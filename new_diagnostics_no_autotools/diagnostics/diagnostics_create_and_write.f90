@@ -4,6 +4,10 @@
 
 module diagnostics_create_and_write
 
+implicit none
+
+!> Create and/or write the given variable depending on the values
+!! of the flags gnostics%create and gnostics%wryte
 interface create_and_write_variable
   module procedure create_and_write_variable_real_0
   module procedure create_and_write_variable_real_1
@@ -48,6 +52,45 @@ interface create_and_write_variable
   module procedure create_and_write_variable_complex_16_5
   module procedure create_and_write_variable_complex_16_6
 end interface create_and_write_variable
+
+!> These are a set of subroutines for writing variables which 
+!! have the dimensions X and Y (for example, fields, moments or 
+!! fluxes) which may be distributed, ie. different XY combinations
+!! may be on different processors. The locality is determined through
+!! the function field_k_local.
+interface create_and_write_distributed_fieldlike_variable
+  module procedure create_and_write_dstrb_fieldlike_variable_real_2
+  module procedure create_and_write_dstrb_fieldlike_variable_real_3
+  module procedure create_and_write_dstrb_fieldlike_variable_real_4
+  module procedure create_and_write_dstrb_fieldlike_variable_real_5
+  module procedure create_and_write_dstrb_fieldlike_variable_real_6
+  module procedure create_and_write_dstrb_fieldlike_variable_integer_2
+  module procedure create_and_write_dstrb_fieldlike_variable_integer_3
+  module procedure create_and_write_dstrb_fieldlike_variable_integer_4
+  module procedure create_and_write_dstrb_fieldlike_variable_integer_5
+  module procedure create_and_write_dstrb_fieldlike_variable_integer_6
+  module procedure create_and_write_dstrb_fieldlike_variable_character_2
+  module procedure create_and_write_dstrb_fieldlike_variable_character_3
+  module procedure create_and_write_dstrb_fieldlike_variable_character_4
+  module procedure create_and_write_dstrb_fieldlike_variable_character_5
+  module procedure create_and_write_dstrb_fieldlike_variable_character_6
+  module procedure create_and_write_dstrb_fieldlike_variable_double_precision_2
+  module procedure create_and_write_dstrb_fieldlike_variable_double_precision_3
+  module procedure create_and_write_dstrb_fieldlike_variable_double_precision_4
+  module procedure create_and_write_dstrb_fieldlike_variable_double_precision_5
+  module procedure create_and_write_dstrb_fieldlike_variable_double_precision_6
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_2
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_3
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_4
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_5
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_6
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_16_2
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_16_3
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_16_4
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_16_5
+  module procedure create_and_write_dstrb_fieldlike_variable_complex_16_6
+end interface create_and_write_distributed_fieldlike_variable
+
 
 contains
 
@@ -974,6 +1017,2137 @@ contains
    call write_variable(gnostics%sfile, variable_name, val)
 
  end subroutine create_and_write_variable_complex_16_6
+
+
+ subroutine create_and_write_dstrb_fieldlike_variable_real_2(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   real, intent(in), dimension(:,:)  :: val
+   real :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_real_2
+
+ subroutine create_and_write_dstrb_fieldlike_variable_real_3(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   real, intent(in), dimension(:,:,:)  :: val
+   real :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_real_3
+
+ subroutine create_and_write_dstrb_fieldlike_variable_real_4(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   real, intent(in), dimension(:,:,:,:)  :: val
+   real :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_real_4
+
+ subroutine create_and_write_dstrb_fieldlike_variable_real_5(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   real, intent(in), dimension(:,:,:,:,:)  :: val
+   real :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_real_5
+
+ subroutine create_and_write_dstrb_fieldlike_variable_real_6(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   real, intent(in), dimension(:,:,:,:,:,:)  :: val
+   real :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_real_6
+
+ subroutine create_and_write_dstrb_fieldlike_variable_integer_2(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   integer, intent(in), dimension(:,:)  :: val
+   integer :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_integer_2
+
+ subroutine create_and_write_dstrb_fieldlike_variable_integer_3(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   integer, intent(in), dimension(:,:,:)  :: val
+   integer :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_integer_3
+
+ subroutine create_and_write_dstrb_fieldlike_variable_integer_4(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   integer, intent(in), dimension(:,:,:,:)  :: val
+   integer :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_integer_4
+
+ subroutine create_and_write_dstrb_fieldlike_variable_integer_5(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   integer, intent(in), dimension(:,:,:,:,:)  :: val
+   integer :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_integer_5
+
+ subroutine create_and_write_dstrb_fieldlike_variable_integer_6(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   integer, intent(in), dimension(:,:,:,:,:,:)  :: val
+   integer :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_integer_6
+
+ subroutine create_and_write_dstrb_fieldlike_variable_character_2(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   character, intent(in), dimension(:,:)  :: val
+   character :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_character_2
+
+ subroutine create_and_write_dstrb_fieldlike_variable_character_3(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   character, intent(in), dimension(:,:,:)  :: val
+   character :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_character_3
+
+ subroutine create_and_write_dstrb_fieldlike_variable_character_4(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   character, intent(in), dimension(:,:,:,:)  :: val
+   character :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_character_4
+
+ subroutine create_and_write_dstrb_fieldlike_variable_character_5(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   character, intent(in), dimension(:,:,:,:,:)  :: val
+   character :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_character_5
+
+ subroutine create_and_write_dstrb_fieldlike_variable_character_6(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   character, intent(in), dimension(:,:,:,:,:,:)  :: val
+   character :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_character_6
+
+ subroutine create_and_write_dstrb_fieldlike_variable_double_precision_2(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   double precision, intent(in), dimension(:,:)  :: val
+   double precision :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_double_precision_2
+
+ subroutine create_and_write_dstrb_fieldlike_variable_double_precision_3(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   double precision, intent(in), dimension(:,:,:)  :: val
+   double precision :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_double_precision_3
+
+ subroutine create_and_write_dstrb_fieldlike_variable_double_precision_4(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   double precision, intent(in), dimension(:,:,:,:)  :: val
+   double precision :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_double_precision_4
+
+ subroutine create_and_write_dstrb_fieldlike_variable_double_precision_5(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   double precision, intent(in), dimension(:,:,:,:,:)  :: val
+   double precision :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_double_precision_5
+
+ subroutine create_and_write_dstrb_fieldlike_variable_double_precision_6(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   double precision, intent(in), dimension(:,:,:,:,:,:)  :: val
+   double precision :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_double_precision_6
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_2(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex, intent(in), dimension(:,:)  :: val
+   complex :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_2
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_3(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex, intent(in), dimension(:,:,:)  :: val
+   complex :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_3
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_4(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex, intent(in), dimension(:,:,:,:)  :: val
+   complex :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_4
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_5(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex, intent(in), dimension(:,:,:,:,:)  :: val
+   complex :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_5
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_6(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex, intent(in), dimension(:,:,:,:,:,:)  :: val
+   complex :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_6
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_16_2(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex*16, intent(in), dimension(:,:)  :: val
+   complex*16 :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_16_2
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_16_3(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex*16, intent(in), dimension(:,:,:)  :: val
+   complex*16 :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_16_3
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_16_4(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex*16, intent(in), dimension(:,:,:,:)  :: val
+   complex*16 :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_16_4
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_16_5(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex*16, intent(in), dimension(:,:,:,:,:)  :: val
+   complex*16 :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_16_5
+
+ subroutine create_and_write_dstrb_fieldlike_variable_complex_16_6(gnostics, variable_type, variable_name, dimension_list, &
+    variable_description, variable_units, val)
+   use simpledataio, only: create_variable
+   use simpledataio, only: set_start
+   use simpledataio, only: set_count
+   use simpledataio_write, only: write_variable
+   use simpledataio_write, only: write_variable_with_offset
+   use diagnostics_config, only: diagnostics_type
+   use mp, only: mp_abort
+   use file_utils, only: error_unit
+   use fields_parallelization, only: field_k_local
+   use kt_grids, only: naky, ntheta0
+   type(diagnostics_type), intent(in) :: gnostics
+   integer, intent(in) :: variable_type
+   character(*), intent(in) :: variable_name
+   character(*), intent(in) :: dimension_list
+   character(*), intent(in) :: variable_description
+   character(*), intent(in) :: variable_units
+   integer :: xdim
+   integer :: id, it, ik
+   complex*16, intent(in), dimension(:,:,:,:,:,:)  :: val
+   complex*16 :: dummy
+   
+   ! Find location of the x dimension
+   xdim = index(dimension_list, "XY")
+
+   if (xdim .eq. 0) then
+    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+    & only be called for arrays whose dimension list contains XY in that order"
+    call mp_abort("")
+   end if
+ 
+   if (gnostics%create) then 
+     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+     if (gnostics%distributed) then
+       ! For some reason every process has to make at least
+       ! one write to a variable with an infinite dimension.
+       ! Here we make some dummy writes to satisfy that
+       do id = 1,len(dimension_list)
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+       end do
+       call write_variable(gnostics%sfile, variable_name, dummy)
+       do id = 1,len(dimension_list)
+          ! Reset the starts and counts
+          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+       end do
+     end if
+   end if
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
+       call set_count(gnostics%sfile, variable_name, "X", 1)
+       call set_count(gnostics%sfile, variable_name, "Y", 1)
+       do ik = 1,naky
+         do it = 1,ntheta0
+           if (field_k_local(it,ik)) then
+             call set_start(gnostics%sfile, variable_name, "X", it)
+             call set_start(gnostics%sfile, variable_name, "Y", ik)
+             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+           end if
+         end do
+       end do
+     end if
+    end if
+
+ end subroutine create_and_write_dstrb_fieldlike_variable_complex_16_6
 
 
 end module diagnostics_create_and_write

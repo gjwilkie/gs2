@@ -23,7 +23,10 @@ program test_gs2_diagnostics_new
   !call test_gs2('Linear CBC (unit test) to test new diagnostics', checks)
     use gs2_main, only: run_gs2, finish_gs2
     use unit_tests
+    use unit_tests, only: should_print
+    use diagnostics_config, only: override_screen_printout_options
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
+    use mp, only: broadcast
     use gs2_diagnostics, only: finish_gs2_diagnostics
     use gs2_diagnostics, only: pflux_avg, qflux_avg, heat_avg, vflux_avg
 #ifdef NEW_DIAG
@@ -39,6 +42,8 @@ program test_gs2_diagnostics_new
       !variables = (/'lambda', 'phi'/), &
       !n_lines = (/'3', '30'/)
   ! General config
+
+
   eps = 1.0e-7
 
   if (precision(eps).lt. 11) eps = eps * 100.0
@@ -86,7 +91,15 @@ program test_gs2_diagnostics_new
     new_variables(16) = 'ntot_flxsurf_avg'
     n_lines(16) = '20'
 
-    n_vars = 16
+    variables(17) = 'phi0'
+    new_variables(17) = 'phi_igomega_by_mode'
+    n_lines(17) = '15'
+
+    variables(18) = 'apar_heat_by_k'
+    new_variables(18) = 'apar_heat_flux_by_mode'
+    n_lines(18) = '20'
+
+    n_vars = 18
 
 
     file_names(1) = 'heat'
@@ -107,6 +120,12 @@ program test_gs2_diagnostics_new
     n_file_names = 7
 
     call init_mp
+
+  ! Here we switch on print_line and print_flux_line if we have 
+  ! high verbosity... tests if they are working.
+  
+  !if (proc0) override_screen_printout_options = should_print(3)
+  !call broadcast(override_screen_printout_options)
 
     test_driver_flag = .true.
     functional_test_flag = .true.

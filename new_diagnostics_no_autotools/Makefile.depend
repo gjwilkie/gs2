@@ -98,7 +98,6 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -201,7 +200,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -332,7 +330,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -428,7 +425,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -541,13 +537,16 @@ diagnostics_config.o: \
 	 text_options.o 
 diagnostics_create_and_write.o: \
 	 diagnostics_config.o \
+	 fields_parallelization.o \
+	 file_utils.o \
+	 kt_grids.o \
+	 mp.o \
 	 simpledataio_write.o \
 	 simpledataiof.o 
 diagnostics_fields.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
 	 fields_arrays.o \
-	 fields_parallelization.o \
 	 file_utils.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -621,7 +620,6 @@ diagnostics_moments.o: \
 	 diagnostics_create_and_write.o \
 	 dist_fn.o \
 	 fields_arrays.o \
-	 fields_parallelization.o \
 	 gs2_io.o \
 	 kt_grids.o \
 	 mp.o \
@@ -1137,7 +1135,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1178,8 +1175,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

@@ -19,8 +19,10 @@
 
 
 &diagnostics_config
-      print_line = .true.
-      print_flux_line = .true.
+!     These two are overriden to be true if the verbosity is high enough
+      print_line = .false.
+      print_flux_line = .false.
+
       nwrite = 10
       write_any = .true.
       write_fields = .true.

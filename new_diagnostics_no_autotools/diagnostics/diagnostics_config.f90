@@ -15,6 +15,7 @@ module diagnostics_config
   public :: finish_diagnostics_config
   public ::diagnostics_type
   public :: results_summary_type
+  public :: override_screen_printout_options
 
 
   !> A type for storing the current results of the simulation
@@ -133,6 +134,11 @@ module diagnostics_config
 
 
   private
+
+  !> Used for testing... causes screen printout to be 
+  !! generated regardless of the values of print_line 
+  !! and print_flux_line if set to true
+  logical :: override_screen_printout_options = .false.
 
 contains
   subroutine init_diagnostics_config(gnostics)
@@ -500,6 +506,11 @@ contains
     call broadcast (gnostics%write_gs)
     call broadcast (gnostics%save_for_restart)
     call broadcast (gnostics%save_distfn)
+    
+    if (override_screen_printout_options) then 
+      gnostics%print_line = .true.
+      gnostics%print_flux_line = .true.
+    end if
 
 
 
