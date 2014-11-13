@@ -45,6 +45,7 @@ contains
   subroutine write_omega(gnostics)
     use simpledataio
     use simpledataio_write
+    use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
     use fields_parallelization, only: field_k_local
     use run_parameters, only: woutunits
     type(diagnostics_type), intent(in) :: gnostics
@@ -53,45 +54,39 @@ contains
     complex, dimension(ntheta0, naky) :: omega_average_woutunits
 
 
-    ! Here we have to separate creating and writing because the fields
-    ! may be distributed
-    if (gnostics%create) then
-      call create_variable(gnostics%sfile, gnostics%rtype, "omega", "rXYt", &
-        "Complex frequency as a function of kx, ky and time", "a/v_thr")
-      call create_variable(gnostics%sfile, gnostics%rtype, "omega_average", "rXYt", &
-        "Complex frequency, averaged over navg timesteps, as a function of kx, ky and time", "a/v_thr")
-     call set_count(gnostics%sfile, "omega", "X", 1)
-     call set_count(gnostics%sfile, "omega", "Y", 1)
-     call set_count(gnostics%sfile, "omega_average", "X", 1)
-     call set_count(gnostics%sfile, "omega_average", "Y", 1)
-    end if
 
     do ik=1,naky
       omegahist_woutunits(:,:,ik) = omegahist(:,:,ik) * woutunits(ik)
       omega_average_woutunits(:,ik) = omega_average(:,ik) * woutunits(ik)
     end do
 
+      call create_and_write_distributed_fieldlike_variable(gnostics, gnostics%rtype, "omega", "rXYt", &
+        "Complex frequency as a function of kx, ky and time", "a/v_thr", &
+        omegahist_woutunits(mod(gnostics%istep,gnostics%navg), :, :))
+      call create_and_write_distributed_fieldlike_variable(gnostics, gnostics%rtype, "omega_average", "rXYt", &
+        "Complex frequency, averaged over navg timesteps, as a function of kx, ky and time", "a/v_thr", &
+        omega_average_woutunits)
     
-    if (gnostics%wryte) then
-      ! Dummy writes, necessary for parallel for some reason
-      call write_variable_with_offset(gnostics%sfile, "omega", omegahist_woutunits(mod(gnostics%istep,gnostics%navg), :, :))
-      call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average_woutunits)
+    !if (gnostics%wryte) then
+      !! Dummy writes, necessary for parallel for some reason
+      !call write_variable_with_offset(gnostics%sfile, "omega", omegahist_woutunits(mod(gnostics%istep,gnostics%navg), :, :))
+      !call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average_woutunits)
 
-      do ik=1,naky
-        do it=1,ntheta0
-          if (.not. gnostics%distributed .or. field_k_local(it, ik)) then 
-             call set_start(gnostics%sfile, "omega", "X", it)
-             call set_start(gnostics%sfile, "omega", "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, "omega", &
-               omegahist_woutunits(mod(gnostics%istep,gnostics%navg), :, :))
+      !do ik=1,naky
+        !do it=1,ntheta0
+          !if (.not. gnostics%distributed .or. field_k_local(it, ik)) then 
+             !call set_start(gnostics%sfile, "omega", "X", it)
+             !call set_start(gnostics%sfile, "omega", "Y", ik)
+             !call write_variable_with_offset(gnostics%sfile, "omega", &
+               !omegahist_woutunits(mod(gnostics%istep,gnostics%navg), :, :))
 
-             call set_start(gnostics%sfile, "omega_average", "X", it)
-             call set_start(gnostics%sfile, "omega_average", "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average_woutunits)
-          end if
-        end do
-      end do
-    end if
+             !call set_start(gnostics%sfile, "omega_average", "X", it)
+             !call set_start(gnostics%sfile, "omega_average", "Y", ik)
+             !call write_variable_with_offset(gnostics%sfile, "omega_average", omega_average_woutunits)
+          !end if
+        !end do
+      !end do
+    !end if
 
    
   end subroutine write_omega

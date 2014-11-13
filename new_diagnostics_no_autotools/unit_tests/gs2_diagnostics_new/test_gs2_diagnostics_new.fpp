@@ -58,7 +58,7 @@ program test_gs2_diagnostics_new
     n_lines(4) = '10'
     variables(5) = 't'
     n_lines(5) = '5'
-    variables(6) = 'phi2_by_ky'
+    variables(6) = 'phi2_by_ky -p 7,11'
     n_lines(6) = '12'
     variables(7) = 'phi2_by_kx'
     n_lines(7) = '12'
@@ -124,8 +124,8 @@ program test_gs2_diagnostics_new
   ! Here we switch on print_line and print_flux_line if we have 
   ! high verbosity... tests if they are working.
   
-  !if (proc0) override_screen_printout_options = should_print(3)
-  !call broadcast(override_screen_printout_options)
+  if (proc0) override_screen_printout_options = should_print(3)
+  call broadcast(override_screen_printout_options)
 
     test_driver_flag = .true.
     functional_test_flag = .true.

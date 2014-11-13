@@ -66,6 +66,7 @@ contains
     if (.not. gnostics%write_any) return
 
     gnostics%parallel = init_options%parallel_io
+    !write (*,*) 'parallel', gnostics%parallel
     if (init_options%default_double) then
       gnostics%rtype = SDATIO_DOUBLE
     else
@@ -124,6 +125,7 @@ contains
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
 
+    if(proc0) write (*,*) 'finished initializing new diagnostics'
 
 
   end subroutine init_gs2_diagnostics_new
@@ -294,6 +296,7 @@ contains
     ! This line is a temporary placeholder
     ! till distributed fields are up and running
     gnostics%distributed = gnostics%parallel
+    !gnostics%distributed = .false.
 
     ! Need to also add 'if Trinity run' condition to this
     gnostics%calculate_fluxes = (gnostics%write_fluxes &
@@ -336,9 +339,11 @@ contains
       if (gnostics%write_correlation_extend) call write_correlation_extend(gnostics)
       if (gnostics%write_lorentzian) call write_lorentzian(gnostics)
 !
+      !write (*,*) 'Hello'
+      if (gnostics%print_line) call print_line(gnostics)
+      if (gnostics%write_line) call write_line(gnostics)
       if (proc0) then
-        if (gnostics%print_line) call print_line(gnostics)
-        if (gnostics%write_line) call write_line(gnostics)
+        !write (*,*) 'Hello2'
         if (gnostics%print_flux_line) call print_flux_line(gnostics)
         if (gnostics%write_flux_line) call write_flux_line(gnostics)
       end if

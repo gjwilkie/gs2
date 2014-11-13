@@ -127,7 +127,7 @@ contains
     ! moment_by_mode could be distributed so we have to be careful here
     moment_flx_surfavg(:,:) = 0.0
     do it = 1,ntheta0
-      if (.not. gnostics%distributed.or.field_k_local(it, 1))&
+      if ((.not. gnostics%distributed).or.field_k_local(it, 1))&
         moment_flx_surfavg(it, :) = moment_by_mode(it, 1, :)
     end do
     if (gnostics%distributed) call sum_allreduce(moment_flx_surfavg)
