@@ -1024,10 +1024,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1039,9 +1040,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    real, intent(in), dimension(:,:)  :: val
    real :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1054,37 +1057,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 2 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 2 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1095,10 +1120,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1110,9 +1136,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    real, intent(in), dimension(:,:,:)  :: val
    real :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1125,37 +1153,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 3 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 3 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1166,10 +1216,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1181,9 +1232,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    real, intent(in), dimension(:,:,:,:)  :: val
    real :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1196,37 +1249,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 4 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 4 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1237,10 +1312,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1252,9 +1328,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    real, intent(in), dimension(:,:,:,:,:)  :: val
    real :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1267,37 +1345,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 5 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 5 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1308,10 +1408,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1323,9 +1424,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    real, intent(in), dimension(:,:,:,:,:,:)  :: val
    real :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1338,37 +1441,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 6 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 6 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1379,10 +1504,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1394,9 +1520,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    integer, intent(in), dimension(:,:)  :: val
    integer :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1409,37 +1537,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 2 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 2 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1450,10 +1600,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1465,9 +1616,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    integer, intent(in), dimension(:,:,:)  :: val
    integer :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1480,37 +1633,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 3 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 3 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1521,10 +1696,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1536,9 +1712,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    integer, intent(in), dimension(:,:,:,:)  :: val
    integer :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1551,37 +1729,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 4 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 4 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1592,10 +1792,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1607,9 +1808,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    integer, intent(in), dimension(:,:,:,:,:)  :: val
    integer :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1622,37 +1825,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 5 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 5 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1663,10 +1888,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1678,9 +1904,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    integer, intent(in), dimension(:,:,:,:,:,:)  :: val
    integer :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1693,37 +1921,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 6 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 6 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1734,10 +1984,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1749,9 +2000,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    character, intent(in), dimension(:,:)  :: val
    character :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1764,37 +2017,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 2 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 2 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1805,10 +2080,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1820,9 +2096,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    character, intent(in), dimension(:,:,:)  :: val
    character :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1835,37 +2113,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 3 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 3 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1876,10 +2176,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1891,9 +2192,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    character, intent(in), dimension(:,:,:,:)  :: val
    character :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1906,37 +2209,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 4 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 4 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -1947,10 +2272,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -1962,9 +2288,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    character, intent(in), dimension(:,:,:,:,:)  :: val
    character :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -1977,37 +2305,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 5 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 5 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2018,10 +2368,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2033,9 +2384,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    character, intent(in), dimension(:,:,:,:,:,:)  :: val
    character :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2048,37 +2401,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 6 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 6 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2089,10 +2464,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2104,9 +2480,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    double precision, intent(in), dimension(:,:)  :: val
    double precision :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2119,37 +2497,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 2 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 2 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2160,10 +2560,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2175,9 +2576,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    double precision, intent(in), dimension(:,:,:)  :: val
    double precision :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2190,37 +2593,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 3 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 3 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2231,10 +2656,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2246,9 +2672,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    double precision, intent(in), dimension(:,:,:,:)  :: val
    double precision :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2261,37 +2689,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 4 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 4 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2302,10 +2752,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2317,9 +2768,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    double precision, intent(in), dimension(:,:,:,:,:)  :: val
    double precision :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2332,37 +2785,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 5 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 5 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2373,10 +2848,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2388,9 +2864,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    double precision, intent(in), dimension(:,:,:,:,:,:)  :: val
    double precision :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2403,37 +2881,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 6 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 6 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2444,10 +2944,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2459,9 +2960,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex, intent(in), dimension(:,:)  :: val
    complex :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2474,37 +2977,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 2 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 2 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2515,10 +3040,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2530,9 +3056,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex, intent(in), dimension(:,:,:)  :: val
    complex :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2545,37 +3073,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 3 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 3 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2586,10 +3136,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2601,9 +3152,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex, intent(in), dimension(:,:,:,:)  :: val
    complex :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2616,37 +3169,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 4 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 4 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2657,10 +3232,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2672,9 +3248,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex, intent(in), dimension(:,:,:,:,:)  :: val
    complex :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2687,37 +3265,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 5 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 5 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2728,10 +3328,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2743,9 +3344,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex, intent(in), dimension(:,:,:,:,:,:)  :: val
    complex :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2758,37 +3361,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 6 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 6 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2799,10 +3424,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2814,9 +3440,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex*16, intent(in), dimension(:,:)  :: val
    complex*16 :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2829,37 +3457,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 2 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 2 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2870,10 +3520,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2885,9 +3536,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex*16, intent(in), dimension(:,:,:)  :: val
    complex*16 :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2900,37 +3553,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 3 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 3 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -2941,10 +3616,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -2956,9 +3632,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex*16, intent(in), dimension(:,:,:,:)  :: val
    complex*16 :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -2971,37 +3649,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 4 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 4 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -3012,10 +3712,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -3027,9 +3728,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex*16, intent(in), dimension(:,:,:,:,:)  :: val
    complex*16 :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -3042,37 +3745,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 5 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 5 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 
@@ -3083,10 +3808,11 @@ contains
    use simpledataio, only: create_variable
    use simpledataio, only: set_start
    use simpledataio, only: set_count
+   use simpledataio, only: set_independent, set_collective
    use simpledataio_write, only: write_variable
    use simpledataio_write, only: write_variable_with_offset
    use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort
+   use mp, only: mp_abort,barrier
    use file_utils, only: error_unit
    use fields_parallelization, only: field_k_local
    use kt_grids, only: naky, ntheta0
@@ -3098,9 +3824,11 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
+   integer :: i1, i2, i3
    complex*16, intent(in), dimension(:,:,:,:,:,:)  :: val
    complex*16 :: dummy
    
+   !return 
    ! Find location of the x dimension
    xdim = index(dimension_list, "XY")
 
@@ -3113,37 +3841,59 @@ contains
    if (gnostics%create) then 
      call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
      if (gnostics%distributed) then
+     end if
+   end if
+
+
+   if (gnostics%wryte) then
+     if (.not.  gnostics%distributed) then
+     !if (.true.) then
+       call write_variable(gnostics%sfile, variable_name, val)
+     else
        ! For some reason every process has to make at least
        ! one write to a variable with an infinite dimension.
        ! Here we make some dummy writes to satisfy that
        do id = 1,len(dimension_list)
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
        end do
        call write_variable(gnostics%sfile, variable_name, dummy)
        do id = 1,len(dimension_list)
-          ! Reset the starts and counts
+          !! Reset the starts and counts
+          if (dimension_list(id:id) .eq. 't') cycle
           call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
        end do
-     end if
-   end if
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
+       call barrier
        call set_count(gnostics%sfile, variable_name, "X", 1)
        call set_count(gnostics%sfile, variable_name, "Y", 1)
+       call set_independent(gnostics%sfile, variable_name)
        do ik = 1,naky
          do it = 1,ntheta0
            if (field_k_local(it,ik)) then
              call set_start(gnostics%sfile, variable_name, "X", it)
              call set_start(gnostics%sfile, variable_name, "Y", ik)
-             call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             ! Now we treat cases where X and Y are not the two most
+             ! slowly varying indices
+             if (xdim < 6 - 1) then
+              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+              ! This loop will normally be over species
+              do i1 = 1,size(val, xdim+2)
+                if (xdim < 6 - 2) then
+                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                  stop 1
+                end if
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                call write_variable_with_offset(gnostics%sfile, variable_name, val)
+              end do 
+             else
+              call write_variable_with_offset(gnostics%sfile, variable_name, val)
+             end if
            end if
          end do
        end do
+       call set_collective(gnostics%sfile, variable_name)
      end if
     end if
 

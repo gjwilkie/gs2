@@ -31,6 +31,7 @@ contains
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
     use volume_averages
+    use mp,only: broadcast
     type(diagnostics_type), intent(inout) :: gnostics
     character(*), intent(in) :: field_name, field_description, field_units
     complex, dimension(-ntgrid:ntgrid,ntheta0,naky), intent(in) :: field_value
@@ -48,6 +49,8 @@ contains
     !call create_and_write_field(gnostics%sfile, field_name, field_description, field_units, field_value)
     !call create_and_write_field_by_mode(gnostics, field_name, field_description, field_units, &
       !field_value, field2_by_mode, distributed)
+
+    !call broadcast(field2_by_mode)
 
     call average_kx(field2_by_mode, field2_by_ky, distributed)
     call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_ky", "Yt", &

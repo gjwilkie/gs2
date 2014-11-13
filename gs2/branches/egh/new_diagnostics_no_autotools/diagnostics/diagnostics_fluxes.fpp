@@ -380,10 +380,12 @@ contains
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
     use volume_averages
     use fields_parallelization, only: field_k_local
+    use mp,only: broadcast, sum_allreduce
     type(diagnostics_type), intent(inout) :: gnostics
     !real, intent(out) :: total
     character(*), intent(in) :: flux_name, flux_description, flux_units
-    real, dimension(ntheta0,naky,nspec), intent(in) :: flux_value
+    real, dimension(ntheta0,naky,nspec), intent(inout) :: flux_value
+    real, dimension(ntheta0,naky,nspec) :: flux_value_temp
     logical, intent(in) :: distributed
     real, dimension(ntheta0, naky) :: total_flux_by_mode
     real, dimension(naky) :: total_flux_by_ky
@@ -394,7 +396,16 @@ contains
 
     !call average_theta(flux_value, flux_value, flux_by_mode, .true.)
     !!call create_and_write_flux(gnostics%sfile, flux_name, flux_description, flux_units, flux_value)
+    call broadcast(flux_value)
+
+
     call average_all(flux_value, flux_by_species, distributed) 
+
+    flux_value_temp = flux_value
+
+    call broadcast(flux_value_temp)
+    !call sum_allreduce(flux_value_temp)
+    if (.not. ( abs(abs(sum(flux_value_temp))  - abs(sum(flux_value))) .lt. epsilon(0.0)) ) write (*,*) "NOT EQUAL" 
 
     total_flux_by_mode = 0.
     do ik = 1,naky

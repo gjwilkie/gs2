@@ -39,7 +39,7 @@ module diagnostics_printout
       real, dimension (ntheta0, naky) :: phitot
       integer :: ik, it
 
-      call average_theta(phinew, phinew, phitot, gnostics%distributed)
+      !call average_theta(phinew, phinew, phitot, gnostics%distributed)
 
       if (gnostics%distributed) call sum_reduce(phitot, 0)
 

@@ -26,6 +26,9 @@ program test_gs2_diagnostics
     use unit_tests
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
+#endif 
     implicit none
     real :: eps
 
@@ -47,6 +50,10 @@ program test_gs2_diagnostics
     call process_test(diagnostics_unit_test_diffusivity(19.852483466900530, eps), 'diffusivity')
 
     call finish_gs2_diagnostics(ilast_step)
+#ifdef NEW_DIAG
+    call finish_gs2_diagnostics_new
+#endif 
+
     call finish_gs2
 
 

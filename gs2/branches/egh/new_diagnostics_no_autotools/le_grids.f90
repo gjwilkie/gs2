@@ -1324,6 +1324,9 @@ contains
           !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
           !all procs in this case.
           call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
+       else if (present(all)) then
+          call sum_allreduce (total_small)
+
        else
           !Complete integral over distributed velocity space but only proc0 knows the answer
           call sum_reduce (total_small, 0)
