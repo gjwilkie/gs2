@@ -585,7 +585,7 @@ contains
        fac = 0.5
        if (aky(ik) == 0.) fac = 1.0
        do it = 1, ntheta0
-         if ((.not. distributed) .or. field_k_local(it,ik)) then
+         if (.not. distributed .or. field_k_local(it,ik)) then
 
           favg(ik) = favg(ik) + f(it, ik) * fac
          end if

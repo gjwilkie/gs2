@@ -138,12 +138,13 @@ class GeneratorDistributed
               call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
               ! This loop will normally be over species
               do i1 = 1,size(val, xdim+2)
+                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
                 if (xdim < #@dimsize - 2) then
                   write (*,*) "Case with two dimensions to the right of X and Y not implemented"
                   stop 1
+                else
+                  call write_variable_with_offset(gnostics%sfile, variable_name, val)
                 end if
-                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
-                call write_variable_with_offset(gnostics%sfile, variable_name, val)
               end do 
              else
               call write_variable_with_offset(gnostics%sfile, variable_name, val)
