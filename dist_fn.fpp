@@ -132,13 +132,8 @@ module dist_fn
   complex, dimension (:,:,:), allocatable :: g_adj
   ! (N(links), 2, -g-layout-)
 
-!  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
   complex, dimension (:,:,:), allocatable, save :: gexp_1, gexp_2, gexp_3
   ! (-ntgrid:ntgrid,2, -g-layout-)
-
-  ! momentum conservation
-!  complex, dimension (:,:), allocatable :: g3int
-!  real, dimension (:,:,:), allocatable :: sq
 
   ! exb shear
   integer, dimension(:), allocatable :: jump, ikx_indexed
@@ -3350,6 +3345,8 @@ endif
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        !<DD>CAN WE LIMIT G0 TO ONLY EXIST WHEN REQUIRED, NOT GLOBALLY?
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       !<DD>We could make source_coeffs real as long as we add 2/1 extra elements
+       !to the first dimension. Could save ~25% memory of this array.
        if(opt_source)then
           if(fapar.gt.0)then
              allocate (source_coeffs(4,-ntgrid:ntgrid-1,2,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -8869,13 +8866,6 @@ endif
     mom_coeff_tpara(:,:,:)=0. ; mom_coeff_tperp(:,:,:)=0.
     mom_shift_para(:,:,:)=0.  ; mom_shift_perp(:,:,:)=0.
 
-    allocate(wgt(-ntgrid:ntgrid))
-    allocate(coeff0(-ntgrid:ntgrid,nakx,naky,nspec))
-    allocate(gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-    wgt(:)=0.
-    coeff0(:,:,:,:)=cmplx(0.,0.)
-    gtmp(:,:,:)=cmplx(0.,0.)
-
     if (analytical) then
        do it=1,nakx
           do ik=1,naky
@@ -8893,6 +8883,14 @@ endif
           end do
        end do
     else
+
+       allocate(wgt(-ntgrid:ntgrid))
+       allocate(coeff0(-ntgrid:ntgrid,nakx,naky,nspec))
+       allocate(gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       wgt(:)=0.
+       coeff0(:,:,:,:)=cmplx(0.,0.)
+       gtmp(:,:,:)=cmplx(0.,0.)
+
        do i = 1, ncnt_mom_coeff
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
              il = il_idx(g_lo,iglo)
@@ -8917,6 +8915,7 @@ endif
                   & coeff0(0,1:nakx,1:naky,1:nspec)
           end where
        end do
+       deallocate(gtmp,coeff0,wgt)
     endif
 
     !<DD>Currently below could include divide by zero if analytical=.true.
@@ -8932,10 +8931,6 @@ endif
     mom_coeff_tpara(:,:,:)= &
          & (mom_coeff(:,:,:,7)-mom_shift_para(:,:,:)*mom_coeff(:,:,:,6)) / &
          & (mom_coeff(:,:,:,4)-mom_shift_para(:,:,:)*mom_coeff(:,:,:,2))
-
-    deallocate(gtmp,coeff0,wgt)
-    
-!    initialized=.true.
   end subroutine init_mom_coeff
 
   subroutine finish_dist_fn

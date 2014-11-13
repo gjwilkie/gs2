@@ -185,24 +185,11 @@ contains
     use species, only: init_species, nspec, spec
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, naky, ntheta0
-    use le_grids, only: init_le_grids, nlambda, negrid , init_map
+    use le_grids, only: init_le_grids, nlambda, negrid
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
 
     implicit none
-
-    logical :: use_lz_layout = .false.
-    logical :: use_e_layout = .false.
-! lowflow terms include higher-order corrections to GK equation
-! such as parallel nonlinearity that require derivatives in v-space.
-! most efficient way to take these derivatives is to go from g_lo to le_lo,
-! i.e., bring all energies and lambdas onto each processor
-!<DD>Note the user can still disable use_le_layout in the input file
-!    this just changes the default.
-# ifdef LOWFLOW
-    use_le_layout = .true.
-# endif
-
 
     if (initialized) return
     initialized = .true.
@@ -218,18 +205,7 @@ contains
     call init_run_parameters
     call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters
-    if( .not. use_le_layout ) then
-       select case (collision_model_switch)
-       case (collision_model_full)
-          use_lz_layout = .true.
-          use_e_layout = .true.
-       case (collision_model_lorentz,collision_model_lorentz_test)
-          use_lz_layout = .true.
-       case (collision_model_ediffuse)
-          use_e_layout = .true.
-       end select
-    end if
-    call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
+
     call init_arrays
 
   end subroutine init_collisions
@@ -341,7 +317,7 @@ contains
 
   subroutine init_arrays
     use species, only: nspec
-    use le_grids, only: negrid
+    use le_grids, only: negrid, init_map
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use dist_fn_arrays, only: c_rate
@@ -349,16 +325,44 @@ contains
     implicit none
 
     real, dimension (negrid) :: hee
+    logical :: use_lz_layout = .false.
+    logical :: use_e_layout = .false.
+! lowflow terms include higher-order corrections to GK equation
+! such as parallel nonlinearity that require derivatives in v-space.
+! most efficient way to take these derivatives is to go from g_lo to le_lo,
+! i.e., bring all energies and lambdas onto each processor
+!<DD>Note the user can still disable use_le_layout in the input file
+!    this just changes the default.
+# ifdef LOWFLOW
+    use_le_layout = .true.
+# endif
 
+    !<DD>This (potentially large) array should only be needed if 
+    !write_hrate (gs2_diagnostics) is true.
     if (.not. allocated(c_rate)) then
        allocate (c_rate(-ntgrid:ntgrid, ntheta0, naky, nspec, 3))
        c_rate = 0.
     end if
 
+    !<DD>Should probably put this first
     if (collision_model_switch == collision_model_none) then
        colls = .false.
        return
     end if
+
+    if( .not. use_le_layout ) then
+       select case (collision_model_switch)
+       case (collision_model_full)
+          use_lz_layout = .true.
+          use_e_layout = .true.
+       case (collision_model_lorentz,collision_model_lorentz_test)
+          use_lz_layout = .true.
+       case (collision_model_ediffuse)
+          use_e_layout = .true.
+       end select
+    end if
+
+    call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
 
     call init_vnew (hee)
     if (all(abs(vnew(:,1,:)) <= 2.0*epsilon(0.0))) then
