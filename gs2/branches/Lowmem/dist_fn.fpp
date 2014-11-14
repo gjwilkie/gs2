@@ -142,7 +142,7 @@ module dist_fn
   real, dimension(:,:), allocatable :: ufac
 
   ! set_source_opt
-  complex, dimension (:,:,:,:), allocatable :: source_coeffs
+  real, dimension (:,:,:,:), allocatable :: source_coeffs
 
   ! getfieldeq1
   real, allocatable, dimension(:,:) :: awgt
@@ -1361,39 +1361,45 @@ endif
 #ifdef LOWFLOW
              !Phi m
              source_coeffs(1,ig,isgn,iglo)=-2*anon(ie)*vparterm(ig,isgn,iglo)
-             !Phi p
-             source_coeffs(2,ig,isgn,iglo)=-zi*anon(ie)*wdfac(ig,isgn,iglo) &
-              + zi*(wstarfac(ig,isgn,iglo) &
+             !Phi p, should be multiplied by zi in use
+             source_coeffs(2,ig,isgn,iglo)=-anon(ie)*wdfac(ig,isgn,iglo) &
+              + (wstarfac(ig,isgn,iglo) &
               + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
+
              if(fapar.gt.0)then
                 !Apar m
                 source_coeffs(3,ig,isgn,iglo)=-spec(is)%zstm*anon(ie)*&
                      vpac(ig,isgn,il,ie)*(aj0(ig+1,iglo)+aj0(ig,iglo))*0.5
-                !Apar p
-                source_coeffs(4,ig,isgn,iglo)=anon(ie)*D_res(it,ik)*spec(is)%zstm*&
-                     vpac(ig,isgn,il,ie)-spec(is)%stm*vpac(ig,isgn,il,ie)*&
-                     zi*(wstarfac(ig,isgn,iglo) &
+                !Apar p, real only
+                source_coeffs(4,ig,isgn,iglo)=anon(ie)*D_res(it,ik)*spec(is)%zstm*vpac(ig,isgn,il,ie)
+                !Apar p, should be multiplied by zi in use. 
+                !I.e. apar P term = source_coeffs(4)+zi*source_coeffs(5)
+                source_coeffs(5,ig,isgn,iglo)=-spec(is)%stm*vpac(ig,isgn,il,ie)*&
+                     (wstarfac(ig,isgn,iglo) &
                      + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
-                     -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
+                     -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
              endif
 #else
 
              !Phi m
              source_coeffs(1,ig,isgn,iglo)=-2*anon(ie)*vpar(ig,isgn,il,ie)*spec(is)%zstm*tunits(ik)
-             !Phi p
-             source_coeffs(2,ig,isgn,iglo)=-zi*anon(ie)*wdrift(ig,isgn,iglo) &
-              + zi*(wstar(ik,ie,is) &
+             !Phi p, should be multiplied by zi in use
+             source_coeffs(2,ig,isgn,iglo)=-anon(ie)*wdrift(ig,isgn,iglo) &
+              + (wstar(ik,ie,is) &
               + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
               -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm)
              if(fapar.gt.0)then
                 !Apar m
                 source_coeffs(3,ig,isgn,iglo)=-spec(is)%zstm*anon(ie)*&
                      vpac(ig,isgn,il,ie)*(aj0(ig+1,iglo)+aj0(ig,iglo))*0.5
-                !Apar p
+                !Apar p, real only
                 source_coeffs(4,ig,isgn,iglo)=anon(ie)*D_res(it,ik)*spec(is)%zstm*&
-                     vpac(ig,isgn,il,ie)-spec(is)%stm*vpac(ig,isgn,il,ie)*&
-                     zi*(wstar(ik,ie,is) &
+                     vpac(ig,isgn,il,ie)
+                !Apar p, should be multiplied by zi in use. 
+                !I.e. apar P term = source_coeffs(4)+zi*source_coeffs(5)
+                source_coeffs(5,ig,isgn,iglo)=-spec(is)%stm*vpac(ig,isgn,il,ie)*&
+                     (wstar(ik,ie,is) &
                      + vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*ufac(ie,is) &
                      -2.0*omprimfac*vpac(ig,isgn,il,ie)*code_dt*wunits(ik)*g_exb*itor_over_B(ig)/spec(is)%stm) 
              endif
@@ -1929,7 +1935,8 @@ endif
     endif
        
 ! n_links_max is typically 2 * number of cells in largest supercell
-       allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+    !<DD>This array can become very large for problems with big ntheta0/nx
+    allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
 
 ! now set up links_h:
 ! excluding wfb
@@ -2915,6 +2922,7 @@ endif
        call delete_list (to_h)
       
 ! n_links_max is typically 2 * number of cells in largest supercell
+       !<DD>This array can become very large for problems with big ntheta0/nx
        allocate (g_adj (n_links_max, 2, g_lo%llim_proc:g_lo%ulim_alloc))
 !################################
 !End of linked comms setup
@@ -3345,11 +3353,9 @@ endif
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        !<DD>CAN WE LIMIT G0 TO ONLY EXIST WHEN REQUIRED, NOT GLOBALLY?
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       !<DD>We could make source_coeffs real as long as we add 2/1 extra elements
-       !to the first dimension. Could save ~25% memory of this array.
        if(opt_source)then
           if(fapar.gt.0)then
-             allocate (source_coeffs(4,-ntgrid:ntgrid-1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+             allocate (source_coeffs(5,-ntgrid:ntgrid-1,2,g_lo%llim_proc:g_lo%ulim_alloc))
           else
              allocate (source_coeffs(2,-ntgrid:ntgrid-1,2,g_lo%llim_proc:g_lo%ulim_alloc))
           endif
@@ -4658,9 +4664,10 @@ endif
                  -apar(ig+1,it,ik)-apar(ig,it,ik)
             
             source(ig,isgn)=phi_m*source_coeffs(1,ig,isgn,iglo)+&
-                 phi_p*source_coeffs(2,ig,isgn,iglo)+&
+                 phi_p*source_coeffs(2,ig,isgn,iglo)*zi+&
                  apar_m*source_coeffs(3,ig,isgn,iglo)+&
-                 apar_p*source_coeffs(4,ig,isgn,iglo)
+                 apar_p*(source_coeffs(4,ig,isgn,iglo)+&
+                 zi*source_coeffs(5,ig,isgn,iglo))
          end do
       else
          do ig = -ntgrid, ntgrid-1
@@ -4668,7 +4675,7 @@ endif
             phi_m = phigavg(ig+1)-phigavg(ig)
             
             source(ig,isgn)=phi_m*source_coeffs(1,ig,isgn,iglo)+&
-                 phi_p*source_coeffs(2,ig,isgn,iglo)
+                 phi_p*source_coeffs(2,ig,isgn,iglo)*zi
          end do
       endif
 
