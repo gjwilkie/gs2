@@ -291,24 +291,34 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use antenna, only: no_driver
+    use fields_local, only: floc_allocate=>allocate_arrays
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew, apar_ext
     implicit none
 
-    if (.not. allocated(phi)) then
-       allocate (     phi (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (    apar (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (   bpar (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
-       allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
-       allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
-    endif
-    phi = 0.; phinew = 0.
-    apar = 0.; aparnew = 0.
-    bpar = 0.; bparnew = 0.
-    if(.not.allocated(apar_ext).and.(.not.no_driver))then
-       allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
-       apar_ext = 0.
-    endif
+    !Here we can allow each field implementation to handle their allocation of 
+    !field arrays in case they want to do things differently. If no case is specified
+    !we default to the traditional method.
+    select case (fieldopt_switch)
+    case (fieldopt_local)
+       call floc_allocate
+    case default
+       if (.not. allocated(phi)) then
+          allocate (     phi (-ntgrid:ntgrid,ntheta0,naky))
+          allocate (    apar (-ntgrid:ntgrid,ntheta0,naky))
+          allocate (   bpar (-ntgrid:ntgrid,ntheta0,naky))
+          allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
+          allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
+          allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
+       endif
+       phi = 0.; phinew = 0.
+       apar = 0.; aparnew = 0.
+       bpar = 0.; bparnew = 0.
+
+       if(.not.allocated(apar_ext).and.(.not.no_driver))then
+          allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
+          apar_ext = 0.
+       endif
+    end select
   end subroutine allocate_arrays
 
   subroutine advance (istep)
