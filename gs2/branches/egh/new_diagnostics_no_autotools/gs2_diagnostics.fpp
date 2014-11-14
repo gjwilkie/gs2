@@ -2944,7 +2944,7 @@ contains
     call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
     !<DD>Do all processors need to know the full result here? Only proc0 seems to do any writing.
     !If not then remove the last two arguments in the following call.
-    call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, 1, full_arr=.true.)
+    call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, .true., full_arr=.true.)
     call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
     do is = 1, nspec
        do ik = 1, naky
