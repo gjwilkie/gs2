@@ -12,6 +12,7 @@ module fields_local
   public :: advance_local, reset_fields_local, dump_response_to_file_local
   public :: fields_local_functional, read_response_from_file_local, minNrow
   public :: do_smart_update, field_local_allreduce, field_local_allreduce_sub
+  public :: allocate_arrays
 
   !> Unit tests
   public :: fields_local_unit_test_init_fields_matrixlocal
@@ -3393,6 +3394,33 @@ contains
     fields_local_unit_test_init_fields_matrixlocal = .true.
 
   end function fields_local_unit_test_init_fields_matrixlocal
+
+  !>Routine to allocate the field shape arrays
+  subroutine allocate_arrays
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew, apar_ext
+    use antenna, only: no_driver
+    use run_parameters, only: fphi, fapar, fbpar
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    implicit none
+
+    if (.not. allocated(phi)) then
+       allocate (     phi (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (    apar (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (   bpar (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
+    endif
+    phi = 0.; phinew = 0.
+    apar = 0.; aparnew = 0.
+    bpar = 0.; bparnew = 0.
+
+    if(.not.allocated(apar_ext).and.(.not.no_driver))then
+       allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
+       apar_ext = 0.
+    endif
+  end subroutine allocate_arrays
 
   !>Routine use to initialise field matrix data
   subroutine init_fields_matrixlocal
