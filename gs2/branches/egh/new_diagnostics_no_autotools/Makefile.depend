@@ -636,6 +636,7 @@ diagnostics_nonlinear_convergence.o: \
 diagnostics_omega.o: \
 	 constants.o \
 	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
 	 fields_arrays.o \
 	 fields_parallelization.o \
 	 gs2_time.o \

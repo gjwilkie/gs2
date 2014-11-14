@@ -87,8 +87,8 @@ program test_gs2_diagnostics_new
     new_variables(15) = 'omega_average'
     n_lines(15) = '4'
     
-    variables(16) = 'ntot00'
-    new_variables(16) = 'ntot_flxsurf_avg'
+    variables(16) = 'ntot00  -p 7,11'
+    new_variables(16) = 'ntot_flxsurf_avg  -p 7,11'
     n_lines(16) = '20'
 
     variables(17) = 'phi0'
@@ -189,7 +189,7 @@ contains
     use unit_tests, only: should_print
     character(*), intent(in) :: var_name, new_var_name, n_lines
     logical :: test_variable
-    character(200) ::  command 
+    character(1000) ::  command 
     
     test_variable=.true.
 #ifdef NEW_DIAG
@@ -197,7 +197,7 @@ contains
      &  ""`ncdump -v "//new_var_name//" test_gs2_diagnostics_new.cdf | tail -n "//n_lines//" `"" ]; &
      & then echo ""T"" > test_tmp.txt; fi"
     
-    if (should_print(3)) write(*,*) command
+    if (should_print(3)) write(*,*) trim(command)
     call system(" echo ""F"" > test_tmp.txt")
     call system(command)
     test_variable = .true.
@@ -205,12 +205,12 @@ contains
     read(120349, '(L)') test_variable
     close(120349)
 #endif
-  end
+  end function test_variable
   function test_file(file_name, n_lines)
     use unit_tests, only: should_print
     character(*), intent(in) :: file_name, n_lines
     logical :: test_file
-    character(200) ::  command 
+    character(1000) ::  command 
     
     test_file=.true.
 #ifdef NEW_DIAG
@@ -218,7 +218,7 @@ contains
      &  ""`cat test_gs2_diagnostics_new.new."//file_name//"   | tail -n "//n_lines//"`"" ]; &
      & then echo ""T"" > test_tmp.txt; fi"
     
-    if (should_print(3)) write(*,*) command
+    if (should_print(3)) write(*,*) trim(command)
     call system(" echo ""F"" > test_tmp.txt")
     call system(command)
     !test_= .true.
