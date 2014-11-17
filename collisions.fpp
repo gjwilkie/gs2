@@ -183,7 +183,7 @@ contains
        case (collision_model_none)
           write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
        end select
-       write (unit, fmt="(' cfac = ',f5.3)") cfac
+       write (unit, fmt="(' cfac = ',f6.3)") cfac
        write (unit, fmt="(' heating = ',L1)") heating
        write (unit, fmt="(' /')")
   end subroutine wnml_collisions
@@ -306,15 +306,15 @@ contains
        ierr = error_unit()
        call get_option_value &
             (collision_model, modelopts, collision_model_switch, &
-            ierr, "collision_model in collisions_knobs")
+            ierr, "collision_model in collisions_knobs",.true.)
 
        call get_option_value &
             (lorentz_scheme, schemeopts, lorentz_switch, &
-            ierr, "lorentz_scheme in collisions_knobs")
+            ierr, "lorentz_scheme in collisions_knobs",.true.)
 
        call get_option_value &
             (ediff_scheme, eschemeopts, ediff_switch, &
-            ierr, "ediff_scheme in collisions_knobs")
+            ierr, "ediff_scheme in collisions_knobs",.true.)
     end if
 
 
@@ -412,13 +412,13 @@ contains
 
     implicit none
     
-    logical :: init_flag = .true.
     complex, dimension (1,1,1) :: dum1 = 0., dum2 = 0.
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
-    integer :: ie, il, ik, is, isgn, iglo, all, it
+    integer :: ie, il, ik, is, isgn, iglo,  it
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
+    logical :: all = .true.
 
     if(use_le_layout) then
        allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -477,7 +477,7 @@ contains
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, z0)   ! z0 is redefined below
     else
-      call solfp_lorentz (z0,dum1,dum2,init=init_flag)   ! z0 is redefined below
+      call solfp_lorentz (z0,dum1,dum2)   ! z0 is redefined below
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -521,7 +521,7 @@ contains
           end do
        end do
 
-       all = 1
+       all = .true.
        call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
     else
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -534,7 +534,7 @@ contains
           end do
        end do
 
-       all = 1
+       all = .true.
        call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
 
 !       do is = 1, nspec
@@ -574,7 +574,7 @@ contains
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, s0)   ! s0
     else
-      call solfp_lorentz (s0,dum1,dum2,init=init_flag)   ! s0
+      call solfp_lorentz (s0,dum1,dum2)   ! s0
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -665,7 +665,7 @@ contains
       call solfp_lorentz (ctmp)
       call scatter (g2le, ctmp, w0)
     else
-      call solfp_lorentz (w0,dum1,dum2,init=init_flag)
+      call solfp_lorentz (w0,dum1,dum2)
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -827,7 +827,8 @@ contains
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
-    integer :: ie, il, ik, is, isgn, iglo, all, it
+    integer :: ie, il, ik, is, isgn, iglo, it
+    logical :: all
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
 
     if(use_le_layout) then
@@ -864,7 +865,7 @@ contains
        end do
     end do
        
-    all = 1
+    all = .true.
     call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
 !    else
 !       do is = 1, nspec
@@ -897,7 +898,7 @@ contains
       call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
     else
-      call solfp_ediffuse_standard_layout (bz0,init=.true.)   ! bz0 is redefined below
+      call solfp_ediffuse_standard_layout (bz0)   ! bz0 is redefined below
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -945,7 +946,7 @@ contains
        end do
     end do
        
-    all = 1
+    all = .true.
     call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
 !    else
 !       do is = 1, nspec
@@ -983,7 +984,7 @@ contains
       call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bs0)   ! bs0
     else
-      call solfp_ediffuse_standard_layout (bs0,init=.true.)    ! s0
+      call solfp_ediffuse_standard_layout (bs0)    ! s0
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1065,7 +1066,7 @@ contains
       call solfp_ediffuse_le_layout (ctmp)
       call scatter (g2le, ctmp, bw0)
     else
-      call solfp_ediffuse_standard_layout (bw0,init=.true.)
+      call solfp_ediffuse_standard_layout (bw0)
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1391,13 +1392,12 @@ contains
     real, intent (in), optional :: vnmult_target
 
     integer :: ie, is, ik, il, ig, it
-    real, dimension (:), allocatable :: aa, bb, cc, xe, el
+    real, dimension (:), allocatable :: aa, bb, cc, xe
     integer :: ile, ixi
     integer :: ielo
 
     allocate (aa(negrid), bb(negrid), cc(negrid))
     allocate (xe(negrid))
-    allocate (el(negrid))
 
     ! want to use x variables instead of e because we want conservative form
     ! for the x-integration
@@ -1427,7 +1427,7 @@ contains
          do ixi=1, nxi
             il = ixi_to_il(ig,ixi)
             if (forbid(ig,il)) cycle
-            call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
+            call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, xe)
             ec1le(ixi,:,ile) = cc
             ebetaale(ixi,1,ile) = 1.0 / bb(1)
             do ie = 1, negrid-1
@@ -1455,7 +1455,7 @@ contains
          ig = ig_idx(e_lo, ielo)
          it = it_idx(e_lo, ielo)
          if (forbid(ig,il)) cycle
-         call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
+         call get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, xe)
          ec1(:,ielo) = cc
 
 ! fill in the arrays for the tridiagonal
@@ -1469,11 +1469,11 @@ contains
 
     end if
 
-    deallocate(aa, bb, cc, xe, el)
+    deallocate(aa, bb, cc, xe)
 
   end subroutine init_ediffuse
 
-  subroutine get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, el, xe)
+  subroutine get_ediffuse_matrix (aa, bb, cc, ig, ik, it, il, is, xe)
 
     use species, only: spec
     use run_parameters, only: tunits
@@ -1487,7 +1487,7 @@ contains
     implicit none
 
     integer, intent (in) :: ig, ik, it, il, is
-    real, dimension (:), intent (in) :: el, xe
+    real, dimension (:), intent (in) :: xe
     real, dimension (:), intent (out) :: aa, bb, cc
 
     integer :: ie
@@ -2696,7 +2696,8 @@ contains
     real, dimension (:,:,:), allocatable :: vns
     complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2
 
-    integer :: isgn, iglo, ik, ie, il, is, it, all = 1
+    integer :: isgn, iglo, ik, ie, il, is, it
+    logical :: all = .true. 
 
     allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))
@@ -3000,8 +3001,9 @@ contains
 
     real, dimension (:,:,:), allocatable :: vns
 
-    integer :: isgn, iglo, ik, ie, il, is, it, all = 1
+    integer :: isgn, iglo, ik, ie, il, is, it 
     complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2    
+    logical :: all = .true.
 
     allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))
@@ -3332,7 +3334,7 @@ contains
 
   end subroutine conserve_diffuse_le_layout
 
-  subroutine solfp_lorentz_standard_layout (g, gc, gh, diagnostics, init)
+  subroutine solfp_lorentz_standard_layout (g, gc, gh, diagnostics)
 
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, jend, ng2, lambda_map, nxi
@@ -3348,7 +3350,6 @@ contains
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gc, gh
     integer, optional, intent (in) :: diagnostics
-    logical, optional, intent (in) :: init
 
     complex, dimension (:,:), allocatable :: glz, glzc
     integer :: ilz
@@ -3447,7 +3448,11 @@ contains
           delta(il+1) = glz(il+1,ilz) - ql(il+1,ilz)*delta(il)
        end do
        
-       glz(je,ilz) = delta(je)*betaa(je,ilz)
+!CMR, 5/9/14:
+! Correction to next line fixes a bug introduced at r2699 which
+! affected Lorentz scattering operator at wfb bounce point (theta=pi)
+! with default setting of special_wfb_lorentz=t        
+       glz(nxi_scatt+1,ilz) = delta(nxi_scatt+1)*betaa(nxi_scatt+1,ilz)
        do il = nxi_scatt, 1, -1
           glz(il,ilz) = (delta(il) - c1(il,ilz)*glz(il+1,ilz))*betaa(il,ilz)
        end do
@@ -3579,7 +3584,7 @@ contains
 ! Fixes for wfb treatment below, use same je definition in ALL cases
 !   je  = #physical xi values at location, includes duplicate point at vpar=0
 !  je-1 = #physical xi values removing duplicate vpar=0 point
-       je=2*jend(ig)
+       je=max(2*jend(ig),2*ng2+1)
        nxi_scatt=je-1
        if (jend(ig) == ng2+1 .and.special_wfb_lorentz) then
           nxi_scatt=nxi_scatt-1
@@ -3609,8 +3614,11 @@ contains
           do il = 1, nxi_scatt
              delta(il+1) = gle(il+1,ie,ile) - qle(il+1,ie,ile)*delta(il)
           end do
-       
-          gle(je,ie,ile) = delta(je)*betaale(je,ie,ile)
+!CMR, 5/9/14:
+! Correction to next line fixes a bug introduced at r2699 which
+! affected Lorentz scattering operator at wfb bounce point (theta=pi)
+! with default setting of special_wfb_lorentz=t        
+          gle(nxi_scatt+1,ie,ile) = delta(nxi_scatt+1)*betaale(nxi_scatt+1,ie,ile)
           do il = nxi_scatt, 1, -1
              gle(il,ie,ile) = (delta(il) - c1le(il,ie,ile)*gle(il+1,ie,ile))*betaale(il,ie,ile)
           end do
@@ -3642,7 +3650,7 @@ contains
   ! energy diffusion subroutine used with energy layout (not le_layout)
   ! this is always the case when initializing the conserving terms,
   ! otherwise is the case if use_le_layout is no specified in the input file.
-  subroutine solfp_ediffuse_standard_layout (g, init)
+  subroutine solfp_ediffuse_standard_layout (g)
 
     use species, only: spec
     use theta_grid, only: ntgrid
@@ -3657,7 +3665,6 @@ contains
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
-    logical, intent (in), optional :: init
 
     integer :: ie, is, ig, il, it, ik
     complex, dimension (negrid) :: delta

@@ -1,12 +1,10 @@
 module fields_implicit
-  use fields_arrays, only: nidx
   implicit none
 
   public :: init_fields_implicit
   public :: advance_implicit
   public :: remove_zonal_flows
   public :: init_allfields_implicit
-  public :: nidx
   public :: reset_init
   public :: field_subgath, dump_response, read_response
   public :: dump_response_to_file_imp
@@ -16,13 +14,47 @@ module fields_implicit
 
   private
 
+!///////////////////////////////////////////////////////
+!// DERIVED TYPES FOR FIELD MATRIX REPRESENTATION
+!///////////////////////////////////////////////////////
+
+  !////////////////////////////////////////////////////////////////
+  !// DCELL : 
+  ! Within each supercell, there are are N_class primary cells.  Each 
+  ! has (2*ntgrid+1)*nfield points.
+  type dcell_type
+     complex, dimension(:), pointer :: supercell => null()
+  end type dcell_type
+  !----------------------------------------------------------------
+
+  ! Within each class, there may be multiple supercells.
+
+  ! The number of supercells in each class is M_class.
+  
+  ! When aminv is laid out over PEs, the supercells of each class 
+  ! are distributed -- thus, "dcells"
+  
+  !////////////////////////////////////////////////////////////////
+  !// FIELD_MATRIX_TYPE : 
+  type :: field_matrix_type
+     type(dcell_type), dimension (:), pointer :: dcell => null()
+  end type field_matrix_type
+  !----------------------------------------------------------------
+
+  !////////////////////////////////////////////////////////////////
+  !// AMINV :
+  ! There may be supercells of different sizes or "classes".  
+  type (field_matrix_type), dimension (:), allocatable :: aminv
+  !----------------------------------------------------------------
+!-------------------------------------------------------
+
   !> A variable to help with running benchmarks... do not set true
   !! unless you know what you are doing. If true, the response matrix
   !! will not be initialised and set to zero. The results of any 
   !! simulation will be garbage
   logical, public :: skip_initialisation = .false.
 
-  integer, save :: nfield
+  integer :: nfield, nidx
   logical :: initialized = .false.
   logical :: linked = .false.
   logical :: field_subgath
@@ -34,13 +66,21 @@ contains
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
+    use run_parameters, only: fphi, fapar, fbpar
+    use mp, only: mp_abort
 !    use parameter_scan_arrays, only: run_scan
     implicit none
     logical, parameter :: debug=.false.
-!    logical :: dummy
 
     if (initialized) return
     initialized = .true.
+
+    !Check we have at least one field. If not abort.
+    !Note, we do this here rather than as soon as we read input file
+    !as other field types may support operation with no fields (e.g. 'local' does)
+    if((fphi.lt.epsilon(0.0)).and.(fapar.lt.epsilon(0.0)).and.(fbpar.lt.epsilon(0.0)))then
+       call mp_abort("Field_option='implicit' requires at least one field is non-zero",.true.)
+    endif
 
     if (debug) write(6,*) "init_fields_implicit: gs2_layouts"
     call init_gs2_layouts
@@ -48,8 +88,6 @@ contains
     call init_theta_grid
     if (debug) write(6,*) "init_fields_implicit: kt_grids"
     call init_kt_grids
-    if (debug) write(6,*) "init_fields_implicit: read_parameters"
-    call read_parameters
  !   if (debug .and. run_scan) &
  !       write(6,*) "init_fields_implicit: set_scan_parameter"
         ! Must be done before resp. m.
@@ -61,16 +99,12 @@ contains
   end subroutine init_fields_implicit
 
   function fields_implicit_unit_test_init_fields_implicit()
+    implicit none
     logical :: fields_implicit_unit_test_init_fields_implicit
 
     call init_fields_implicit
-
     fields_implicit_unit_test_init_fields_implicit = .true.
-
   end function fields_implicit_unit_test_init_fields_implicit
-
-  subroutine read_parameters
-  end subroutine read_parameters
 
   subroutine init_allfields_implicit
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
@@ -192,7 +226,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: f_lo, jf_lo, ij, mj, dj
     use prof, only: prof_entering, prof_leaving
-    use fields_arrays, only: aminv, time_field
+    use fields_arrays, only: time_field
     use theta_grid, only: ntgrid
     use dist_fn, only: N_class
     use mp, only: sum_allreduce, allgatherv, iproc,nproc, proc0
@@ -296,7 +330,7 @@ contains
   subroutine advance_implicit (istep, remove_zonal_flows_switch)
     use run_parameters, only: reset
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use fields_arrays, only: apar_ext !, phi_ext
+    use fields_arrays, only: apar_ext
     use antenna, only: antenna_amplitudes, no_driver
     use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
@@ -305,11 +339,10 @@ contains
     integer, intent (in) :: istep
     logical, intent (in) :: remove_zonal_flows_switch
 
-
     !GGH NOTE: apar_ext is initialized in this call
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
        
-    if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew) 
+    if (allocated(kx_shift) .or. allocated(theta0_shift)) call exb_shear (gnew, phinew, aparnew, bparnew, istep) 
     
     g = gnew
     phi = phinew
@@ -337,7 +370,7 @@ contains
     use fields_arrays, only: phinew
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
-    
+    implicit none
     complex, dimension(:,:,:), allocatable :: phi_avg
 
     allocate(phi_avg(-ntgrid:ntgrid,ntheta0,naky)) 
@@ -355,17 +388,14 @@ contains
   
   ! It replaces the routines fieldlineavgphi_loc and fieldlineavgphi_tot,
   ! in fields.f90, which I  think are defunct, as phi is always on every processor.
-
   subroutine fieldline_average_phi (phi_in, phi_average, ik_only)
     use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag, delthet
     use kt_grids, only: ntheta0, naky
-
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi_in
     complex, dimension (-ntgrid:,:,:), intent (out) :: phi_average
     integer, intent (in), optional :: ik_only
     real, dimension (-ntgrid:ntgrid) :: jac
-    !complex, dimension (-ntgrid:ntgrid) :: phi_avg_line
     complex :: phi_avg_line
     integer it, ik, ik_only_actual
     ik_only_actual = -1
@@ -389,11 +419,9 @@ contains
 
   end subroutine fieldline_average_phi
 
-
   subroutine reset_init
-
-    use fields_arrays, only: aminv
     use gs2_layouts, only: finish_fields_layouts, finish_jfields_layouts
+    implicit none
     integer :: i, j
     initialized = .false.
 
@@ -414,7 +442,6 @@ contains
 
   subroutine init_response_matrix
     use mp, only: barrier
-!   use mp, only: proc0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
@@ -693,12 +720,11 @@ contains
     use gs2_layouts, only: if_idx, im_idx, in_idx, local_field_solve
     use gs2_layouts, only: ig_idx, ifield_idx, ij_idx, mj, dj
     use prof, only: prof_entering, prof_leaving
-    use fields_arrays, only: aminv
     use dist_fn, only: i_class, M_class, N_class
     implicit none
     integer, intent (in) :: ic
     complex, dimension(:,f_lo(ic)%llim_proc:), intent (in out) :: am
-    complex, dimension(:,:), allocatable :: a_inv, lhscol, rhsrow
+    complex, dimension(:,:), allocatable :: a_inv, lhscol, rhsrow, col_row_tmp
     complex, dimension (:), allocatable :: am_tmp
     complex :: fac
     integer :: i, j, k, ik, it, m, n, nn, if, ig, jsc, jf, jg, jc
@@ -744,6 +770,7 @@ contains
                end if
             end do
          else
+            allocate(col_row_tmp(nidx*N_class(ic),2)) ; col_row_tmp = 0.
             !Loop over classes (supercell lengths)
             do m = 1, M_class(ic)
                !Convert to f_lo index
@@ -751,18 +778,24 @@ contains
                !Is ilo on this proc?
                if (idx_local(f_lo(ic),ilo)) then
                   !If so store column/row
-                  lhscol(:,m) = am(:,ilo)
-                  rhsrow(:,m) = a_inv(:,ilo)
+                  !lhscol(:,m) = am(:,ilo)
+                  !rhsrow(:,m) = a_inv(:,ilo)
+                  col_row_tmp(:,1) = am(:,ilo)
+                  col_row_tmp(:,2) = a_inv(:,ilo)
                end if
                !Here we send lhscol and rhscol sections to all procs
                !from the one on which it is currently known
                !Can't do this outside m loop as proc_id depends on m
                !These broadcasts can be relatively expensive so local_field_solve
                !may be preferable
-               call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
-               call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
+               !call broadcast (lhscol(:,m), proc_id(f_lo(ic),ilo))
+               !call broadcast (rhsrow(:,m), proc_id(f_lo(ic),ilo))
+               call broadcast (col_row_tmp, proc_id(f_lo(ic),ilo))
+               lhscol(:,m) = col_row_tmp(:,1)
+               rhsrow(:,m) = col_row_tmp(:,2)
             end do
             !All procs will have the same lhscol and rhsrow after this loop+broadcast
+            deallocate(col_row_tmp)
          end if
 
          !Loop over field compound dimension
@@ -1025,7 +1058,6 @@ contains
   end subroutine init_inverse_matrix
 
   subroutine finish_fields_layouts
-
     use dist_fn, only: N_class, i_class, itright, boundary
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: f_lo, jf_lo, ij, ik_idx, it_idx
@@ -1087,13 +1119,12 @@ contains
   end subroutine finish_fields_layouts
 
   subroutine kt2ki (i, n, ik, it)
-
+    use mp, only: mp_abort
     use file_utils, only: error_unit
     use dist_fn, only: l_links, r_links, N_class, i_class
-
+    implicit none
     integer, intent (in) :: ik, it
     integer, intent (out) :: i, n
-
     integer :: nn, ierr
 !
 ! Get size of this supercell
@@ -1113,7 +1144,7 @@ contains
        write(ierr,*) 'Error in kt2ki:'
        write(ierr,*) 'i = ',i,' ik = ',ik,' it = ',it,&
             ' N(i) = ',N_class(i),' nn = ',nn
-       stop
+       call mp_abort('Error in kt2ki')
     end if
 ! 
 ! Get position in this supercell, counting from the left
@@ -1125,7 +1156,6 @@ contains
   !>A routine to dump the current response matrix to file
   subroutine dump_response_to_file_imp(suffix)
     use file_utils, only: run_name
-    use fields_arrays, only: aminv
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: i_class, N_class, M_class, get_leftmost_it, itright
@@ -1349,7 +1379,6 @@ contains
   !response storage, note we also allocate the response storage objects
   subroutine read_response_from_file_imp(suffix)
     use file_utils, only: run_name
-    use fields_arrays, only: aminv
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: i_class, N_class, M_class, get_leftmost_it, itright
@@ -1631,7 +1660,6 @@ contains
   !>A subroutine to allocate the response matrix storage objects
   subroutine alloc_response_objects
     use dist_fn, only: i_class, N_class
-    use fields_arrays, only: aminv
     use gs2_layouts, only: jf_lo, f_lo, im_idx, in_idx, ig_idx, ifield_idx, ij_idx,dj,mj, idx_local
     use theta_grid, only: ntgrid
     implicit none

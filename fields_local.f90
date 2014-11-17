@@ -471,11 +471,18 @@ contains
     class(cell_type), intent(inout) :: self
     
     !Set our locality. Note here we assume all rb have same size
-    self%is_empty=self%rb(1)%nrow.eq.0
+    if(size(self%rb).gt.0)then
+       self%is_empty=self%rb(1)%nrow.eq.0
+       self%is_all_local=self%rb(1)%nrow.eq.self%nrow
+    else
+       self%is_empty=.true.
+       self%is_all_local=.false.
+    endif
+
     !/Also ignore the ky=kx=0 mode
     self%is_empty=(self%is_empty.or.(abs(aky(self%ik_ind)).lt.epsilon(0.0).and.abs(akx(self%it_ind)).lt.epsilon(0.0)))
     self%is_local=pc%is_local(self%it_ind,self%ik_ind).eq.1
-    self%is_all_local=self%rb(1)%nrow.eq.self%nrow
+
   end subroutine c_set_locality
 
   !>Test if a given row belongs to the current cell
@@ -486,7 +493,11 @@ contains
     logical :: c_has_row
     !NOTE: Here we assume all row blocks in the cell have the same
     !row limits
-    c_has_row=(irow.ge.self%rb(1)%row_llim.and.irow.le.self%rb(1)%row_ulim)
+    if(size(self%rb).gt.0)then
+       c_has_row=(irow.ge.self%rb(1)%row_llim.and.irow.le.self%rb(1)%row_ulim)
+    else
+       c_has_row=.false.
+    endif
   end function c_has_row
 
 !------------------------------------------------------------------------
@@ -2727,10 +2738,12 @@ contains
           write(unit,'("        ",4(" ",A8," "))') "ic", "rllim", "rulim", "nrow"
           write(unit,'("        ",4(" ",9("-")))')
           do ic=1,self%kyb(ik)%supercells(is)%ncell
-             write(unit,'("        ",4(I9," "))') ic,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_llim,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_ulim,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             if(size(self%kyb(ik)%supercells(is)%cells(ic)%rb).gt.0)then
+                write(unit,'("        ",4(I9," "))') ic,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_llim,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_ulim,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             endif
           enddo
           write(unit,'("        ",4(" ",9("-")))')
        enddo
@@ -3317,7 +3330,11 @@ contains
              if(fieldmat%kyb(ik)%supercells(is)%is_local) call free_comm(tmp)
 
              !Record the number of responsible rows, note we assume all rb have same size
-             self%nresp_per_cell(it,ik)=fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             if(size(fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb).gt.0)then
+                self%nresp_per_cell(it,ik)=fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             else
+                self%nresp_per_cell(it,ik)=0
+             endif
           enddo
        enddo
     enddo
@@ -3334,8 +3351,9 @@ contains
     use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
-    use gs2_layouts, only: init_gs2_layouts
+    use gs2_layouts, only: init_gs2_layouts, g_lo
     use mp, only: proc0, mp_abort
+    use file_utils, only: error_unit
     implicit none
 
     !Early exit if possible
@@ -3356,6 +3374,11 @@ contains
     call init_fields_matrixlocal
     if (debug.and.proc0) write(6,*) "init_fields_local: antenna"
     call init_antenna
+
+    !Print a warning message if x_lo isn't local
+    if((.not.(g_lo%x_local.and.g_lo%y_local)).and.field_local_allreduce_sub) then
+       if(proc0)write(error_unit(),'("Warning : In this run not all procs will hold the full field data (only proc0)")')
+    endif
 
     !Set the initialised state
     initialised = .true.
@@ -3601,6 +3624,7 @@ contains
   !>Initialise the fields from the initial g, just uses the
   !fields_implicit routine
   subroutine init_allfields_local
+    use mp, only: proc0
     use fields_implicit, only: init_allfields_implicit
     implicit none
     call init_allfields_implicit
@@ -3633,7 +3657,7 @@ contains
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
 
     !Apply flow shear if active
-    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew)
+    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew,istep,field_local_allreduce_sub)
 
     !Update g and fields
     g=gnew

@@ -4,6 +4,7 @@
 !! which runs GS2.
 module functional_tests
   use unit_tests, only: announce_check, agrees_with, process_check
+  use unit_tests, only: process_test, announce_test, print_with_stars
   use runtime_tests, only: verbosity
 
   !> Check that the relative error of the growth rates as a 

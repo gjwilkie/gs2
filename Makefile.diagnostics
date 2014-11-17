@@ -1,3 +1,55 @@
+# Generation of large fortran source files
+RUBY_GENERATE=env ruby $2 $1; if test "$$?" != 0; then  echo && echo && echo  "Warning: no ruby: $1 is not updated!!!" && echo && echo; fi
+
+
+
+
+# If USE_AUTOTOOLS is off build simpledataio in the same way as gs2
+# Note that any value other than "on" is considered to be "off"
+ifneq ($(USE_AUTOTOOLS),on)
+
+distclean_simpledataio:
+clean_simpledataio:
+simpledataio:
+
+SIMPLEDATAIO_VPATH=:diagnostics/simpledataio/src/:../diagnostics/simpledataio/src/:diagnostics/simpledataio/include/:../diagnostics/simpledataio/include/
+
+diagnostics: libsimpledataio.a
+
+libsimpledataio.a: simpledataio_write.o simpledataiof.o simpledataio.o
+	$(ARCH) $(ARCHFLAGS) $@ $^
+
+simpledataio_write.o: simpledataio_write.f90 simpledataiof.o
+	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
+
+simpledataiof.o: simpledataiof.f90 simpledataio.o
+	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
+
+#ifdef DBLE
+#CPPFLAGS+=-DSDATIO_DEFAULT_DOUBLE
+#endif
+
+diagnostics/simpledataio/src/simpledataio_write.F90: diagnostics/simpledataio/src/generate_simpledataio_write.rb
+	$(call RUBY_GENERATE,$@,$<)
+
+CPPFLAGS+= -DFORTRAN_NETCDF -DISO_C_BINDING  -DHAVE_MPI
+
+ifdef USE_PARALLEL_NETCDF
+	CPPFLAGS += -DPARALLEL
+endif
+
+CFLAGS+= -Idiagnostics/simpledataio
+
+SIMPLEDATAIO_LIB_ABS=$(PWD)/libsimpledataio.a
+SIMPLEDATAIO_LIB=libsimpledataio.a
+
+
+
+
+
+
+
+else # i.e. if USE_AUTOTOOLS=on
 
 ifeq ($(SIMPLEDATAIO_CONF_ARCHIVEONLY), true)
   SIMPLEDATAIO_CONF_EARCHIVE=--enable-archiveonly
@@ -50,9 +102,9 @@ diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  
 
 #simpledataio: $(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES)
 
-#diagnostics/simpledataio/.libs/libsimpledataio.a: build_simpledatio 
+#diagnostics/simpledataio/.libs/libsimpledataio.a: build_simpledataio 
 
-#diagnostics/simpledataio/.libs/libsimpledataiof.a: build_simpledatio
+#diagnostics/simpledataio/.libs/libsimpledataiof.a: build_simpledataio
 
 $(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a: $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
 	make -C diagnostics/simpledataio
@@ -63,7 +115,7 @@ $(SIMPLEDATAIO_MODULE_FILES): $(SIMPLEDATAIO_LIB)
 $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a: diagnostics/simpledataio/Makefile
 	make -C diagnostics/simpledataio
 
-simpledatio: diagnostics/simpledataio/Makefile
+simpledataio: diagnostics/simpledataio/Makefile
 	make -C diagnostics/simpledataio
 
 diagnostics/simpledataio/Makefile: diagnostics/simpledataio/configure
@@ -73,3 +125,16 @@ clean_simpledataio:
 	make clean -C diagnostics/simpledataio || echo "already clean"
 distclean_simpledataio:
 	make distclean -C diagnostics/simpledataio || echo "already clean"
+
+endif # ifndef USE_AUTOTOOLS
+
+diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb $(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES)
+	$(call RUBY_GENERATE,$@,$<)
+diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB) 
+	$(call RUBY_GENERATE,$@,$<)
+diagnostics/diagnostics_ascii.f90: diagnostics/generate_diagnostics_ascii.rb  $(SIMPLEDATAIO_LIB) 
+	$(call RUBY_GENERATE,$@,$<)
+
+# This must be built without promotion of reals to doubles
+diagnostics_create_and_write.o: diagnostics_create_and_write.f90
+	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<

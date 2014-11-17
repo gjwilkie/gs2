@@ -4,12 +4,12 @@
 !! GS2 is an initial value nonlinear code which solves the gyrokinetic equation. This is the source code documentation for GS2, and is aimed at developers. 
 !!
 !! \subsection udoc User Documentation
-!! For a general introduction and user documentation please go to the Gyrokinetics Wiki: http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=Gyrokinetics_Wiki_Home
+!! For a general introduction and user documentation please go to the Gyrokinetics Wiki: http://gyrokinetics.sourceforge.net/wiki/index.php/Main_Page
 !! 
 !! Some useful pages are: 
-!!  - A beginners guide to downloading and installing: http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=GS2:_A_Guide_for_Beginners
-!!  - A general introduction to GS2: http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=An_Introduction_to_GS2
-!!  - A comprehensive guide to the GS2 input parameters: http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=GS2_Input_Parameters
+!!  - A beginners guide to downloading and installing: http://gyrokinetics.sourceforge.net/wiki/index.php/GS2:_A_Guide_for_Beginners
+!!  - A general introduction to GS2: http://gyrokinetics.sourceforge.net/wiki/index.php/An_Introduction_to_GS2
+!!  - A comprehensive guide to the GS2 input parameters: http://gyrokinetics.sourceforge.net/wiki/index.php/GS2_Input_Parameters
 !!
 !! \section doc Documentation Structure
 !! Documentation is categorized by namespaces (i.e. modules), class (which in
@@ -37,7 +37,7 @@
 !! input parameters. Your changes will be ignored in favour of the
 !! automatically generated input parameter documentation. To edit 
 !! this input parameter documentation, please go to the wiki page: 
-!! http://sourceforge.net/apps/mediawiki/gyrokinetics/index.php?title=Gs2_Input_Parameters. 
+!! http://gyrokinetics.sourceforge.net/wiki/index.php/Gs2_Input_Parameters. 
 !! \subsection gen Updating this Documentation
 !!
 !! - Install doxygen: http://www.stack.nl/~dimitri/doxygen/

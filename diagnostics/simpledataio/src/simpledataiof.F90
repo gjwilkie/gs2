@@ -127,7 +127,7 @@ contains
 #ifdef ISO_C_BINDING
 #ifdef FORTRAN_NETCDF
      interface
-       subroutine sdatio_createfile_parallel(sfile, fname, comm) bind(c, name='sdatio_createfile_parallel')
+       subroutine sdatio_createfile_parallel(sfile, fname, comm) bind(c, name='sdatio_createfile_parallel_fortran')
          use iso_c_binding
          import sdatio_file
          type(sdatio_file) :: sfile
@@ -492,6 +492,43 @@ contains
 #endif
   end subroutine increment_start
   
+
+ !>/* Set parallel access collective*/
+ subroutine set_collective(sfile, variable_name)
+   type(sdatio_file), intent(in) :: sfile
+   character(*), intent(in) :: variable_name
+
+#ifdef ISO_C_BINDING
+
+   interface
+       subroutine sdatio_collective(sfile, variable_name) &
+            bind(c, name='sdatio_collective')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         character(c_char) :: variable_name(*)
+       end subroutine sdatio_collective
+   end interface 
+   call sdatio_collective(sfile, variable_name//c_null_char)
+#endif
+ end subroutine set_collective 
+ !>/* Set parallel access independent*/
+ subroutine set_independent(sfile, variable_name)
+   type(sdatio_file), intent(in) :: sfile
+   character(*), intent(in) :: variable_name
+#ifdef ISO_C_BINDING
+   interface
+       subroutine sdatio_independent(sfile, variable_name) &
+            bind(c, name='sdatio_independent')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         character(c_char) :: variable_name(*)
+       end subroutine sdatio_independent
+   end interface 
+   call sdatio_independent(sfile, variable_name//c_null_char)
+#endif
+ end subroutine set_independent 
 
  !>/* Returns .true. if the given variable has already been created, .false. otherwise */
  function variable_exists(sfile, variable_name)

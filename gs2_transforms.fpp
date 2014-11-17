@@ -42,8 +42,8 @@ module gs2_transforms
 
   private
 
-  logical :: initialized, initialized_x, initialized_y_fft
-  logical :: initialized_x_redist, initialized_y_redist, initialized_3d
+  logical :: initialized=.false., initialized_x=.false., initialized_y_fft=.false.
+  logical :: initialized_x_redist=.false., initialized_y_redist=.false., initialized_3d=.false.
 
   interface transform_x
      module procedure transform_x5d
@@ -82,8 +82,8 @@ module gs2_transforms
 
   ! fft
 
-  type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
-  type (fft_type) :: xf3d_cr, xf3d_rc
+  type (fft_type), save :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
+  type (fft_type), save :: xf3d_cr, xf3d_rc
 
   logical :: xfft_initted = .false.
 
@@ -102,7 +102,7 @@ contains
 
   subroutine init_transforms &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
-    use mp, only: nproc
+    use mp, only: nproc, proc0
     use gs2_layouts, only: init_gs2_layouts, opt_redist_init
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     use gs2_layouts, only: init_y_transform_layouts
@@ -158,7 +158,7 @@ contains
     if (debug) write (*,*) 'init_transforms: done'
     accelerated = accel
     
-    if (fft_use_wisdom) call save_wisdom(trim(fft_wisdom_file))
+    if (proc0.and.fft_use_wisdom) call save_wisdom(trim(fft_wisdom_file))
 
   end subroutine init_transforms
 
@@ -1043,7 +1043,9 @@ contains
     complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: xxf
 # ifdef FFT
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
+# if FFT == _FFTW_
     integer :: i
+# endif
 # else
     real, dimension (:,yxf_lo%llim_proc:) :: yxf
 # endif
@@ -1665,11 +1667,12 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
-  subroutine kz_spectrum (an, an2, ntheta0, naky)
-
+  subroutine kz_spectrum (an, an2)
+# if FFT == _FFTW_
+    use kt_grids, only: naky, ntheta0
+# endif
     complex, dimension (:,:,:), intent(in)  :: an
     complex, dimension (:,:,:), intent(out) :: an2
-    integer, intent (in) :: ntheta0, naky
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)

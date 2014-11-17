@@ -66,7 +66,7 @@ contains
     if (fphi /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('fphi in the knobs namelist = ',e10.4)") fphi
+       write (report_unit, fmt="('fphi in the knobs namelist = ',e11.4)") fphi
        write (report_unit, fmt="('fphi is a scale factor of all instances of Phi (the electrostatic potential).')")
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -82,7 +82,7 @@ contains
     if (fapar /= 0. .and. fapar /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('fapar in the knobs namelist = ',e10.4)") fapar
+       write (report_unit, fmt="('fapar in the knobs namelist = ',e11.4)") fapar
        write (report_unit, fmt="('fapar is a scale factor of all instances of A_parallel (the parallel vector potential).')")
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -98,7 +98,7 @@ contains
     if (fbpar /= 0. .and. fbpar /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('fbpar in the knobs namelist = ',e10.4)") fbpar
+       write (report_unit, fmt="('fbpar in the knobs namelist = ',e11.4)") fbpar
        write (report_unit, fmt="('fbpar is a scale factor of all instances of B_parallel &
            & (the perturbed parallel magnetic field).')")
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
@@ -134,9 +134,9 @@ contains
      if (rpexist) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "parameters"
-       write (unit, fmt="(' beta = ',e16.10)") beta       ! if zero, fapar, fbpar should be zero
-       if (collisions) write (unit, fmt="(' zeff = ',e16.10)") zeff
-       if (.not. electrons)  write (unit, fmt="(' tite = ',e16.10)") tite
+       write (unit, fmt="(' beta = ',e17.10)") beta       ! if zero, fapar, fbpar should be zero
+       if (collisions) write (unit, fmt="(' zeff = ',e17.10)") zeff
+       if (.not. electrons)  write (unit, fmt="(' tite = ',e17.10)") tite
 !CMR, 10/2/2011: zip not in this namelist, so removing it!
 !       if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
@@ -147,7 +147,7 @@ contains
        write (unit, fmt="(' fphi   = ',f6.3)") fphi
        write (unit, fmt="(' fapar  = ',f6.3)") fapar
        write (unit, fmt="(' fbpar = ',f6.3)") fbpar
-       write (unit, fmt="(' delt = ',e16.10)") delt
+       write (unit, fmt="(' delt = ',e17.10)") delt
        write (unit, fmt="(' nstep = ',i8)") nstep
        write (unit, fmt="(' wstar_units = ',L1)") wstar_units
        if (eqzip) then
@@ -155,7 +155,7 @@ contains
           write (unit, fmt="(' secondary = ',L1)") secondary
           write (unit, fmt="(' tertiary = ',L1)") tertiary
        end if
-       write (unit, fmt="(' margin = ',e16.10)") margin
+       write (unit, fmt="(' margin = ',e17.10)") margin
        select case (delt_option_switch)
        case (delt_option_auto)
           write (unit, fmt="(' delt_option = ',a)") '"check_restart"'
@@ -300,11 +300,11 @@ contains
        ierr = error_unit()
        call get_option_value &
             (delt_option, deltopts, delt_option_switch, ierr, &
-            "delt_option in knobs")
+            "delt_option in knobs",.true.)
 
        call get_option_value ( &
             eqzip_option, eqzipopts, eqzip_option_switch, error_unit(), &
-            "eqzip_option in knobs")
+            "eqzip_option in knobs",.true.)
 
 !!$       ! eqzip_option replaces eqzip, secondary, tertiary, harris
 !!$       if (eqzip .and. eqzip_option_switch == eqzip_option_none) then

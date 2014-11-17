@@ -383,296 +383,6 @@ contains
 
   end subroutine ceqin
 
-!  subroutine teqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
-!       avgrmid, initeq, in_nt, nthg) 
-!
-!    use constants, only: pi
-!!    use netcdf 
-!    implicit none
-!!    include 'netcdf.inc'
-!
-!!     This subroutine reads a generic NetCDF equilibrium file
-!!     containing the axisymmetric magnetic field geometry in flux 
-!!     coordinates
-!
-!    character (len=80) :: eqfile
-!    real, intent(out) :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid
-!    integer, intent(in) :: initeq
-!    integer, intent(out) :: nthg
-!!    integer :: initeq, nthg
-!!    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
-!    real :: d, R_geo
-!!    logical :: in_nt
-!    logical, intent(in) :: in_nt
-!
-!    integer :: istatus
-!    integer :: ncid, id, i, j
-!    integer :: nchar
-!!    integer :: ncid, id, i, j, ifail, nchar
-!!    character(31) :: fortrancrap
-!!    character(80) :: filename, eqfile
-!    character (len=80) :: filename
-!!    integer, dimension(2) :: start, cnt
-!
-!!
-!! what is the best way to handle the netcdf single/double problem?
-!!
-!!    integer :: nt1
-!!    real*8, allocatable, dimension(:) :: workr
-!!    real*8, allocatable, dimension(:,:) :: work
-!    real, allocatable, dimension(:,:) :: work
-!    real :: f_N, psi_N
-!    
-!!     read the data
-!
-!    if(initeq == 0) then
-!       nthg = nt/2
-!       return
-!    endif
-!    if (.not.in_nt) then
-!
-!       nchar=index(eqfile,' ')-1
-!       filename=eqfile(1:nchar)
-!!       filename=trim(eqfile)
-!    else
-!       filename='dskeq.cdf'
-!    endif
-!
-!# ifdef NETCDF
-!!     netcdf open file         
-!!    ncid = ncopn (filename, NCNOWRIT, ifail)
-!    istatus = nf90_open(filename, NF90_NOWRITE, ncid)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=filename)
-!
-!!     netcdf read scalar: nr
-!!
-!!     nr == number of radial grid points in radial eq grid
-!
-!!    id = ncdid (ncid, 'dim_00021', ifail)
-!!    call ncdinq (ncid, id, fortrancrap, nr, ifail)
-!
-!!    id = ncvid (ncid, 'ns', ifail)
-!!    call ncvgt1 (ncid, id, 1, nr, ifail)
-!    istatus = nf90_inq_varid (ncid, 'ns', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='ns')
-!    istatus = nf90_get_var (ncid, id, nr)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!    
-!!     netcdf read scalar: nt
-!!
-!!     nt == number of theta grid points in theta eq grid
-!
-!!    id = ncvid (ncid, 'nt1', ifail)
-!!    call ncvgt1 (ncid, id, 1, nt, ifail)
-!    istatus = nf90_inq_varid (ncid, 'nt1', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='nt1')
-!    istatus = nf90_get_var (ncid, id, nt)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!    
-!!    id = ncdid (ncid, 'dim_00050', ifail)
-!!    call ncdinq (ncid, id, fortrancrap, nt, ifail)
-!   
-!    call alloc_arrays(nr, nt)
-!
-!!     netcdf read scalars: psi_0,psi_a,B_T
-!!
-!!     psi_0 == value of psi at the magnetic axis
-!!     psi_a == value of psi at the boundary of the plasma
-!!     B_T == vacuum toroidal magnetic field at R_center
-!
-!!       id = ncvid (ncid, 'B_T', ifail)
-!!       call ncvgt1 (ncid, id, start, work1, ifail)
-!!       B_T = work1*1.e-4  ! cgs to MKS
-!
-!!     netcdf read vectors: eqpsi,fp,qsf,beta,pressure
-!!
-!!     rho_d(1:nr) == half diameters of flux surfaces at elevation 
-!!                             of Z_mag on the radial grid
-!!     psi is the poloidal flux
-!!     eqpsi(1:nr) == values of psi on the radial grid
-!!     psi_bar(1:nr) == values of psi_bar on the radial grid
-!!     [psi_bar == (eqpsi - psi_0)/(psi_a - psi_0) if not available]
-!!     fp(1:nr) == the function that satisfies 
-!!              B = fp grad zeta + grad zeta x grad psi
-!!     qsf(1:nr) == q profile on the radial grid
-!!     beta(1:nr) == local beta, with the magnetic field defined 
-!!     to be vacuum magnetic field on axis
-!!     pressure(1:nr) == pressure profile on the radial grid,
-!!     normalized to the value at the magnetic axis.     
-!
-!!    allocate(workr(nr))
-!!    workr = 0.
-!
-!!    start(1) = 1
-!!    cnt(1) = nr
-!
-!!    id = ncvid (ncid, 'rho', ifail)
-!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
-!!    rho_b = workr(1:nr)
-!    istatus = nf90_inq_varid (ncid, 'rho', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='rho')
-!    istatus = nf90_get_var (ncid, id, rho_b)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!
-!!    id = ncvid (ncid, 'psi', ifail)
-!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
-!!    eqpsi = abs(workr(1:nr))
-!    istatus = nf90_inq_varid (ncid, 'psi', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='psi')
-!    istatus = nf90_get_var (ncid, id, eqpsi)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!    eqpsi(1:nr) = abs(eqpsi(1:nr))
-!    
-!    psi_0 = eqpsi(1)
-!    psi_a = eqpsi(nr)
-!
-!    psi_bar = (eqpsi-psi_0)/(psi_a-psi_0)
-!    
-!!    id = ncvid (ncid, 'g', ifail)
-!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
-!!    fp = abs(workr(1:nr))
-!    istatus = nf90_inq_varid (ncid, 'g', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='g')
-!    istatus = nf90_get_var (ncid, id, fp)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!    fp(1:nr) = abs(fp(1:nr))
-!    
-!! not needed
-!!    id = ncvid (ncid, 'q', ifail)
-!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
-!!    qsf = abs(workr(1:nr))
-!    istatus = nf90_inq_varid (ncid, 'q', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='q')
-!    istatus = nf90_get_var (ncid, id, qsf)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!    qsf(1:nr) = abs(qsf(1:nr))
-!    
-!!    id = ncvid (ncid, 'p', ifail)
-!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)       
-!!    pressure = workr(1:nr)
-!    istatus = nf90_inq_varid (ncid, 'p', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='p')
-!    istatus = nf90_get_var (ncid, id, pressure)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!
-!!       id = ncvid (ncid, 'beta', ifail)
-!!       call ncvgt (ncid, id, start, cnt, workr, ifail)
-!!       beta = workr
-!!       beta_0 = beta(1)
-!
-!!     netcdf read 2d field: R_psi,Z_psi and B_psi (mod(B))
-!!     eq_Rpsi(1:nr, 1:nt)
-!!     eq_Zpsi(1:nr, 1:nt)
-!!     eq_Bpsi(1:nr, 1:nt)
-!!         
-!
-!    allocate(work(nt,nr))
-!!    start(1) = 1
-!!    start(2) = 1
-!!    cnt(1) = nt
-!!    cnt(2) = nr
-!
-!!    id = ncvid (ncid, 'R', ifail)
-!!    call ncvgt (ncid, id, start, cnt, work, ifail)
-!    istatus = nf90_inq_varid (ncid, 'R', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='R')
-!    istatus = nf90_get_var (ncid, id, work)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!
-!    do j=1,nt
-!       do i=1,nr
-!          R_psi(i,j) = work(j,i)
-!       enddo
-!    enddo
-!    
-!!    cnt(1) = nt
-!!    cnt(2) = nr
-!!    id = ncvid (ncid, 'Z', ifail)
-!!    call ncvgt (ncid, id, start, cnt, work, ifail)
-!    istatus = nf90_inq_varid (ncid, 'Z', id)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='Z')
-!    istatus = nf90_get_var (ncid, id, work)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
-!
-!    do j=1,nt
-!       do i=1,nr
-!          Z_psi(i,j) = work(j,i)
-!       enddo
-!    enddo
-!    
-!!    call ncclos (ncid, ifail)
-!    istatus = nf90_close (ncid)
-!    if (istatus /= NF90_NOERR) call netcdf_error (istatus)
-!    
-!!    deallocate(work,workr)
-!    deallocate(work)
-!
-!!    endif   ! end of external reads
-!
-!! mildly gimpy at the moment, because the TRANSP output does not 
-!! regularly include the point at theta=0.  
-!
-!! find aminor
-!    aminor = 0.5*abs(R_psi(nr,nt/2)-R_psi(nr,1))
-!
-!! find R_geo
-!    R_geo = 0.5*(R_psi(nr,nt/2)+R_psi(nr,1))
-!
-!! find rho_d
-!
-!    rho_d = 0.5*(R_psi(:,nt/2)-R_psi(:,1))/aminor
-!
-!! find magnetic axis
-!
-!    R_mag = R_psi(1,1)
-!    Z_mag = Z_psi(1,1)
-!
-!! Find normalizing magnetic field
-!
-!    B_T = fp(nr)/R_geo
-!!
-!!     Normalize, rename quantities 
-!!
-!
-!    R_mag = R_mag
-!    Z_mag = Z_mag
-!    R_geo = R_geo/aminor
-!    R_psi = R_psi/aminor
-!    Z_psi = Z_psi/aminor
-!     
-!
-!    beta = 8. * pi * 1.e-7 * pressure / B_T**2  ! not correct definition yet?
-!    beta_0 = beta(1)
-!    pressure = pressure/pressure(1)
-!
-!    avgrmid = aminor
-!    rmaj = R_mag / aminor   ! used to reference the grid
-!    B_T0 = abs(B_T)
-!
-!    psi_N = B_T0 * avgrmid**2
-!    psi_a = psi_a / psi_N
-!    psi_0 = psi_0 / psi_N
-!    psi_a_out = psi_a 
-!    psi_0_out = psi_0 
-!    eqpsi = eqpsi / psi_N
-!
-!    f_N = B_T0*avgrmid
-!    fp=fp/f_N
-!
-!!CMR 28/6/2011: why divide the number of theta points by two here?
-!    nthg=nt/2
-!
-!    transp = .true.
-!
-!!    do i=1,nr
-!!       write (*,*) rho_b(i), pressure(i), qsf(i)
-!!    end do
-!# else
-!    write(*,*) 'error: ceq teqin is called without netcdf'; stop
-!# endif
-!
-!  end subroutine teqin
-
   subroutine alloc_arrays(nr, nt)
 
     integer :: nr, nt
@@ -897,9 +607,9 @@ contains
     
     do i=-nth_used,-1
        f(:,:) = dcart(:,:,1)
-       call eqitem(rgrid(i), theta(i), f, tmp(1), 'R')
+       call eqitem(rgrid(i), theta(i), f, tmp(1))
        f(:,:) = dcart(:,:,2)
-       call eqitem(rgrid(i), theta(i), f, tmp(2), 'Z')
+       call eqitem(rgrid(i), theta(i), f, tmp(2))
        !if(char == 'T' .and. .not. transp) then
           !grad(i,1)=-tmp(1)
           !grad(i,2)=-tmp(2)
@@ -911,9 +621,9 @@ contains
 
     do i=0,nth_used
        f(:,:) = dcart(:,:,1)
-       call eqitem(rgrid(i),theta(i),f,tmp(1), 'R')
+       call eqitem(rgrid(i),theta(i),f,tmp(1))
        f(:,:) = dcart(:,:,2)
-       call eqitem(rgrid(i),theta(i),f,tmp(2), 'Z')
+       call eqitem(rgrid(i),theta(i),f,tmp(2))
        grad(i,1)=tmp(1)
        grad(i,2)=tmp(2)
     enddo
@@ -932,7 +642,7 @@ contains
   end subroutine gradient
 
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
+    use mp, only: mp_abort
     use splines, only: inter_d_cspl
     implicit none
     
@@ -946,7 +656,7 @@ contains
     select case(char)
     case('B') 
 !       dbish = dbbish
-       write(*,*) 'error: bishop = 1 not allowed with ceq. (2)'; stop
+       call mp_abort('error: bishop = 1 not allowed with ceq. (2)',.true.)
     case('D')  ! diagnostic
        dbish = dbtbish
     case('P') 
@@ -958,8 +668,8 @@ contains
     end select
 
     do i=-nth_used,nth_used
-       call eqitem(rgrid(i), theta(i), dbish(:,:,1), grad(i,1), 'R')
-       call eqitem(rgrid(i), theta(i), dbish(:,:,2), grad(i,2), 'Z')
+       call eqitem(rgrid(i), theta(i), dbish(:,:,1), grad(i,1))
+       call eqitem(rgrid(i), theta(i), dbish(:,:,2), grad(i,2))
     enddo
 
     !if (char == 'T' .and. .not. transp) then
@@ -982,11 +692,10 @@ contains
 
   end subroutine bgradient
 
-  subroutine eqitem(r, theta_in, f, fstar, char)
- 
+  subroutine eqitem(r, theta_in, f, fstar)
+    use mp, only: mp_abort
     use constants, only: pi
     integer :: i, j, istar, jstar
-    character(1) :: char
     real :: r, thet, fstar, sign, theta_in
     real :: st, dt, sr, dr
     real, dimension(:,:) :: f
@@ -997,7 +706,7 @@ contains
     if(r == eqpsi(1)) then
        write(*,*) 'no evaluation at axis allowed in eqitem'
        write(*,*) r, theta_in, eqpsi(1)
-       stop
+       call mp_abort('no evaluation at axis allowed in eqitem')
     endif
     
 ! allow psi(r) to be a decreasing function
@@ -1008,7 +717,7 @@ contains
     if(r < sign*eqpsi(1)) then
        write(*,*) 'r < Psi_0 in eqitem'
        write(*,*) r,sign,eqpsi(1)
-       stop
+       call mp_abort('r < Psi_0 in eqitem')
     endif
       
 ! find r on psi mesh
@@ -1019,7 +728,7 @@ contains
        write(*,*) 'No evaluation of eqitem allowed on or outside surface'
        write(*,*) '(Could this be relaxed a bit?)'
        write(*,*) r, theta_in, eqpsi(nr), sign
-       stop      
+       call mp_abort('No evaluation of eqitem allowed on or outside surface')
     endif
     
     istar=0
@@ -1037,7 +746,7 @@ contains
     if(istar == 1) then
        write(*,*) 'Too close to axis in eqitem'
        write(*,*) r, theta_in, eqpsi(1), eqpsi(2)
-       stop
+       call mp_abort('Too close to axis in eqitem')
     endif
   
 ! Now do theta direction
@@ -1204,7 +913,7 @@ contains
     
     th = mod2pi( theta)
     
-    call eqitem(r, th, R_psi, f, 'R')
+    call eqitem(r, th, R_psi, f)
     !if (debug) write(*,*) 'invR', 'th', th, 'R', f
     invR=1./f
     
@@ -1218,7 +927,7 @@ contains
     
     th = mod2pi( theta)
     
-    call eqitem(r, th, R_psi, f, 'R')
+    call eqitem(r, th, R_psi, f)
     Rpos=f
     
   end function Rpos
@@ -1231,7 +940,7 @@ contains
     
     th = mod2pi( theta)
     
-    call eqitem(r, th, Z_psi, f, 'Z')
+    call eqitem(r, th, Z_psi, f)
     Zpos=f
     
   end function Zpos
@@ -1246,9 +955,9 @@ contains
 
   end function initialize_psi
 
-  function psi (r, theta)
+  function psi (r)
    
-    real, intent (in) :: r, theta
+    real, intent (in) :: r
     real :: psi
 
     psi = r
@@ -1506,7 +1215,7 @@ contains
        rho2=0.5*diameter(rp2)
        drhodpsiq=(rho1-rho2)/(rp1-rp2)
        
-       call eqitem(eqpsi(i), 0., dpbish(:,:,1), gradpsi, 'R')
+       call eqitem(eqpsi(i), 0., dpbish(:,:,1), gradpsi)
        
        mag_B=sqrt( (btori(pbar(i))**2 + gradpsi**2))/Rpos(eqpsi(i),0.)
 
