@@ -58,7 +58,7 @@ void sdatio_createfile_parallel(struct sdatio_file * sfile, char * fname, MPI_Co
 
 	/*MPI_Init(&retval, &args);*/
 #ifdef PARALLEL 
-		if ((retval = nc_create_par(fname, NC_NETCDF4|NC_MPIPOSIX|NC_CLOBBER, comm, MPI_INFO_NULL,  &(sfile->nc_file_id)))) ERR(retval);
+		if ((retval = nc_create_par(fname, NC_NETCDF4|NC_MPIPOSIX|NC_CLOBBER, *comm, MPI_INFO_NULL,  &(sfile->nc_file_id)))) ERR(retval);
 #else
 		printf("sdatio was built without --enable-parallel, sdatio_createfile_parallel will not work\n");
 		abort();
@@ -71,9 +71,10 @@ void sdatio_createfile_parallel(struct sdatio_file * sfile, char * fname, MPI_Co
 	sdatio_end_definitions(sfile);
 }
 
-void sdatio_createfile_parallel_fortran(struct sdatio_file * sfile, char * fname, MPI_Fint * fcomm)  {
+void sdatio_createfile_parallel_fortran(struct sdatio_file * sfile, char * fname, MPI_Fint  fcomm)  {
 #ifdef PARALLEL
-  sdatio_createfile_parallel(sfile, fname, MPI_Comm_f2c(fcomm));
+  MPI_Comm comm = MPI_Comm_f2c(fcomm);
+  sdatio_createfile_parallel(sfile, fname, &comm);
   /* Above will need to be enabled for higher versions of MPI*/
   /*sdatio_createfile_parallel(sfile, fname, fcomm);*/
 #else 
