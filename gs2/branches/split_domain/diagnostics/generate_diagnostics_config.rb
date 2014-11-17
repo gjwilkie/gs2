@@ -8,25 +8,117 @@
 # This list is used in generating diagnostics_config.f90
 input_variables_for_diagnostics_config = [
 	['integer', 'nwrite', '10'],
+	['integer', 'nwrite_large', '100'],
 	['logical', 'write_any', '.true.'],
+
+  # Controls the theta location of omega calculation,
+  # also of any quantities that are written out for
+  # a given value of theta
+	['integer', 'igomega', '0'],
+
+  # Write instantaneous quantities to screen
+	['logical', 'print_line', '.false.'],
+	['logical', 'print_flux_line', '.false.'],
+
+  # Write instantaneous quantites to .new.out
+	['logical', 'write_line', '.true.'],
+	['logical', 'write_flux_line', '.true.'],
 
 	# Parameters for writing out fields
 	['logical', 'write_fields', '.true.'],
 	['logical', 'write_phi_over_time'],
 	['logical', 'write_apar_over_time'],
 	['logical', 'write_bpar_over_time'],
+	['logical', 'write_movie', '.false.'],
+	['logical', 'dump_fields_periodically', '.false.'],
+  
+
+  # Parameters for writing out moments such as density etc
+	['logical', 'write_moments', '.true.'],
+	['logical', 'write_full_moments_notgc', '.false.'],
+  # Write out 4-D moments as a function of time ... gives
+  # LARGE data files!
+	['logical', 'write_ntot_over_time', '.false.'],
+	['logical', 'write_density_over_time', '.false.'],
+	['logical', 'write_upar_over_time', '.false.'],
+	['logical', 'write_tperp_over_time', '.false.'],
+
 
 	# Parameters for writing out fluxes
 	['logical', 'write_fluxes', '.true.'],
-	['logical', 'write_fluxes_by_mode'],
+	['logical', 'write_fluxes_by_mode', '.false.'],
+	['logical', 'write_symmetry', '.false.'],
+	['logical', 'write_parity', '.false.'],
 
 	# Parameters for writing out growth rates and frequencies
 	['logical', 'write_omega', '.true.'],
 	['integer', 'navg', '10'],
-	['integer', 'igomega', '0'],
 	['real', 'omegatinst', '1.0e6'],
 	['real', 'omegatol', '-0.001'],
 	['logical', 'exit_when_converged', '.true.'],
+
+  # Parameters for writing out velocity space diagnostics
+	['logical', 'write_verr', '.true.'],
+	['logical', 'write_max_verr', '.false.'],
+	['integer', 'ncheck', '10'],
+
+  # Parameters controlling heating diagnositics
+	['logical', 'write_heating', '.false.'],
+
+
+  # If true, write out old-style text files
+	['logical', 'write_ascii', '.true.'],
+
+  # If true, write the dist_fn at a range of points in space
+  # as a function of velocity to an output file. Do not enable
+  # in the new and old diagnostics modules at the same time
+	['logical', 'write_gyx', '.false.'],
+	['logical', 'write_g', '.false.'],
+	['logical', 'write_lpoly', '.false.'],
+
+
+  # Switches on write collision_error
+	['logical', 'write_cerr', '.false.'],
+
+  # Parameters controlling Trinity convergence tests
+	['integer', 'conv_nstep_av', '4000'],
+	['real', 'conv_test_multiplier', '4e-1'],
+	['integer', 'conv_min_step', '4000'],
+	['integer', 'conv_max_step', '80000'],
+	['integer', 'conv_nsteps_converged', '10000'],
+	['logical', 'use_nonlin_convergence', '.false.'],
+
+  # Parameters determining what turbulence characteristics are calculated
+	['logical', 'write_cross_phase', '.false.'],
+	['logical', 'write_correlation', '.true.'],
+	['logical', 'write_correlation_extend', '.false.'],
+
+  # Parameters controlling diagnostics for the antennna
+	['logical', 'write_jext', '.false.'],
+	['logical', 'write_lorentzian', '.false.'],
+
+  # Parameters controlling some old routines which dump
+  # stuff to text files at the end of the simulation
+	['logical', 'write_eigenfunc', '.false.'],
+	['logical', 'write_final_fields', '.false.'],
+	['logical', 'write_kpar', '.false.'],
+	['logical', 'write_final_epar', '.false.'],
+	['logical', 'write_final_db', '.false.'],
+	['logical', 'write_final_moments', '.false.'],
+	['logical', 'write_final_antot', '.false.'],
+	['logical', 'write_gs', '.false.'],
+
+  # Save the current state of the simulation so 
+  # that it can be restarted
+	['logical', 'save_for_restart', '.true.'],
+
+  # Save the distribution function
+	['logical', 'save_distfn', '.false.'],
+
+
+
+
+
 ]
 
 
@@ -62,6 +154,20 @@ class Generator
 	end
 end
 
+begin
+  4.times.map{|i|}
+rescue
+  puts "You appear to be running ruby 1.8.6 or lower... suggest you upgrade your ruby version!"
+  class Integer
+    def times(&block)
+      if block
+        (0...self).to_a.each{|i| yield(i)}
+      else
+        return  (0...self).to_a
+      end
+    end
+  end
+end
 generators = input_variables_for_diagnostics_config.map{|type, name, default| Generator.new(type,name,default)}
 
 
@@ -75,13 +181,56 @@ string = <<EOF
 module diagnostics_config
 
   use simpledataio, only: sdatio_file
+  use diagnostics_ascii, only: diagnostics_ascii_type
+
+
 
   public :: init_diagnostics_config
   public :: finish_diagnostics_config
   public ::diagnostics_type
+  public :: results_summary_type
+  public :: override_screen_printout_options
 
+
+  !> A type for storing the current results of the simulation
+  type results_summary_type
+    real :: phi2
+    real :: apar2
+    real :: bpar2
+    real :: total_heat_flux
+    real :: total_momentum_flux
+    real :: total_particle_flux
+    real :: max_growth_rate
+
+    ! Individual heat fluxes
+    real, dimension(:), allocatable :: species_es_heat_flux
+    real, dimension(:), allocatable :: species_apar_heat_flux
+    real, dimension(:), allocatable :: species_bpar_heat_flux
+
+    ! Total fluxes
+    real, dimension(:), allocatable :: species_heat_flux
+    real, dimension(:), allocatable :: species_momentum_flux
+    real, dimension(:), allocatable :: species_particle_flux
+    real, dimension(:), allocatable :: species_energy_exchange
+
+    ! Average total fluxes
+    real, dimension(:), allocatable :: species_heat_flux_avg
+    real, dimension(:), allocatable :: species_momentum_flux_avg
+    real, dimension(:), allocatable :: species_particle_flux_avg
+
+    ! Heating
+    real, dimension(:), allocatable :: species_heating
+    real, dimension(:), allocatable :: species_heating_avg
+  end type results_summary_type
+
+  !> A type for storing the diagnostics configuration,
+  !! a reference to the output file, and current 
+  !! results of the simulation
   type diagnostics_type
    type(sdatio_file) :: sfile
+   !type(sdatio_file) :: sfilemovie
+   type(diagnostics_ascii_type) :: ascii_files
+   type(results_summary_type) :: current_results
    !> Integer below gives the sdatio type 
    !! which corresponds to a gs2 real
    integer :: rtype
@@ -91,21 +240,73 @@ module diagnostics_config
    logical :: distributed
    logical :: parallel
    logical :: exit
+   logical :: vary_vnew_only
+   logical :: calculate_fluxes
+   real :: user_time
+   real :: user_time_old
+   real, dimension(:), allocatable :: fluxfac
    #{generators.map{|g| g.declaration}.join("\n   ") }
   end type diagnostics_type
 
 
   private
 
+  !> Used for testing... causes screen printout to be 
+  !! generated regardless of the values of print_line 
+  !! and print_flux_line if set to true
+  logical :: override_screen_printout_options = .false.
+
 contains
   subroutine init_diagnostics_config(gnostics)
     use file_utils, only: open_output_file
     type(diagnostics_type), intent(out) :: gnostics
     call read_parameters(gnostics)
+    call allocate_current_results(gnostics)
   end subroutine init_diagnostics_config
 
-  subroutine finish_diagnostics_config
+  subroutine finish_diagnostics_config(gnostics)
+    type(diagnostics_type), intent(out) :: gnostics
+    call deallocate_current_results(gnostics)
   end subroutine finish_diagnostics_config
+
+  subroutine allocate_current_results(gnostics)
+    use species, only: nspec
+    type(diagnostics_type), intent(inout) :: gnostics
+    allocate(gnostics%current_results%species_es_heat_flux(nspec))
+    allocate(gnostics%current_results%species_apar_heat_flux(nspec))
+    allocate(gnostics%current_results%species_bpar_heat_flux(nspec))
+
+    allocate(gnostics%current_results%species_heat_flux(nspec))
+    allocate(gnostics%current_results%species_momentum_flux(nspec))
+    allocate(gnostics%current_results%species_particle_flux(nspec))
+    allocate(gnostics%current_results%species_energy_exchange(nspec))
+    allocate(gnostics%current_results%species_heat_flux_avg(nspec))
+    allocate(gnostics%current_results%species_momentum_flux_avg(nspec))
+    allocate(gnostics%current_results%species_particle_flux_avg(nspec))
+    allocate(gnostics%current_results%species_heating(nspec))
+    allocate(gnostics%current_results%species_heating_avg(nspec))
+  end subroutine allocate_current_results
+
+  subroutine deallocate_current_results(gnostics)
+    type(diagnostics_type), intent(inout) :: gnostics
+    ! This routine needs to be fixed: I don't know 
+    ! how to correctly deallocate the derived type
+    return
+    
+    ! One call deallocates gnostics and all allocatable arrays 
+    ! within it
+    !deallocate(gnostics%current_results)
+    write (*,*) "DEALLOCATING"
+    deallocate(gnostics%current_results%species_heat_flux)
+    deallocate(gnostics%current_results%species_momentum_flux)
+    deallocate(gnostics%current_results%species_particle_flux)
+    deallocate(gnostics%current_results%species_heat_flux_avg)
+    deallocate(gnostics%current_results%species_momentum_flux_avg)
+    deallocate(gnostics%current_results%species_particle_flux_avg)
+    deallocate(gnostics%current_results%species_heating)
+    deallocate(gnostics%current_results%species_heating_avg)
+  end subroutine deallocate_current_results
+
 
   subroutine read_parameters(gnostics)
     use file_utils, only: input_unit, error_unit, input_unit_exist
@@ -131,6 +332,11 @@ contains
     end if
 
     #{generators.map{|g| g.broadcast}.join("\n    ")}
+    
+    if (override_screen_printout_options) then 
+      gnostics%print_line = .true.
+      gnostics%print_flux_line = .true.
+    end if
 
 
 

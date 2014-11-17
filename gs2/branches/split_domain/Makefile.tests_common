@@ -15,6 +15,9 @@
 	$(CPP) $(CPPFLAGS) $< $@ -I ../../
 .c.o:
 	$(CC) $(CFLAGS) -c $< -I ../../
+	
+# This prevents error messages like m2c: Command not found
+%.o : %.mod
 
 
 clean: 

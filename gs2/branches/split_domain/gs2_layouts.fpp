@@ -5,8 +5,6 @@
 
 module gs2_layouts
 
-! TT: What are gint_layout_type and geint_layout_type?
-
 ! TT>
   use layouts_type, only: g_layout_type, lz_layout_type, e_layout_type
   use layouts_type, only: le_layout_type, p_layout_type
@@ -25,8 +23,6 @@ module gs2_layouts
 ! TT>
   public :: g_lo
 ! <TT
-  public :: gint_lo, gint_layout_type
-  public :: geint_lo, geint_layout_type
   public :: p_lo
 
 ! HJL>
@@ -46,7 +42,6 @@ module gs2_layouts
   public :: lz_lo
 ! <TT
   public :: gidx2lzidx
-  public :: gidx2gintidx, gintidx2geidx
 
   public :: init_energy_layouts
 ! TT>
@@ -249,8 +244,6 @@ module gs2_layouts
 
   interface ik_idx
      module procedure ik_idx_g
-     module procedure ik_idx_gint
-     module procedure ik_idx_geint
      module procedure ik_idx_jf
      module procedure ik_idx_lz
      module procedure ik_idx_e
@@ -266,8 +259,6 @@ module gs2_layouts
 
   interface it_idx
      module procedure it_idx_g
-     module procedure it_idx_gint
-     module procedure it_idx_geint
      module procedure it_idx_jf
      module procedure it_idx_lz
      module procedure it_idx_e
@@ -291,7 +282,6 @@ module gs2_layouts
 
   interface ie_idx
      module procedure ie_idx_g
-     module procedure ie_idx_gint
      module procedure ie_idx_lz
      module procedure ie_idx_xxf
      module procedure ie_idx_yxf
@@ -301,8 +291,6 @@ module gs2_layouts
 
   interface is_idx
      module procedure is_idx_g
-     module procedure is_idx_gint
-     module procedure is_idx_geint
      module procedure is_idx_lz
      module procedure is_idx_e
 ! TT>
@@ -322,8 +310,6 @@ module gs2_layouts
 
   interface proc_id
      module procedure proc_id_g
-     module procedure proc_id_gint
-     module procedure proc_id_geint
      module procedure proc_id_f
      module procedure proc_id_jf
      module procedure proc_id_lz
@@ -339,8 +325,6 @@ module gs2_layouts
 
   interface idx
      module procedure idx_g
-     module procedure idx_gint
-     module procedure idx_geint
      module procedure idx_f
      module procedure idx_jf
      module procedure idx_lz
@@ -356,8 +340,6 @@ module gs2_layouts
 
   interface idx_local
      module procedure idx_local_g,      ig_local_g
-     module procedure idx_local_gint,   ig_local_gint
-     module procedure idx_local_geint,  ig_local_geint
      module procedure idx_local_f,      ig_local_f
      module procedure idx_local_jf,     ig_local_jf
      module procedure idx_local_lz,     ig_local_lz
@@ -5420,39 +5402,6 @@ contains
     ilz = idx(lz_lo, ig, ik_idx(g_lo,iglo), it_idx(g_lo,iglo), &
          ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2lzidx
-
-! TT>
-# ifdef USE_C_INDEX
-  subroutine gidx2gintidx (g_lo, iglo, gint_lo, il, igint)
-# else
-  elemental subroutine gidx2gintidx (g_lo, iglo, gint_lo, il, igint)
-# endif
-! <TT
-    implicit none
-    type (g_layout_type), intent (in) :: g_lo
-    integer, intent (in) :: iglo
-    type (gint_layout_type), intent (in) :: gint_lo
-    integer, intent (out) :: il, igint
-
-    il = il_idx(g_lo, iglo)
-
-    igint = idx(gint_lo, ik_idx(g_lo,iglo), it_idx(g_lo,iglo), &
-         ie_idx(g_lo,iglo), is_idx(g_lo,iglo))
-  end subroutine gidx2gintidx
-
-  elemental subroutine gintidx2geidx (gint_lo, igint, ie, geint_lo, igeint)
-    implicit none
-    type (gint_layout_type), intent (in) :: gint_lo
-    integer, intent (in) :: igint
-    type (geint_layout_type), intent (in) :: geint_lo
-    integer, intent (out) :: ie, igeint
-
-    ie = ie_idx(gint_lo, igint)
-
-    igeint = idx(geint_lo, ik_idx(gint_lo, igint), it_idx(gint_lo, igint), &
-         is_idx(gint_lo, igint))
-
-  end subroutine gintidx2geidx
 
 ! TT>
 # ifdef USE_C_INDEX

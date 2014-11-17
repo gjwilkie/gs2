@@ -100,6 +100,13 @@ module eigval
   !Do we specify the initial condition (through ginit)?
   logical :: use_ginit
 
+  !Number of GS2 advance steps per SLEPc call to advance_eigen
+  !May be useful when looking at marginal modes etc.
+  integer :: nadv
+
+  !If true then save restart files for each eigenmode
+  logical :: save_restarts
+
   !A custom type to make it easy to encapsulate specific settings
   type EpsSettings
      logical :: use_ginit
@@ -259,7 +266,7 @@ contains
 
     namelist /eigval_knobs/ n_eig, max_iter, tolerance, &
          solver_option, extraction_option, which_option, transform_option,&
-         targ_re, targ_im, use_ginit
+         targ_re, targ_im, use_ginit, nadv, save_restarts
     integer :: ierr, in_file
     logical :: exist
 
@@ -275,6 +282,8 @@ contains
        which_option='default'
        transform_option='default'
        use_ginit=.false.
+       nadv=1
+       save_restarts=.false.
 
        !Check if name list exists and if so read it
        in_file=input_unit_exist(nml_name,exist)
@@ -286,19 +295,19 @@ contains
        !Convert string options to integer flags
        call get_option_value &
             (solver_option,solver_type_opts,solver_option_switch,&
-            ierr,"solver_option in "//nml_name)
+            ierr,"solver_option in "//nml_name,.true.)
        
        call get_option_value &
             (extraction_option,extraction_type_opts,extraction_option_switch,&
-            ierr,"extraction_option in "//nml_name)
+            ierr,"extraction_option in "//nml_name,.true.)
 
        call get_option_value &
             (which_option,which_type_opts,which_option_switch,&
-            ierr,"which_option in "//nml_name)
+            ierr,"which_option in "//nml_name,.true.)
 
        call get_option_value &
             (transform_option,transform_type_opts,transform_option_switch,&
-            ierr,"transform_option in "//nml_name)
+            ierr,"transform_option in "//nml_name,.true.)
     endif
 
     !Broadcasts
@@ -312,6 +321,8 @@ contains
     call broadcast(targ_re)
     call broadcast(targ_im)
     call broadcast(use_ginit)
+    call broadcast(nadv)
+    call broadcast(save_restarts)
   end subroutine read_parameters
 
   !> Write the eigval_knobs namelist
@@ -327,6 +338,7 @@ contains
     write(unit,'(A,A,"=",L1)') inden,'use_ginit',use_ginit
     write(unit,'(A,A,"=",I0)') inden,'n_eig',n_eig
     write(unit,'(A,A,"=",I0)') inden,'max_iter',max_iter
+    write(unit,'(A,A,"=",I0)') inden,'nadv',nadv
     write(unit,'(A,A,"=",F12.5)') inden,'toleranace',tolerance
     write(unit,'(A,A,"=",F12.5)') inden,'targ_re',targ_re
     write(unit,'(A,A,"=",F12.5)') inden,'targ_im',targ_im
@@ -859,11 +871,16 @@ contains
   !> Routine to write results to screen and netcdf
   subroutine ReportResults(my_solver,my_operator,my_settings)
     use mp, only: proc0
-    use gs2_time, only: code_dt
+    use gs2_time, only: code_dt, user_time, user_dt
+    use collisions, only: vnmult
     use run_parameters, only: fphi, fapar, fbpar
     use fields, only: set_init_fields
-    use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
+    use fields_arrays, only: phinew, bparnew
+    use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file
+    use gs2_save, only: add_eigenpair_to_file, gs2_save_for_restart, finish_save
     use file_utils, only: run_name
+    use dist_fn_arrays, only: gnew, g_adjust
+    use gs2_diagnostics, only: save_distfn
     implicit none
     EPS, intent(in) :: my_solver
     Mat, intent(in) :: my_operator
@@ -876,6 +893,8 @@ contains
     logical :: all_found
     PetscInt :: ieig
     type(EigNetcdfID) :: io_ids
+    character(len=20) :: restart_unique_string
+    integer :: istatus
 
     !Find out how many iterations were performed
     call EPSGetIterationNumber(my_solver,iteration_count,ierr)
@@ -920,6 +939,30 @@ contains
 
           !Add to file
           if(proc0)call add_eigenpair_to_file(EigVal,fphi,fapar,fbpar,io_ids)
+
+          !Save restart file
+          if(save_restarts) then
+             !First make the unique bit of the name
+             write(restart_unique_string,'(".eig_",I0)') ieig
+
+             !Save restart files
+             call gs2_save_for_restart(gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar,.true.,fileopt=restart_unique_string)
+
+             !Save distfn files
+             if(save_distfn)then
+                !Convert h to distribution function
+                call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+                
+                !Save dfn, fields and velocity grids to file
+                call gs2_save_for_restart(gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar,.true.,distfn=.true.,fileopt=restart_unique_string)
+
+                !Convert distribution function back to h
+                call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+             endif
+
+             !Reset the status of save_for_restart
+             call finish_save
+          endif
        enddo
 
        !Close netcdf file
@@ -936,7 +979,7 @@ contains
     use gs2_time, only: code_dt
     implicit none
     complex, intent(in) :: eig
-    Eig_SlepcToGs2=log(eig)*cmplx(0.0,1.0)/code_dt
+    Eig_SlepcToGs2=log(eig)*cmplx(0.0,1.0)/(code_dt*nadv)
   end function Eig_SlepcToGs2
 
   elemental PetscScalar function Eig_Gs2ToSlepc(eig)
@@ -946,9 +989,9 @@ contains
     !If PETSC doesn't have a complex type then return the
     !magnitude of the eigenvalue.
 #ifdef PETSC_USE_COMPLEX
-    Eig_Gs2ToSlepc=exp(-cmplx(0.0,1.0)*code_dt*eig)
+    Eig_Gs2ToSlepc=exp(-cmplx(0.0,1.0)*code_dt*eig*nadv)
 #else
-    Eig_Gs2ToSlepc=abs(exp(-cmplx(0.0,1.0)*code_dt*eig))
+    Eig_Gs2ToSlepc=abs(exp(-cmplx(0.0,1.0)*code_dt*eig*nadv))
 #endif
   end function Eig_Gs2ToSlepc
 
@@ -959,14 +1002,21 @@ contains
     Vec, intent(inout) :: VecIn, Res
     PetscErrorCode, intent(inout) :: ierr
     integer, parameter :: istep=2
+    integer :: is
+
     !First unpack input vector into gnew
     call VecToGnew(VecIn)
 
     !Now set fields to be consistent with gnew
     call set_init_fields
 
-    !Now do one time step
-    call advance(istep)
+    !Now do a number of time steps
+    do is=1,nadv
+       !Note by using a fixed istep we
+       !force the explicit terms to be excluded
+       !except for the very first call.
+       call advance(istep)
+    enddo
 
     !Now pack gnew into output
     call GnewToVec(Res)

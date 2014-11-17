@@ -109,7 +109,12 @@ LOWFLOW ?=
 # Compile with PETSC/SLEPC support for determining eigensystem (bin).
 WITH_EIG ?= 
 
+# Compile with the new simplified diagnostics module
 USE_NEW_DIAG ?= on
+
+# Use autotools to configure the code (currently only affects the new diagnostics module)
+# Possible values... on, off
+USE_AUTOTOOLS ?= off
 
 HAS_ISO_C_BINDING ?= on
 
@@ -408,7 +413,8 @@ PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
 		 $(SIMPLEDATAIO_INC) $(EIG_INC)
-CFLAGS += $(COPTFLAGS)
+CFLAGS += $(COPTFLAGS) \
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) 
 
 DATE=$(shell date +%y%m%d)
 TARDIR=$(GK_PROJECT)_$(DATE)
@@ -423,7 +429,7 @@ ifneq ($(TOPDIR),$(CURDIR))
 	SUBDIR=true
 endif
 
-VPATH = $(UTILS):$(GEO):Aux:diagnostics:../$(UTILS):../$(GEO):../diagnostics
+VPATH = $(UTILS):$(GEO):Aux:diagnostics:../$(UTILS):../$(GEO):../diagnostics$(SIMPLEDATAIO_VPATH)
 # this just removes non-existing directory from VPATH
 VPATH_tmp := $(foreach tmpvp,$(subst :, ,$(VPATH)),$(shell [ -d $(tmpvp) ] && echo $(tmpvp)))
 VPATH = .:$(shell echo $(VPATH_tmp) | sed "s/ /:/g")
@@ -458,14 +464,20 @@ endif
 ####################################################################### RULES
 
 .SUFFIXES:
-.SUFFIXES: .fpp .f90 .c .o
+.SUFFIXES: .fpp .f90 .c .o .F90
 
 .f90.o: 
 	$(FC) $(F90FLAGS) $(F90FLAGS_SFXJUNK) -c $<
 .fpp.f90:
 	$(CPP) $(CPPFLAGS) $< $@
+.F90.f90:
+	$(CPP) $(CPPFLAGS) $< $@
 .c.o:
 	$(CC) $(CFLAGS) $(subst -traditional,,$(subst -C,,$(subst -P,,$(CPPFLAGS)))) -c $<
+
+# This prevents error messages like m2c: Command not found
+%.o : %.mod
+
 
 ##################################################################### TARGETS
 
@@ -485,10 +497,15 @@ all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
 
-utils_mod += fft_save_wisdom.o
-gs2_mod += fft_save_wisdom.o
-ingen_mod += fft_save_wisdom.o
-generate_fftw_wisdom_mod += fft_save_wisdom.o
+#If we're using fft(w) then we want to link the fft_save_wisdom object file
+#this currently has to be handled specially as it comes from a c source file
+#rather than fortran (so isn't picked up by fortdep).
+ifdef USE_FFT
+    utils_mod += fft_save_wisdom.o
+    gs2_mod += fft_save_wisdom.o
+    ingen_mod += fft_save_wisdom.o
+    generate_fftw_wisdom_mod += fft_save_wisdom.o
+endif
 
 #include Makefile.doc_depend
 
@@ -550,7 +567,7 @@ clean: clean_simpledataio
 	-rm -f *.o *.mod *.g90 *.h core */core
 
 CLEANCOMMAND=echo $$$$PWD
-CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch *.timing.*
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch *.timing.* *.moments *.cdf *.jext *.parity *.heat *.heat2 *.vres2
 
 ifdef CLEAN_TEXTFILES
 	CLEANCOMMAND+= *~ *.orig

@@ -138,9 +138,9 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperviscosity included without hyperresistivity.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hypervisc
+             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hypervisc
           else
-             write (report_unit, fmt="('The damping coefficent is ',e10.4)") D_hypervisc
+             write (report_unit, fmt="('The damping coefficent is ',e11.4)") D_hypervisc
              write (report_unit, fmt="('The damping rate is proportional to the RMS amplitude of the turbulence.')")
           end if
           if (isotropic_shear) then
@@ -149,7 +149,7 @@ contains
           else
              write (report_unit, fmt="('The hyperviscosity is anisotropic in the perpendicular plane.')")
              write (report_unit, fmt="('This is appropriate for drift-type calculations.')")
-             write (report_unit, fmt="('omega_osc = ',e10.4)") omega_osc
+             write (report_unit, fmt="('omega_osc = ',e11.4)") omega_osc
           end if
           
        case (hyper_option_res)
@@ -157,7 +157,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperresistivity included without hyperviscosity.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
+             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hyperres
           else
              write (report_unit, fmt="('################# WARNING #######################')")
              write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
@@ -179,7 +179,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperresistivity and hyperviscosity included.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
+             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hyperres
           else
              write (report_unit, fmt="('################# WARNING #######################')")
              write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
@@ -212,19 +212,19 @@ contains
              
           case (hyper_option_visc) 
              write (unit, fmt="(' hyper_option = ',a)") '"visc_only"'
-             write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+             write (unit, fmt="(' D_hypervisc = ',e17.10)") D_hypervisc
              
           case (hyper_option_res) 
              write (unit, fmt="(' hyper_option = ',a)") '"res_only"'
-             write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             write (unit, fmt="(' D_hyperres = ',e17.10)") D_hyperres
              
           case (hyper_option_both) 
              write (unit, fmt="(' hyper_option = ',a)") '"both"'
              if (D_hyperres == D_hypervisc) then
-                write (unit, fmt="(' D_hyper = ',e16.10)") D_hyper
+                write (unit, fmt="(' D_hyper = ',e17.10)") D_hyper
              else
-                write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
-                write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+                write (unit, fmt="(' D_hypervisc = ',e17.10)") D_hypervisc
+                write (unit, fmt="(' D_hyperres = ',e17.10)") D_hyperres
              end if
           end select
 
@@ -233,7 +233,7 @@ contains
           write (unit, fmt="(' const_amp = ',L1)") const_amp
           write (unit, fmt="(' isotropic_shear = ',L1)") isotropic_shear
           if (.not. isotropic_shear) &
-               write (unit, fmt="(' omega_osc = ',e16.10)") omega_osc
+               write (unit, fmt="(' omega_osc = ',e17.10)") omega_osc
 
           write (unit, fmt="(' gridnorm = ',L1)") gridnorm
           write (unit, fmt="(' /')")
@@ -328,7 +328,7 @@ contains
 
        call get_option_value &
             (hyper_option, hyperopts, hyper_option_switch, &
-            ierr, "hyper_option in hyper_knobs")
+            ierr, "hyper_option in hyper_knobs",.true.)
 
        if (.not. isotropic_shear .and. nexp /=2) then
           write (ierr, *) 'Forcing nexp = 2.  Higher values not implemented for anisotropic shear model.'

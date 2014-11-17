@@ -464,6 +464,7 @@ contains
 
   subroutine eqitem(r, theta_in, f, fstar, char)
     use constants, only: pi
+    use mp, only: mp_abort
     integer :: i, j, istar, jstar
     character(1) :: char
     real :: r, thet, fstar, sign, tp, tps, theta_in
@@ -476,7 +477,7 @@ contains
     if(r == eqpsi(1)) then
        write(*,*) 'no evaluation at axis allowed in eqitem'
        write(*,*) r, theta_in, eqpsi(1)
-       stop
+       call mp_abort('no evaluation at axis allowed in eqitem')
     endif
     
 ! allow psi(r) to be a decreasing function
@@ -487,7 +488,7 @@ contains
     if(r < sign*eqpsi(1)) then
        write(*,*) 'r < Psi_0 in eqitem'
        write(*,*) r,sign,eqpsi(1)
-       stop
+       call mp_abort('r < Psi_0 in eqitem')
     endif
       
 ! find r on psi mesh
@@ -503,7 +504,7 @@ contains
     if(r >= eqpsi(nr)) then
        write(*,*) 'No evaluation of eqitem allowed outside surface'
        write(*,*) r, theta_in, eqpsi(nr), sign
-       stop      
+       call mp_abort('No evaluation of eqitem allowed outside surface')
     endif
     
     istar=0
@@ -521,7 +522,7 @@ contains
     if(istar == 1) then
 !       write(*,*) 'Too close to axis in eqitem'
 !       write(*,*) r, theta_in, eqpsi(1), eqpsi(2)
-!       stop
+!       call mp_abort('Too close to axis in eqitem')
     endif
   
 ! Now do theta direction
@@ -682,9 +683,9 @@ contains
 
   end function initialize_psi
 
-  function psi (r, theta)
+  function psi (r)
    
-    real, intent (in) :: r, theta
+    real, intent (in) :: r
     real :: psi
 
     psi = r
@@ -779,9 +780,9 @@ contains
 
   end function initialize_dbtori
 
-  function dbtori (pbar)
+  function dbtori ()
   
-    real :: pbar, dbtori
+    real :: dbtori
 
     dbtori = 0.
 
@@ -797,9 +798,9 @@ contains
 
   end function initialize_btori
 
-  function btori (pbar)
+  function btori ()
   
-    real :: pbar, btori
+    real :: btori
 
     btori = 0.
 
@@ -815,9 +816,9 @@ contains
 
   end function initialize_q
 
-  function qfun (pbar)
+  function qfun ()
   
-    real :: pbar, qfun
+    real :: qfun
 
     qfun = 0.
 

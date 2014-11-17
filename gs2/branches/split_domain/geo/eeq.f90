@@ -147,6 +147,7 @@ contains
     use constants, only: pi, twopi
     use gs2d, only: read_gs2d, psi, b0, f, ippsi, nr, nz, p, ps
     use gs2d, only: psip, psmin, q, r0, rgrid, rmag, rsep, zgrid, zmag, zsep
+    use mp, only: mp_abort
     implicit none
 
     real :: p_0
@@ -199,7 +200,7 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
     if (size(ps) /= nw) then
        write(6,*) 'gs2din: size(ps) (',size(ps),') /= nw (',nw,')'
        write(6,*) 'gs2din: => should fix the GS2D output file and try again'
-       stop
+       call mp_abort('gs2din: => should fix the GS2D output file and try again')
     endif
     spsi_bar=(ps-minval(ps))/(maxval(ps)-minval(ps))
 
@@ -741,7 +742,8 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
   end subroutine bgradient
 
   subroutine eqitem(r, thetin, f, fstar)
-      
+    use mp, only: mp_abort
+    implicit none
     integer :: i, j, istar, jstar
     real, intent (in) :: r, thetin, f(:,:)
     real, intent (out) :: fstar
@@ -757,7 +759,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of R domain'
        write(*,*) r, thetin, efit_R(nw), r_pos
-       stop      
+       call mp_abort('No evaluation of eqitem allowed outside or on edge of R domain')
     endif
 
 ! ensure point is on Z mesh
@@ -766,7 +768,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of Z domain'
        write(*,*) r, thetin, efit_Z(1), efit_Z(nh), z_pos
-       stop
+       call mp_abort('No evaluation of eqitem allowed outside or on edge of Z domain')
     endif
     
     istar=0
@@ -1047,8 +1049,9 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
   end subroutine efit_finish
 
   subroutine a_minor(r, z, Z_mag, a)
-
+!    use mp, only: mp_abort
     use splines, only: new_spline, splint, delete_spline, spline
+    implicit none
     real, dimension(:), intent (in) :: r, z
     real :: a, Z_mag, r1, r2
     integer, parameter :: nz = 5
@@ -1068,7 +1071,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
     if(n < nz) then
        write(*,*) 'nbbbs < nz -- very strange.  Stopping.'
        write(*,*) 'Look in eeq.f90.'
-!       stop
+!      call mp_abort('nbbbs < nz -- very strange.  Stopping : Look in eeq.f90')
     endif
 
     j = 0

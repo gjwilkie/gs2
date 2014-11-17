@@ -1,14 +1,10 @@
 module fields
-  use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-  use fields_arrays, only: apar_ext
 
   implicit none
 
   public :: init_fields, finish_fields
   public :: read_parameters, wnml_fields, check_fields
   public :: advance, force_maxwell_reinit
-  public :: kperp, fieldlineavgphi
-  public :: phi, apar, bpar, phinew, aparnew, bparnew
   public :: reset_init, set_init_fields
   public :: fields_init_response, set_dump_and_read_response
   public :: dump_response_to_file
@@ -59,7 +55,6 @@ contains
        if(do_smart_update) write(report_unit, fmt="('Using optimised field update.')")
     end select
   end subroutine check_fields
-
 
   subroutine wnml_fields(unit)
     use fields_local, only: minNrow, do_smart_update
@@ -181,20 +176,14 @@ contains
     use fields_implicit, only: dump_response_to_file_imp
     use fields_local, only: dump_response_to_file_local
     implicit none
-    character(len=*), intent(in), optional :: suffix
+    character(len=*), intent(in), optional :: suffix 
+    !Note can pass optional straight through as long as also optional
+    !in called routine (and not different routines combined in interface)
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       if(present(suffix)) then
-          call dump_response_to_file_imp(suffix)
-       else
-          call dump_response_to_file_imp
-       end if
+       call dump_response_to_file_imp(suffix)
     case (fieldopt_local)
-       if(present(suffix)) then
-          call dump_response_to_file_local(suffix)
-       else
-          call dump_response_to_file_local
-       end if
+       call dump_response_to_file_local(suffix)
     case default
        !Silently ignore unsupported field options
     end select
@@ -252,13 +241,12 @@ contains
        field_local_allreduce=.false.
        field_local_allreduce_sub=.false.
        in_file = input_unit_exist ("fields_knobs", exist)
-!       if (exist) read (unit=input_unit("fields_knobs"), nml=fields_knobs)
        if (exist) read (unit=in_file, nml=fields_knobs)
 
        ierr = error_unit()
        call get_option_value &
             (field_option, fieldopts, fieldopt_switch, &
-            ierr, "field_option in fields_knobs")
+            ierr, "field_option in fields_knobs",.true.)
 
     end if
 
@@ -303,10 +291,9 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use antenna, only: no_driver
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew, apar_ext
     implicit none
-!    logical :: alloc = .true.
 
-!    if (alloc) then
     if (.not. allocated(phi)) then
        allocate (     phi (-ntgrid:ntgrid,ntheta0,naky))
        allocate (    apar (-ntgrid:ntgrid,ntheta0,naky))
@@ -322,8 +309,6 @@ contains
        allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
        apar_ext = 0.
     endif
-
-!    alloc = .false.
   end subroutine allocate_arrays
 
   subroutine advance (istep)
@@ -343,10 +328,12 @@ contains
     end select
   end subroutine advance
 
+  !This routine has a potentially misleading name and isn't used anywhere
   subroutine kperp (ntgrid_output, akperp)
     use theta_grid, only: delthet
     use kt_grids, only: naky, aky, ntheta0, kperp2
     use run_parameters, only: fphi, fapar, fbpar
+    use fields_arrays, only: phinew, aparnew, bparnew
     implicit none
     integer, intent (in) :: ntgrid_output
     real, dimension (:,:), intent (out) :: akperp
@@ -373,8 +360,10 @@ contains
     end do
   end subroutine kperp
 
+  !This routine isn't used anywhere
   subroutine fieldlineavgphi_loc (ntgrid_output, it, ik, phiavg)
     use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag, delthet
+    use fields_arrays, only: phi
     implicit none
     integer, intent (in) :: ntgrid_output, ik, it
     complex, intent (out) :: phiavg
@@ -388,6 +377,7 @@ contains
                  *jac(-ntgrid_output:ntgrid_output))
   end subroutine fieldlineavgphi_loc
 
+  !This doesn't look like a useful routine and isn't used anywhere
   subroutine fieldlineavgphi_tot (phiavg)
     use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag
 !    use theta_grid, only: delthet
@@ -426,15 +416,20 @@ contains
 
   !end subroutine fieldline_average_phi
 
-
   subroutine reset_init
     use fields_implicit, only: fi_reset => reset_init
     use fields_test, only: ft_reset => reset_init
     use fields_local, only: fl_reset => reset_fields_local
+    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     implicit none
     initialized  = .false.
     phi = 0.
     phinew = 0.
+    apar = 0.
+    aparnew = 0.
+    bpar = .0
+    bparnew = 0.
+    !What about apar_ext?
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        call fi_reset

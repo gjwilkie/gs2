@@ -11,7 +11,7 @@ module theta_grid_gridgen
   integer :: npadd
   real :: alknob, epsknob, bpknob, extrknob, tension
   real :: thetamax, deltaw, widthw
-  logical :: exist, initialized
+  logical :: exist, initialized=.false.
 
 contains
   subroutine wnml_theta_grid_gridgen(unit)
@@ -21,14 +21,14 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "theta_grid_gridgen_knobs"
        write (unit, fmt="(' npadd =    ',i4)") npadd
-       write (unit, fmt="(' alknob =   ',e16.10)") alknob
-       write (unit, fmt="(' epsknob =  ',e16.10)") epsknob
-       write (unit, fmt="(' bpknob =   ',e16.10)") bpknob
-       write (unit, fmt="(' extrknob = ',e16.10)") extrknob
-       write (unit, fmt="(' tension =  ',e16.10)") tension
-       write (unit, fmt="(' thetamax = ',e16.10)") thetamax
-       write (unit, fmt="(' deltaw =   ',e16.10)") deltaw
-       write (unit, fmt="(' widthw =   ',e16.10)") widthw
+       write (unit, fmt="(' alknob =   ',e17.10)") alknob
+       write (unit, fmt="(' epsknob =  ',e17.10)") epsknob
+       write (unit, fmt="(' bpknob =   ',e17.10)") bpknob
+       write (unit, fmt="(' extrknob = ',e17.10)") extrknob
+       write (unit, fmt="(' tension =  ',e17.10)") tension
+       write (unit, fmt="(' thetamax = ',e17.10)") thetamax
+       write (unit, fmt="(' deltaw =   ',e17.10)") deltaw
+       write (unit, fmt="(' widthw =   ',e17.10)") widthw
        write (unit, fmt="(' /')")
   end subroutine wnml_theta_grid_gridgen
 
@@ -371,8 +371,8 @@ contains
      if (.not. exist) return
      write (unit, *)
      write (unit, fmt="(' &',a)") "theta_grid_salpha_knobs"
-     write (unit, fmt="(' alpmhdfac = ',e16.10)") alpmhdfac
-     write (unit, fmt="(' alpha1 =    ',e16.10)") alpha1
+     write (unit, fmt="(' alpmhdfac = ',e17.10)") alpmhdfac
+     write (unit, fmt="(' alpha1 =    ',e17.10)") alpha1
      
      select case (model_switch)
         
@@ -458,7 +458,7 @@ contains
     ierr = error_unit()
     call get_option_value &
          (model_option, modelopts, model_switch, &
-         ierr, "model_option in theta_grid_salpha_knobs")
+         ierr, "model_option in theta_grid_salpha_knobs",.true.)
 
     if (alpmhdfac > epsilon(0.0)) then
        shift = - alpmhd*alpmhdfac
@@ -486,6 +486,7 @@ contains
     use constants, only: pi
     use theta_grid_params, only: eps, epsl, shat_param => shat, pk
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
+    use file_utils, only: error_unit
     implicit none
     integer, intent (in) :: nperiod
     integer, intent (in out) :: ntheta, ntgrid, nbset
@@ -619,12 +620,20 @@ contains
     ! BD: What are gds23 and gds24?  Who put this here?
     ! MB: gds23 and gds24 are geometrical factors appearing at next order in gk eqn
     ! MB: NEED TO INCLUDE SHIFT IN BELOW EXPRESSIONS
-    gds23 = -0.5*epsl*shat*theta*(1.+2.*eps*cos(theta))/eps
-    gds24_noq = 0.5*epsl*(1.+eps*cos(theta))/eps
+    !<DD> The following few lines will cause an issue in the (semi-)valid case where eps=0.0 so adding a guard
+    !     here. These terms are used in lowflow calculations
+    if(eps>epsilon(0.0))then
+       gds23 = -0.5*epsl*shat*theta*(1.+2.*eps*cos(theta))/eps
+       gds24_noq = 0.5*epsl*(1.+eps*cos(theta))/eps
+       ! MB: NEED TO INCLUDE SHIFT BELOW
+       cvdrift_th = -0.25*(cos(theta))*epsl**2/eps
+    else
+       write(error_unit(),'("Warning : Some lowflow related geometrical terms are forced to zero in cases with eps=0.")')
+       gds23 = 0.
+       gds24_noq = 0.
+       cvdrift_th = 0.
+    endif
     gds24 = shat*gds24_noq
-
-    ! MB: NEED TO INCLUDE SHIFT BELOW
-    cvdrift_th = -0.25*(cos(theta))*epsl**2/eps
     gbdrift_th = cvdrift_th
 
     if (model_switch /= model_alpha1) then
@@ -1428,7 +1437,17 @@ contains
     integer :: unit
     character(200) :: line
     integer :: i
+    logical :: first=.true.
     !<DD> Should jacob also be provided by this routine?
+
+    !<DD> NOTE: Not currently settin Bpol here. This is used in flux calculations.
+    !If not set then results will be funny. Add a warning message and set to zero
+    !for now.
+    if(first)then
+       write(*,'("WARNING: When using file_get_grids, Bpol does not have a correct definition --> Currently just setting to zero, may impact some diagnostics")')
+       Bpol=0.
+       first=.false.
+    endif
 
     shat = shat_input
     drhodpsi = drhodpsi_input
@@ -1784,7 +1803,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     ierr = error_unit()
     call get_option_value &
          (equilibrium_option, eqopts, eqopt_switch, &
-         ierr, "equilibrium_option in theta_grid_knobs")
+         ierr, "equilibrium_option in theta_grid_knobs",.true.)
   end subroutine read_parameters
 
   subroutine allocate_arrays
