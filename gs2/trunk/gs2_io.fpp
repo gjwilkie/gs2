@@ -1,5 +1,11 @@
 # include "define.inc"
 
+!> The old module for writing to netcdf. THIS MODULE IS NOW DEPRECATED.
+!! It is scheduled to be disabled by default on 1st Jan 2015 and removed
+!! from the repository on 1st March 2015. Do not edit or extend this module
+!! in any way apart from vital fixes. Any changes you make may not be 
+!! transferred to the new diagnostics module... please use the new diagnostics 
+!! module contained in the diagnostics folder instead.
 module gs2_io
 
 # ifdef NETCDF
