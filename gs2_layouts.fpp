@@ -95,6 +95,7 @@ module gs2_layouts
 
   logical :: use_split
   integer :: split_x, split_y, split_l, split_e, split_s
+  integer :: nproc_glo
 
   logical :: opt_local_copy
   logical :: opt_redist_init
@@ -115,21 +116,7 @@ module gs2_layouts
 !!$  end type g_layout_type
 ! <TT
 
-  type :: gint_layout_type
-     integer :: iproc
-     integer :: naky, ntheta0, negrid, nspec
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
-  end type gint_layout_type
-
-  type :: geint_layout_type
-     integer :: iproc
-     integer :: naky, ntheta0, nspec
-     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
-  end type geint_layout_type
-
   type (g_layout_type) :: g_lo
-  type (gint_layout_type) :: gint_lo
-  type (geint_layout_type) :: geint_lo
 ! TT>
   type (le_layout_type) :: le_lo  ! new type
 ! <TT
@@ -416,6 +403,7 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
+    use mp, only: nproc
     implicit none
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
@@ -423,7 +411,7 @@ contains
          opt_local_copy, opt_redist_nbk, opt_redist_init, intmom_sub, &
          intspec_sub, opt_redist_persist, opt_redist_persist_overlap, fft_measure_plan, &
          fft_use_wisdom, fft_wisdom_file,&
-         use_split, split_x, split_y, split_l, split_e, split_s
+         use_split, split_x, split_y, split_l, split_e, split_s, nproc_glo
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -449,6 +437,7 @@ contains
     split_l = -1
     split_e = -1
     split_s = -1
+    nproc_glo = nproc
     in_file=input_unit_exist("layouts_knobs", exist)
     if (exist) read (unit=input_unit("layouts_knobs"), nml=layouts_knobs)
     if (layout.ne.'yxels' .and. layout.ne.'yxles' .and. layout.ne.'lexys'&
@@ -497,7 +486,6 @@ contains
     character(len=*), intent(inout) :: wisdom_file
     character(len=1000) :: env_wisdom_file
     call get_environment_variable("GK_FFTW3_WISDOM", env_wisdom_file)
-    !read (env_wisdom_file,'(I10)') verbosity
 
     if (wisdom_file .eq. 'default') then
       if (trim(env_wisdom_file) .eq. '') then
@@ -506,7 +494,6 @@ contains
         wisdom_file = env_wisdom_file
       end if
     end if
-    !write (*,*) 'wisdom_file', wisdom_file
   end subroutine get_wisdom_file
 
   subroutine broadcast_results
@@ -536,6 +523,7 @@ contains
     call broadcast (split_l)
     call broadcast (split_e)
     call broadcast (split_s)
+    call broadcast (nproc_glo)
   end subroutine broadcast_results
 
   subroutine check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
@@ -751,7 +739,8 @@ contains
     g_lo%nspec = nspec
     g_lo%llim_world = 0
     g_lo%ulim_world = naky*ntheta0*negrid*nlambda*nspec - 1
-      
+    g_lo%nproc = nproc_glo
+
     !Specified split setup
     !1. Copy data into layout
     g_lo%use_split = use_split
@@ -804,19 +793,19 @@ contains
        g_lo%blocksize = g_lo%x_block*g_lo%y_block*g_lo%l_block*g_lo%e_block*g_lo%s_block
 
        !Check if we have enough processors
-       tmp=nproc*g_lo%blocksize
-       nproc_spare=(nproc-(g_lo%ulim_world+1)/g_lo%blocksize)
+       tmp=g_lo%nproc*g_lo%blocksize
+       nproc_spare=(g_lo%nproc-(g_lo%ulim_world+1)/g_lo%blocksize)
        if(tmp.ge.(g_lo%ulim_world+1)) then !We have enough procs
           !Print a brief message saying what fraction of procs we don't use
           if(proc0) then
-             write(6,'("For the requested split we are wasting around ",F9.2,"% of the procs")') 100*nproc_spare/(nproc*1.0)
+             write(6,'("For the requested split we are wasting around ",F9.2,"% of the procs")') 100*nproc_spare/(g_lo%nproc*1.0)
           endif
        else
           call mp_abort("Not enough processors for the requested split")
        endif
     else
        !Blocksize
-       g_lo%blocksize = g_lo%ulim_world/nproc + 1
+       g_lo%blocksize = g_lo%ulim_world/g_lo%nproc + 1
 
        !If not using a split approach then we only have a single "layout block" so all dimension blocks
        !are just the length of the total dimension size
@@ -827,7 +816,7 @@ contains
        g_lo%s_block = g_lo%nspec
 
        !nproc_spare
-       nproc_spare = nproc-(g_lo%ulim_world+1)/g_lo%blocksize
+       nproc_spare = g_lo%nproc-(g_lo%ulim_world+1)/g_lo%blocksize
 
        !Override splits
        g_lo%split_x = 1
@@ -837,7 +826,7 @@ contains
        g_lo%split_s = 1
     endif
 
-    g_lo%nproc_used=nproc-nproc_spare
+    g_lo%nproc_used=g_lo%nproc-nproc_spare
 
     !Calculate processor limits
     g_lo%llim_proc = g_lo%blocksize*iproc
@@ -1239,7 +1228,7 @@ contains
     enddo
 
     !Now work out how the compound dimension splits amongst processors
-    nproc_tmp=nproc
+    nproc_tmp=g_lo%nproc
     !/Initialise
     nproc_dim=-1
     dim_divides=.false.
@@ -1472,32 +1461,6 @@ contains
        deallocate(les_kxky_range)
     endif
 !</DD>
-!Note: gint_lo isn't used anywhere!
-    gint_lo%iproc = iproc
-    gint_lo%naky = naky
-    gint_lo%ntheta0 = ntheta0
-    gint_lo%negrid = negrid
-    gint_lo%nspec = nspec
-    gint_lo%llim_world = 0
-    gint_lo%ulim_world = naky*ntheta0*negrid*nspec - 1
-    gint_lo%blocksize = gint_lo%ulim_world/nproc + 1
-    gint_lo%llim_proc = gint_lo%blocksize*iproc
-    gint_lo%ulim_proc &
-         = min(gint_lo%ulim_world, gint_lo%llim_proc + gint_lo%blocksize - 1)
-    gint_lo%ulim_alloc = max(gint_lo%llim_proc, gint_lo%ulim_proc)
-    
-!Note: geint_lo isn't used anywhere!
-    geint_lo%iproc = iproc
-    geint_lo%naky = naky
-    geint_lo%ntheta0 = ntheta0
-    geint_lo%nspec = nspec
-    geint_lo%llim_world = 0
-    geint_lo%ulim_world = naky*ntheta0*nspec - 1
-    geint_lo%blocksize = geint_lo%ulim_world/nproc + 1
-    geint_lo%llim_proc = geint_lo%blocksize*iproc
-    geint_lo%ulim_proc &
-         = min(geint_lo%ulim_world, geint_lo%llim_proc + geint_lo%blocksize -1)
-    geint_lo%ulim_alloc = max(geint_lo%llim_proc, geint_lo%ulim_proc)
 
 ! TT>
 # ifdef USE_C_INDEX
@@ -1648,6 +1611,7 @@ contains
 
     if(proc0.and.debug) print*,"Choosing to split ",dim," into ",best_fac
   end subroutine set_next_split
+
   subroutine is_kx_local(negrid, nspec, nlambda, naky, kx_local)  
 
     use mp, only: nproc
@@ -2095,269 +2059,6 @@ contains
 
     ig_local_g = lo%iproc == proc_id(lo, ig)
   end function ig_local_g
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Once-integrated distribution function layouts
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  elemental function is_idx_gint (lo, i)
-    implicit none
-    integer :: is_idx_gint
-    type (gint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
-    case ('yxles')
-       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
-    case ('lexys')
-       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%negrid/lo%ntheta0/lo%naky, lo%nspec)
-    case ('lxyes')
-       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
-    case ('lyxes')
-       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0/lo%negrid, lo%nspec)
-    case ('xyles')
-       is_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky/lo%negrid, lo%nspec)
-    end select
-  end function is_idx_gint
-
-  elemental function ie_idx_gint (lo, i)
-    implicit none
-    integer :: ie_idx_gint
-    type (gint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
-    case ('yxles')
-       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
-    case ('lexys')
-       ie_idx_gint = 1 + mod(i - lo%llim_world, lo%negrid)
-    case ('lxyes')
-       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%negrid)
-    case ('lyxes')
-       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%negrid)
-    case ('xyles')
-       ie_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%negrid)
-    end select
-
-  end function ie_idx_gint
-
-  elemental function it_idx_gint (lo, i)
-    implicit none
-    integer :: it_idx_gint
-    type (gint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       it_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
-    case ('yxles')
-       it_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
-    case ('lexys')
-       it_idx_gint = 1 + mod((i - lo%llim_world)/lo%negrid, lo%ntheta0)
-    case ('lxyes')
-       it_idx_gint = 1 + mod((i - lo%llim_world), lo%ntheta0)
-    case ('lyxes')
-       it_idx_gint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
-    case ('xyles')
-       it_idx_gint = 1 + mod((i - lo%llim_world), lo%ntheta0)
-    end select
-  end function it_idx_gint
-
-  elemental function ik_idx_gint (lo, i)
-    implicit none
-    integer :: ik_idx_gint
-    type (gint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       ik_idx_gint = 1 + mod(i - lo%llim_world, lo%naky)
-    case ('yxles')
-       ik_idx_gint = 1 + mod(i - lo%llim_world, lo%naky)
-    case ('lexys')
-       ik_idx_gint = 1 + mod((i - lo%llim_world)/lo%negrid/lo%ntheta0, lo%naky)
-    case ('lxyes')
-       ik_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
-    case ('lyxes')
-       ik_idx_gint = 1 + mod((i - lo%llim_world), lo%naky)
-    case ('xyles')
-       ik_idx_gint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
-    end select
-  end function ik_idx_gint
-
-  elemental function proc_id_gint (lo, i)
-    implicit none
-    integer :: proc_id_gint
-    type (gint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    proc_id_gint = i/lo%blocksize
-  end function proc_id_gint
-
-  elemental function idx_gint (lo, ik, it, ie, is)
-    implicit none
-    integer :: idx_gint
-    type (gint_layout_type), intent (in) :: lo
-    integer, intent (in) :: ik, it, ie, is
-
-    select case (layout)
-    case ('yxels')
-       idx_gint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
-    case ('yxles')
-       idx_gint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
-    case ('lexys')
-       idx_gint = ie-1 + lo%negrid*(it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1)))
-    case ('lxyes')
-       idx_gint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1)))
-    case ('lyxes')
-       idx_gint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(ie-1 + lo%negrid*(is-1)))
-    case ('xyles')
-       idx_gint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(ie-1 + lo%negrid*(is-1)))
-    end select
-  end function idx_gint
-
-  elemental function idx_local_gint (lo, ik, it, ie, is)
-    implicit none
-    logical :: idx_local_gint
-    type (gint_layout_type), intent (in) :: lo
-    integer, intent (in) :: ik, it, ie, is
-
-    idx_local_gint = idx_local(lo, idx(lo, ik, it, ie, is))
-  end function idx_local_gint
-
-  elemental function ig_local_gint (lo, ig)
-    implicit none
-    logical :: ig_local_gint
-    type (gint_layout_type), intent (in) :: lo
-    integer, intent (in) :: ig
-
-    ig_local_gint = lo%iproc == proc_id(lo, ig)
-  end function ig_local_gint
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! Twice-integrated distribution function layouts
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  elemental function is_idx_geint (lo, i)
-    implicit none
-    integer :: is_idx_geint
-    type (geint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nspec)
-    case ('yxles')
-       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nspec)
-    case ('lexys')
-       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%nspec)
-    case ('lxyes')
-       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%nspec)
-    case ('lyxes')
-       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky/lo%ntheta0, lo%nspec)
-    case ('xyles')
-       is_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0/lo%naky, lo%nspec)
-    end select
-
-  end function is_idx_geint
-
-  elemental function it_idx_geint (lo, i)
-    implicit none
-    integer :: it_idx_geint
-    type (geint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       it_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
-    case ('yxles')
-       it_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
-    case ('lexys')
-       it_idx_geint = 1 + mod(i - lo%llim_world, lo%ntheta0)
-    case ('lxyes')
-       it_idx_geint = 1 + mod(i - lo%llim_world, lo%ntheta0)
-    case ('lyxes')
-       it_idx_geint = 1 + mod((i - lo%llim_world)/lo%naky, lo%ntheta0)
-    case ('xyles')
-       it_idx_geint = 1 + mod(i - lo%llim_world, lo%ntheta0)
-    end select
-  end function it_idx_geint
-
-  elemental function ik_idx_geint (lo, i)
-    implicit none
-    integer :: ik_idx_geint
-    type (geint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    select case (layout)
-    case ('yxels')
-       ik_idx_geint = 1 + mod(i - lo%llim_world, lo%naky)
-    case ('yxles')
-       ik_idx_geint = 1 + mod(i - lo%llim_world, lo%naky)
-    case ('lexys')
-       ik_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
-    case ('lxyes')
-       ik_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
-    case ('lyxes')
-       ik_idx_geint = 1 + mod((i - lo%llim_world), lo%naky)
-    case ('xyles')
-       ik_idx_geint = 1 + mod((i - lo%llim_world)/lo%ntheta0, lo%naky)
-    end select
-  end function ik_idx_geint
-
-  elemental function proc_id_geint (lo, i)
-    implicit none
-    integer :: proc_id_geint
-    type (geint_layout_type), intent (in) :: lo
-    integer, intent (in) :: i
-
-    proc_id_geint = i/lo%blocksize
-  end function proc_id_geint
-
-  elemental function idx_geint (lo, ik, it, is)
-    implicit none
-    integer :: idx_geint
-    type (geint_layout_type), intent (in) :: lo
-    integer, intent (in) :: ik, it, is
-
-    select case (layout)
-    case ('yxels')
-       idx_geint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1))
-    case ('yxles')
-       idx_geint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1))
-    case ('lexys')
-       idx_geint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))
-    case ('lxyes')
-       idx_geint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))
-    case ('lyxes')
-       idx_geint = ik-1 + lo%naky*(it-1 + lo%ntheta0*(is-1))
-    case ('xyles')
-       idx_geint = it-1 + lo%ntheta0*(ik-1 + lo%naky*(is-1))
-    end select
-  end function idx_geint
-
-  elemental function idx_local_geint (lo, ik, it, is)
-    implicit none
-    logical :: idx_local_geint
-    type (geint_layout_type), intent (in) :: lo
-    integer, intent (in) :: ik, it, is
-
-    idx_local_geint = idx_local(lo, idx(lo, ik, it, is))
-  end function idx_local_geint
-
-  elemental function ig_local_geint (lo, ig)
-    implicit none
-    logical :: ig_local_geint
-    type (geint_layout_type), intent (in) :: lo
-    integer, intent (in) :: ig
-
-    ig_local_geint = lo%iproc == proc_id(lo, ig)
-  end function ig_local_geint
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Field layouts
