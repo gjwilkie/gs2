@@ -19,6 +19,10 @@
 
 
 &diagnostics_config
+!     These two are overriden to be true if the verbosity is high enough
+      print_line = .false.
+      print_flux_line = .false.
+
       nwrite = 10
       write_any = .true.
       write_fields = .true.
@@ -28,14 +32,50 @@
       write_fluxes = .true.
       write_fluxes_by_mode = .true.
 
+      write_ntot_over_time = .true.
+
+      write_movie = .true.
+      write_heating = .true.
+
+      write_g = .true.
+      write_lpoly = .true.
+
       omegatol = -0.001
+
+      use_nonlin_convergence = .true.
+
+      write_cross_phase = .true.
+
+      write_jext = .true.
+
+      write_symmetry = .true.
+
+      write_full_moments_notgc = .true.
+
+      write_correlation = .true.
+      write_correlation_extend = .true.
+
+      write_parity = .true.
+
+write_eigenfunc=.true.
+write_final_fields=.true.
+write_kpar=.true.
+write_final_epar=.true.
+write_final_db=.true.
+write_final_moments=.true.
+write_final_antot=.true.
+write_gs=.true.
+
+save_for_restart=.true.
+
+save_distfn=.true.
 /
 
 !==============================
 !GENERAL PARAMETERS  
 !==============================
 &parameters
- beta = 0.0 ! Ratio of particle to magnetic pressure (reference Beta, not total beta):  beta=n_0 T_0 /( B^2 / (8 pi))
+ beta = 0.1 ! Ratio of particle to magnetic pressure (reference Beta, not total beta):  beta=n_0 T_0 /( B^2 / (8 pi))
  zeff = 1.0 ! Effective ionic charge.
 /
 
@@ -48,7 +88,8 @@
 !==============================
 &kt_grids_box_parameters
  y0 = 2
- naky = 2
+ !naky = 2
+ ny = 4
  jtwist = 6
  nx = 6
 /
@@ -113,8 +154,9 @@
 &knobs
  wstar_units = .false. ! For linear runs only. Evolves each k_y with a different timestep.
  fphi = 1.0 ! Multiplies Phi (electrostatic potential).
- fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
+ fapar = 1.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
+ fbpar = 1.0
  delt = 0.05 ! Time step
  nstep = 200 ! Maximum number of timesteps
 /
@@ -154,7 +196,7 @@
 !EVOLVED SPECIES  
 !==============================
 &species_knobs
- nspec = 1 ! Number of kinetic species evolved.
+ nspec = 2 ! Number of kinetic species evolved.
 /
 
 !==============================
@@ -163,7 +205,7 @@
 &species_parameters_1
  z = 1.0 ! Charge
  mass = 1.0 ! Mass
- dens = 1.0 ! Density	
+ dens = 1.0 ! Density
  temp = 1.0 ! Temperature
  tprim = 6.9 ! -1/T (dT/drho)
  fprim = 2.2 ! -1/n (dn/drho)
@@ -172,10 +214,31 @@
  type = "ion" ! Type of species, e.g. 'ion', 'electron', 'beam'
 /
 
+
+
+&species_parameters_2
+ z = -1.0 ! Charge
+ mass = 0.0002723311546840959 ! Mass
+ dens = 1.0 ! Densit
+ temp = 1.0 ! Temperature
+ tprim = 6.9 ! -1/T (dT/drho)
+ fprim = 2.2 ! -1/n (dn/drho)
+ uprim = 0.0 ! ?
+ vnewk = 0.01 ! collisionality parameter
+ type = "electron" ! Type of species, e.g. 'ion', 'electron', 'beam'
+/
+
+
 !==============================
 ! 1 
 !==============================
 &dist_fn_species_knobs_1
+ fexpr = 0.45 ! Temporal implicitness parameter. Recommended value: 0.48
+ bakdif = 0.05 ! Spatial implicitness parameter. Recommended value: 0.05
+/
+
+
+&dist_fn_species_knobs_2
  fexpr = 0.45 ! Temporal implicitness parameter. Recommended value: 0.48
  bakdif = 0.05 ! Spatial implicitness parameter. Recommended value: 0.05
 /
@@ -200,16 +263,16 @@
   ! write_g not specified --- Write the distribution function to the '.dist' (NetCDF?)
  write_line = .false. ! If (write_ascii = T) write estimated frequencies and growth rates to the output file
   ! write_gyx not specified --- Write dist fn at a given physical spacial point to a file
- write_hrate = .false. ! Write heating rate, collisonal entropy generation etc to '.heat'
+ write_hrate = .true. ! Write heating rate, collisonal entropy generation etc to '.heat'
   ! write_final_epar not specified --- If (write_ascii = T) E_parallel(theta) written to runname.eigenfunc
- write_avg_moments = .F. ! Write flux surface averaged low-order moments of g to runname.out.nc and runname.moments (if write_ascii = T)
+ write_avg_moments = .true. ! Write flux surface averaged low-order moments of g to runname.out.nc and runname.moments (if write_ascii = T)
   ! write_lorentzian not specified --- Frequency Sweep Data
  write_omega = .true. ! If (write_ascii = T) instantaneous omega to output file. Very heavy output
  write_omavg = .true. ! If (write_ascii = T) time-averaged growth rate and frequency to the output file.
  write_eigenfunc = .true. ! If (write_ascii = T) Normalized phi written to runname.eigenfunc
  write_final_fields = .true. ! If (write_ascii = T) Phi(theta) written to '.fields'
  write_final_moments = .true. ! write final n, T
-  ! write_parity not specified --- Writes parities in dist fn and particle fluxes
+ write_parity = .true. ! not specified --- Writes parities in dist fn and particle fluxes
  nsave = 100 ! Write restart files every nsave timesteps
  nwrite = 10 ! Output diagnostic data every nwrite
  navg = 10 ! Any time averages performed over navg
@@ -231,6 +294,7 @@
   ! exit_when_converged not specified --- 
   ! write_full_moments_notgc not specified --- 
   ! write_cross_phase not specified --- 
+      write_cross_phase = .true.
   ! dump_check1 not specified --- 
   ! dump_check2 not specified --- 
   ! dump_fields_periodically not specified --- 
