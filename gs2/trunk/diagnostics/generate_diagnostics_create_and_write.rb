@@ -162,6 +162,20 @@ EOF
 
 end
 
+begin
+  4.times.map{|i|}
+rescue
+  puts "You appear to be running ruby 1.8.6 or lower... suggest you upgrade your ruby version!"
+  class Integer
+    def times(&block)
+      if block
+        (0...self).to_a.each{|i| yield(i)}
+      else
+        return  (0...self).to_a
+      end
+    end
+  end
+end
 generators = []
 distributed_generators = []
 ['real', 'integer', 'character', 'double precision', 'complex', 'complex_16'].each do |type| # 
