@@ -493,11 +493,13 @@ contains
   end subroutine increment_start
   
 
- !>/* Set parallel access collective
+ !>/* Set parallel access collective*/
  subroutine set_collective(sfile, variable_name)
    type(sdatio_file), intent(in) :: sfile
    character(*), intent(in) :: variable_name
+
 #ifdef ISO_C_BINDING
+
    interface
        subroutine sdatio_collective(sfile, variable_name) &
             bind(c, name='sdatio_collective')
@@ -510,7 +512,7 @@ contains
    call sdatio_collective(sfile, variable_name//c_null_char)
 #endif
  end subroutine set_collective 
- !>/* Set parallel access indepedent
+ !>/* Set parallel access independent*/
  subroutine set_independent(sfile, variable_name)
    type(sdatio_file), intent(in) :: sfile
    character(*), intent(in) :: variable_name
