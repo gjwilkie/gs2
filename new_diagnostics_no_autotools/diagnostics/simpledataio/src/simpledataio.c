@@ -71,9 +71,10 @@ void sdatio_createfile_parallel(struct sdatio_file * sfile, char * fname, MPI_Co
 	sdatio_end_definitions(sfile);
 }
 
-void sdatio_createfile_parallel_fortran(struct sdatio_file * sfile, char * fname, MPI_Fint * fcomm)  {
+void sdatio_createfile_parallel_fortran(struct sdatio_file * sfile, char * fname, MPI_Fint  fcomm)  {
 #ifdef PARALLEL
-  sdatio_createfile_parallel(sfile, fname, MPI_Comm_f2c(fcomm));
+  MPI_Comm comm = MPI_Comm_f2c(fcomm);
+  sdatio_createfile_parallel(sfile, fname, &comm);
   /* Above will need to be enabled for higher versions of MPI*/
   /*sdatio_createfile_parallel(sfile, fname, fcomm);*/
 #else 
