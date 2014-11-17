@@ -458,6 +458,7 @@ DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && ech
 F90FROMFPP = $(patsubst %.fpp,%.f90,$(notdir $(wildcard *.fpp */*.fpp)))
 F90FROMFPP += unit_tests/nonlinear_terms/test_nonlinear_terms.f90
 F90FROMFPP += unit_tests/gs2_diagnostics_new/test_gs2_diagnostics_new.f90
+F90FROMFPP += simpledataiof.f90 simpledataio_write.f90
 ifdef SCAL
    FC:= scalasca -instrument $(FC)
 endif
