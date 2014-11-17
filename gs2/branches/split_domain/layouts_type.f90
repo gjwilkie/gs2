@@ -7,7 +7,7 @@ module layouts_type
   type :: g_layout_type
      sequence
      integer :: iproc
-     integer :: naky, ntheta0, nlambda, negrid, nspec
+     integer :: naky, ntheta0, nlambda, negrid, nspec, nproc
      integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
 !<DD>
 !    For branchless index lookup routines
