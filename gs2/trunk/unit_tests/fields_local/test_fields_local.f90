@@ -32,7 +32,7 @@ program test_fields_local
   ! General config
   eps = 1.0e-7
 
-  if (precision(eps).lt. 11) eps = eps * 100.0
+  if (precision(eps).lt. 11) eps = eps * 1000.0
 
   ! Set up depenencies
   call init_mp

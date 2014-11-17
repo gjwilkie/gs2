@@ -20,6 +20,13 @@ class Generator
 			"write_variable_#{@type.gsub(/[* ]/, '_')}_#{@dimsize}"
 		end
 	end
+  def interface_name
+    #unless @type=~/^(real|complex)$/
+      "  module procedure " + procedure_name
+    #else
+      #"#ifdef SINGLE_PRECISION\n  module procedure #{procedure_name}\n#endif"
+    #end
+  end
 	def get_n2
 		if @offset
 			<<EOF
@@ -131,6 +138,7 @@ generators = []
 generators_no_offset = []
 ['real', 'double precision', 'integer', 'character', 'complex', 'complex*16'].each do |type|
 	(0..6).each do |dimsize|
+    #next if ENV['DEFAULT_DOUBLE'] and type =~ /^(real|complex)$/
 		generators.push Generator.new(type, dimsize, true)
 		generators_no_offset.push Generator.new(type, dimsize, false)
 	end
@@ -141,11 +149,11 @@ string = <<EOF
 module simpledataio_write
 
 interface write_variable_with_offset
-#{generators.map{|g| "  module procedure " + g.procedure_name}.join("\n")}
+#{generators.map{|g| g.interface_name}.join("\n")}
 end interface write_variable_with_offset
 
 interface write_variable
-#{generators_no_offset.map{|g| "  module procedure " + g.procedure_name}.join("\n")}
+#{generators_no_offset.map{|g| g.interface_name}.join("\n")}
 end interface write_variable
 
 contains
