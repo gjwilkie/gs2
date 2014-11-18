@@ -32,7 +32,10 @@ simpledataiof.o: simpledataiof.f90 simpledataio.o
 diagnostics/simpledataio/src/simpledataio_write.F90: diagnostics/simpledataio/src/generate_simpledataio_write.rb
 	$(call RUBY_GENERATE,$@,$<)
 
-CPPFLAGS+= -DFORTRAN_NETCDF -DISO_C_BINDING  -DHAVE_MPI
+ifdef USE_MPI
+	CPPFLAGS += -DHAVE_MPI
+endif
+CPPFLAGS+= -DFORTRAN_NETCDF -DISO_C_BINDING
 
 ifdef USE_PARALLEL_NETCDF
 	CPPFLAGS += -DPARALLEL
