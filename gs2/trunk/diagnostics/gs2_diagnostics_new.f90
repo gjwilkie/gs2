@@ -51,7 +51,7 @@ contains
     use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
-    use netcdf, only: NF90_NETCDF4, NF90_CLOBBER
+    use netcdf, only: NF90_CLOBBER
     type(diagnostics_init_options_type), intent(in) :: init_options
 
     if(proc0) write (*,*) 'initializing new diagnostics'
@@ -122,9 +122,9 @@ contains
     if (gnostics%parallel) then 
       call set_parallel(gnostics%sfile, mp_comm)
     else
-      if (gnostics%serial_netcdf4) then 
-        gnostics%sfile%mode = IOR(NF90_NETCDF4,NF90_CLOBBER)
-      else
+      if (.not. gnostics%serial_netcdf4) then 
+        !gnostics%sfile%mode = IOR(NF90_NETCDF4,NF90_CLOBBER)
+      !else
         gnostics%sfile%mode = NF90_CLOBBER
       end if
     end if
