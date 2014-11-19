@@ -1040,7 +1040,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    real, intent(in), dimension(:,:)  :: val
    real :: dummy
    
@@ -1137,7 +1137,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    real, intent(in), dimension(:,:,:)  :: val
    real :: dummy
    
@@ -1234,7 +1234,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    real, intent(in), dimension(:,:,:,:)  :: val
    real :: dummy
    
@@ -1331,7 +1331,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    real, intent(in), dimension(:,:,:,:,:)  :: val
    real :: dummy
    
@@ -1428,7 +1428,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    real, intent(in), dimension(:,:,:,:,:,:)  :: val
    real :: dummy
    
@@ -1525,7 +1525,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    integer, intent(in), dimension(:,:)  :: val
    integer :: dummy
    
@@ -1622,7 +1622,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    integer, intent(in), dimension(:,:,:)  :: val
    integer :: dummy
    
@@ -1719,7 +1719,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    integer, intent(in), dimension(:,:,:,:)  :: val
    integer :: dummy
    
@@ -1816,7 +1816,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    integer, intent(in), dimension(:,:,:,:,:)  :: val
    integer :: dummy
    
@@ -1913,7 +1913,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    integer, intent(in), dimension(:,:,:,:,:,:)  :: val
    integer :: dummy
    
@@ -2010,7 +2010,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    character, intent(in), dimension(:,:)  :: val
    character :: dummy
    
@@ -2107,7 +2107,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    character, intent(in), dimension(:,:,:)  :: val
    character :: dummy
    
@@ -2204,7 +2204,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    character, intent(in), dimension(:,:,:,:)  :: val
    character :: dummy
    
@@ -2301,7 +2301,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    character, intent(in), dimension(:,:,:,:,:)  :: val
    character :: dummy
    
@@ -2398,7 +2398,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    character, intent(in), dimension(:,:,:,:,:,:)  :: val
    character :: dummy
    
@@ -2495,7 +2495,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    double precision, intent(in), dimension(:,:)  :: val
    double precision :: dummy
    
@@ -2592,7 +2592,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    double precision, intent(in), dimension(:,:,:)  :: val
    double precision :: dummy
    
@@ -2689,7 +2689,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    double precision, intent(in), dimension(:,:,:,:)  :: val
    double precision :: dummy
    
@@ -2786,7 +2786,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    double precision, intent(in), dimension(:,:,:,:,:)  :: val
    double precision :: dummy
    
@@ -2883,7 +2883,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    double precision, intent(in), dimension(:,:,:,:,:,:)  :: val
    double precision :: dummy
    
@@ -2980,7 +2980,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex, intent(in), dimension(:,:)  :: val
    complex :: dummy
    
@@ -3077,7 +3077,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex, intent(in), dimension(:,:,:)  :: val
    complex :: dummy
    
@@ -3174,7 +3174,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex, intent(in), dimension(:,:,:,:)  :: val
    complex :: dummy
    
@@ -3271,7 +3271,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex, intent(in), dimension(:,:,:,:,:)  :: val
    complex :: dummy
    
@@ -3368,7 +3368,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex, intent(in), dimension(:,:,:,:,:,:)  :: val
    complex :: dummy
    
@@ -3465,7 +3465,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex*16, intent(in), dimension(:,:)  :: val
    complex*16 :: dummy
    
@@ -3562,7 +3562,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex*16, intent(in), dimension(:,:,:)  :: val
    complex*16 :: dummy
    
@@ -3659,7 +3659,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex*16, intent(in), dimension(:,:,:,:)  :: val
    complex*16 :: dummy
    
@@ -3756,7 +3756,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex*16, intent(in), dimension(:,:,:,:,:)  :: val
    complex*16 :: dummy
    
@@ -3853,7 +3853,7 @@ contains
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    complex*16, intent(in), dimension(:,:,:,:,:,:)  :: val
    complex*16 :: dummy
    

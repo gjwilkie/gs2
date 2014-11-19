@@ -9,7 +9,7 @@ module diagnostics_turbulence
     subroutine write_correlation(gnostics)
       use theta_grid, only: ntgrid
       use kt_grids, only: naky
-      use mp, only: proc0
+      !use mp, only: proc0
       use gs2_io, only: nc_loop_corr
       implicit none
       type(diagnostics_type), intent(in) :: gnostics
@@ -50,7 +50,7 @@ module diagnostics_turbulence
   subroutine write_correlation_extend(gnostics)
     use theta_grid, only: ntgrid
     use kt_grids, only: jtwist_out, ntheta0, naky
-    use mp, only: proc0
+    !use mp, only: proc0
     use gs2_io, only: nc_loop_corr_extend
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
@@ -187,7 +187,7 @@ module diagnostics_turbulence
        end do
     end do
     
-    phi2extend = phiextend*conjg(phiextend)
+    phi2extend = real(phiextend*conjg(phiextend))
 
 !    deallocate (dl_over_b, phir, phiextend, phisum)
     deallocate (dl_over_b, phir, phiextend)
@@ -246,7 +246,7 @@ module diagnostics_turbulence
       type(diagnostics_type), intent(in) :: gnostics
       real, intent (out) :: phase_tot, phase_theta
       complex, dimension (:,:,:,:), allocatable :: ntot, tperp
-      complex, dimension (ntheta0, naky) :: nTp_by_mode
+      !complex, dimension (ntheta0, naky) :: nTp_by_mode
       complex :: nTp
   !    real, dimension (ntheta0, naky) :: n2_by_mode, T2_by_mode
   !    real :: n2, T2

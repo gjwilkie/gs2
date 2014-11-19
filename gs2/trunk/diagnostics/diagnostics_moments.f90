@@ -15,7 +15,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use dist_fn, only: getmoms
-    use mp, only: proc0
+    !use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
     !use diagnostics_write_fields, only: write_standard_field_properties
     implicit none
@@ -53,7 +53,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use dist_fn, only: getmoms_notgc
-    use mp, only: proc0
+    !use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
     !use diagnostics_write_fields, only: write_standard_field_properties
     implicit none
@@ -100,7 +100,7 @@ contains
     complex, dimension(ntheta0, naky, nspec) :: moment_igomega_by_mode
     complex, dimension(ntheta0, nspec) :: moment_flx_surfavg
     logical :: write_moment_by_time
-    integer :: it, ik
+    integer :: it !, ik
 
     call average_theta(moment_value, moment_value, moment2_by_mode, distributed)
     !call create_and_write_moment(gnostics%sfile, moment_name, moment_description, moment_units, moment_value)

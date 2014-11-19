@@ -11,6 +11,20 @@ input_variables_for_diagnostics_config = [
 	['integer', 'nwrite_large', '100'],
 	['logical', 'write_any', '.true.'],
 
+  # If built with parallel IO capability 
+  # enable parallel IO. Currently disabled by 
+  # default because of problems on Helios:
+  # parallel IO seems to work on 1 node but not
+  # on >1. This problem does not affect parallel
+  # IO for the single restart file because it only 
+  # affects output with infinite dimensions
+	['logical', 'enable_parallel', '.false.'],
+
+  # If true, produce netcdf-4 files when running
+  # with serial IO. Otherwise produce classic file
+  # format. Parallel IO always produces netcdf-4 files.
+	['logical', 'serial_netcdf4', '.false.'],
+
   # Controls the theta location of omega calculation,
   # also of any quantities that are written out for
   # a given value of theta

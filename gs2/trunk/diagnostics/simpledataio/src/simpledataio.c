@@ -17,20 +17,45 @@
 
 #include "include/simpledataio.h"
 
-#ifdef PARALLEL 
-#include "netcdf_par.h"
-#endif
-#if HAVE_MPI
-#include "mpi.h"
-#else
-typedef int MPI_Comm;
-typedef int MPI_Fint;
-#endif
 
 #define ERRCODE 2
 #define ERR(e) {printf("Error: %s\n", nc_strerror(e)); exit(ERRCODE);}
 #define DEBUG_MESS if (sdatio_debug) printf
 
+
+void sdatio_init(struct sdatio_file * sfile, char * fname){
+  sfile->mode = NC_NETCDF4|NC_CLOBBER;
+  sfile->is_open = 0;
+	sfile->is_parallel = 0;
+  sfile->communicator = (MPI_Comm*)malloc(sizeof(MPI_Comm));
+  sfile->name = (char*)malloc(sizeof(char)*(strlen(fname)+1));
+  strcpy(sfile->name, fname);
+}
+
+void sdatio_free(struct sdatio_file * sfile){
+  if (sfile->is_open)
+    printf("WARNING: Freeing an sdatio_file object associated with an open file; this may lead to a memory leak. Suggest closing the file first using sdatio_close\n");
+  free(sfile->communicator);
+  free(sfile->name);
+}
+
+void sdatio_set_parallel(struct sdatio_file * sfile, MPI_Comm * comm){
+  if (sfile->is_open)
+    printf("WARNING: called sdatio_set_parallel on an open file... expect the unexpected\n");
+  sfile->is_parallel = 1;
+  sfile->mode = NC_NETCDF4|NC_CLOBBER|NC_MPIPOSIX;
+  *(sfile->communicator) = *comm;
+}
+
+void sdatio_set_parallel_fortran(struct sdatio_file * sfile, MPI_Fint fcomm){
+#ifdef PARALLEL
+  MPI_Comm comm = MPI_Comm_f2c(fcomm);
+  sdatio_set_parallel(sfile, &comm);
+#else 
+		printf("sdatio was built without --enable-parallel, sdatio_set_parallel will not work\n");
+  abort();
+#endif
+}
 
 /* Private*/
 void sdatio_end_definitions(struct sdatio_file * sfile){
@@ -47,54 +72,72 @@ void sdatio_recommence_definitions(struct sdatio_file * sfile){
 }
 
 
-void sdatio_createfile_parallel(struct sdatio_file * sfile, char * fname, MPI_Comm * comm)  {
+void sdatio_create_file(struct sdatio_file * sfile )  {
 	/*printf("called\n");*/
 	int retval;
 	/*if (0){}*/
 	/*else {*/
 
-	char * args;
+  /*char * args;*/
 	retval = 0;
 
+  if (sfile->is_open){
+    printf("ERROR: The supplied sdatio_file struct corresponds to an already open file.\n");
+    abort();
+  }
+
 	/*MPI_Init(&retval, &args);*/
+  if (sfile->is_parallel) {
 #ifdef PARALLEL 
-		if ((retval = nc_create_par(fname, NC_NETCDF4|NC_MPIPOSIX|NC_CLOBBER, *comm, MPI_INFO_NULL,  &(sfile->nc_file_id)))) ERR(retval);
+		if ((retval = nc_create_par(sfile->name, sfile->mode, *(sfile->communicator), MPI_INFO_NULL,  &(sfile->nc_file_id)))) ERR(retval);
 #else
-		printf("sdatio was built without --enable-parallel, sdatio_createfile_parallel will not work\n");
+		printf("sdatio was built without --enable-parallel, sdatio_create_file will not work for parallel files\n");
 		abort();
 #endif
-		/*}*/
+  }
+  else {
+		if ((retval = nc_create(sfile->name, sfile->mode, &(sfile->nc_file_id)))) ERR(retval);
+  }
+  sfile->is_open = 1;
 	sfile->n_dimensions = 0;
 	sfile->n_variables = 0;
-	sfile->is_parallel = 1;
 	sfile->data_written = 0;
+		/*}*/
 	sdatio_end_definitions(sfile);
 }
 
-void sdatio_createfile_parallel_fortran(struct sdatio_file * sfile, char * fname, MPI_Fint  fcomm)  {
-#ifdef PARALLEL
-  MPI_Comm comm = MPI_Comm_f2c(fcomm);
-  sdatio_createfile_parallel(sfile, fname, &comm);
-  /* Above will need to be enabled for higher versions of MPI*/
-  /*sdatio_createfile_parallel(sfile, fname, fcomm);*/
-#else 
+/*void sdatio_create_file_parallel_fortran(struct sdatio_file * sfile, char * fname, MPI_Fint  fcomm)  {*/
+/*#ifdef PARALLEL*/
+/*MPI_Comm comm = MPI_Comm_f2c(fcomm);*/
+/*sdatio_create_file_parallel(sfile, fname, &comm);*/
+/*#else */
 
-#endif
-}
+/*#endif*/
+/*}*/
 
-void sdatio_createfile(struct sdatio_file * sfile, char * fname)  {
-	/*printf("called\n");*/
-	int retval;
-	/*if (0){}*/
-	/*else {*/
-		if ((retval = nc_create(fname, NC_NETCDF4|NC_CLOBBER, &(sfile->nc_file_id)))) ERR(retval);
-		/*}*/
-	sfile->n_dimensions = 0;
-	sfile->n_variables = 0;
-	sfile->is_parallel = 0;
-	sfile->data_written = 0;
-	sdatio_end_definitions(sfile);
-}
+/*void sdatio_create_file_with_mode(struct sdatio_file * sfile, int mode, char * fname)  {*/
+/**//*printf("called\n");*/
+/*int retval;*/
+/**//*if (0){}*/
+/**//*else {*/
+/*if ((retval = nc_create(fname, NC_CLOBBER, &(sfile->nc_file_id)))) ERR(retval);*/
+/**//*}*/
+/*sdatio_end_definitions(sfile);*/
+/*}*/
+/*void sdatio_create_file(struct sdatio_file * sfile, char * fname)  {*/
+/*sdatio_create_file_with_mode(sfile, NC_CLOBBER|NC_NETCDF4, fname);*/
+/**//*printf("called\n");*/
+/**//*int retval;*/
+/**//**//*if (0){}*/
+/**//**//*else {*/
+/**//*if ((retval = nc_create(fname, NC_CLOBBER, &(sfile->nc_file_id)))) ERR(retval);*/
+/**//**//*}*/
+/**//*sfile->n_dimensions = 0;*/
+/**//*sfile->n_variables = 0;*/
+/**//*sfile->is_parallel = 0;*/
+/**//*sfile->data_written = 0;*/
+/**//*sdatio_end_definitions(sfile);*/
+/*}*/
 
 
 
@@ -290,6 +333,34 @@ void sdatio_append_variable(struct sdatio_file * sfile, struct sdatio_variable *
 	
 }
 
+int sdatio_number_of_dimensions(struct sdatio_file * sfile, char * variable_name){
+	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
+	return strlen(svar->dimension_list);
+}
+
+void sdatio_number_of_unlimited_dimensions(struct sdatio_file * sfile, char * variable_name, int * n){
+	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
+	struct sdatio_dimension * sdim;
+	int i,j;
+	int found;
+	*n = 0;
+	for (i=0;i<strlen(svar->dimension_list);i++){
+		found = 0;
+		for (j=0;j<sfile->n_dimensions;j++){
+			sdim = sfile->dimensions[j];
+			if (sdim->nc_id == svar->dimension_ids[i]){
+				found = 1;
+				if (sdim->size == SDATIO_UNLIMITED) (*n)++; 
+			}
+		}
+		if (!found) {
+			printf("Couldn't find dimension in sdatio_get_counts_and_starts\n");
+			abort();
+		}
+	}
+	/*printf("n unlimited was %d\n", *n);*/
+}
+
 void sdatio_create_variable(struct sdatio_file * sfile,
 														int variable_type,
 														char * variable_name,
@@ -356,7 +427,6 @@ void sdatio_create_variable(struct sdatio_file * sfile,
 	sdatio_append_variable(sfile, svar);
 
 #ifdef PARALLEL
-  /*printf("PARALLEL\n");*/
     if (sfile->is_parallel){
       sdatio_number_of_unlimited_dimensions(sfile, variable_name, &nunlim);
       if (nunlim > 0)
@@ -425,7 +495,7 @@ void sdatio_get_offsets(struct sdatio_file * sfile, struct sdatio_variable * sva
 void sdatio_set_offset(struct sdatio_file * sfile, char * variable_name, char * dimension_name, int * offset){
 	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
 	struct sdatio_dimension * sdim;
-	struct sdatio_dimension * sdim_found;
+  /*struct sdatio_dimension * sdim_found;*/
 	int i,j;
 	int found;
 	int ndim;
@@ -439,7 +509,7 @@ void sdatio_set_offset(struct sdatio_file * sfile, char * variable_name, char * 
 			/*printf("sdim %s, comp %d\n", sdim->name, !(strcmp(sdim->name, dimension_name)));*/
 			if ((sdim->nc_id == svar->dimension_ids[i]) && !strcmp(sdim->name, dimension_name)){
 				found = 1;
-				sdim_found = sdim;
+        /*sdim_found = sdim;*/
 				ndim = i;
 			}
 		}
@@ -458,7 +528,7 @@ void sdatio_set_offset(struct sdatio_file * sfile, char * variable_name, char * 
 void sdatio_set_start(struct sdatio_file * sfile, char * variable_name, char * dimension_name, int * start){
 	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
 	struct sdatio_dimension * sdim;
-	struct sdatio_dimension * sdim_found;
+  /*struct sdatio_dimension * sdim_found;*/
 	int i,j;
 	int found;
 	int ndim;
@@ -472,7 +542,7 @@ void sdatio_set_start(struct sdatio_file * sfile, char * variable_name, char * d
 			/*printf("sdim %s, comp %d\n", sdim->name, !(strcmp(sdim->name, dimension_name)));*/
 			if ((sdim->nc_id == svar->dimension_ids[i]) && !strcmp(sdim->name, dimension_name)){
 				found = 1;
-				sdim_found = sdim;
+        /*sdim_found = sdim;*/
 				ndim = i;
 			}
 		}
@@ -490,7 +560,7 @@ void sdatio_set_start(struct sdatio_file * sfile, char * variable_name, char * d
 void sdatio_set_count(struct sdatio_file * sfile, char * variable_name, char * dimension_name, int * count){
 	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
 	struct sdatio_dimension * sdim;
-	struct sdatio_dimension * sdim_found;
+  /*struct sdatio_dimension * sdim_found;*/
 	int i,j;
 	int found;
 	int ndim;
@@ -503,7 +573,7 @@ void sdatio_set_count(struct sdatio_file * sfile, char * variable_name, char * d
 			sdim = sfile->dimensions[j];
 			if (sdim->nc_id == svar->dimension_ids[i] && !strcmp(sdim->name, dimension_name)){
 				found = 1;
-				sdim_found = sdim;
+        /*sdim_found = sdim;*/
 				ndim = i;
 			}
 		}
@@ -519,33 +589,6 @@ void sdatio_set_count(struct sdatio_file * sfile, char * variable_name, char * d
 
 }
 
-int sdatio_number_of_dimensions(struct sdatio_file * sfile, char * variable_name){
-	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
-	return strlen(svar->dimension_list);
-}
-
-void sdatio_number_of_unlimited_dimensions(struct sdatio_file * sfile, char * variable_name, int * n){
-	struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
-	struct sdatio_dimension * sdim;
-	int i,j;
-	int found;
-	*n = 0;
-	for (i=0;i<strlen(svar->dimension_list);i++){
-		found = 0;
-		for (j=0;j<sfile->n_dimensions;j++){
-			sdim = sfile->dimensions[j];
-			if (sdim->nc_id == svar->dimension_ids[i]){
-				found = 1;
-				if (sdim->size == SDATIO_UNLIMITED) (*n)++; 
-			}
-		}
-		if (!found) {
-			printf("Couldn't find dimension in sdatio_get_counts_and_starts\n");
-			abort();
-		}
-	}
-	/*printf("n unlimited was %d\n", *n);*/
-}
 
 
 /* Private: used for the Fortran interface*/
@@ -660,7 +703,7 @@ void sdatio_write_variable_fortran_convert(struct sdatio_file * sfile, char * va
 void sdatio_write_variable(struct sdatio_file * sfile, char * variable_name, void * address){
 	int  ndims;
 	struct sdatio_variable * svar;
-	double * double_array;
+  /*double * double_array;*/
 	size_t * counts, * starts;
 
 	/*printf("address is %d\n", address);*/
@@ -693,7 +736,7 @@ void sdatio_write_variable_at_index(struct sdatio_file * sfile, char * variable_
 
 void sdatio_write_variable_at_index_fast(struct sdatio_file * sfile, struct sdatio_variable * svar, int * indexes, void * address){
 	int i, ndims;
-	double * double_array;
+  /*double * double_array;*/
 	size_t * counts, * starts;
 
 
@@ -735,6 +778,7 @@ void sdatio_close(struct sdatio_file * sfile){
 		if ((retval = nc_close(sfile->nc_file_id))) ERR(retval);
 		/*}*/
 
+  sfile->is_open = 0;
 	for (i=0;i<sfile->n_dimensions;i++){
 		sdatio_free_dimension(sfile->dimensions[i]);
 	}

@@ -30,7 +30,7 @@ module diagnostics_printout
       use mp, only: proc0, sum_reduce
       use kt_grids, only: naky, ntheta0, aky, akx, theta0
       use run_parameters, only: woutunits
-      use fields_arrays, only: phinew
+      !use fields_arrays, only: phinew
       use volume_averages, only: average_theta
       use diagnostics_omega, only: omegahist, omega_average
       implicit none

@@ -88,7 +88,7 @@ contains
     use diagnostics_create_and_write, only: create_and_write_variable
     type(diagnostics_type), intent(inout) :: gnostics
     integer :: is
-    real :: total
+    !real :: total
     !if (istep > 0) then
 
     gnostics%current_results%total_heat_flux = 0.0
@@ -268,7 +268,8 @@ contains
     use diagnostics_omega, only: omega_average
     use fields_parallelization, only: field_k_local
     use species, only: spec
-    use kt_grids, only: aky, akx, kperp2
+    !use kt_grids, only: aky, akx, kperp2
+    use kt_grids, only: kperp2
     !use geometry, only: surfarea, dvdrhon, grho
     use theta_grid, only: grho
     use diagnostics_create_and_write
@@ -276,7 +277,7 @@ contains
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     real, dimension(ntheta0, naky) :: diffusivity_by_k
-    real :: diffusivity
+    !real :: diffusivity
     real :: heat_flux_max
     real, dimension(nspec) :: heat_flux_max_by_spec
     real :: particle_flux_max
@@ -288,7 +289,7 @@ contains
     real, dimension(naky, nspec) :: particle_flux_by_ky
     real, dimension(ntheta0, naky) :: momentum_flux
     integer :: it, ik, is
-    real :: k2, total
+    !real :: k2, total
     diffusivity_by_k = 0.0
     heat_flux = 0.0
     particle_flux = 0.0
@@ -581,7 +582,7 @@ contains
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
-    use mp, only: proc0
+    !use mp, only: proc0
     use gs2_io, only: nc_loop_sym
     use fields_arrays, only: phinew
     use diagnostics_create_and_write, only: create_and_write_variable

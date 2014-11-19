@@ -74,6 +74,8 @@ module diagnostics_config
    integer :: nwrite
    integer :: nwrite_large
    logical :: write_any
+   logical :: enable_parallel
+   logical :: serial_netcdf4
    integer :: igomega
    logical :: print_line
    logical :: print_flux_line
@@ -201,6 +203,8 @@ contains
     integer :: nwrite
     integer :: nwrite_large
     logical :: write_any
+    logical :: enable_parallel
+    logical :: serial_netcdf4
     integer :: igomega
     logical :: print_line
     logical :: print_flux_line
@@ -261,6 +265,8 @@ contains
       nwrite, &
       nwrite_large, &
       write_any, &
+      enable_parallel, &
+      serial_netcdf4, &
       igomega, &
       print_line, &
       print_flux_line, &
@@ -325,6 +331,8 @@ contains
       nwrite = 10
       nwrite_large = 100
       write_any = .true.
+      enable_parallel = .false.
+      serial_netcdf4 = .true.
       igomega = 0
       print_line = .false.
       print_flux_line = .false.
@@ -388,6 +396,8 @@ contains
       gnostics%nwrite = nwrite
       gnostics%nwrite_large = nwrite_large
       gnostics%write_any = write_any
+      gnostics%enable_parallel = enable_parallel
+      gnostics%serial_netcdf4 = serial_netcdf4
       gnostics%igomega = igomega
       gnostics%print_line = print_line
       gnostics%print_flux_line = print_flux_line
@@ -450,6 +460,8 @@ contains
     call broadcast (gnostics%nwrite)
     call broadcast (gnostics%nwrite_large)
     call broadcast (gnostics%write_any)
+    call broadcast (gnostics%enable_parallel)
+    call broadcast (gnostics%serial_netcdf4)
     call broadcast (gnostics%igomega)
     call broadcast (gnostics%print_line)
     call broadcast (gnostics%print_flux_line)
