@@ -82,7 +82,7 @@ class GeneratorDistributed
    character(*), intent(in) :: variable_units
    integer :: xdim
    integer :: id, it, ik
-   integer :: i1, i2, i3
+   integer :: i1 !, i2, i3
    #{@type.sub(/_/, '*')}, intent(in)#{@dimension} :: val
    #{@type.sub(/_/, '*')} :: dummy
    

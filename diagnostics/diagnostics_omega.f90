@@ -49,7 +49,7 @@ contains
     use fields_parallelization, only: field_k_local
     use run_parameters, only: woutunits
     type(diagnostics_type), intent(in) :: gnostics
-    integer :: ik, it
+    integer :: ik !, it
     complex, dimension(0:gnostics%navg-1,ntheta0,naky) :: omegahist_woutunits
     complex, dimension(ntheta0, naky) :: omega_average_woutunits
 

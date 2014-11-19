@@ -1,4 +1,7 @@
-!> This module is intended to replace the old gs2_diagnostics module with a 
+!> A module for calculating and writing gs2 outputs. It can write
+!! these outputs both to a netcdf file <run_name>.cdf or to ascii text
+!! files. It is controlled via the namelist diagnostics_config. 
+!! This module is intended to replace the old gs2_diagnostics module with a 
 !! simpler and more structured interface. 
 module gs2_diagnostics_new
   use diagnostics_create_and_write
@@ -21,7 +24,7 @@ module gs2_diagnostics_new
   public :: diagnostics_init_options_type
 
   type diagnostics_init_options_type
-    logical :: parallel_io
+    logical :: parallel_io_capable
     logical :: default_double
     logical :: initialized
   end type diagnostics_init_options_type
@@ -48,6 +51,7 @@ contains
     use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
+    use netcdf, only: NF90_NETCDF4, NF90_CLOBBER
     type(diagnostics_init_options_type), intent(in) :: init_options
 
     if(proc0) write (*,*) 'initializing new diagnostics'
@@ -65,7 +69,18 @@ contains
     end if
     if (.not. gnostics%write_any) return
 
-    gnostics%parallel = init_options%parallel_io
+
+    gnostics%parallel = .false.
+    if (gnostics%enable_parallel) then
+      if (init_options%parallel_io_capable) then 
+        gnostics%parallel = .true.
+      else
+        if (proc0) write (*,*) "WARNING: you have selected &
+          & enable_parallel but this build does not have &
+          & parallel capability."
+      end if
+    end if
+
     !write (*,*) 'parallel', gnostics%parallel
     if (init_options%default_double) then
       gnostics%rtype = SDATIO_DOUBLE
@@ -103,21 +118,34 @@ contains
    ! which corresponds to a gs2 real
     !gnostics%rtype = SDATIO_DOUBLE
 
-    if (gnostics%parallel) then
-      call createfile_parallel(gnostics%sfile, trim(run_name)//'.cdf', mp_comm)
-      !if (gnostics%write_movie) &
-        !call createfile_parallel(gnostics%sfilemovie, trim(run_name)//'.movie.cdf', mp_comm)
-
-    else if (proc0) then
-      call createfile(gnostics%sfile, trim(run_name)//'.cdf')
-      !if (gnostics%write_movie) &
-        !call createfile(gnostics%sfilemovie, trim(run_name)//'.movie.cdf')
+    call sdatio_init(gnostics%sfile, trim(run_name)//'.cdf')
+    if (gnostics%parallel) then 
+      call set_parallel(gnostics%sfile, mp_comm)
+    else
+      if (gnostics%serial_netcdf4) then 
+        gnostics%sfile%mode = IOR(NF90_NETCDF4,NF90_CLOBBER)
+      else
+        gnostics%sfile%mode = NF90_CLOBBER
+      end if
     end if
-
-    if (gnostics%parallel .or. proc0) then 
+    if (gnostics%parallel.or.proc0) then 
+      call create_file(gnostics%sfile)
       call create_dimensions
-      !if (gnostics%write_movie) call create_dimensions_movie
     end if
+      !call createfile_parallel(gnostics%sfile, trim(run_name)//'.cdf', mp_comm)
+
+      !!if (gnostics%write_movie) &
+        !!call createfile_parallel(gnostics%sfilemovie, trim(run_name)//'.movie.cdf', mp_comm)
+
+    !else if (proc0) then
+      !call createfile(gnostics%sfile, trim(run_name)//'.cdf')
+      !!if (gnostics%write_movie) &
+        !!call createfile(gnostics%sfilemovie, trim(run_name)//'.movie.cdf')
+    !end if
+
+    !if (gnostics%parallel .or. proc0) then 
+      !if (gnostics%write_movie) call create_dimensions_movie
+    !end if
     !if (gnostics%write_ascii) then 
       if (proc0) call set_ascii_file_switches
       if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
@@ -269,7 +297,7 @@ contains
     use diagnostics_ascii, only: flush_output_files
     use collisions, only: vary_vnew
     use nonlinear_terms, only: nonlin
-    use species, only: spec, has_electron_species, nspec
+    use species, only: spec, has_electron_species
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
 

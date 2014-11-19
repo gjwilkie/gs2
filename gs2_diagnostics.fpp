@@ -1,7 +1,3 @@
-! what about boundary condition contributions?  In the presence 
-! of magnetic shear, there are not always zero amplitudes at the ends
-! of the supercells.
-
 !> The old module for calculating and writing gs2 outputs. THIS MODULE IS NOW DEPRECATED.
 !! It is scheduled to be disabled by default on 1st Jan 2015 and removed
 !! from the repository on 1st March 2015. Do not edit or extend this module
@@ -12,6 +8,10 @@
 module gs2_diagnostics
   use gs2_heating, only: heating_diagnostics
   use gs2_save, only: save_many
+
+! what about boundary condition contributions?  In the presence 
+! of magnetic shear, there are not always zero amplitudes at the ends
+! of the supercells.
 
   implicit none
 

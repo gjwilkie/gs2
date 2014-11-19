@@ -188,9 +188,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
 #ifdef NEW_DIAG
 #ifdef NETCDF_PARALLEL
-       diagnostics_init_options%parallel_io = .true.
+       diagnostics_init_options%parallel_io_capable = .true.
 #else
-       diagnostics_init_options%parallel_io = .false.
+       diagnostics_init_options%parallel_io_capable = .false.
 #endif
 
        ! Here we check if reals have been promoted to doubles
