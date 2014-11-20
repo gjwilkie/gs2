@@ -486,6 +486,9 @@ contains
     in_file = input_unit_exist("kt_grids_box_parameters", exist)
     if (exist) read (in_file, nml=kt_grids_box_parameters)
 
+    if (ny==0 .and. naky==0) call mp_abort("ERROR: ny==0 .and. naky==0", .true.) 
+    if (nx==0 .and. ntheta0==0) call mp_abort("ERROR: nx==0 .and. ntheta0==0", .true.) 
+
     if (rhostar_box .gt. 0.0 .and. n0 .gt. 0) y0=1.0/(n0*rhostar_box*drhodpsi)
 
     if (y0 < 0) y0 = -1./y0
@@ -510,11 +513,15 @@ contains
     end if
     if (nx == 0) then 
       if (proc0) write (error_unit(), *) "INFO: nx set from ntheta0"
+      if (mod(ntheta0, 2) /= 1) then
+        call mp_abort("ERROR: ntheta0 must be an odd number in box mode", .true.)
+      end if
       nx = ((ntheta0 - 1) /  2) * 3 + 1
     else if (ntheta0 /= 2*((nx-1)/3) + 1) then
       if (proc0) write (error_unit(), *) "ERROR: ntheta0 and nx both set and inconsistent... set one or the other"
       call mp_abort("")
     end if
+
     
     nkpolar_private = nkpolar
     naky_private = naky
