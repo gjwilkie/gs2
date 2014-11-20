@@ -195,6 +195,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
        ! Here we check if reals have been promoted to doubles
        diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
+       ! Check whether this is a Trinity run... enforces calculation of the
+       ! fluxes
+       diagnostics_init_options%is_trinity_run = present(mpi_comm)
 
        if (first_time) diagnostics_init_options%initialized = .false.
        if (.not. diagnostics_init_options%initialized) then

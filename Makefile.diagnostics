@@ -8,6 +8,24 @@ RUBY_GENERATE=env ruby $2 $1; if test "$$?" != 0; then  echo && echo && echo  "W
 # Note that any value other than "on" is considered to be "off"
 ifneq ($(USE_AUTOTOOLS),on)
 
+ifdef USE_MPI
+CPPFLAGS += -DHAVE_MPI
+endif
+
+CPPFLAGS+= -DFORTRAN_NETCDF -DISO_C_BINDING
+
+ifdef USE_PARALLEL_NETCDF
+	CPPFLAGS += -DPARALLEL
+endif
+
+CFLAGS+= -Idiagnostics/simpledataio
+
+SIMPLEDATAIO_LIB_ABS=$(PWD)/libsimpledataio.a
+SIMPLEDATAIO_LIB=libsimpledataio.a
+
+
+
+
 distclean_simpledataio:
 clean_simpledataio:
 simpledataio:
@@ -31,20 +49,6 @@ simpledataiof.o: simpledataiof.f90 simpledataio.o
 
 diagnostics/simpledataio/src/simpledataio_write.F90: diagnostics/simpledataio/src/generate_simpledataio_write.rb
 	$(call RUBY_GENERATE,$@,$<)
-
-ifdef USE_MPI
-	CPPFLAGS += -DHAVE_MPI
-endif
-CPPFLAGS+= -DFORTRAN_NETCDF -DISO_C_BINDING
-
-ifdef USE_PARALLEL_NETCDF
-	CPPFLAGS += -DPARALLEL
-endif
-
-CFLAGS+= -Idiagnostics/simpledataio
-
-SIMPLEDATAIO_LIB_ABS=$(PWD)/libsimpledataio.a
-SIMPLEDATAIO_LIB=libsimpledataio.a
 
 
 
