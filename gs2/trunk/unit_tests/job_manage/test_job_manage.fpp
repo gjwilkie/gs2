@@ -1,36 +1,24 @@
-#define CONCAT //
 
-!> A program that tests the new diagnostics module. It  runs 
-!! a  linear cyclone test case and then checks that the old and
-!! new diagnostics give the same results
-!!
-!! This is free software released under GPLv3
-!!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
-
-!module checks_mod
-!  use unit_tests
-!  use functional_tests
-!  public checks
-!  contains
-!    function checks()
-!      logical :: checks
-!      checks = .true.
-!    end function checks
-!end module checks_mod
+!> This unit runs a tiny grid with nstep=10000, and checks
+!! that both the .stop and the avail_cpu_time mechanisms
+!! are working
 !
-program test_gs2_diagnostics
+program test_job_manage
   !use functional_tests
   !use checks_mod
   !call test_gs2('Linear CBC (unit test) to test new diagnostics', checks)
     use gs2_main, only: run_gs2, finish_gs2
     use unit_tests
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
-    use gs2_diagnostics
+    use gs2_diagnostics, only: finish_gs2_diagnostics
+    use job_manage, only: timer_local
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
 #endif 
     implicit none
     real :: eps
+    real :: start_time
+    real :: avail_time = 2.0
 
     eps = 1.0e-7
     if (precision(eps).lt. 11) eps = eps * 1000.0
@@ -41,13 +29,23 @@ program test_gs2_diagnostics
     test_driver_flag = .true.
     functional_test_flag = .true.
 
-   call announce_module_test("gs2_diagnostics")
+   call announce_module_test("job_manage")
 
+   if (proc0) call system("touch test_job_manage.stop")
+   call announce_test("that gs2 doesn't run without limit when run_name.stop is present")
+   start_time = timer_local()
+   call process_test((timer_local() - start_time < avail_time), &
+     "that gs2 doesn't run without limit when run_name.stop is present")
     call run_gs2(mp_comm)
+    if (proc0) call system("rm test_job_manage.stop")
 
+   call announce_test("that gs2 doesn't run without limit when avail_cpu_time is set")
+   start_time = timer_local()
+    call run_gs2(mp_comm)
+    !write (*,*) 'start_time', start_time, timer_local()
+   call process_test(((timer_local() - start_time .gt. avail_time - 1.0) ), &
+     "that gs2 doesn't run without limit when avail_cpu_time is set")
 
-    call announce_test('diffusivity')
-    call process_test(diagnostics_unit_test_diffusivity(19.852483466900530, eps), 'diffusivity')
 
     call finish_gs2_diagnostics(ilast_step)
 #ifdef NEW_DIAG
@@ -58,7 +56,7 @@ program test_gs2_diagnostics
 
 
 
-   call close_module_test("gs2_diagnostics")
+   call close_module_test("job_manage")
 
     call finish_mp
 
@@ -66,4 +64,4 @@ contains
   
 
 
-end program test_gs2_diagnostics
+end program test_job_manage

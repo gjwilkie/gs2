@@ -47,6 +47,7 @@ module diagnostics_nonlinear_convergence
     istep = gnostics%istep
     nwrite = gnostics%nwrite
     heat_flux = gnostics%current_results%total_heat_flux
+    exit = gnostics%exit
 
     if(proc0 .and. .not. (trin_istep .ne. 0 .and. istep .eq. 0)) then
        if(istep .gt. 0) trin_istep = trin_istep + nwrite ! Total number of steps including restarted trinity runs
