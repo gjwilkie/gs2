@@ -85,7 +85,6 @@ contains
     moment_units, moment_value, distributed)
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
-    use diagnostics_create_and_write, only: create_and_write_dstrb_fieldlike_variable_complex_16_2
     use volume_averages
     use mp, only: sum_allreduce
     use theta_grid, only: ntgrid
