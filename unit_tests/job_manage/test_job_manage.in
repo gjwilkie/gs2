@@ -50,14 +50,14 @@
  y0 = 2
  naky = 2
  jtwist = 6
- nx = 6
+ nx = 4
 /
 
 !==============================
 !  
 !==============================
 &theta_grid_parameters
- ntheta = 12 ! Number of points along field line (theta) per 2 pi segment
+ ntheta = 6 ! Number of points along field line (theta) per 2 pi segment
  nperiod = 1 ! Number of 2 pi segments along equilibrium magnetic field.
  eps = 0.18 ! eps=r/R
  epsl = 2.0 ! epsl=2 a/R
@@ -84,8 +84,8 @@
 !PITCH ANGLE/ENERGY GRID SETUP  
 !==============================
 &le_grids_knobs
- ngauss = 3 ! Number of untrapped pitch-angles moving in one direction along field line.
- negrid = 12 ! Total number of energy grid points
+ ngauss = 1 ! Number of untrapped pitch-angles moving in one direction along field line.
+ negrid = 4 ! Total number of energy grid points
 /
 
 !==============================
@@ -116,7 +116,8 @@
  fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
  delt = 0.05 ! Time step
- nstep = 200 ! Maximum number of timesteps
+ nstep = 10000 ! Maximum number of timesteps
+ avail_cpu_time = 302
 /
 
 !==============================
@@ -145,7 +146,7 @@
 !NONLINEARITY  
 !==============================
 &nonlinear_terms_knobs
- nonlinear_mode = "off" ! Include nonlinear terms? ('on','off')
+ nonlinear_mode = "on" ! Include nonlinear terms? ('on','off')
  flow_mode = "off" 
  cfl = 0.5 ! The maximum delt < cfl * min(Delta_perp/v_perp)
 /
