@@ -26,7 +26,7 @@
 void sdatio_init(struct sdatio_file * sfile, char * fname){
   sfile->mode = NC_NETCDF4|NC_CLOBBER;
   sfile->is_open = 0;
-	sfile->is_parallel = 0;
+  sfile->is_parallel = 0;
   sfile->communicator = (MPI_Comm*)malloc(sizeof(MPI_Comm));
   sfile->name = (char*)malloc(sizeof(char)*(strlen(fname)+1));
   strcpy(sfile->name, fname);
@@ -368,7 +368,9 @@ void sdatio_create_variable(struct sdatio_file * sfile,
 														char * description,
 														char * units){
 	int ndims;
+#ifdef PARALLEL
   int nunlim;
+#endif
 	struct sdatio_variable  * svar;
 	int retval;
 	/*int * dimension_ids;*/
@@ -791,7 +793,7 @@ void sdatio_close(struct sdatio_file * sfile){
 }
 
 void sdatio_sync(struct sdatio_file * sfile){
-	int i, retval;
+	int retval;
 
 	/*if (sfile->is_parallel){}*/
 	/*else {*/

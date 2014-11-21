@@ -1,8 +1,7 @@
 module fields_parallelization
-   use theta_grid, only: ntgrid
-   use kt_grids, only: naky, ntheta0
    implicit none
-
+   private
+   public :: field_k_local
 contains
   !function field_k_local_allcover(ik,it)
     !use mp, only: iproc, nproc
@@ -16,7 +15,8 @@ contains
   !end function field_k_local_allcover
 
   function field_k_local(it,ik)
-    use mp, only: iproc, nproc, proc0
+    use mp, only: iproc, nproc
+    implicit none
     integer, intent(in) :: ik, it
     logical :: field_k_local
 

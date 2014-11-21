@@ -1,4 +1,3 @@
-
 class Generator
   def initialize(type, dimsize)
     @dimsize = dimsize
@@ -17,27 +16,26 @@ class Generator
   end
   def function_string
     _string = <<EOF
- subroutine #{procedure_name}(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
-   use simpledataio 
-   use simpledataio_write 
-   use diagnostics_config, only: diagnostics_type
-   type(diagnostics_type), intent(in) :: gnostics
-   integer, intent(in) :: variable_type
-   character(*), intent(in) :: variable_name
-   character(*), intent(in) :: dimension_list
-   character(*), intent(in) :: variable_description
-   character(*), intent(in) :: variable_units
-   #{@type.sub(/_/, '*')}, intent(in)#{@dimension} :: val
+  subroutine #{procedure_name}(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
+    use simpledataio, only: create_variable
+    use simpledataio_write, only: write_variable
+    use diagnostics_config, only: diagnostics_type
+    type(diagnostics_type), intent(in) :: gnostics
+    integer, intent(in) :: variable_type
+    character(*), intent(in) :: variable_name
+    character(*), intent(in) :: dimension_list
+    character(*), intent(in) :: variable_description
+    character(*), intent(in) :: variable_units
+    #{@type.sub(/_/, '*')}, intent(in)#{@dimension} :: val
  
-   if (gnostics%create) then 
-     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-   end if
+    if (gnostics%create) then 
+       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+    end if
 
-   if (gnostics%create .or. .not. gnostics%wryte) return
-   
-   call write_variable(gnostics%sfile, variable_name, val)
+    if (gnostics%create .or. .not. gnostics%wryte) return
 
- end subroutine #{procedure_name}
+    call write_variable(gnostics%sfile, variable_name, val)
+  end subroutine #{procedure_name}
 EOF
   end
 
@@ -61,102 +59,99 @@ class GeneratorDistributed
   end
   def function_string
     _string = <<EOF
- subroutine #{procedure_name}(gnostics, variable_type, variable_name, dimension_list, &
+  subroutine #{procedure_name}(gnostics, variable_type, variable_name, dimension_list, &
     variable_description, variable_units, val)
-   use simpledataio, only: create_variable
-   use simpledataio, only: set_start
-   use simpledataio, only: set_count
-   use simpledataio, only: set_independent, set_collective
-   use simpledataio_write, only: write_variable
-   use simpledataio_write, only: write_variable_with_offset
-   use diagnostics_config, only: diagnostics_type
-   use mp, only: mp_abort,barrier
-   use file_utils, only: error_unit
-   use fields_parallelization, only: field_k_local
-   use kt_grids, only: naky, ntheta0
-   type(diagnostics_type), intent(in) :: gnostics
-   integer, intent(in) :: variable_type
-   character(*), intent(in) :: variable_name
-   character(*), intent(in) :: dimension_list
-   character(*), intent(in) :: variable_description
-   character(*), intent(in) :: variable_units
-   integer :: xdim
-   integer :: id, it, ik
-   integer :: i1 !, i2, i3
-   #{@type.sub(/_/, '*')}, intent(in)#{@dimension} :: val
-   #{@type.sub(/_/, '*')} :: dummy
+    use simpledataio, only: create_variable, set_start, set_count
+    use simpledataio, only: set_independent, set_collective
+    use simpledataio_write, only: write_variable, write_variable_with_offset
+    use diagnostics_config, only: diagnostics_type
+    use mp, only: mp_abort,barrier
+    use file_utils, only: error_unit
+    use fields_parallelization, only: field_k_local
+    use kt_grids, only: naky, ntheta0
+    type(diagnostics_type), intent(in) :: gnostics
+    integer, intent(in) :: variable_type
+    character(*), intent(in) :: variable_name
+    character(*), intent(in) :: dimension_list
+    character(*), intent(in) :: variable_description
+    character(*), intent(in) :: variable_units
+    integer :: xdim
+    integer :: id, it, ik
+    integer :: i1 !, i2, i3
+    #{@type.sub(/_/, '*')}, intent(in)#{@dimension} :: val
+    #{@type.sub(/_/, '*')} :: dummy
    
-   !return 
-   ! Find location of the x dimension
-   xdim = index(dimension_list, "XY")
+    !return 
+    ! Find location of the x dimension
+    xdim = index(dimension_list, "XY")
 
-   if (xdim .eq. 0) then
-    write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-    & only be called for arrays whose dimension list contains XY in that order"
-    call mp_abort("")
-   end if
+    if (xdim .eq. 0) then
+       write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
+            & only be called for arrays whose dimension list contains XY in that order"
+       call mp_abort("")
+    end if
  
-   if (gnostics%create) then 
-     call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
-     if (gnostics%distributed) then
-     end if
-   end if
-
-
-   if (gnostics%wryte) then
-     if (.not.  gnostics%distributed) then
-     !if (.true.) then
-       call write_variable(gnostics%sfile, variable_name, val)
-     else
-       ! For some reason every process has to make at least
-       ! one write to a variable with an infinite dimension.
-       ! Here we make some dummy writes to satisfy that
-       do id = 1,len(dimension_list)
-          if (dimension_list(id:id) .eq. 't') cycle
-          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-       end do
-       call write_variable(gnostics%sfile, variable_name, dummy)
-       do id = 1,len(dimension_list)
-          !! Reset the starts and counts
-          if (dimension_list(id:id) .eq. 't') cycle
-          call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-          !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-       end do
-       call barrier
-       call set_count(gnostics%sfile, variable_name, "X", 1)
-       call set_count(gnostics%sfile, variable_name, "Y", 1)
-       call set_independent(gnostics%sfile, variable_name)
-       do ik = 1,naky
-         do it = 1,ntheta0
-           if (field_k_local(it,ik)) then
-             call set_start(gnostics%sfile, variable_name, "X", it)
-             call set_start(gnostics%sfile, variable_name, "Y", ik)
-             ! Now we treat cases where X and Y are not the two most
-             ! slowly varying indices
-             if (xdim < #@dimsize - 1) then
-              call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
-              ! This loop will normally be over species
-              do i1 = 1,size(val, xdim+2)
-                call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
-                if (xdim < #@dimsize - 2) then
-                  write (*,*) "Case with two dimensions to the right of X and Y not implemented"
-                  stop 1
-                else
-                  call write_variable_with_offset(gnostics%sfile, variable_name, val)
-                end if
-              end do 
-             else
-              call write_variable_with_offset(gnostics%sfile, variable_name, val)
-             end if
-           end if
-         end do
-       end do
-       call set_collective(gnostics%sfile, variable_name)
-     end if
+    if (gnostics%create) then 
+       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       if (gnostics%distributed) then
+       end if
     end if
 
- end subroutine #{procedure_name}
+
+    if (gnostics%wryte) then
+       if (.not.  gnostics%distributed) then
+          call write_variable(gnostics%sfile, variable_name, val)
+       else
+          ! For some reason every process has to make at least
+          ! one write to a variable with an infinite dimension.
+          ! Here we make some dummy writes to satisfy that
+          do id = 1,len(dimension_list)
+             if (dimension_list(id:id) .eq. 't') cycle
+             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          end do
+          call write_variable(gnostics%sfile, variable_name, dummy)
+          do id = 1,len(dimension_list)
+             !! Reset the starts and counts
+             if (dimension_list(id:id) .eq. 't') cycle
+             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+          end do
+          call barrier
+          call set_count(gnostics%sfile, variable_name, "X", 1)
+          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_independent(gnostics%sfile, variable_name)
+          do ik = 1,naky
+             do it = 1,ntheta0
+                if (field_k_local(it,ik)) then
+                   call set_start(gnostics%sfile, variable_name, "X", it)
+                   call set_start(gnostics%sfile, variable_name, "Y", ik)
+                   ! Now we treat cases where X and Y are not the two most
+                   ! slowly varying indices
+                   if (xdim < #@dimsize - 1) then
+                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      ! This loop will normally be over species
+                      do i1 = 1,size(val, xdim+2)
+                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         if (xdim < #@dimsize - 2) then
+                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            !<DD>Should this be an mp_abort?
+                            stop 1
+                         else
+                            call write_variable_with_offset(gnostics%sfile, variable_name, val)
+                         end if
+                      end do 
+                   else
+                      call write_variable_with_offset(gnostics%sfile, variable_name, val)
+                   end if
+                end if
+             end do
+          end do
+          call set_collective(gnostics%sfile, variable_name)
+       end if
+    end if
+
+  end subroutine #{procedure_name}
 EOF
   end
 
@@ -197,30 +192,28 @@ string = <<EOF
 !! the same manner as the fields.
 module diagnostics_create_and_write
 
-implicit none
+  implicit none
 
-!> Create and/or write the given variable depending on the values
-!! of the flags gnostics%create and gnostics%wryte
-public :: create_and_write_variable
+  private
 
-!> These are a set of subroutines for writing variables which 
-!! have the dimensions X and Y (for example, fields, moments or 
-!! fluxes) which may be distributed, ie. different XY combinations
-!! may be on different processors. The locality is determined through
-!! the function field_k_local.
-public :: create_and_write_distributed_fieldlike_variable
+  !> Create and/or write the given variable depending on the values
+  !! of the flags gnostics%create and gnostics%wryte
+  public :: create_and_write_variable
 
+  !> These are a set of subroutines for writing variables which 
+  !! have the dimensions X and Y (for example, fields, moments or 
+  !! fluxes) which may be distributed, ie. different XY combinations
+  !! may be on different processors. The locality is determined through
+  !! the function field_k_local.
+  public :: create_and_write_distributed_fieldlike_variable
 
-private
+  interface create_and_write_variable
+#{generators.map{|g| "     "+"module procedure " + g.procedure_name}.join("\n")}
+  end interface create_and_write_variable
 
-interface create_and_write_variable
-#{generators.map{|g| "  module procedure " + g.procedure_name}.join("\n")}
-end interface create_and_write_variable
-
-interface create_and_write_distributed_fieldlike_variable
-#{distributed_generators.map{|g| "  module procedure " + g.procedure_name}.join("\n")}
-end interface create_and_write_distributed_fieldlike_variable
-
+  interface create_and_write_distributed_fieldlike_variable
+#{distributed_generators.map{|g| "     "+"module procedure " + g.procedure_name}.join("\n")}
+  end interface create_and_write_distributed_fieldlike_variable
 
 contains
 
