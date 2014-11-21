@@ -1,34 +1,24 @@
 !> Module which contains functions for calculating
 !! and writing out the fluxes of heat and momentum etc.
 module diagnostics_fluxes
+ 
+  implicit none
 
-  use kt_grids, only: naky, ntheta0
-  use diagnostics_config, only: diagnostics_type
-  use species, only: nspec
-  use theta_grid, only: ntgrid
-  use simpledataio
-  use simpledataio_write
+  private
 
-  
+  !> Allocate arrays
+  public :: init_diagnostics_fluxes
 
-implicit none
+  !> Deallocate arrays
+  public :: finish_diagnostics_fluxes
 
-!> Allocate arrays
-public :: init_diagnostics_fluxes
+  !> Calculate and possibly write fluxes.  The fluxes are actually calculated
+  !!  in the module dist_fn. They are returned as a function of
+  !!  x, y and species. This function writes the whole array,
+  !!  and also various averages of them.
+  public :: calculate_fluxes
+  public :: write_symmetry, write_parity
 
-!> Deallocate arrays
-public :: finish_diagnostics_fluxes
-
-!> Calculate and possibly write fluxes.  The fluxes are actually calculated
-!!  in the module dist_fn. They are returned as a function of
-!!  x, y and species. This function writes the whole array,
-!!  and also various averages of them.
-public :: calculate_fluxes
-
-public :: write_symmetry
-public :: write_parity
-
-private
   real, dimension (:,:,:,:), allocatable ::  qheat, qmheat, qbheat
   real, dimension (:,:,:), allocatable ::  pflux,  vflux, vflux_par, vflux_perp
   real, dimension (:,:,:), allocatable ::  pflux_tormom
@@ -37,42 +27,42 @@ private
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
   real, dimension (:,:,:), allocatable :: exchange
   real, dimension (:,:,:), allocatable :: exchange1
-  !integer, parameter :: gnostics%rtype = SDATIO_DOUBLE
-
 
 contains
   subroutine init_diagnostics_fluxes(gnostics)
+    use kt_grids, only: naky, ntheta0
+    use species, only: nspec
+    use diagnostics_config, only: diagnostics_type
+    implicit none
     type(diagnostics_type), intent(inout) :: gnostics
-
+    
     gnostics%current_results%species_heat_flux_avg = 0.0
     gnostics%current_results%species_momentum_flux_avg = 0.0
     gnostics%current_results%species_particle_flux_avg = 0.0
-
   
     allocate (pflux (ntheta0,naky,nspec)) ; pflux = 0.
     allocate (pflux_tormom (ntheta0,naky,nspec)) ; pflux_tormom = 0. 
     allocate (qheat (ntheta0,naky,nspec,3)) ; qheat = 0.
     allocate (vflux (ntheta0,naky,nspec)) ; vflux = 0.
-
+    
     allocate (exchange1 (ntheta0,naky,nspec)) ; exchange1 = 0.
     allocate (exchange (ntheta0,naky,nspec)) ; exchange = 0.
 
     allocate (vflux_par (ntheta0,naky,nspec)) ; vflux_par = 0.
     allocate (vflux_perp (ntheta0,naky,nspec)) ; vflux_perp = 0.
-
+    
     allocate (vflux0 (ntheta0,naky,nspec)) ; vflux0 = 0.
     allocate (vflux1 (ntheta0,naky,nspec)) ; vflux1 = 0.
-
+    
     allocate (pmflux(ntheta0,naky,nspec)) ; pmflux = 0.
     allocate (qmheat(ntheta0,naky,nspec,3)) ; qmheat = 0.
     allocate (vmflux(ntheta0,naky,nspec)) ; vmflux = 0.
-
+    
     allocate (pbflux(ntheta0,naky,nspec)) ; pbflux = 0.
     allocate (qbheat(ntheta0,naky,nspec,3)) ; qbheat = 0.
-    allocate (vbflux(ntheta0,naky,nspec)) ; vbflux = 0.
-
+    allocate (vbflux(ntheta0,naky,nspec)) ; vbflux = 0.   
   end subroutine init_diagnostics_fluxes
-
+  
   subroutine finish_diagnostics_fluxes
     deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange, exchange1)
@@ -86,10 +76,10 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_config, only: diagnostics_type
+    implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     integer :: is
-    !real :: total
-    !if (istep > 0) then
 
     gnostics%current_results%total_heat_flux = 0.0
     gnostics%current_results%total_momentum_flux = 0.0
@@ -99,102 +89,95 @@ contains
     gnostics%current_results%species_particle_flux = 0.0
 
     if (nonlinear_mode_switch .eq. nonlinear_mode_none) &
-      call write_diffusive_estimates(gnostics)
+         call write_diffusive_estimates(gnostics)
+
     call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
     call flux (phinew, aparnew, bparnew, &
-      pflux,  qheat,  vflux, vflux_par, vflux_perp, &
-      pmflux, qmheat, vmflux, pbflux, qbheat, vbflux, pflux_tormom)
+         pflux,  qheat,  vflux, vflux_par, vflux_perp, &
+         pmflux, qmheat, vmflux, pbflux, qbheat, vbflux, pflux_tormom)
+
 #ifdef LOWFLOW
-     !lowflow terms only implemented in electrostatic limit at present
-     call lf_flux (phinew, vflux0, vflux1)
+    !lowflow terms only implemented in electrostatic limit at present
+    call lf_flux (phinew, vflux0, vflux1)
 #endif
+
     call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
     call eexchange (phinew, phi, exchange1, exchange)
-    !end if
+    
     if (fphi > epsilon(0.0)) then
-      do is = 1, nspec
+       do is = 1, nspec
           qheat(:,:,is,1) = qheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
           qheat(:,:,is,2) = qheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
           qheat(:,:,is,3) = qheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
-
+          
           pflux(:,:,is) = pflux(:,:,is) * spec(is)%dens
           pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
-
+          
           vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           vflux_par(:,:,is) = vflux_par(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
           exchange(:,:,is) = exchange(:,:,is) * spec(is)%dens*spec(is)%z
-
+          
 #ifdef LOWFLOW
           vflux0(:,:,is) = vflux0(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
           vflux1(:,:,is) = vflux1(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
 #endif
-      end do
-      call calculate_standard_flux_properties(gnostics, &
-        'es_heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), gnostics%distributed)
-      !gnostics%current_results%total_heat_flux = gnostics%current_results%total_heat_flux + total
-
-      call calculate_standard_flux_properties(gnostics, &
-        'es_heat_flux_par',  'Turbulent flux of parallel heat', 'Q_gB = ', qheat(:,:,:,2), gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'es_heat_flux_perp',  'Turbulent flux of perpendicular heat', 'Q_gB = ', qheat(:,:,:,3), gnostics%distributed)
-
-      call calculate_standard_flux_properties(gnostics, &
-        'es_part_flux',  'Turbulent flux of particles', 'n_r? ', pflux, gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'es_part_tormom_flux',  'Ask Jung-Pyo Lee...', '? ', pflux_tormom, gnostics%distributed)
-
-      call calculate_standard_flux_properties(gnostics, &
-        'es_mom_flux',  'Flux of toroidal angular momentum', 'Pi_gB =  ', vflux, gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'es_mom_flux_par',  &
-        'Flux of the parallel component of the toroidal angular momentum', 'Pi_gB =  ', &
-        vflux_par, gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'es_energy_exchange', &
-        '??', 'Pi_gB =  ', &
-        exchange, gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'es_mom_flux_perp', &
-        'Flux of the perpendicular component of the toroidal angular momentum', 'Pi_gB =  ', &
-        vflux_perp, gnostics%distributed)
+       end do
+       call calculate_standard_flux_properties(gnostics, &
+            'es_heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_heat_flux_par',  'Turbulent flux of parallel heat', 'Q_gB = ', qheat(:,:,:,2), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_heat_flux_perp',  'Turbulent flux of perpendicular heat', 'Q_gB = ', qheat(:,:,:,3), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_part_flux',  'Turbulent flux of particles', 'n_r? ', pflux, gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_part_tormom_flux',  'Ask Jung-Pyo Lee...', '? ', pflux_tormom, gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_mom_flux',  'Flux of toroidal angular momentum', 'Pi_gB =  ', vflux, gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_mom_flux_par', 'Flux of the parallel component of the toroidal angular momentum', 'Pi_gB =  ', &
+            vflux_par, gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_energy_exchange', '??', 'Pi_gB =  ', &
+            exchange, gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_mom_flux_perp', 'Flux of the perpendicular component of the toroidal angular momentum', 'Pi_gB =  ', &
+            vflux_perp, gnostics%distributed)
 #ifdef LOWFLOW
-      call calculate_standard_flux_properties(gnostics, &
-        'es_mom0', &
-        'Low-flow momentum flux 0 (Ask Michael Barnes)', 'Pi_gB =  ', &
-        vflux0, gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'es_mom1', &
-        'Low-flow momentum flux 1 (Ask Michael Barnes)', 'Pi_gB =  ', &
-        vflux0, gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_mom0', 'Low-flow momentum flux 0 (Ask Michael Barnes)', 'Pi_gB =  ', &
+            vflux0, gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'es_mom1', 'Low-flow momentum flux 1 (Ask Michael Barnes)', 'Pi_gB =  ', &
+            vflux0, gnostics%distributed)
 #endif
     end if
 
 
     if (fapar > epsilon(0.0)) then
-      do is = 1, nspec
-        qmheat(:,:,is,1)=qmheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
-        qmheat(:,:,is,2)=qmheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
-        qmheat(:,:,is,3)=qmheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
-        pmflux(:,:,is)=pmflux(:,:,is) * spec(is)%dens
-        vmflux(:,:,is)=vmflux(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
-      end do
-      call calculate_standard_flux_properties(gnostics, &
-        'apar_heat_flux',  'Turbulent flux of heat resulting from &
-        & perpendicular magnetic fluctuations', 'Q_gB = ', qmheat(:,:,:,1), gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'apar_heat_flux_par',  'Turbulent flux of parallel heat resulting from &
-        & perpendicular magnetic fluctuations', 'Q_gB = ', qmheat(:,:,:,2), gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'apar_heat_flux_perp',  'Turbulent flux of perpendicular heat resulting from &
-        & perpendicular magnetic fluctuations', 'Q_gB = ', qmheat(:,:,:,3), gnostics%distributed)
-      !call get_surf_average (qmheat(:,:,is,1), x_qmflux(:,is))
-      call calculate_standard_flux_properties(gnostics, &
-        'apar_part_flux',  'Turbulent flux of particles resulting from &
-        & perpendicular magnetic fluctuations', 'TBC ', pmflux(:,:,:), gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'apar_mom_flux',  'Turbulent flux of momentum resulting from &
-        & perpendicular magnetic fluctuations', 'Pi_gB = ', vmflux(:,:,:), gnostics%distributed)
+       do is = 1, nspec
+          qmheat(:,:,is,1)=qmheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
+          qmheat(:,:,is,2)=qmheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
+          qmheat(:,:,is,3)=qmheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
+          pmflux(:,:,is)=pmflux(:,:,is) * spec(is)%dens
+          vmflux(:,:,is)=vmflux(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
+       end do
+       call calculate_standard_flux_properties(gnostics, &
+            'apar_heat_flux',  'Turbulent flux of heat resulting from &
+            & perpendicular magnetic fluctuations', 'Q_gB = ', qmheat(:,:,:,1), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'apar_heat_flux_par',  'Turbulent flux of parallel heat resulting from &
+            & perpendicular magnetic fluctuations', 'Q_gB = ', qmheat(:,:,:,2), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'apar_heat_flux_perp',  'Turbulent flux of perpendicular heat resulting from &
+            & perpendicular magnetic fluctuations', 'Q_gB = ', qmheat(:,:,:,3), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'apar_part_flux',  'Turbulent flux of particles resulting from &
+            & perpendicular magnetic fluctuations', 'TBC ', pmflux(:,:,:), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'apar_mom_flux',  'Turbulent flux of momentum resulting from &
+            & perpendicular magnetic fluctuations', 'Pi_gB = ', vmflux(:,:,:), gnostics%distributed)
     end if
     if (fbpar > epsilon(0.0)) then
        do is = 1, nspec
@@ -204,62 +187,57 @@ contains
           pbflux(:,:,is)=pbflux(:,:,is) * spec(is)%dens
           vbflux(:,:,is)=vbflux(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
        end do
-      call calculate_standard_flux_properties(gnostics, &
-        'bpar_heat_flux',  'Turbulent flux of heat resulting from &
-        & parallel magnetic fluctuations', 'Q_gB = ', qbheat(:,:,:,1), gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'bpar_heat_flux_par',  'Turbulent flux of parallel heat resulting from &
-        & parallel magnetic fluctuations', 'Q_gB = ', qbheat(:,:,:,2), gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'bpar_heat_flux_perp',  'Turbulent flux of perpendicular heat resulting from &
-        & parallel magnetic fluctuations', 'Q_gB = ', qbheat(:,:,:,3), gnostics%distributed)
-      !call get_surf_average (qbheat(:,:,is,1), x_qmflux(:,is))
-      call calculate_standard_flux_properties(gnostics, &
-        'bpar_part_flux',  'Turbulent flux of particles resulting from &
-        & parallel magnetic fluctuations', 'TBC ', pbflux(:,:,:), gnostics%distributed)
-      call calculate_standard_flux_properties(gnostics, &
-        'bpar_mom_flux',  'Turbulent flux of momentum resulting from &
-        & parallel magnetic fluctuations', 'Pi_gB = ', vbflux(:,:,:), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'bpar_heat_flux',  'Turbulent flux of heat resulting from &
+            & parallel magnetic fluctuations', 'Q_gB = ', qbheat(:,:,:,1), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'bpar_heat_flux_par',  'Turbulent flux of parallel heat resulting from &
+            & parallel magnetic fluctuations', 'Q_gB = ', qbheat(:,:,:,2), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'bpar_heat_flux_perp',  'Turbulent flux of perpendicular heat resulting from &
+            & parallel magnetic fluctuations', 'Q_gB = ', qbheat(:,:,:,3), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'bpar_part_flux',  'Turbulent flux of particles resulting from &
+            & parallel magnetic fluctuations', 'TBC ', pbflux(:,:,:), gnostics%distributed)
+       call calculate_standard_flux_properties(gnostics, &
+            'bpar_mom_flux',  'Turbulent flux of momentum resulting from &
+            & parallel magnetic fluctuations', 'Pi_gB = ', vbflux(:,:,:), gnostics%distributed)
     end if
     
     ! Update averages
     gnostics%current_results%species_heat_flux_avg = gnostics%current_results%species_heat_flux_avg + & 
-      gnostics%current_results%species_heat_flux * (gnostics%user_time-gnostics%user_time_old)
+         gnostics%current_results%species_heat_flux * (gnostics%user_time-gnostics%user_time_old)
     gnostics%current_results%species_particle_flux_avg = gnostics%current_results%species_particle_flux_avg + & 
-      gnostics%current_results%species_particle_flux * (gnostics%user_time-gnostics%user_time_old)
+         gnostics%current_results%species_particle_flux * (gnostics%user_time-gnostics%user_time_old)
     gnostics%current_results%species_momentum_flux_avg = gnostics%current_results%species_momentum_flux_avg + & 
-      gnostics%current_results%species_momentum_flux * (gnostics%user_time-gnostics%user_time_old)
+         gnostics%current_results%species_momentum_flux * (gnostics%user_time-gnostics%user_time_old)
     ! Don't need to broadcast them any more as fluxes are now calculated on all
     ! processors
-
     
     ! Write totals
     if (gnostics%write_fluxes) then
-      call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_tot", "t", &
-        "Total heat flux, as a function of  time", &
-        "Q_gB", gnostics%current_results%total_heat_flux)
-      call create_and_write_variable(gnostics, gnostics%rtype, "hflux_tot", "t", &
-        "Total heat flux, as a function of  time, same as heat_flux_tot, included &
-        & for backwards compatiblity", &
-        "Q_gB", gnostics%current_results%total_heat_flux)
-      call create_and_write_variable(gnostics, gnostics%rtype, "mom_flux_tot", "t", &
-        "Total momentum flux, as a function of  time", &
-        "Pi_gB", gnostics%current_results%total_momentum_flux)
-      call create_and_write_variable(gnostics, gnostics%rtype, "vflux_tot", "t", &
-        "Total momentum flux, as a function of  time, same as mom_flux_tot, &
-        & included for backwards compatiblity.", &
-        "Pi_gB", gnostics%current_results%total_momentum_flux)
-      call create_and_write_variable(gnostics, gnostics%rtype, "part_flux_tot", "t", &
-        "Total particle flux, as a function of  time", &
-        "TBC", gnostics%current_results%total_particle_flux)
-      call create_and_write_variable(gnostics, gnostics%rtype, "zflux_tot", "t", &
-        "Total particle flux, as a function of  time, same as part_flux_tot, &
-        & included for backwards compatiblity.", &
-        "TBC", gnostics%current_results%total_particle_flux)
-    end if
-    
-
-    
+       call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_tot", "t", &
+            "Total heat flux, as a function of  time", &
+            "Q_gB", gnostics%current_results%total_heat_flux)
+       call create_and_write_variable(gnostics, gnostics%rtype, "hflux_tot", "t", &
+            "Total heat flux, as a function of  time, same as heat_flux_tot, included &
+            & for backwards compatiblity", &
+            "Q_gB", gnostics%current_results%total_heat_flux)
+       call create_and_write_variable(gnostics, gnostics%rtype, "mom_flux_tot", "t", &
+            "Total momentum flux, as a function of  time", &
+            "Pi_gB", gnostics%current_results%total_momentum_flux)
+       call create_and_write_variable(gnostics, gnostics%rtype, "vflux_tot", "t", &
+            "Total momentum flux, as a function of  time, same as mom_flux_tot, &
+            & included for backwards compatiblity.", &
+            "Pi_gB", gnostics%current_results%total_momentum_flux)
+       call create_and_write_variable(gnostics, gnostics%rtype, "part_flux_tot", "t", &
+            "Total particle flux, as a function of  time", &
+            "TBC", gnostics%current_results%total_particle_flux)
+       call create_and_write_variable(gnostics, gnostics%rtype, "zflux_tot", "t", &
+            "Total particle flux, as a function of  time, same as part_flux_tot, &
+            & included for backwards compatiblity.", &
+            "TBC", gnostics%current_results%total_particle_flux)
+    end if    
   end subroutine calculate_fluxes
 
   !> Calculate estimates of the heat and particles fluxes using
@@ -267,13 +245,11 @@ contains
   subroutine write_diffusive_estimates(gnostics)
     use diagnostics_omega, only: omega_average
     use fields_parallelization, only: field_k_local
-    use species, only: spec
-    !use kt_grids, only: aky, akx, kperp2
-    use kt_grids, only: kperp2
-    !use geometry, only: surfarea, dvdrhon, grho
+    use species, only: spec, nspec
+    use kt_grids, only: kperp2, ntheta0, naky
     use theta_grid, only: grho
-    use diagnostics_create_and_write
-    use volume_averages
+    use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_config, only: diagnostics_type
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     real, dimension(ntheta0, naky) :: diffusivity_by_k
@@ -289,101 +265,83 @@ contains
     real, dimension(naky, nspec) :: particle_flux_by_ky
     real, dimension(ntheta0, naky) :: momentum_flux
     integer :: it, ik, is
-    !real :: k2, total
+
     diffusivity_by_k = 0.0
     heat_flux = 0.0
     particle_flux = 0.0
     momentum_flux = 0.0
     heat_flux_max = 0.0
-    !grho = 1.0
-    !grho = surfarea/dvdrhon
-    !write (*,*) 'grho', grho
-    do ik = 1,naky
-      do it = 1,ntheta0
-        if (.not. gnostics%distributed .or. field_k_local(it,ik)) then
-          !k2 = (aky(ik)**2.0 + akx(it)**2.0)**0.5
-          !if (k2.eq.epsilon(0.0)) cycle
-          !if (akx(it) .eq. 0.0) cycle
-          !if (aky(ik) .eq. 0.0) cycle
-          if (kperp2(gnostics%igomega,it,ik).eq.0.0) cycle
-          diffusivity_by_k(it,ik) = &
-            max(aimag(omega_average(it,ik)),0.0)/kperp2(gnostics%igomega, it, ik)*2.0
-            !max(aimag(omega_average(it,ik)),0.0)/aky(ik)**2.0/2.0**0.5
-            !max(aimag(omega_average(it,ik)),0.0)/akx(ik)**2.0/2.0**0.5
-            !max(aimag(omega_average(it,ik)),0.0)/k2
-            !aimag(omega_average(it,ik))
-          do is = 1,nspec
-           ! Q = n chi grad T = n (gamma / k^2) dT / dr
-           ! = dens  n_r (gamma_N v_thr / k_N**2 rho_r a) dT / drho drho/dr
-           ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) T a / L_T drho/dr
-           ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) temp T_r tprim drho/dr_N/a
-           ! Q / (n_r  v_r T_r rho_r**2/a**2) 
-           ! = dens (gamma_N / k_N**2) temp tprim grho
-           !   
-           heat_flux(it,ik,is) = diffusivity_by_k(it,ik) * &
-             spec(is)%dens * spec(is)%temp * spec(is)%tprim *  grho(gnostics%igomega)
-           particle_flux(it,ik,is) = diffusivity_by_k(it,ik) * &
-             spec(is)%dens **2.0 * spec(is)%fprim * grho(gnostics%igomega)
-!
-           !heat_flux(it,ik,is) = max(aimag(omega_average(it,ik)),0.0)
 
-           !heat_flux_max = max(heat_flux(it,ik,is), heat_flux_max)
-             
-          end do
-        end if
-      end do
+    do ik = 1,naky
+       do it = 1,ntheta0
+          if (.not. gnostics%distributed .or. field_k_local(it,ik)) then
+             if (kperp2(gnostics%igomega,it,ik).eq.0.0) cycle
+             diffusivity_by_k(it,ik) = &
+                  max(aimag(omega_average(it,ik)),0.0)/kperp2(gnostics%igomega, it, ik)*2.0
+             do is = 1,nspec
+                ! Q = n chi grad T = n (gamma / k^2) dT / dr
+                ! = dens  n_r (gamma_N v_thr / k_N**2 rho_r a) dT / drho drho/dr
+                ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) T a / L_T drho/dr
+                ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) temp T_r tprim drho/dr_N/a
+                ! Q / (n_r  v_r T_r rho_r**2/a**2) 
+                ! = dens (gamma_N / k_N**2) temp tprim grho
+                !   
+                heat_flux(it,ik,is) = diffusivity_by_k(it,ik) * &
+                     spec(is)%dens * spec(is)%temp * spec(is)%tprim *  grho(gnostics%igomega)
+                particle_flux(it,ik,is) = diffusivity_by_k(it,ik) * &
+                     spec(is)%dens **2.0 * spec(is)%fprim * grho(gnostics%igomega)
+             end do
+          end if
+       end do
     end do
-    !heat_flux = 0.0
+
     call calculate_standard_flux_properties(gnostics, &
-      'heat_flux_diff',  'Diffusive estimate of turbulent flux of heat', &
-      'Q_gB = ', heat_flux, gnostics%distributed)
+         'heat_flux_diff',  'Diffusive estimate of turbulent flux of heat', &
+         'Q_gB = ', heat_flux, gnostics%distributed)
     
     call calculate_standard_flux_properties(gnostics, &
-      'part_flux_diff',  'Diffusive estimate of turbulent flux of particles', &
-      'n_r? ', particle_flux, gnostics%distributed)
-
-
-    !call average_kx(heat_flux, heat_flux_by_ky, gnostics%distributed)
-    !call average_kx(particle_flux, particle_flux_by_ky, gnostics%distributed)
+         'part_flux_diff',  'Diffusive estimate of turbulent flux of particles', &
+         'n_r? ', particle_flux, gnostics%distributed)
+    
     heat_flux_by_ky = maxval(heat_flux, 1)
     particle_flux_by_ky = maxval(particle_flux, 1)
-
+    
     heat_flux_max_by_spec = maxval(heat_flux_by_ky, 1)
     particle_flux_max_by_spec = maxval(particle_flux_by_ky, 1)
-
+    
     heat_flux_max = sum(heat_flux_max_by_spec)
     particle_flux_max = sum(particle_flux_max_by_spec)
     
     if (gnostics%write_fluxes) then
-      call create_and_write_variable(gnostics, gnostics%rtype, "es_heat_flux_diff_max", "st", &
-        " A turbulent estimate of the heat flux, as a function of species and  time", &
-        "Q_gB", heat_flux_max_by_spec)
-      call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_diff_max", "t", &
-        " A turbulent estimate of the heat flux, as a function of  time", &
-        "Q_gB", heat_flux_max)
-      call create_and_write_variable(gnostics, gnostics%rtype, "es_particle_flux_diff_max", "st", &
-        " A turbulent estimate of the particle flux, as a function of species and  time", &
-        "Q_gB", particle_flux_max_by_spec)
-      call create_and_write_variable(gnostics, gnostics%rtype, "particle_flux_diff_max", "t", &
-        " A turbulent estimate of the particle flux, as a function of  time", &
-        "Q_gB", particle_flux_max)
+       call create_and_write_variable(gnostics, gnostics%rtype, "es_heat_flux_diff_max", "st", &
+            " A turbulent estimate of the heat flux, as a function of species and  time", &
+            "Q_gB", heat_flux_max_by_spec)
+       call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_diff_max", "t", &
+            " A turbulent estimate of the heat flux, as a function of  time", &
+            "Q_gB", heat_flux_max)
+       call create_and_write_variable(gnostics, gnostics%rtype, "es_particle_flux_diff_max", "st", &
+            " A turbulent estimate of the particle flux, as a function of species and  time", &
+            "Q_gB", particle_flux_max_by_spec)
+       call create_and_write_variable(gnostics, gnostics%rtype, "particle_flux_diff_max", "t", &
+            " A turbulent estimate of the particle flux, as a function of  time", &
+            "Q_gB", particle_flux_max)
     end if
-
   end subroutine write_diffusive_estimates
 
   !> Writes a range of different summed and averaged properties of the given
   !! flux... e.g. the flux summed over kx as a function of ky, species and time 
   subroutine calculate_standard_flux_properties(gnostics, flux_name, flux_description, &
-    flux_units, flux_value, distributed)
+       flux_units, flux_value, distributed)
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
-    use volume_averages
     use fields_parallelization, only: field_k_local
-    use mp,only: broadcast, sum_allreduce
+    use mp, only: broadcast, sum_allreduce
+    use volume_averages, only: average_all, average_kx, average_ky
+    use diagnostics_config, only: diagnostics_type
+    implicit none
     type(diagnostics_type), intent(inout) :: gnostics
-    !real, intent(out) :: total
     character(*), intent(in) :: flux_name, flux_description, flux_units
     real, dimension(ntheta0,naky,nspec), intent(inout) :: flux_value
     real, dimension(ntheta0,naky,nspec) :: flux_value_temp
@@ -393,12 +351,8 @@ contains
     real, dimension(ntheta0) :: total_flux_by_kx
     real, dimension(nspec) :: flux_by_species
     integer :: is, ik, it
-    !logical, external :: k_local
 
-    !call average_theta(flux_value, flux_value, flux_by_mode, .true.)
-    !!call create_and_write_flux(gnostics%sfile, flux_name, flux_description, flux_units, flux_value)
     call broadcast(flux_value)
-
 
     call average_all(flux_value, flux_by_species, distributed) 
 
@@ -420,71 +374,68 @@ contains
       end do
     end do
 
+!Is this dead?
     !if (gnostics%write_fluxes_by_mode) then 
       !if (gnostics%write_fluxes) call create_and_write_flux_by_mode(gnostics, flux_name, flux_description, flux_units, &
         !flux_value, total_flux_by_mode, distributed)
     !end if
 
-
-
     call average_kx(total_flux_by_mode, total_flux_by_ky, distributed)
     call average_ky(total_flux_by_mode, total_flux_by_kx, distributed)
     if (gnostics%write_fluxes) then 
-
-      call create_and_write_variable(gnostics, gnostics%rtype, flux_name, "st", &
-        flux_description//" averaged over kx and ky, as a function of species and time", &
-        flux_units, flux_by_species)
-      call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_ky", "Yt", &
-        flux_description//" summed over species and averaged over kx, as a function of ky and time", &
-        flux_units, total_flux_by_ky)
-
-      call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_kx", "Xt", &
-        flux_description//" summed over species and averaged over ky, as a function of kx and time", &
-        flux_units, total_flux_by_kx)
-
-      call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name, "t", &
-        flux_description//" summed over species and averaged over kx and ky, as a function of time", &
-        flux_units, sum(total_flux_by_kx))
-
-      if (gnostics%write_fluxes_by_mode) then 
-        call create_and_write_distributed_fieldlike_variable( &
-          gnostics, gnostics%rtype, flux_name//"_by_mode", "XYst", &
-          flux_description//" as a function of species, kx and ky", &
-          flux_units, flux_value)
-        call create_and_write_distributed_fieldlike_variable( &
-          gnostics, gnostics%rtype, "total_"//flux_name//"_by_mode", "XYt", &
-          flux_description//" summed over species, as a function of kx and ky", &
-          flux_units, total_flux_by_mode)
-
-      end if
+       call create_and_write_variable(gnostics, gnostics%rtype, flux_name, "st", &
+            flux_description//" averaged over kx and ky, as a function of species and time", &
+            flux_units, flux_by_species)
+       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_ky", "Yt", &
+            flux_description//" summed over species and averaged over kx, as a function of ky and time", &
+            flux_units, total_flux_by_ky)
+       
+       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_kx", "Xt", &
+            flux_description//" summed over species and averaged over ky, as a function of kx and time", &
+            flux_units, total_flux_by_kx)
+       
+       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name, "t", &
+            flux_description//" summed over species and averaged over kx and ky, as a function of time", &
+            flux_units, sum(total_flux_by_kx))
+       
+       if (gnostics%write_fluxes_by_mode) then 
+          call create_and_write_distributed_fieldlike_variable( &
+               gnostics, gnostics%rtype, flux_name//"_by_mode", "XYst", &
+               flux_description//" as a function of species, kx and ky", &
+               flux_units, flux_value)
+          call create_and_write_distributed_fieldlike_variable( &
+               gnostics, gnostics%rtype, "total_"//flux_name//"_by_mode", "XYt", &
+               flux_description//" summed over species, as a function of kx and ky", &
+               flux_units, total_flux_by_mode)
+          
+       end if
     end if
-
-
+    
     if (flux_name .eq. 'es_heat_flux') gnostics%current_results%species_es_heat_flux = flux_by_species
     if (flux_name .eq. 'es_energy_exchange') gnostics%current_results%species_energy_exchange = flux_by_species
     if (flux_name .eq. 'apar_heat_flux') gnostics%current_results%species_apar_heat_flux = flux_by_species
     if (flux_name .eq. 'bpar_heat_flux') gnostics%current_results%species_bpar_heat_flux = flux_by_species
-
-    if (   flux_name .eq. 'es_heat_flux' &
-      .or. flux_name .eq. 'apar_heat_flux' &
-      .or. flux_name .eq. 'bpar_heat_flux') then 
-      gnostics%current_results%total_heat_flux = gnostics%current_results%total_heat_flux + sum(flux_by_species)
-      gnostics%current_results%species_heat_flux = gnostics%current_results%species_heat_flux + flux_by_species
+    
+    if (flux_name .eq. 'es_heat_flux' &
+         .or. flux_name .eq. 'apar_heat_flux' &
+         .or. flux_name .eq. 'bpar_heat_flux') then 
+       gnostics%current_results%total_heat_flux = gnostics%current_results%total_heat_flux + sum(flux_by_species)
+       gnostics%current_results%species_heat_flux = gnostics%current_results%species_heat_flux + flux_by_species
     else if (flux_name .eq. 'es_mom_flux' &
          !.or.flux_name .eq. 'es_mom0' & ! Low flow fluxes, currently disabled
          .or.flux_name .eq. 'apar_mom_flux' &
          .or.flux_name .eq. 'bpar_mom_flux') then
-      gnostics%current_results%total_momentum_flux = gnostics%current_results%total_momentum_flux + sum(flux_by_species)
-      gnostics%current_results%species_momentum_flux = gnostics%current_results%species_momentum_flux + flux_by_species
+       gnostics%current_results%total_momentum_flux = gnostics%current_results%total_momentum_flux + sum(flux_by_species)
+       gnostics%current_results%species_momentum_flux = gnostics%current_results%species_momentum_flux + flux_by_species
     else if (flux_name .eq. 'es_part_flux' &
          .or.flux_name .eq. 'apar_part_flux' &
          .or.flux_name .eq. 'bpar_part_flux') then
-      gnostics%current_results%total_particle_flux = gnostics%current_results%total_particle_flux + sum(flux_by_species)
-      gnostics%current_results%species_particle_flux = gnostics%current_results%species_particle_flux + flux_by_species
-    end if 
-
+       gnostics%current_results%total_particle_flux = gnostics%current_results%total_particle_flux + sum(flux_by_species)
+       gnostics%current_results%species_particle_flux = gnostics%current_results%species_particle_flux + flux_by_species
+    end if
   end subroutine calculate_standard_flux_properties
 
+!Is this dead?
   !subroutine create_and_write_flux_by_mode(gnostics, flux_name, flux_description, flux_units, &
       !flux_value, total_flux_by_mode, distributed)
     !use fields_parallelization, only: field_k_local
@@ -582,10 +533,10 @@ contains
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
-    !use mp, only: proc0
     use gs2_io, only: nc_loop_sym
     use fields_arrays, only: phinew
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_config, only: diagnostics_type
     implicit none
     type (diagnostics_type), intent(in) :: gnostics
     real, dimension(:,:,:), allocatable :: vflx_sym
@@ -594,16 +545,16 @@ contains
     allocate (pflux_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
     call pflux_vs_theta_vs_vpa (pflux_sym)
     call create_and_write_variable(gnostics, gnostics%rtype, "es_part_tormom_sym", "zvst", &
-      "Particle flux density as a function theta and vspace, used for looking at the effect of asymmetry, &
-      & see Parra et al POP 18 062501 2011 and ask Jung-Pyo Lee", "See ref", pflux_sym)
+         "Particle flux density as a function theta and vspace, used for looking at the effect of asymmetry, &
+         & see Parra et al POP 18 062501 2011 and ask Jung-Pyo Lee", "See ref", pflux_sym)
     !if (proc0) call nc_loop_partsym_tormom (nout, pflux_sym)
     deallocate (pflux_sym)
 
     allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
     call flux_vs_theta_vs_vpa (phinew,vflx_sym)
     call create_and_write_variable(gnostics, gnostics%rtype, "es_mom_sym", "zvst", &
-      "Momentum flux density as a function theta and vspace, used for looking at the effect of asymmetry, &
-      & see Parra et al POP 18 062501 2011", "See ref", vflx_sym)
+         "Momentum flux density as a function theta and vspace, used for looking at the effect of asymmetry, &
+         & see Parra et al POP 18 062501 2011", "See ref", vflx_sym)
     !if (proc0) call nc_loop_sym (nout, vflx_sym)
     deallocate (vflx_sym)
   end subroutine write_symmetry
@@ -621,6 +572,7 @@ contains
     use run_parameters, only: fphi, fbpar
     use constants, only: zi
     use volume_averages, only: average_theta, average_all
+    use diagnostics_config, only: diagnostics_type
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     real :: t 
@@ -644,7 +596,7 @@ contains
        call init_parity_layouts (naky, nlambda, negrid, nspec)
        first = .false.
     end if
-
+    
     allocate (gparity(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
     allocate (g0(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
     allocate (gm(-ntgrid:ntgrid,2,p_lo%llim_proc:p_lo%ulim_alloc))
@@ -664,10 +616,10 @@ contains
     allocate (g_avg(ntheta0,nspec), gnorm_avg(ntheta0,nspec))
     allocate (g_all_tot(nspec), g_nokx_tot(nspec), g_nosig_tot(nspec), gtmp(nspec))
     allocate (gnorm_all_tot(nspec), gnorm_nokx_tot(nspec), gnorm_nosig_tot(nspec))
-
+    
     ! convert from g to h
     call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
-
+    
     ! below we define gparity = J0 * h, where delta f = h - (q phi / T) F0
     ! because we're ultimately interested in int J0 h * phi (i.e. particle flux)
     do isgn = 1, 2
@@ -696,10 +648,10 @@ contains
           end do
        end do
     end do
-
+    
     ! convert from h back to g
     call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
-
+    
     ! first diagnostic is phase space average of 
     ! |J0*(h(z,vpa,kx) +/- h(-z,-vpa,-kx))|**2 / ( |J0*h(z,vpa,kx)|**2 + |J0*h(-z,-vpa,-kx)|**2 )
     do it = 1, ntheta0
@@ -732,8 +684,8 @@ contains
              call average_theta (gmint(:,ik,is),gmavg(it,ik,is))
              call average_theta (gpint(:,ik,is),gpavg(it,ik,is))
              call average_theta (gmnormint(:,ik,is),gmnormavg(it,ik,is))
-          end do 
           end do
+       end do
 
        ! phim(theta,kx) = phi(-theta,-kx)
        ! have to treat kx=0 specially
@@ -746,7 +698,7 @@ contains
              phim(ig,:) = phinew(-ig,ntheta0-it+2,:)
           end do
        end if
-
+       
        ! want int dtheta sum_{kx} int d3v | sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
        ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-vpa,-kx)*conjg(phi(-theta,-kx))
        do iplo = p_lo%llim_proc, p_lo%ulim_proc
@@ -763,7 +715,7 @@ contains
        do is = 1, nspec
           call average_theta (g_kint(:,1,is)+g_kint(:,2,is),g_avg(it,is))
        end do
-
+       
        ! get normalizing term for above diagnostic
        do iplo = p_lo%llim_proc, p_lo%ulim_proc
           ik = ik_idx(p_lo,iplo)
@@ -783,7 +735,7 @@ contains
                + gp_kint(:,1,is)+gp_kint(:,2,is),gnorm_avg(it,is))
        end do
     end do
-
+    
     ! average over perp plane
     do is = 1, nspec
        call average_all (gmavg(:,:,is), gmtot(is), gnostics%distributed)
@@ -792,10 +744,10 @@ contains
        g_all_tot(is) = sum(g_avg(:,is))
        gnorm_all_tot(is) = sum(gnorm_avg(:,is))
     end do
-
+    
     allocate (gmx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
     allocate (gpx(-ntgrid:ntgrid,ntheta0,2,p_lo%llim_proc:p_lo%ulim_alloc))
-
+    
     ! now we want diagnostic of phase space average of
     ! |J0*(h(z,vpa) +/- h(-z,-vpa))|**2 / ( |J0*h(z,vpa)|**2 + |J0*h(-z,-vpa)|**2 )
     do it = 1, ntheta0
@@ -820,13 +772,13 @@ contains
              call average_theta (gmnormint(:,ik,is),gmnormavg(it,ik,is))
           end do
        end do
-
+       
        ! phim(theta) = phi(-theta)
        ! have to treat kx=0 specially
        do ig = -ntgrid, ntgrid
           phim(ig,:) = phinew(-ig,it,:)
        end do
-
+       
        ! want int dtheta int d3v | sum_{kx} sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
        ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-vpa)*conjg(phi(-theta))
        do iplo = p_lo%llim_proc, p_lo%ulim_proc
@@ -837,7 +789,7 @@ contains
           end do
        end do
     end do
-
+    
     ! sum over kx
     gp = sum(gpx,2)
     deallocate (gpx)
@@ -849,7 +801,7 @@ contains
     do is = 1, nspec
        call average_theta (g_kint(:,1,is)+g_kint(:,2,is), g_nokx_tot(is))
     end do
-
+    
     ! get normalizing terms for above diagnostic
     gm = sum(gmx,2)
     deallocate (gmx)
@@ -863,14 +815,14 @@ contains
        call average_theta (gm_kint(:,1,is)+gm_kint(:,2,is) &
             + gp_kint(:,1,is)+gp_kint(:,2,is), gnorm_nokx_tot(is))
     end do
-
+    
     ! average over perp plane
     do is = 1, nspec
        call average_all (gmavg(:,:,is), gm_nokx_tot(is), gnostics%distributed)
        call average_all (gpavg(:,:,is), gp_nokx_tot(is), gnostics%distributed)
        call average_all (gmnormavg(:,:,is), gmnorm_nokx_tot(is), gnostics%distributed)   
     end do
-
+    
     ! final diagnostic is phase space average of 
     ! |J0*(h(z,kx) +/- h(-z,-kx))|**2 / ( |J0*h(z,kx)|**2 + |J0*h(-z,-kx)|**2 )
     do it = 1, ntheta0
@@ -899,7 +851,7 @@ contains
              call average_theta (gmnormint(:,ik,is),gmnormavg(it,ik,is))
           end do
        end do
-
+       
        ! phim(theta,kx) = phi(-theta,-kx)
        ! have to treat kx=0 specially
        if (it == 1) then
@@ -911,7 +863,7 @@ contains
              phim(ig,:) = phinew(-ig,ntheta0-it+2,:)
           end do
        end if
-
+       
        ! want int dtheta sum_{kx} int dE dmu | sum_{sigma} sum_{ky} [ J0*(h+ * conjg(phi-) + h- * conjg(phi+)) ky ] |**2
        ! J0*(h+ * conjg(phi-) + h- * conjg(phi+)) = h*conjg(phi) - h(-theta,-kx)*conjg(phi(-theta,-kx))
        do iplo = p_lo%llim_proc, p_lo%ulim_proc
@@ -926,7 +878,7 @@ contains
        do is = 1, nspec
           call average_theta (g_kint(:,1,is),g_avg(it,is))
        end do
-
+       
        ! get normalizing term for above diagnostic
        do iplo = p_lo%llim_proc, p_lo%ulim_proc
           ik = ik_idx(p_lo,iplo)
@@ -952,7 +904,7 @@ contains
        g_nosig_tot(is) = sum(g_avg(:,is))
        gnorm_nosig_tot(is) = sum(gnorm_avg(:,is))
     end do
-
+    
     deallocate (gparity) ; allocate (gparity(-ntgrid:ntgrid,ntheta0,naky,nspec))
     ! obtain normalization factor = int over phase space of |g|**2
     call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
@@ -968,14 +920,14 @@ contains
        end do
        call average_all (gmavg(:,:,is), gtot(is), gnostics%distributed)
     end do
-
+    
     ! normalize g(theta,vpa,kx) - g(-theta,-vpa,-kx) terms
     where (gtot+gmnormtot > epsilon(0.0))
        gmtot = sqrt(gmtot/(gtot+gmnormtot)) ; gptot = sqrt(gptot/(gtot+gmnormtot))
     elsewhere
        gmtot = sqrt(gmtot) ; gptot = sqrt(gptot)
     end where
-
+    
     where (real(gnorm_all_tot) > epsilon(0.0))
        gtmp = sqrt(real(g_all_tot)/real(gnorm_all_tot))
     elsewhere
@@ -986,14 +938,14 @@ contains
     elsewhere
        g_all_tot = gtmp + zi*sqrt(aimag(g_all_tot))
     end where
-
+    
     ! normalize g(theta,vpa) +/- g(-theta,-vpa) terms
     where (gtot+gmnorm_nokx_tot > epsilon(0.0))
        gm_nokx_tot = sqrt(gm_nokx_tot/(gtot+gmnorm_nokx_tot)) ; gp_nokx_tot = sqrt(gp_nokx_tot/(gtot+gmnorm_nokx_tot))
     elsewhere
        gm_nokx_tot = sqrt(gm_nokx_tot) ; gp_nokx_tot = sqrt(gp_nokx_tot)
     end where
-
+    
     where (real(gnorm_nokx_tot) > epsilon(0.0))
        gtmp = sqrt(real(g_nokx_tot)/real(gnorm_nokx_tot))
     elsewhere
@@ -1004,14 +956,14 @@ contains
     elsewhere
        g_nokx_tot = gtmp + zi*sqrt(aimag(g_nokx_tot))
     end where
-
+    
     ! normalize g(theta,kx) +/ g(-theta,-kx) terms
     where (gtot+gmnorm_nosig_tot > epsilon(0.0))
        gm_nosig_tot = sqrt(gm_nosig_tot/(gtot+gmnorm_nosig_tot)) ; gp_nosig_tot = sqrt(gp_nosig_tot/(gtot+gmnorm_nosig_tot))
     elsewhere
        gm_nosig_tot = sqrt(gm_nosig_tot) ; gp_nosig_tot = sqrt(gp_nosig_tot)
     end where
-
+    
     where (real(gnorm_nosig_tot) > epsilon(0.0))
        gtmp = sqrt(real(g_nosig_tot)/real(gnorm_nosig_tot))
     elsewhere
@@ -1022,13 +974,13 @@ contains
     elsewhere
        g_nosig_tot = gtmp + zi*sqrt(aimag(g_nosig_tot))
     end where
-
+    
     if (proc0 .and. gnostics%write_ascii) write (gnostics%ascii_files%parity,"(19(1x,e12.5))") &
          t, gmtot, gptot, real(g_all_tot), aimag(g_all_tot), &
          real(gnorm_all_tot), aimag(gnorm_all_tot), gm_nokx_tot, gp_nokx_tot, real(g_nokx_tot), aimag(g_nokx_tot), &
          real(gnorm_nokx_tot), aimag(gnorm_nokx_tot), gm_nosig_tot, gp_nosig_tot, &
          real(g_nosig_tot), aimag(g_nosig_tot), real(gnorm_nosig_tot), aimag(gnorm_nosig_tot)
-
+    
     deallocate (gparity, g0)
     deallocate (gm, gp, gmnorm, gmint, gpint, gmnormint)
     deallocate (gmavg, gpavg, gmnormavg)
@@ -1041,5 +993,4 @@ contains
     deallocate (gnorm_all_tot, gnorm_nokx_tot, gnorm_nosig_tot)
     deallocate (phim)
   end subroutine write_parity
-
 end module diagnostics_fluxes

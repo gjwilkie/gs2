@@ -7,9 +7,9 @@
 #
 # This list is used in generating diagnostics_config.f90
 input_variables_for_diagnostics_config = [
-	['integer', 'nwrite', '10'],
-	['integer', 'nwrite_large', '100'],
-	['logical', 'write_any', '.true.'],
+  ['integer', 'nwrite', '10'],
+  ['integer', 'nwrite_large', '100'],
+  ['logical', 'write_any', '.true.'],
 
   # If built with parallel IO capability 
   # enable parallel IO. Currently disabled by 
@@ -18,154 +18,149 @@ input_variables_for_diagnostics_config = [
   # on >1. This problem does not affect parallel
   # IO for the single restart file because it only 
   # affects output with infinite dimensions
-	['logical', 'enable_parallel', '.false.'],
+  ['logical', 'enable_parallel', '.false.'],
 
   # If true, produce netcdf-4 files when running
   # with serial IO. Otherwise produce classic file
   # format. Parallel IO always produces netcdf-4 files.
-	['logical', 'serial_netcdf4', '.false.'],
+  ['logical', 'serial_netcdf4', '.false.'],
 
   # Controls the theta location of omega calculation,
   # also of any quantities that are written out for
   # a given value of theta
-	['integer', 'igomega', '0'],
+  ['integer', 'igomega', '0'],
 
   # Write instantaneous quantities to screen
-	['logical', 'print_line', '.false.'],
-	['logical', 'print_flux_line', '.false.'],
+  ['logical', 'print_line', '.false.'],
+  ['logical', 'print_flux_line', '.false.'],
 
   # Write instantaneous quantites to .new.out
-	['logical', 'write_line', '.true.'],
-	['logical', 'write_flux_line', '.true.'],
+  ['logical', 'write_line', '.true.'],
+  ['logical', 'write_flux_line', '.true.'],
 
-	# Parameters for writing out fields
-	['logical', 'write_fields', '.true.'],
-	['logical', 'write_phi_over_time'],
-	['logical', 'write_apar_over_time'],
-	['logical', 'write_bpar_over_time'],
-	['logical', 'write_movie', '.false.'],
-	['logical', 'dump_fields_periodically', '.false.'],
-  
+  # Parameters for writing out fields
+  ['logical', 'write_fields', '.true.'],
+  ['logical', 'write_phi_over_time'],
+  ['logical', 'write_apar_over_time'],
+  ['logical', 'write_bpar_over_time'],
+  ['logical', 'write_movie', '.false.'],
+  ['logical', 'dump_fields_periodically', '.false.'],
 
   # Parameters for writing out moments such as density etc
-	['logical', 'write_moments', '.true.'],
-	['logical', 'write_full_moments_notgc', '.false.'],
+  ['logical', 'write_moments', '.true.'],
+  ['logical', 'write_full_moments_notgc', '.false.'],
   # Write out 4-D moments as a function of time ... gives
   # LARGE data files!
-	['logical', 'write_ntot_over_time', '.false.'],
-	['logical', 'write_density_over_time', '.false.'],
-	['logical', 'write_upar_over_time', '.false.'],
-	['logical', 'write_tperp_over_time', '.false.'],
+  ['logical', 'write_ntot_over_time', '.false.'],
+  ['logical', 'write_density_over_time', '.false.'],
+  ['logical', 'write_upar_over_time', '.false.'],
+  ['logical', 'write_tperp_over_time', '.false.'],
 
 
-	# Parameters for writing out fluxes
-	['logical', 'write_fluxes', '.true.'],
-	['logical', 'write_fluxes_by_mode', '.false.'],
-	['logical', 'write_symmetry', '.false.'],
-	['logical', 'write_parity', '.false.'],
+  # Parameters for writing out fluxes
+  ['logical', 'write_fluxes', '.true.'],
+  ['logical', 'write_fluxes_by_mode', '.false.'],
+  ['logical', 'write_symmetry', '.false.'],
+  ['logical', 'write_parity', '.false.'],
 
-	# Parameters for writing out growth rates and frequencies
-	['logical', 'write_omega', '.true.'],
-	['integer', 'navg', '10'],
-	['real', 'omegatinst', '1.0e6'],
-	['real', 'omegatol', '-0.001'],
-	['logical', 'exit_when_converged', '.true.'],
+  # Parameters for writing out growth rates and frequencies
+  ['logical', 'write_omega', '.true.'],
+  ['integer', 'navg', '10'],
+  ['real', 'omegatinst', '1.0e6'],
+  ['real', 'omegatol', '-0.001'],
+  ['logical', 'exit_when_converged', '.true.'],
 
   # Parameters for writing out velocity space diagnostics
-	['logical', 'write_verr', '.true.'],
-	['logical', 'write_max_verr', '.false.'],
-	['integer', 'ncheck', '10'],
+  ['logical', 'write_verr', '.true.'],
+  ['logical', 'write_max_verr', '.false.'],
+  ['integer', 'ncheck', '10'],
 
   # Parameters controlling heating diagnositics
-	['logical', 'write_heating', '.false.'],
+  ['logical', 'write_heating', '.false.'],
 
 
   # If true, write out old-style text files
-	['logical', 'write_ascii', '.true.'],
+  ['logical', 'write_ascii', '.true.'],
 
   # If true, write the dist_fn at a range of points in space
   # as a function of velocity to an output file. Do not enable
   # in the new and old diagnostics modules at the same time
-	['logical', 'write_gyx', '.false.'],
-	['logical', 'write_g', '.false.'],
-	['logical', 'write_lpoly', '.false.'],
+  ['logical', 'write_gyx', '.false.'],
+  ['logical', 'write_g', '.false.'],
+  ['logical', 'write_lpoly', '.false.'],
 
 
   # Switches on write collision_error
-	['logical', 'write_cerr', '.false.'],
+  ['logical', 'write_cerr', '.false.'],
 
   # Parameters controlling Trinity convergence tests
-	['integer', 'conv_nstep_av', '4000'],
-	['real', 'conv_test_multiplier', '4e-1'],
-	['integer', 'conv_min_step', '4000'],
-	['integer', 'conv_max_step', '80000'],
-	['integer', 'conv_nsteps_converged', '10000'],
-	['logical', 'use_nonlin_convergence', '.false.'],
+  ['integer', 'conv_nstep_av', '4000'],
+  ['real', 'conv_test_multiplier', '4e-1'],
+  ['integer', 'conv_min_step', '4000'],
+  ['integer', 'conv_max_step', '80000'],
+  ['integer', 'conv_nsteps_converged', '10000'],
+  ['logical', 'use_nonlin_convergence', '.false.'],
 
   # Parameters determining what turbulence characteristics are calculated
-	['logical', 'write_cross_phase', '.false.'],
-	['logical', 'write_correlation', '.true.'],
-	['logical', 'write_correlation_extend', '.false.'],
+  ['logical', 'write_cross_phase', '.false.'],
+  ['logical', 'write_correlation', '.true.'],
+  ['logical', 'write_correlation_extend', '.false.'],
 
   # Parameters controlling diagnostics for the antennna
-	['logical', 'write_jext', '.false.'],
-	['logical', 'write_lorentzian', '.false.'],
+  ['logical', 'write_jext', '.false.'],
+  ['logical', 'write_lorentzian', '.false.'],
 
   # Parameters controlling some old routines which dump
   # stuff to text files at the end of the simulation
-	['logical', 'write_eigenfunc', '.false.'],
-	['logical', 'write_final_fields', '.false.'],
-	['logical', 'write_kpar', '.false.'],
-	['logical', 'write_final_epar', '.false.'],
-	['logical', 'write_final_db', '.false.'],
-	['logical', 'write_final_moments', '.false.'],
-	['logical', 'write_final_antot', '.false.'],
-	['logical', 'write_gs', '.false.'],
+  ['logical', 'write_eigenfunc', '.false.'],
+  ['logical', 'write_final_fields', '.false.'],
+  ['logical', 'write_kpar', '.false.'],
+  ['logical', 'write_final_epar', '.false.'],
+  ['logical', 'write_final_db', '.false.'],
+  ['logical', 'write_final_moments', '.false.'],
+  ['logical', 'write_final_antot', '.false.'],
+  ['logical', 'write_gs', '.false.'],
 
   # Save the current state of the simulation so 
   # that it can be restarted
-	['logical', 'save_for_restart', '.true.'],
+  ['logical', 'save_for_restart', '.true.'],
 
   # Save the distribution function
-	['logical', 'save_distfn', '.false.'],
-
-
-
-
+  ['logical', 'save_distfn', '.false.'],
 
 ]
 
 
 class Generator
-	attr_accessor :name, :type
-	def initialize(type, name, default)
-		@type = type
-		@name = name
-		@default = default
-	end
-	def declaration
-		"#@type :: #@name"
-	end
-	def set_default
-		"#@name = #{default}"
-	end
-	def default
-		@default || case type
-								when /logical/
-									'.false.'
-								when /integer/
-									'1'
-								end
-	end
-	def parameters_type_value
-		"gnostics%#@name"
-	end
-	def set_parameters_type_value
-		"#{parameters_type_value} = #@name"
-	end
-	def broadcast
-		"call broadcast (#{parameters_type_value})"
-	end
+  attr_accessor :name, :type
+  def initialize(type, name, default)
+    @type = type
+    @name = name
+    @default = default
+  end
+  def declaration
+    "#@type :: #@name"
+  end
+  def set_default
+    "#@name = #{default}"
+  end
+  def default
+    @default || case type
+                when /logical/
+                  '.false.'
+                when /integer/
+                  '1'
+                end
+  end
+  def parameters_type_value
+    "gnostics%#@name"
+  end
+  def set_parameters_type_value
+    "#{parameters_type_value} = #@name"
+  end
+  def broadcast
+    "call broadcast (#{parameters_type_value})"
+  end
 end
 
 begin
@@ -184,90 +179,83 @@ rescue
 end
 generators = input_variables_for_diagnostics_config.map{|type, name, default| Generator.new(type,name,default)}
 
-
 string = <<EOF
 
 ! DO NOT EDIT THIS FILE
 ! This file has been automatically generated using generate_diagnostics_config.rb
 
-
-
-
 !> A module for handling the configuration of the diagnostics
 !! module via the namelist diagnostics_config.
 module diagnostics_config
-
   use simpledataio, only: sdatio_file
   use diagnostics_ascii, only: diagnostics_ascii_type
 
+  implicit none
 
+  private
 
   public :: init_diagnostics_config
   public :: finish_diagnostics_config
-  public ::diagnostics_type
+  public :: diagnostics_type
   public :: results_summary_type
   public :: override_screen_printout_options
 
-
   !> A type for storing the current results of the simulation
   type results_summary_type
-    real :: phi2
-    real :: apar2
-    real :: bpar2
-    real :: total_heat_flux
-    real :: total_momentum_flux
-    real :: total_particle_flux
-    real :: max_growth_rate
+     real :: phi2
+     real :: apar2
+     real :: bpar2
+     real :: total_heat_flux
+     real :: total_momentum_flux
+     real :: total_particle_flux
+     real :: max_growth_rate
 
-    ! Individual heat fluxes
-    real, dimension(:), allocatable :: species_es_heat_flux
-    real, dimension(:), allocatable :: species_apar_heat_flux
-    real, dimension(:), allocatable :: species_bpar_heat_flux
+     ! Individual heat fluxes
+     real, dimension(:), allocatable :: species_es_heat_flux
+     real, dimension(:), allocatable :: species_apar_heat_flux
+     real, dimension(:), allocatable :: species_bpar_heat_flux
 
-    ! Total fluxes
-    real, dimension(:), allocatable :: species_heat_flux
-    real, dimension(:), allocatable :: species_momentum_flux
-    real, dimension(:), allocatable :: species_particle_flux
-    real, dimension(:), allocatable :: species_energy_exchange
+     ! Total fluxes
+     real, dimension(:), allocatable :: species_heat_flux
+     real, dimension(:), allocatable :: species_momentum_flux
+     real, dimension(:), allocatable :: species_particle_flux
+     real, dimension(:), allocatable :: species_energy_exchange
 
-    ! Average total fluxes
-    real, dimension(:), allocatable :: species_heat_flux_avg
-    real, dimension(:), allocatable :: species_momentum_flux_avg
-    real, dimension(:), allocatable :: species_particle_flux_avg
+     ! Average total fluxes
+     real, dimension(:), allocatable :: species_heat_flux_avg
+     real, dimension(:), allocatable :: species_momentum_flux_avg
+     real, dimension(:), allocatable :: species_particle_flux_avg
 
-    ! Heating
-    real, dimension(:), allocatable :: species_heating
-    real, dimension(:), allocatable :: species_heating_avg
+     ! Heating
+     real, dimension(:), allocatable :: species_heating
+     real, dimension(:), allocatable :: species_heating_avg
   end type results_summary_type
 
   !> A type for storing the diagnostics configuration,
   !! a reference to the output file, and current 
   !! results of the simulation
   type diagnostics_type
-   type(sdatio_file) :: sfile
-   !type(sdatio_file) :: sfilemovie
-   type(diagnostics_ascii_type) :: ascii_files
-   type(results_summary_type) :: current_results
-   !> Integer below gives the sdatio type 
-   !! which corresponds to a gs2 real
-   integer :: rtype
-   integer :: istep
-   logical :: create
-   logical :: wryte
-   logical :: distributed
-   logical :: parallel
-   logical :: exit
-   logical :: vary_vnew_only
-   logical :: calculate_fluxes
-   logical :: is_trinity_run
-   real :: user_time
-   real :: user_time_old
-   real, dimension(:), allocatable :: fluxfac
-   #{generators.map{|g| g.declaration}.join("\n   ") }
+     type(sdatio_file) :: sfile
+     type(diagnostics_ascii_type) :: ascii_files
+     type(results_summary_type) :: current_results
+     !> Integer below gives the sdatio type 
+     !! which corresponds to a gs2 real
+     integer :: rtype
+     integer :: itype
+     integer :: istep
+     logical :: create
+     logical :: wryte
+     logical :: distributed
+     logical :: parallel
+     logical :: exit
+     logical :: vary_vnew_only
+     logical :: calculate_fluxes
+     logical :: is_trinity_run
+     real :: user_time
+     real :: user_time_old
+     real, dimension(:), allocatable :: fluxfac
+     #{generators.map{|g| g.declaration}.join("\n     ") }
   end type diagnostics_type
-
-
-  private
 
   !> Used for testing... causes screen printout to be 
   !! generated regardless of the values of print_line 
@@ -276,20 +264,23 @@ module diagnostics_config
 
 contains
   subroutine init_diagnostics_config(gnostics)
-    use file_utils, only: open_output_file
+    implicit none
     type(diagnostics_type), intent(out) :: gnostics
     call read_parameters(gnostics)
     call allocate_current_results(gnostics)
   end subroutine init_diagnostics_config
 
   subroutine finish_diagnostics_config(gnostics)
+    implicit none
     type(diagnostics_type), intent(out) :: gnostics
     call deallocate_current_results(gnostics)
   end subroutine finish_diagnostics_config
 
   subroutine allocate_current_results(gnostics)
     use species, only: nspec
+    implicit none
     type(diagnostics_type), intent(inout) :: gnostics
+
     allocate(gnostics%current_results%species_es_heat_flux(nspec))
     allocate(gnostics%current_results%species_apar_heat_flux(nspec))
     allocate(gnostics%current_results%species_bpar_heat_flux(nspec))
@@ -306,9 +297,12 @@ contains
   end subroutine allocate_current_results
 
   subroutine deallocate_current_results(gnostics)
+    implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     ! This routine needs to be fixed: I don't know 
     ! how to correctly deallocate the derived type
+    !<DD>What's written below should work fine, just need to
+    !deallocate anything explicitly allocated.
     return
     
     ! One call deallocates gnostics and all allocatable arrays 
@@ -334,34 +328,29 @@ contains
     type(diagnostics_type), intent(out) :: gnostics
     #{generators.map{|g| g.declaration}.join("\n    ") }
     namelist /diagnostics_config/ &
-      #{generators.map{|g| g.name}.join(", &\n      ")}
+         #{generators.map{|g| g.name}.join(", &\n         ")}
 
     integer :: in_file
     logical :: exist
 
     if (proc0) then
-      #{generators.map{|g| g.set_default}.join("\n      ")}
+       #{generators.map{|g| g.set_default}.join("\n       ")}
 
-      in_file = input_unit_exist ("diagnostics_config", exist)
-      if (exist) read (unit=in_file, nml=diagnostics_config)
+       in_file = input_unit_exist ("diagnostics_config", exist)
+       if (exist) read (unit=in_file, nml=diagnostics_config)
 
-      #{generators.map{|g| g.set_parameters_type_value}.join("\n      ")}
+       #{generators.map{|g| g.set_parameters_type_value}.join("\n       ")}
 
     end if
 
     #{generators.map{|g| g.broadcast}.join("\n    ")}
     
     if (override_screen_printout_options) then 
-      gnostics%print_line = .true.
-      gnostics%print_flux_line = .true.
+       gnostics%print_line = .true.
+       gnostics%print_flux_line = .true.
     end if
-
-
-
   end subroutine read_parameters
 end module diagnostics_config
-
-
 
 EOF
 

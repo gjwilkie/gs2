@@ -98,6 +98,7 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -200,6 +201,7 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -330,6 +332,7 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -425,6 +428,7 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -555,8 +559,6 @@ diagnostics_fields.o: \
 	 le_grids.o \
 	 mp.o \
 	 run_parameters.o \
-	 simpledataio_write.o \
-	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
@@ -564,7 +566,6 @@ diagnostics_final_routines.o: \
 	 constants.o \
 	 diagnostics_config.o \
 	 dist_fn.o \
-	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_io.o \
@@ -593,15 +594,12 @@ diagnostics_fluxes.o: \
 	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
-	 simpledataio_write.o \
-	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
 diagnostics_geometry.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
-	 simpledataiof.o \
 	 theta_grid.o 
 diagnostics_heating.o: \
 	 diagnostics_config.o \
@@ -620,11 +618,10 @@ diagnostics_moments.o: \
 	 diagnostics_create_and_write.o \
 	 dist_fn.o \
 	 fields_arrays.o \
+	 fields_parallelization.o \
 	 gs2_io.o \
 	 kt_grids.o \
 	 mp.o \
-	 simpledataio_write.o \
-	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
@@ -641,13 +638,10 @@ diagnostics_omega.o: \
 	 fields_parallelization.o \
 	 gs2_time.o \
 	 kt_grids.o \
-	 run_parameters.o \
-	 simpledataio_write.o \
-	 simpledataiof.o 
+	 run_parameters.o 
 diagnostics_screen_printout.o: \
 	 diagnostics_config.o \
 	 diagnostics_omega.o \
-	 fields_arrays.o \
 	 file_utils.o \
 	 kt_grids.o \
 	 mp.o \
@@ -674,7 +668,6 @@ diagnostics_velocity_space.o: \
 	 gs2_time.o \
 	 le_grids.o \
 	 mp.o \
-	 simpledataiof.o \
 	 species.o 
 dist_fn.o: \
 	 antenna.o \
@@ -805,9 +798,7 @@ fields_local.o: \
 	 species.o \
 	 theta_grid.o 
 fields_parallelization.o: \
-	 kt_grids.o \
-	 mp.o \
-	 theta_grid.o 
+	 mp.o 
 fields_test.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
@@ -1136,6 +1127,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1176,7 +1168,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

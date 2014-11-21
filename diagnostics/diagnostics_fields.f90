@@ -2,22 +2,21 @@
 !! that have the dimensions of the fields, including
 !! volume averaged quantities, etc.
 module diagnostics_fields
-   use simpledataio
-   use simpledataio_write
-   use theta_grid, only: ntgrid
-   use kt_grids, only: naky, ntheta0
-   use diagnostics_config, only: diagnostics_type
-   implicit none
-   !integer, parameter :: gnostics%rtype = SDATIO_DOUBLE
+  implicit none
+  
+  private
+  
+  public :: write_fields, dump_fields_periodically, write_movie
 
 contains
 
   subroutine write_fields(gnostics)
     use fields_arrays, only: phinew, aparnew, bparnew
     use run_parameters, only: fphi, fapar, fbpar
+    use diagnostics_config, only: diagnostics_type
+    implicit none
     type(diagnostics_type), intent(inout) :: gnostics
 
-    
     if (fphi >epsilon(0.0)) call write_standard_field_properties(gnostics, &
       'phi',  'The electrostatic potential', 'T_r/e', phinew)
     if (fapar>epsilon(0.0)) call write_standard_field_properties(gnostics, &
@@ -27,30 +26,29 @@ contains
   end subroutine write_fields
 
   subroutine write_standard_field_properties(gnostics, field_name, field_description, &
-    field_units, field_value)
+       field_units, field_value)
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
-    use volume_averages
+    use diagnostics_config, only: diagnostics_type
+    use volume_averages, only: average_theta, average_kx, average_ky
+    use kt_grids, only: ntheta0, naky
+    use theta_grid, only: ntgrid
     use mp,only: broadcast
+    implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     character(*), intent(in) :: field_name, field_description, field_units
-    complex, dimension(-ntgrid:ntgrid,ntheta0,naky), intent(in) :: field_value
+    complex, dimension(-ntgrid:,:,:), intent(in) :: field_value
     logical :: distributed
+    !Should these be allocatable to avoid them hanging around?
     complex, dimension(ntheta0, naky) :: field_igomega_by_mode
     real, dimension(ntheta0, naky) :: field2_by_mode
     real, dimension(naky) :: field2_by_ky
     real, dimension(ntheta0) :: field2_by_kx
-    logical :: write_field_by_time
-    
+    logical :: write_field_by_time    
 
     distributed = gnostics%distributed
 
     call average_theta(field_value, field_value, field2_by_mode, distributed)
-    !call create_and_write_field(gnostics%sfile, field_name, field_description, field_units, field_value)
-    !call create_and_write_field_by_mode(gnostics, field_name, field_description, field_units, &
-      !field_value, field2_by_mode, distributed)
-
-    !call broadcast(field2_by_mode)
 
     call average_kx(field2_by_mode, field2_by_ky, distributed)
     call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_ky", "Yt", &
@@ -79,24 +77,24 @@ contains
     if (field_name .eq. 'apar' .and. gnostics%write_apar_over_time) write_field_by_time = .true.
     if (field_name .eq. 'bpar' .and. gnostics%write_bpar_over_time) write_field_by_time = .true.
  
- 
     field_igomega_by_mode(:,:) = field_value(gnostics%igomega, :, :)
 
     call create_and_write_distributed_fieldlike_variable( &
-      gnostics, gnostics%rtype, field_name, "rzXY", field_description, field_units, field_value)
+         gnostics, gnostics%rtype, field_name, "rzXY", field_description, field_units, field_value)
     call create_and_write_distributed_fieldlike_variable( &
-      gnostics, gnostics%rtype, field_name//"_igomega_by_mode", "rXYt", &
-      field_description//" at ig=igomega, as a function of kx and ky" , field_units, field_igomega_by_mode)
+         gnostics, gnostics%rtype, field_name//"_igomega_by_mode", "rXYt", &
+         field_description//" at ig=igomega, as a function of kx and ky" , field_units, field_igomega_by_mode)
     call create_and_write_distributed_fieldlike_variable( &
-      gnostics, gnostics%rtype, field_name//"2_by_mode", "XYt", &
-      field_description//" squared and averaged over theta, as a function of kx and ky" , &
-      field_units, field2_by_mode)
-    if (write_field_by_time) & 
-      call create_and_write_distributed_fieldlike_variable( &
-        gnostics, gnostics%rtype, field_name//"_t", "rzXYt", &
-        field_description//": the whole field as a function time " , &
-        field_units, field_value)
+         gnostics, gnostics%rtype, field_name//"2_by_mode", "XYt", &
+         field_description//" squared and averaged over theta, as a function of kx and ky" , &
+         field_units, field2_by_mode)
 
+    if (write_field_by_time) then 
+       call create_and_write_distributed_fieldlike_variable( &
+            gnostics, gnostics%rtype, field_name//"_t", "rzXYt", &
+            field_description//": the whole field as a function time " , &
+            field_units, field_value)
+    endif
   end subroutine write_standard_field_properties
 
   !> Dump the fields to a time-labelled ascii file:
@@ -105,8 +103,10 @@ contains
   subroutine dump_fields_periodically(gnostics)
     use file_utils, only: get_unused_unit
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
-    use theta_grid, only: theta
+    use theta_grid, only: theta, ntgrid
     use fields_arrays, only: phinew, aparnew, bparnew
+    use mp, only: proc0
+    use diagnostics_config, only: diagnostics_type
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     real :: t
@@ -114,13 +114,18 @@ contains
     integer :: ik, it, ig, unit
     integer :: ntg_out 
 
+    !<DD>Adding guard to only let proc0 do this writing
+    if(.not.proc0) return
+
     ! EGH I'm pretty sure that there is no difference
     ! between ntg_out and ntgrid in the old diagnostics 
     ! module... anyone disagree?
+    !<DD>I agree... we should probably remove it. 
     ntg_out = ntgrid
-
+    
     t = gnostics%user_time
-
+    
+    !<DD>Should this only occur for write_ascii=T?
     call get_unused_unit (unit)
     write (filename, "('dump.fields.t=',e13.6)") t
     open (unit=unit, file=filename, status="unknown")
@@ -138,135 +143,6 @@ contains
     close (unit=unit)
   end subroutine dump_fields_periodically
 
-  !> This subroutine is obsolete and to be deleted
-  !subroutine create_and_write_field_by_mode(gnostics, field_name, field_description, field_units, &
-      !val, field2_by_mode, distributed)
-   !use fields_parallelization, only: field_k_local
-   !use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
-   !!use diagnostics_create_and_write, only: create_and_write_dstrb_field_like_variable_complex_16_3
-   !type(diagnostics_type), intent(in) :: gnostics
-   !character(*), intent(in) :: field_name
-   !character(*), intent(in) :: field_description
-   !character(*), intent(in) :: field_units
-   !character(len=len(field_name)+16) :: field_igomega_by_mode_name
-   !character(len=len(field_name)+9) :: field2_by_mode_name
-   !character(len=len(field_name)+2) :: field_t_name
-   !complex, intent(in), dimension(-ntgrid:ntgrid, ntheta0, naky) :: val
-   !complex, dimension(ntheta0, naky) :: field_igomega_by_mode
-   !real, dimension(ntheta0, naky), intent(in) :: field2_by_mode
-   !logical, intent(in) :: distributed
-   !complex, dimension(-ntgrid:ntgrid, 1, 1) :: dummyc
-   !real, dimension(1,1) :: dummyr
-   !logical :: write_field_by_time
-   !integer :: it,ik
-
-   !write_field_by_time = .false.
-   !if (field_name .eq. 'phi'  .and. gnostics%write_phi_over_time ) write_field_by_time = .true.
-   !if (field_name .eq. 'apar' .and. gnostics%write_apar_over_time) write_field_by_time = .true.
-   !if (field_name .eq. 'bpar' .and. gnostics%write_bpar_over_time) write_field_by_time = .true.
-
-   !field_igomega_by_mode(:,:) = val(gnostics%igomega, :, :)
-
-   !call create_and_write_distributed_fieldlike_variable( &
-     !gnostics, gnostics%rtype, field_name, "rzXY", field_description, field_units, val)
-   !call create_and_write_distributed_fieldlike_variable( &
-     !gnostics, gnostics%rtype, field_name//"_igomega_by_mode", "rXYt", &
-     !field_description//" at ig=igomega, as a function of kx and ky" , field_units, field_igomega_by_mode)
-   !call create_and_write_distributed_fieldlike_variable( &
-     !gnostics, gnostics%rtype, field_name//"2_by_mode", "XYt", &
-     !field_description//" squared and averaged over theta, as a function of kx and ky" , &
-     !field_units, field2_by_mode)
-   !if (write_field_by_time) & 
-     !call create_and_write_distributed_fieldlike_variable( &
-       !gnostics, gnostics%rtype, field_name//"_t", "rzXYt", &
-       !field_description//" squared and averaged over theta, as a function of kx and ky" , &
-       !field_units, val)
-
-   !return
-   
-   !! Below is old stuff to be deleted
-   
-   !field_igomega_by_mode_name =  field_name//"_igomega_by_mode" 
-   !field2_by_mode_name =  field_name//"2_by_mode" 
-   !field_t_name = field_name//"_t"
-   
-   !if (gnostics%create) then 
-     !call create_variable(gnostics%sfile, gnostics%rtype, field_name, "rzXY", field_description, field_units)
-     !call create_variable(gnostics%sfile, gnostics%rtype, field_igomega_by_mode_name, "rXYt", &
-       !field_description//" at ig=igomega, as a function of kx and ky" , field_units)
-     !call create_variable(gnostics%sfile, gnostics%rtype, field2_by_mode_name, "XYt", &
-       !field_description//" squared and averaged over theta, as a function of kx and ky" , &
-       !"("//field_units//")^2")
-     !if (write_field_by_time) then 
-       !call create_variable(gnostics%sfile, gnostics%rtype, field_t_name, "rzXYt", &
-         !field_description//" as a function of time", field_units)
-     !end if
-
-
-   !end if
-   
-   !if (gnostics%create .or. .not. gnostics%wryte) return
-
-   !field_igomega_by_mode(:,:) = val(gnostics%igomega, :, :)
-   
-   !if (.not. distributed) then
-
-     !! If the fields are on every processor our job is simple!
-
-     !call write_variable(gnostics%sfile, field_name, val)
-     !call write_variable(gnostics%sfile, field2_by_mode_name, field2_by_mode)
-     !call write_variable(gnostics%sfile, field_igomega_by_mode_name, field_igomega_by_mode)
-     !if (write_field_by_time) call write_variable(gnostics%sfile, field_t_name, val)
-
-   !else
-
-     !call set_count(gnostics%sfile, field_name, "X", 1)
-     !call set_count(gnostics%sfile, field_name, "Y", 1)
-     !call set_count(gnostics%sfile, field_igomega_by_mode_name, "X", 1)
-     !call set_count(gnostics%sfile, field_igomega_by_mode_name, "Y", 1)
-     !call set_count(gnostics%sfile, field2_by_mode_name, "X", 1)
-     !call set_count(gnostics%sfile, field2_by_mode_name, "Y", 1)
-     !if (write_field_by_time) then
-       !call set_count(gnostics%sfile, field_t_name, "X", 1)
-       !call set_count(gnostics%sfile, field_t_name, "Y", 1)
-     !end if
-
-     !! For some reason every process has to make at least
-     !! one write to a variable with an infinite dimension.
-     !! Here we make some dummy writes to satisfy that
-     !if (write_field_by_time) call write_variable_with_offset(gnostics%sfile, field_t_name, dummyc)
-     !call write_variable_with_offset(gnostics%sfile, field_igomega_by_mode_name, dummyc)
-     !call write_variable_with_offset(gnostics%sfile, field2_by_mode_name, dummyr)
-
-     !do ik = 1,naky
-       !do it = 1,ntheta0
-         !if (field_k_local(it,ik)) then
-
-           !call set_start(gnostics%sfile, field_name, "X", it)
-           !call set_start(gnostics%sfile, field_name, "Y", ik)
-           !call write_variable_with_offset(gnostics%sfile, field_name, val)
-
-           !call set_start(gnostics%sfile, field_igomega_by_mode_name, "X", it)
-           !call set_start(gnostics%sfile, field_igomega_by_mode_name, "Y", ik)
-           !call write_variable_with_offset(gnostics%sfile, &
-             !field_igomega_by_mode_name,&
-             !field_igomega_by_mode)
-
-           !call set_start(gnostics%sfile, field2_by_mode_name, "X", it)
-           !call set_start(gnostics%sfile, field2_by_mode_name, "Y", ik)
-           !call write_variable_with_offset(gnostics%sfile, field2_by_mode_name, field2_by_mode)
-
-           !if (write_field_by_time) then
-             !call set_start(gnostics%sfile, field_t_name, "X", it)
-             !call set_start(gnostics%sfile, field_t_name, "Y", ik)
-             !call write_variable_with_offset(gnostics%sfile, field_t_name, val)
-           !end if
-         !end if
-       !end do
-     !end do
-   !end if
-  !end subroutine create_and_write_field_by_mode
-
   subroutine write_movie(gnostics)
     use gs2_transforms, only: init_transforms
     use gs2_layouts, only: yxf_lo
@@ -279,8 +155,9 @@ contains
     use diagnostics_create_and_write, only: create_and_write_variable
     use le_grids, only: nlambda, negrid
     use species, only: nspec
-    use kt_grids, only: nx, ny
+    use kt_grids, only: nx, ny, naky, ntheta0
     use file_utils, only: error_unit
+    use diagnostics_config, only: diagnostics_type
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     real :: t
@@ -291,58 +168,42 @@ contains
 
     call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
 
-   
-
     t = gnostics%user_time
-
+    
     ! EAB 09/17/03 -- modify dump_fields_periodically to print out inverse fft of fields in x,y
     nnx = yxf_lo%nx
     nny = yxf_lo%ny
-
-    !write (*,*) 'Grid sizes', nnx, nny
-
+    
     if (proc0 .and. .not. warning) then
-      write (error_unit(),*) "WARNING: write_movie writes arrays of size nx*ny which contain a lot of &
-        & redundancy, leading to unnecessarily large output files... consider doing &
-        & the Fourier transforms of the fields in post-processing instead"
-      warning = .true.
+       write (error_unit(),*) "WARNING: write_movie writes arrays of size nx*ny which contain a lot of &
+            & redundancy, leading to unnecessarily large output files... consider doing &
+            & the Fourier transforms of the fields in post-processing instead"
+       warning = .true.
     endif
-
-
-    !<DD>Commented as removed writing of ntot in favour of apar for consistency
-    !call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
-
+    
     if (fphi > epsilon(0.0)) then
        allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
        call transform2 (phinew, yxphi, nny, nnx)
        call create_and_write_variable(gnostics, gnostics%rtype, "phi_by_xmode", "xyzt", &
-          "The electric potential in real space", "Tr/e", yxphi)
+            "The electric potential in real space", "Tr/e", yxphi)
+       deallocate (yxphi)
     end if
 
     if (fapar > epsilon(0.0)) then
        allocate (yxapar(nnx,nny,-ntgrid:ntgrid))
        call transform2 (aparnew, yxapar, nny, nnx)
        call create_and_write_variable(gnostics, gnostics%rtype, "apar_by_xmode", "xyzt", &
-          "The parallel vector potential in real space", "TBC", yxapar)
+            "The parallel vector potential in real space", "TBC", yxapar)
+       deallocate (yxapar)
     end if
 
     if (fbpar > epsilon(0.0)) then 
        allocate (yxbpar(nnx,nny,-ntgrid:ntgrid))
        call transform2 (bparnew, yxbpar, nny, nnx)
        call create_and_write_variable(gnostics, gnostics%rtype, "bpar_by_xmode", "xyzt", &
-          "The parallel magnetic field in real space", "TBC", yxapar)
+            "The parallel magnetic field in real space", "TBC", yxbpar)
+       deallocate (yxbpar)
     end if
-
-    !if (proc0) then
-       !call nc_loop_movie(nout_movie, t, yxphi, yxapar, yxbpar)
-    !end if
-
-    if (fphi > epsilon(0.0)) deallocate (yxphi)
-    if (fapar > epsilon(0.0)) deallocate (yxapar)
-    if (fbpar > epsilon(0.0)) deallocate (yxbpar)
-    !nout_movie = nout_movie + 1
   end subroutine write_movie
-
-
 end module diagnostics_fields
 
