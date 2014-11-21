@@ -407,7 +407,6 @@ contains
     use diagnostics_final_routines,only: do_write_final_moments
     use diagnostics_final_routines,only: do_write_final_antot
     use diagnostics_final_routines,only: do_write_gs
-    use diagnostics_final_routines,only: do_write_geom
     use diagnostics_final_routines,only: init_par_filter
     use diagnostics_final_routines,only: ntg_out
     use nonlinear_terms, only: nonlin
@@ -440,8 +439,6 @@ contains
     if (proc0) call dump_ant_amp
     
     if (nonlin.and.gnostics%write_gs) call do_write_gs(gnostics)
-    
-    if (proc0) call do_write_geom
     
   end subroutine run_old_final_routines
   
