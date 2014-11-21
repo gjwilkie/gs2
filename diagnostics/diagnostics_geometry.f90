@@ -8,12 +8,16 @@ contains
   subroutine write_geometry(gnostics)
     use theta_grid, only: bmag, gradpar, gbdrift, gbdrift0, &
          cvdrift, cvdrift0, gds2, gds21, gds22, grho, jacob, &
-         shat, drhodpsi, eps, cdrift, cdrift0, qval
+         shat, drhodpsi, eps, cdrift, cdrift0, qval, shape, theta, ntgrid
     use theta_grid, only: Rplot, Zplot, aplot, Rprime, Zprime, aprime, drhodpsi
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_config, only: diagnostics_type
+    use mp, only: proc0
+    use file_utils, only: open_output_file, close_output_file
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
+    integer :: i, unit
+
     call create_and_write_variable(gnostics, gnostics%rtype, "bmag", "z", &
          "Values of bmag, the magnitude of the magnetic field ", "B_a", bmag)
     call create_and_write_variable(gnostics, gnostics%rtype, "gradpar", "z", &
@@ -61,5 +65,22 @@ contains
          "d/dx of the height above the midplane at the centre of the flux tube ", "a/rho_r", Zprime)
     call create_and_write_variable(gnostics, gnostics%rtype, "aprime", "z", &
          "d/dx of the toroidal angle at the centre of the flux tube ", "rad/rho_r", aprime)
+
+
+    !Write data to ascii file. 
+    !Should probably disable this if not write_ascii
+    !Netcdf missing "shape" data
+    if(proc0) then 
+       call open_output_file (unit, ".g")
+       write (unit,fmt="('# shape: ',a)") trim(shape)
+       write (unit,fmt="('# q = ',e11.4,' drhodpsi = ',e11.4)") qval, drhodpsi
+       write (unit,fmt="('# theta1             R2                  Z3               alpha4      ', &
+         &   '       Rprime5              Zprime6           alpha_prime7 ')")
+       do i=-ntgrid,ntgrid
+          write (unit,'(20(1x,1pg18.11))') theta(i),Rplot(i),Zplot(i),aplot(i), &
+               Rprime(i),Zprime(i),aprime(i)
+       enddo
+       call close_output_file (unit)
+    endif
   end subroutine write_geometry
 end module diagnostics_geometry

@@ -5,7 +5,7 @@ module diagnostics_final_routines
 
   private
 
-  public :: ntg_out, init_par_filter, do_write_geom, do_write_gs
+  public :: ntg_out, init_par_filter, do_write_gs
   public :: do_write_final_antot, do_write_final_moments, do_write_final_db
   public :: do_write_final_epar, do_write_kpar, do_write_final_fields
   public :: do_write_eigenfunc
@@ -764,29 +764,4 @@ contains
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     deallocate (vx, vy, rvx, rvy)
   end subroutine do_write_gs
-
-!THERE'S NOW NETCDF GEOM OUTPUT SO THIS SHOULD BE MERGED WITH THAT
-  subroutine do_write_geom
-    use mp, only: proc0
-    use file_utils, only: open_output_file, close_output_file
-    use theta_grid, only: ntgrid, theta, Rplot, Zplot, aplot
-    use theta_grid, only: Rprime, Zprime, aprime, drhodpsi, qval, shape
-    implicit none
-    integer :: i, unit
-   
-    if(.not.proc0) return
-    
-    !May want to guard this with if(write_ascii) but not until we provide this
-    !data in main netcdf output by default.
-    call open_output_file (unit, ".g")
-    write (unit,fmt="('# shape: ',a)") trim(shape)
-    write (unit,fmt="('# q = ',e11.4,' drhodpsi = ',e11.4)") qval, drhodpsi
-    write (unit,fmt="('# theta1             R2                  Z3               alpha4      ', &
-         &   '       Rprime5              Zprime6           alpha_prime7 ')")
-    do i=-ntgrid,ntgrid
-       write (unit,'(20(1x,1pg18.11))') theta(i),Rplot(i),Zplot(i),aplot(i), &
-            Rprime(i),Zprime(i),aprime(i)
-    enddo
-    call close_output_file (unit)
-  end subroutine do_write_geom
 end module diagnostics_final_routines
