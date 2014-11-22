@@ -85,6 +85,7 @@ contains
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
     use diagnostics_config, only: diagnostics_type
+    implicit none
     type(diagnostics_type), intent(in) :: gnostics
     character(*), intent(in) :: moment_name, moment_description, moment_units
     complex, dimension(-ntgrid:,:,:,:), intent(in) :: moment_value
