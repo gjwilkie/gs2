@@ -44,7 +44,7 @@ contains
     integer, intent(in) :: outunit
     real, dimension (ntheta0, naky) :: phitot
     integer :: ik, it
-    
+    phitot=0.
     !call average_theta(phinew, phinew, phitot, gnostics%distributed)
     
 !WARNING: Phitot here has not been set
