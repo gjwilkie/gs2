@@ -5469,6 +5469,7 @@ endif
     use run_parameters, only: fphi, fbpar
 
     implicit none
+    logical, parameter :: full_arr=.true.
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
          upar, tpar, tperp, ntot, qparflux, pperpj1, qpperpj1
     complex, dimension (-ntgrid:,:,:), intent(in) :: phinew, bparnew
@@ -5505,17 +5506,17 @@ endif
 ! CMR: density is the nonadiabatic piece of perturbed density
 ! NB normalised wrt equ'm density for species s: n_s n_ref  
 !    ie multiply by (n_s n_ref) to get abs density pert'n
-    call integrate_moment (g0, density,  moment_to_allprocs)
+    call integrate_moment (g0, density,  moment_to_allprocs, full_arr)
 
 ! DJA/CMR: upar and tpar moments 
 ! (nb adiabatic part of <delta f> does not contribute to upar, tpar or tperp)
 ! NB UPAR is normalised to vt_s = sqrt(T_s/m_s) vt_ref
 !    ie multiply by spec(is)%stm * vt_ref to get abs upar
     g0 = vpa*g0
-    call integrate_moment (g0, upar,  moment_to_allprocs)
+    call integrate_moment (g0, upar,  moment_to_allprocs, full_arr)
 
     g0 = 2.*vpa*g0
-    call integrate_moment (g0, tpar,  moment_to_allprocs)
+    call integrate_moment (g0, tpar,  moment_to_allprocs, full_arr)
 ! tpar transiently stores ppar, nonadiabatic perturbed par pressure 
 !      vpa normalised to: sqrt(2 T_s T_ref/m_s m_ref)
 !  including factor 2 in g0 product ensures 
@@ -5527,7 +5528,7 @@ endif
           g0(:,isgn,iglo) = vperp2(:,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)
        end do
     end do
-    call integrate_moment (g0, tperp,  moment_to_allprocs)
+    call integrate_moment (g0, tperp,  moment_to_allprocs, full_arr)
 ! tperp transiently stores pperp, nonadiabatic perturbed perp pressure
 !                          pperp = tperp + density, and so:
     tperp = tperp - density
@@ -5542,7 +5543,7 @@ endif
           g0(:,isgn,iglo) = vpa(:,isgn,iglo)*gnew(:,isgn,iglo)*aj0(:,iglo)*energy(ie_idx(g_lo,iglo))
        end do
     end do 
-    call integrate_moment (g0, qparflux,  moment_to_allprocs)
+    call integrate_moment (g0, qparflux,  moment_to_allprocs, full_arr)
    
 ! Now compute PPERPJ1, a modified p_perp which gives particle flux from Bpar
 ! NB PPERPJ1 is normalised to (n_s T_s/q_s)  n_ref T_ref/q_ref 
@@ -5554,7 +5555,7 @@ endif
                = gnew(:,isgn,iglo)*aj1(:,iglo)*2.0*vperp2(:,iglo)*spec(is)%tz
        end do
     end do
-    call integrate_moment (g0, pperpj1,  moment_to_allprocs)
+    call integrate_moment (g0, pperpj1,  moment_to_allprocs, full_arr)
 
 ! Now compute QPPERPJ1, a modified p_perp*energy which gives heat flux from Bpar
 ! NB QPPERPJ1 is normalised to (n_s T_s^2/q_s)  n_ref  T_ref^2/q_ref
@@ -5562,7 +5563,7 @@ endif
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        g0(:,:,iglo) = g0(:,:,iglo)*energy(ie_idx(g_lo,iglo))
     end do
-    call integrate_moment (g0, qpperpj1, moment_to_allprocs)
+    call integrate_moment (g0, qpperpj1, moment_to_allprocs, full_arr)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! now include the adiabatic part of <delta f>
@@ -5578,7 +5579,7 @@ endif
     end do
 
 ! total perturbed density
-    call integrate_moment (g0, ntot,  moment_to_allprocs)
+    call integrate_moment (g0, ntot,  moment_to_allprocs, full_arr)
 
 !CMR, now multiply by species dependent normalisations to leave only reference normalisations
     do is=1,nspec
@@ -5608,6 +5609,7 @@ endif
     use run_parameters, only: fphi, fbpar
 
     implicit none
+    logical, parameter :: full_arr=.true.
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: tperp, ntot
     complex, dimension (-ntgrid:,:,:), intent(in) :: phinew, bparnew
 
@@ -5656,7 +5658,7 @@ endif
     end do
 
 ! total perturbed density
-    call integrate_moment (g0, ntot,  moment_to_allprocs)
+    call integrate_moment (g0, ntot,  moment_to_allprocs, full_arr)
 
 ! vperp**2 moment:
     do iglo = g_lo%llim_proc, g_lo%ulim_proc       
@@ -5668,7 +5670,7 @@ endif
     end do
 
 ! total perturbed perp pressure
-    call integrate_moment (g0, tperp,  moment_to_allprocs)
+    call integrate_moment (g0, tperp,  moment_to_allprocs, full_arr)
 
 ! tperp transiently stores pperp, 
 !       pperp = tperp + density, and so:
@@ -5695,6 +5697,7 @@ endif
     use le_grids, only: integrate_moment
 
     implicit none
+    logical, parameter :: full_arr=.true.
     complex, intent (out) :: &
          & dens(-ntgrid:,:,:,:), upar(-ntgrid:,:,:,:), &
          & tpar(-ntgrid:,:,:,:), tper(-ntgrid:,:,:,:)
@@ -5729,7 +5732,7 @@ endif
                   & * bparnew(:,it,ik)
           end do
        end do
-       call integrate_moment (g0, ntot,  moment_to_allprocs,full_arr=.true.)
+       call integrate_moment (g0, ntot,  moment_to_allprocs,full_arr)
     endif
 
 ! not guiding center density
@@ -5739,7 +5742,7 @@ endif
        end do
     end do
 
-    call integrate_moment (g0, dens,  moment_to_allprocs,full_arr=.true.)
+    call integrate_moment (g0, dens,  moment_to_allprocs,full_arr)
 
 ! not guiding center upar
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -5748,7 +5751,7 @@ endif
        end do
     end do
 
-    call integrate_moment (g0, upar,  moment_to_allprocs,full_arr=.true.)
+    call integrate_moment (g0, upar,  moment_to_allprocs,full_arr)
 
 ! not guiding center tpar
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -5757,7 +5760,7 @@ endif
        end do
     end do
 
-    call integrate_moment (g0, tpar,  moment_to_allprocs,full_arr=.true.)
+    call integrate_moment (g0, tpar,  moment_to_allprocs,full_arr)
     
 ! not guiding center tperp
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -5766,7 +5769,7 @@ endif
        end do
     end do
 
-    call integrate_moment (g0, tper,  moment_to_allprocs,full_arr=.true.)
+    call integrate_moment (g0, tper,  moment_to_allprocs,full_arr)
 
     do ig=-ntgrid,ntgrid
        do it=1,nakx
@@ -6470,6 +6473,7 @@ endif
     use le_grids, only: integrate_moment
     use species, only: nspec
     implicit none
+    logical, parameter :: full_arr=.true.
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
     real, dimension (:,:,:), intent (in out) :: flx
     real, dimension (-ntgrid:,:,:) :: dnorm
@@ -6484,7 +6488,7 @@ endif
     ! are implemented 1/2014
     ! DD added full_arr=.true. to ensure all procs get the 
     ! full array
-    call integrate_moment (g0, total, moment_to_allprocs, full_arr=.true.)
+    call integrate_moment (g0, total, moment_to_allprocs, full_arr)
 
     ! EGH for new parallel I/O everyone
     ! calculates fluxes
