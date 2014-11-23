@@ -10,18 +10,11 @@ module diagnostics_dimensions
 
   private
   
-!  public :: diagnostics_dimension_type
-  public :: kx_dim, ky_dim, theta_dim, e_dim
-  public :: l_dim, spec_dim, ri_dim, time_dim
-  public :: vpar_dim, theta_ext_dim
-  public :: generic_2_dim, generic_3_dim
-  public :: generic_4_dim, generic_5_dim
-  public :: xx_dim, yy_dim
-
-  public :: dim_string
+  public :: dim_string, diagnostics_dimension_list_type
 
   integer, parameter :: string_len=256
 
+  !> This type is used to describe a single dimension
   type diagnostics_dimension_type
      private
      logical :: is_unlimited 
@@ -37,18 +30,31 @@ module diagnostics_dimensions
      procedure, public :: get_dim_name => dimension_get_dim_name
   end type diagnostics_dimension_type
 
+  !> This type is a container for all the specific dimension instances
+  type diagnostics_dimension_list_type
+     type(diagnostics_dimension_type) :: kx
+     type(diagnostics_dimension_type) :: ky
+     type(diagnostics_dimension_type) :: theta
+     type(diagnostics_dimension_type) :: theta_ext
+     type(diagnostics_dimension_type) :: xx
+     type(diagnostics_dimension_type) :: yy
+     type(diagnostics_dimension_type) :: energy
+     type(diagnostics_dimension_type) :: lambda
+     type(diagnostics_dimension_type) :: species
+     type(diagnostics_dimension_type) :: vpar
+     type(diagnostics_dimension_type) :: time
+     type(diagnostics_dimension_type) :: ri
+     type(diagnostics_dimension_type) :: generic_2
+     type(diagnostics_dimension_type) :: generic_3
+     type(diagnostics_dimension_type) :: generic_4
+     type(diagnostics_dimension_type) :: generic_5
+  end type diagnostics_dimension_list_type
+
   interface dim_string
      module procedure :: make_dim_string
      module procedure :: make_dim_string_arr
   end interface dim_string
 
-  !Specific dimensions used throughout the diagnostics
-  type(diagnostics_dimension_type) :: kx_dim, ky_dim, theta_dim, e_dim
-  type(diagnostics_dimension_type) :: l_dim, spec_dim, ri_dim, time_dim
-  type(diagnostics_dimension_type) :: vpar_dim, theta_ext_dim
-  type(diagnostics_dimension_type) :: generic_2_dim, generic_3_dim
-  type(diagnostics_dimension_type) :: generic_4_dim, generic_5_dim
-  type(diagnostics_dimension_type) :: xx_dim, yy_dim
 contains
   !/////////////////////////////
   !// TYPE BOUND PROCEDURES
@@ -80,16 +86,15 @@ contains
   end subroutine dimension_type_init
   
   !>Attach the dimension to file
-  subroutine dimension_add_to_file(self,gnostics)
-    use diagnostics_config, only: diagnostics_type
-    use simpledataio, only: add_dimension
+  subroutine dimension_add_to_file(self,sfile)
+    use simpledataio, only: add_dimension, sdatio_file
     implicit none
     class(diagnostics_dimension_type), intent(in) :: self
-    type(diagnostics_type), intent(in) :: gnostics
+    type(sdatio_file), intent(in) :: sfile
 
     if(.not.self%initialised) return
 
-    call add_dimension(gnostics%sfile,trim(self%dim_name),&
+    call add_dimension(sfile,trim(self%dim_name),&
          self%length,trim(self%description),trim(self%units))
   end subroutine dimension_add_to_file
 

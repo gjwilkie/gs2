@@ -189,7 +189,7 @@ string = <<EOF
 module diagnostics_config
   use simpledataio, only: sdatio_file
   use diagnostics_ascii, only: diagnostics_ascii_type
-
+  use diagnostics_dimensions, only: diagnostics_dimension_list_type
   implicit none
 
   private
@@ -238,6 +238,7 @@ module diagnostics_config
      type(sdatio_file) :: sfile
      type(diagnostics_ascii_type) :: ascii_files
      type(results_summary_type) :: current_results
+     type(diagnostics_dimension_list_type) :: dims
      !> Integer below gives the sdatio type 
      !! which corresponds to a gs2 real
      integer :: rtype
