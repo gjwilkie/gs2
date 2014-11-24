@@ -1353,7 +1353,7 @@ contains
     !this routine is more expensive than original version just using total.
     !In practice we should have two integrate_moment_c34 routines, one for sub-comms
     !and one for world-comms.
-    if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then
+    if(intmom_sub.and.local_all.and.(.not.local_full_arr))then
        total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=total_small
     else
        total=total_small

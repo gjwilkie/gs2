@@ -214,7 +214,7 @@ module dist_fn
 #ifdef NETCDF_PARALLEL
   logical, parameter :: moment_to_allprocs = .true.
 #else
-  logical, parameter :: moment_to_allprocs = .true.
+  logical, parameter :: moment_to_allprocs = .false.
 #endif
 
 contains
@@ -5469,7 +5469,7 @@ endif
     use run_parameters, only: fphi, fbpar
 
     implicit none
-    logical, parameter :: full_arr=.true.
+    logical, parameter :: full_arr=moment_to_allprocs
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: density, &
          upar, tpar, tperp, ntot, qparflux, pperpj1, qpperpj1
     complex, dimension (-ntgrid:,:,:), intent(in) :: phinew, bparnew
@@ -5609,7 +5609,7 @@ endif
     use run_parameters, only: fphi, fbpar
 
     implicit none
-    logical, parameter :: full_arr=.true.
+    logical, parameter :: full_arr=moment_to_allprocs
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: tperp, ntot
     complex, dimension (-ntgrid:,:,:), intent(in) :: phinew, bparnew
 
@@ -5697,7 +5697,7 @@ endif
     use le_grids, only: integrate_moment
 
     implicit none
-    logical, parameter :: full_arr=.true.
+    logical, parameter :: full_arr=moment_to_allprocs
     complex, intent (out) :: &
          & dens(-ntgrid:,:,:,:), upar(-ntgrid:,:,:,:), &
          & tpar(-ntgrid:,:,:,:), tper(-ntgrid:,:,:,:)
@@ -6473,7 +6473,7 @@ endif
     use le_grids, only: integrate_moment
     use species, only: nspec
     implicit none
-    logical, parameter :: full_arr=.true.
+    logical, parameter :: full_arr=moment_to_allprocs
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
     real, dimension (:,:,:), intent (in out) :: flx
     real, dimension (-ntgrid:,:,:) :: dnorm
