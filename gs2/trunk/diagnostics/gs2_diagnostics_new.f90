@@ -25,7 +25,9 @@ module gs2_diagnostics_new
   end type diagnostics_init_options_type
 
   type(diagnostics_type) :: gnostics 
-  
+
+  logical, parameter :: debug=.false.
+
 contains
   !> Read namelist diagnostics_config, initialise submodules,
   !! open output file 'run_name.cdf' and create dimensions.
@@ -43,6 +45,9 @@ contains
     use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
+    !This reference needs removing to allow compilation on systems without netcdf
+    !It should probably be moved to simpledataio as the rest of the diagnostics
+    !doesn't know what backend simpledataio is using (i.e. if it is netcdf or not).
     use netcdf, only: NF90_CLOBBER
     use simpledataio, only: SDATIO_DOUBLE, SDATIO_FLOAT, SDATIO_INT
     use simpledataio, only: sdatio_init, simpledataio_functional
@@ -50,7 +55,7 @@ contains
     implicit none
     type(diagnostics_init_options_type), intent(in) :: init_options
     
-    if(proc0) write (*,*) 'initializing new diagnostics'
+    if(proc0.and.debug) write (*,*) 'initializing new diagnostics'
     call init_diagnostics_config(gnostics)
     call check_parameters
     
@@ -155,7 +160,7 @@ contains
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
     
-    if(proc0) write (*,*) 'finished initializing new diagnostics'
+    if(proc0.and.debug) write (*,*) 'finished initializing new diagnostics'
   end subroutine init_gs2_diagnostics_new
   
   subroutine check_parameters
@@ -198,7 +203,6 @@ contains
     gnostics%ascii_files%write_to_parity = gnostics%write_parity  .and.  gnostics%write_ascii
     !write (*,*) 'gnostics%ascii_files%write_to_heat2', gnostics%ascii_files%write_to_heat2
   end subroutine set_ascii_file_switches
-
 
   !> Close the output file and deallocate arrays
   subroutine finish_gs2_diagnostics_new
@@ -252,7 +256,7 @@ contains
     if (nonlin.and.gnostics%use_nonlin_convergence) call finish_nonlinear_convergence(gnostics)
     if (gnostics%write_heating) call finish_diagnostics_heating(gnostics)
     if (gnostics%parallel .or. proc0) then
-       if(proc0)write (*,*) "Closing new diagnostics"
+       if(proc0.and.debug) write(*,*) "Closing new diagnostics"
        call closefile(gnostics%sfile)
        !if (gnostics%write_movie) call closefile(gnostics%sfilemovie)
     end if
