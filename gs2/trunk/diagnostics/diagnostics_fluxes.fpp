@@ -77,6 +77,7 @@ contains
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     integer :: is
@@ -216,24 +217,30 @@ contains
     
     ! Write totals
     if (gnostics%write_fluxes) then
-       call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_tot", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_tot", &
+            dim_string([gnostics%dims%time]), &
             "Total heat flux, as a function of  time", &
             "Q_gB", gnostics%current_results%total_heat_flux)
-       call create_and_write_variable(gnostics, gnostics%rtype, "hflux_tot", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "hflux_tot", &
+            dim_string([gnostics%dims%time]), &
             "Total heat flux, as a function of  time, same as heat_flux_tot, included &
             & for backwards compatiblity", &
             "Q_gB", gnostics%current_results%total_heat_flux)
-       call create_and_write_variable(gnostics, gnostics%rtype, "mom_flux_tot", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "mom_flux_tot", &
+            dim_string([gnostics%dims%time]), &
             "Total momentum flux, as a function of  time", &
             "Pi_gB", gnostics%current_results%total_momentum_flux)
-       call create_and_write_variable(gnostics, gnostics%rtype, "vflux_tot", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "vflux_tot", &
+            dim_string([gnostics%dims%time]), &
             "Total momentum flux, as a function of  time, same as mom_flux_tot, &
             & included for backwards compatiblity.", &
             "Pi_gB", gnostics%current_results%total_momentum_flux)
-       call create_and_write_variable(gnostics, gnostics%rtype, "part_flux_tot", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "part_flux_tot", &
+            dim_string([gnostics%dims%time]), &
             "Total particle flux, as a function of  time", &
             "TBC", gnostics%current_results%total_particle_flux)
-       call create_and_write_variable(gnostics, gnostics%rtype, "zflux_tot", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "zflux_tot", &
+            dim_string([gnostics%dims%time]), &
             "Total particle flux, as a function of  time, same as part_flux_tot, &
             & included for backwards compatiblity.", &
             "TBC", gnostics%current_results%total_particle_flux)
@@ -249,6 +256,7 @@ contains
     use kt_grids, only: kperp2, ntheta0, naky
     use theta_grid, only: grho
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_dimensions, only: dim_string
     use diagnostics_config, only: diagnostics_type
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
@@ -313,16 +321,20 @@ contains
     particle_flux_max = sum(particle_flux_max_by_spec)
     
     if (gnostics%write_fluxes) then
-       call create_and_write_variable(gnostics, gnostics%rtype, "es_heat_flux_diff_max", "st", &
-            " A turbulent estimate of the heat flux, as a function of species and  time", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "es_heat_flux_diff_max", &
+            dim_string([gnostics%dims%species,gnostics%dims%time]), &
+            " A turbulent estimate of the heat flux, as a function of species and time", &
             "Q_gB", heat_flux_max_by_spec)
-       call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_diff_max", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_diff_max", &
+            dim_string([gnostics%dims%time]), &
             " A turbulent estimate of the heat flux, as a function of  time", &
             "Q_gB", heat_flux_max)
-       call create_and_write_variable(gnostics, gnostics%rtype, "es_particle_flux_diff_max", "st", &
-            " A turbulent estimate of the particle flux, as a function of species and  time", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "es_particle_flux_diff_max", &
+            dim_string([gnostics%dims%species,gnostics%dims%time]), &
+            " A turbulent estimate of the particle flux, as a function of species and time", &
             "Q_gB", particle_flux_max_by_spec)
-       call create_and_write_variable(gnostics, gnostics%rtype, "particle_flux_diff_max", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "particle_flux_diff_max", &
+            dim_string([gnostics%dims%time]), &
             " A turbulent estimate of the particle flux, as a function of  time", &
             "Q_gB", particle_flux_max)
     end if
@@ -337,6 +349,7 @@ contains
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
     use fields_parallelization, only: field_k_local
+    use diagnostics_dimensions, only: dim_string
     use mp, only: broadcast, sum_allreduce
     use volume_averages, only: average_all, average_kx, average_ky
     use diagnostics_config, only: diagnostics_type
@@ -383,28 +396,34 @@ contains
     call average_kx(total_flux_by_mode, total_flux_by_ky, distributed)
     call average_ky(total_flux_by_mode, total_flux_by_kx, distributed)
     if (gnostics%write_fluxes) then 
-       call create_and_write_variable(gnostics, gnostics%rtype, flux_name, "st", &
+       call create_and_write_variable(gnostics, gnostics%rtype, flux_name, &
+            dim_string([gnostics%dims%species,gnostics%dims%time]), &
             flux_description//" averaged over kx and ky, as a function of species and time", &
             flux_units, flux_by_species)
-       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_ky", "Yt", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_ky", &
+            dim_string([gnostics%dims%ky,gnostics%dims%time]), &
             flux_description//" summed over species and averaged over kx, as a function of ky and time", &
             flux_units, total_flux_by_ky)
        
-       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_kx", "Xt", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name//"_by_kx", &
+            dim_string([gnostics%dims%kx,gnostics%dims%time]), &
             flux_description//" summed over species and averaged over ky, as a function of kx and time", &
             flux_units, total_flux_by_kx)
        
-       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name, "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name, &
+            dim_string([gnostics%dims%time]), &
             flux_description//" summed over species and averaged over kx and ky, as a function of time", &
             flux_units, sum(total_flux_by_kx))
        
        if (gnostics%write_fluxes_by_mode) then 
           call create_and_write_distributed_fieldlike_variable( &
-               gnostics, gnostics%rtype, flux_name//"_by_mode", "XYst", &
+               gnostics, gnostics%rtype, flux_name//"_by_mode", &
+               dim_string([gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%species,gnostics%dims%time]), &
                flux_description//" as a function of species, kx and ky", &
                flux_units, flux_value)
           call create_and_write_distributed_fieldlike_variable( &
-               gnostics, gnostics%rtype, "total_"//flux_name//"_by_mode", "XYt", &
+               gnostics, gnostics%rtype, "total_"//flux_name//"_by_mode", &
+               dim_string([gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]), &
                flux_description//" summed over species, as a function of kx and ky", &
                flux_units, total_flux_by_mode)
           
@@ -536,6 +555,7 @@ contains
     use gs2_io, only: nc_loop_sym
     use fields_arrays, only: phinew
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_dimensions, only: dim_string
     use diagnostics_config, only: diagnostics_type
     implicit none
     type (diagnostics_type), intent(in) :: gnostics
@@ -544,7 +564,8 @@ contains
 
     allocate (pflux_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
     call pflux_vs_theta_vs_vpa (pflux_sym)
-    call create_and_write_variable(gnostics, gnostics%rtype, "es_part_tormom_sym", "zvst", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "es_part_tormom_sym", &
+         dim_string([gnostics%dims%theta,gnostics%dims%vpar,gnostics%dims%species,gnostics%dims%time]), &
          "Particle flux density as a function theta and vspace, used for looking at the effect of asymmetry, &
          & see Parra et al POP 18 062501 2011 and ask Jung-Pyo Lee", "See ref", pflux_sym)
     !if (proc0) call nc_loop_partsym_tormom (nout, pflux_sym)
@@ -552,7 +573,8 @@ contains
 
     allocate (vflx_sym(-ntgrid:ntgrid,nlambda*negrid,nspec))
     call flux_vs_theta_vs_vpa (phinew,vflx_sym)
-    call create_and_write_variable(gnostics, gnostics%rtype, "es_mom_sym", "zvst", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "es_mom_sym", &
+         dim_string([gnostics%dims%theta,gnostics%dims%vpar,gnostics%dims%species,gnostics%dims%time]), &
          "Momentum flux density as a function theta and vspace, used for looking at the effect of asymmetry, &
          & see Parra et al POP 18 062501 2011", "See ref", vflx_sym)
     !if (proc0) call nc_loop_sym (nout, vflx_sym)

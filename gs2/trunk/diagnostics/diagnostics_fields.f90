@@ -29,6 +29,7 @@ contains
        field_units, field_value)
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
+    use diagnostics_dimensions, only: dim_string
     use diagnostics_config, only: diagnostics_type
     use volume_averages, only: average_theta, average_kx, average_ky
     use kt_grids, only: ntheta0, naky
@@ -51,18 +52,21 @@ contains
     call average_theta(field_value, field_value, field2_by_mode, distributed)
 
     call average_kx(field2_by_mode, field2_by_ky, distributed)
-    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_ky", "Yt", &
-      field_description//" squared and averaged over theta and kx, as a function of time", &
-      "("//field_units//")^2", field2_by_ky)
+    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_ky", &
+         dim_string([gnostics%dims%ky,gnostics%dims%time]), &
+         field_description//" squared and averaged over theta and kx, as a function of time", &
+         "("//field_units//")^2", field2_by_ky)
 
     call average_ky(field2_by_mode, field2_by_kx, distributed)
-    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_kx", "Xt", &
-      field_description//" squared and averaged over theta and ky, as a function of time", &
-      "("//field_units//")^2", field2_by_kx)
+    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2_by_kx", &
+         dim_string([gnostics%dims%kx,gnostics%dims%time]), &
+         field_description//" squared and averaged over theta and ky, as a function of time", &
+         "("//field_units//")^2", field2_by_kx)
 
-    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2", "t", &
-      field_description//" squared and averaged over theta, kx and ky, as a function of time", &
-      "("//field_units//")^2", sum(field2_by_kx))
+    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2", &
+         dim_string([gnostics%dims%time]), &
+         field_description//" squared and averaged over theta, kx and ky, as a function of time", &
+         "("//field_units//")^2", sum(field2_by_kx))
 
     if (field_name .eq. 'phi') gnostics%current_results%phi2 = sum(field2_by_kx)
     if (field_name .eq. 'apar') gnostics%current_results%apar2 = sum(field2_by_kx)
@@ -80,18 +84,24 @@ contains
     field_igomega_by_mode(:,:) = field_value(gnostics%igomega, :, :)
 
     call create_and_write_distributed_fieldlike_variable( &
-         gnostics, gnostics%rtype, field_name, "rzXY", field_description, field_units, field_value)
+         gnostics, gnostics%rtype, field_name, &
+         dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%kx,gnostics%dims%ky]), &
+         field_description, field_units, field_value)
     call create_and_write_distributed_fieldlike_variable( &
-         gnostics, gnostics%rtype, field_name//"_igomega_by_mode", "rXYt", &
+         gnostics, gnostics%rtype, field_name//"_igomega_by_mode", &
+         dim_string([gnostics%dims%ri,gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]), &
          field_description//" at ig=igomega, as a function of kx and ky" , field_units, field_igomega_by_mode)
     call create_and_write_distributed_fieldlike_variable( &
-         gnostics, gnostics%rtype, field_name//"2_by_mode", "XYt", &
+         gnostics, gnostics%rtype, field_name//"2_by_mode", &
+         dim_string([gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]), &
          field_description//" squared and averaged over theta, as a function of kx and ky" , &
          field_units, field2_by_mode)
 
     if (write_field_by_time) then 
        call create_and_write_distributed_fieldlike_variable( &
-            gnostics, gnostics%rtype, field_name//"_t", "rzXYt", &
+            gnostics, gnostics%rtype, field_name//"_t", &
+            dim_string([gnostics%dims%ri,gnostics%dims%theta,&
+            gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]), &
             field_description//": the whole field as a function time " , &
             field_units, field_value)
     endif
@@ -153,6 +163,7 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use mp, only: proc0, mp_abort
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_dimensions, only: dim_string
     use le_grids, only: nlambda, negrid
     use species, only: nspec
     use kt_grids, only: nx, ny, naky, ntheta0
@@ -184,7 +195,8 @@ contains
     if (fphi > epsilon(0.0)) then
        allocate (yxphi(nnx,nny,-ntgrid:ntgrid))
        call transform2 (phinew, yxphi, nny, nnx)
-       call create_and_write_variable(gnostics, gnostics%rtype, "phi_by_xmode", "xyzt", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "phi_by_xmode", &
+            dim_string([gnostics%dims%xx,gnostics%dims%yy,gnostics%dims%theta,gnostics%dims%time]), &
             "The electric potential in real space", "Tr/e", yxphi)
        deallocate (yxphi)
     end if
@@ -192,7 +204,8 @@ contains
     if (fapar > epsilon(0.0)) then
        allocate (yxapar(nnx,nny,-ntgrid:ntgrid))
        call transform2 (aparnew, yxapar, nny, nnx)
-       call create_and_write_variable(gnostics, gnostics%rtype, "apar_by_xmode", "xyzt", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "apar_by_xmode", &
+            dim_string([gnostics%dims%xx,gnostics%dims%yy,gnostics%dims%theta,gnostics%dims%time]), &
             "The parallel vector potential in real space", "TBC", yxapar)
        deallocate (yxapar)
     end if
@@ -200,7 +213,8 @@ contains
     if (fbpar > epsilon(0.0)) then 
        allocate (yxbpar(nnx,nny,-ntgrid:ntgrid))
        call transform2 (bparnew, yxbpar, nny, nnx)
-       call create_and_write_variable(gnostics, gnostics%rtype, "bpar_by_xmode", "xyzt", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "bpar_by_xmode", &
+            dim_string([gnostics%dims%xx,gnostics%dims%yy,gnostics%dims%theta,gnostics%dims%time]), &
             "The parallel magnetic field in real space", "TBC", yxbpar)
        deallocate (yxbpar)
     end if

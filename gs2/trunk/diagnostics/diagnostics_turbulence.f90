@@ -17,12 +17,14 @@ contains
     use gs2_io, only: nc_loop_corr
     use diagnostics_config, only: diagnostics_type
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     complex, dimension(:,:), allocatable :: phi_corr_2pi
     allocate (phi_corr_2pi(-ntgrid:ntgrid,naky))
     call correlation (phi_corr_2pi)
-    call create_and_write_variable(gnostics, gnostics%rtype, "phi_corr_2pi", "rzYt", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "phi_corr_2pi", &
+         dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%ky,gnostics%dims%time]), &
          "2 point correlation function calculated from the electric potential &
          & as a function of ky and parallel sep", "1", phi_corr_2pi)
     !if (proc0) call nc_loop_corr (nout,phi_corr_2pi)
@@ -60,6 +62,7 @@ contains
     use gs2_io, only: nc_loop_corr_extend
     use diagnostics_config, only: diagnostics_type
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     real :: t,t_old
@@ -87,7 +90,9 @@ contains
     call correlation_extend (phi_corr, phi2_extend)
     phicorr_sum = phicorr_sum + phi_corr*(t-t_old)
     phiextend_sum = phiextend_sum + phi2_extend*(t-t_old)
-    call create_and_write_variable(gnostics, gnostics%rtype, "phi_corr", "rjXYt", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "phi_corr", &
+         dim_string([gnostics%dims%ri,gnostics%dims%theta_ext,gnostics%dims%kx,&
+         gnostics%dims%ky,gnostics%dims%time]), &
          "2 point correlation function calculated from the electric potential &
          & as a function of ky and parallel sep... time averaged and &
          & calculated along the extended domain. ", "1", phicorr_sum/(t-tcorr0))
@@ -214,6 +219,7 @@ contains
     use mp, only: proc0
     use diagnostics_config, only: diagnostics_type
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     real :: phase_tot, phase_theta
@@ -223,10 +229,12 @@ contains
     
     call get_cross_phase (gnostics, phase_tot, phase_theta)
     
-    call create_and_write_variable(gnostics, gnostics%rtype, "electron_cross_phase_theta", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "electron_cross_phase_theta", &
+         dim_string([gnostics%dims%time]), &
          "Cross phase between electron density and perpendicular electron temperature, &
          &  given at the outboard midplane and averaged across x and y", "radians", phase_theta)
-    call create_and_write_variable(gnostics, gnostics%rtype, "electron_cross_phase_tot", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "electron_cross_phase_tot", &
+         dim_string([gnostics%dims%time]), &
          "Cross phase between electron density and perpendicular electron temperature, &
          & averaged across all space", "radians", phase_tot)
     

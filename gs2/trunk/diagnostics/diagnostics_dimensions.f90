@@ -12,7 +12,7 @@ module diagnostics_dimensions
   
   public :: dim_string, diagnostics_dimension_list_type
 
-  integer, parameter :: string_len=256
+  integer, parameter :: string_len=256, dim_string_len=20
 
   !> This type is used to describe a single dimension
   type diagnostics_dimension_type
@@ -20,7 +20,7 @@ module diagnostics_dimensions
      logical :: is_unlimited 
      logical :: initialised=.false.
      integer :: length !Size of dimension
-     character(len=20) :: dim_name !String representing the dimension 
+     character(len=dim_string_len) :: dim_name !String representing the dimension 
      character(len=string_len) :: description !String to use as a description
      character(len=string_len) :: units !String description of units
    contains
@@ -118,7 +118,8 @@ contains
   !!the file/io routines when creating variables etc.
   function make_dim_string(dim)
     type(diagnostics_dimension_type), intent(in) :: dim
-    character(len=string_len) :: make_dim_string
+    character(len=:), allocatable :: make_dim_string
+    allocate(character(len=len(trim(dim%get_dim_name())))::make_dim_string)
     make_dim_string=trim(dim%get_dim_name())
   end function make_dim_string
 
@@ -126,17 +127,26 @@ contains
   !!the file/io routines when creating variables etc.
   function make_dim_string_arr(dims)
     type(diagnostics_dimension_type), dimension(:), intent(in) :: dims
-    character(len=string_len) :: make_dim_string_arr
+    character(len=:), allocatable :: make_dim_string_arr, tmp
     character(len=*), parameter :: join_char=''
     integer :: ndim, i
-    ndim=size(dims)
-    make_dim_string_arr=''
-    if(ndim.lt.1) return
-    make_dim_string_arr=trim(dims(1)%get_dim_name())
-    if(ndim.eq.1) return
-    do i=2,ndim
-       make_dim_string_arr=trim(make_dim_string_arr)//join_char//trim(dims(i)%get_dim_name())
-    enddo
-  end function make_dim_string_arr
 
+    !Count dimensions
+    ndim=size(dims)
+
+    !Make temporary storage
+    allocate(character(len=dim_string_len*ndim+len(join_char)*(ndim-1))::tmp)
+    tmp=''
+    if(.not.(ndim.lt.1))then
+       tmp=trim(dims(1)%get_dim_name())
+       if(.not.(ndim.eq.1)) then
+          do i=2,ndim
+             tmp=trim(tmp)//join_char//trim(dims(i)%get_dim_name())
+          enddo
+       endif
+    endif
+    allocate(character(len=len(trim(tmp)))::make_dim_string_arr)
+    make_dim_string_arr=trim(tmp)
+    deallocate(tmp)
+  end function make_dim_string_arr
 end module diagnostics_dimensions
