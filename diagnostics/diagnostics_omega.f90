@@ -45,6 +45,7 @@ contains
   !! to the new netcdf file
   subroutine write_omega(gnostics)
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
+    use diagnostics_dimensions, only: dim_string
     use fields_parallelization, only: field_k_local
     use run_parameters, only: woutunits
     use kt_grids, only: ntheta0, naky
@@ -60,10 +61,12 @@ contains
        omega_average_woutunits(:,ik) = omega_average(:,ik) * woutunits(ik)
     end do
     
-    call create_and_write_distributed_fieldlike_variable(gnostics, gnostics%rtype, "omega", "rXYt", &
+    call create_and_write_distributed_fieldlike_variable(gnostics, gnostics%rtype, "omega", &
+         dim_string([gnostics%dims%ri,gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]), &
          "Complex frequency as a function of kx, ky and time", "a/v_thr", &
          omegahist_woutunits(mod(gnostics%istep,gnostics%navg), :, :))
-    call create_and_write_distributed_fieldlike_variable(gnostics, gnostics%rtype, "omega_average", "rXYt", &
+    call create_and_write_distributed_fieldlike_variable(gnostics, gnostics%rtype, "omega_average", &
+         dim_string([gnostics%dims%ri,gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]), &
          "Complex frequency, averaged over navg timesteps, as a function of kx, ky and time", "a/v_thr", &
          omega_average_woutunits)
     

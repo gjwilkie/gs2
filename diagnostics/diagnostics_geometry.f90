@@ -11,34 +11,46 @@ contains
          shat, drhodpsi, eps, cdrift, cdrift0, qval, shape, theta, ntgrid
     use theta_grid, only: Rplot, Zplot, aplot, Rprime, Zprime, aprime, drhodpsi
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_dimensions, only: dim_string
     use diagnostics_config, only: diagnostics_type
-    use mp, only: proc0
     use file_utils, only: open_output_file, close_output_file
+    use mp, only: proc0
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     integer :: i, unit
 
-    call create_and_write_variable(gnostics, gnostics%rtype, "bmag", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "bmag", &
+         dim_string([gnostics%dims%theta]), &
          "Values of bmag, the magnitude of the magnetic field ", "B_a", bmag)
-    call create_and_write_variable(gnostics, gnostics%rtype, "gradpar", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "gradpar", &
+         dim_string([gnostics%dims%theta]), &
          "Values of gradpar, which multiplies the parallel derivative", "a", gradpar)
-    call create_and_write_variable(gnostics, gnostics%rtype, "gbdrift", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "gbdrift", &
+         dim_string([gnostics%dims%theta]), &
          "Values of gbdrift, the magnetic gradient drift ", "TBC", gbdrift)
-    call create_and_write_variable(gnostics, gnostics%rtype, "gbdrift0", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "gbdrift0", &
+         dim_string([gnostics%dims%theta]), &
       "Values of gbdrift0, ", "TBC", gbdrift0)
-    call create_and_write_variable(gnostics, gnostics%rtype, "cvdrift", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "cvdrift", &
+         dim_string([gnostics%dims%theta]), &
          "Values of cvdrift, the magnetic curvature drift", "TBC", cvdrift)
-    call create_and_write_variable(gnostics, gnostics%rtype, "cvdrift0", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "cvdrift0", &
+         dim_string([gnostics%dims%theta]), &
          "Values of cvdrift0, ", "TBC", cvdrift0)
-    call create_and_write_variable(gnostics, gnostics%rtype, "gds2", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "gds2", &
+         dim_string([gnostics%dims%theta]), &
          "Values of gds2, ", "TBC", gds2)
-    call create_and_write_variable(gnostics, gnostics%rtype, "gds21", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "gds21", &
+         dim_string([gnostics%dims%theta]), &
          "Values of gds21, ", "TBC", gds21)
-    call create_and_write_variable(gnostics, gnostics%rtype, "gds22", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "gds22", &
+         dim_string([gnostics%dims%theta]), &
          "Values of gds22, ", "TBC", gds22)
-    call create_and_write_variable(gnostics, gnostics%rtype, "grho", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "grho", &
+         dim_string([gnostics%dims%theta]), &
          "Values of grho, ", "TBC", grho)
-    call create_and_write_variable(gnostics, gnostics%rtype, "jacob", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "jacob", &
+         dim_string([gnostics%dims%theta]), &
          "Values of jacob, ", "TBC", jacob)
     call create_and_write_variable(gnostics, gnostics%rtype, "shat", "", &
          "Values of shat, the magnetic shear", "TBC", shat)
@@ -46,24 +58,32 @@ contains
          "Values of drhodpsi, ", "TBC", drhodpsi)
     call create_and_write_variable(gnostics, gnostics%rtype, "eps", "", &
          "Values of eps, ", "TBC", eps)
-    call create_and_write_variable(gnostics, gnostics%rtype, "cdrift", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "cdrift", &
+         dim_string([gnostics%dims%theta]), &
          "Values of cdrift, ", "TBC", cdrift)
-    call create_and_write_variable(gnostics, gnostics%rtype, "cdrift0", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "cdrift0", &
+         dim_string([gnostics%dims%theta]), &
          "Values of cdrift0, ", "TBC", cdrift0)
     call create_and_write_variable(gnostics, gnostics%rtype, "qval", "", &
          "Values of qval, ", "TBC", qval)
 
-    call create_and_write_variable(gnostics, gnostics%rtype, "Rplot", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "Rplot", &
+         dim_string([gnostics%dims%theta]), &
          "The major radius at the centre of the flux tube ", "a", Rplot)
-    call create_and_write_variable(gnostics, gnostics%rtype, "Zplot", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "Zplot", &
+         dim_string([gnostics%dims%theta]), &
          "The height above the midplane at the centre of the flux tube ", "a", Zplot)
-    call create_and_write_variable(gnostics, gnostics%rtype, "aplot", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "aplot", &
+         dim_string([gnostics%dims%theta]), &
          "The toroidal angle at the centre of the flux tube ", "rad", aplot)
-    call create_and_write_variable(gnostics, gnostics%rtype, "Rprime", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "Rprime", &
+         dim_string([gnostics%dims%theta]), &
          "d/dx of the major radius at the centre of the flux tube ", "a/rho_r", Rprime)
-    call create_and_write_variable(gnostics, gnostics%rtype, "Zprime", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "Zprime", &
+         dim_string([gnostics%dims%theta]), &
          "d/dx of the height above the midplane at the centre of the flux tube ", "a/rho_r", Zprime)
-    call create_and_write_variable(gnostics, gnostics%rtype, "aprime", "z", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "aprime", &
+         dim_string([gnostics%dims%theta]), &
          "d/dx of the toroidal angle at the centre of the flux tube ", "rad/rho_r", aprime)
 
 

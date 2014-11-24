@@ -123,50 +123,70 @@ contains
     use mp, only: proc0
     use diagnostics_config, only: diagnostics_type
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent (inout) :: gnostics
     real :: t
     integer :: is
     
     t = gnostics%user_time
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy", &
+         dim_string([gnostics%dims%time]), &
          "Total free (turbulent) energy", "F_r^2?? TBC", h%energy)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_dot", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_dot", &
+         dim_string([gnostics%dims%time]), &
          "d/dt of total free (turbulent) energy", "F_r^2 a/v_thr?? TBC", h%energy_dot)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_antenna", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_antenna", &
+         dim_string([gnostics%dims%time]), &
          "Energy injection resulting from antenna J_ant.E", "TBC", h%antenna)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_imp_colls", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_imp_colls", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "?? [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0", "TBC", h%imp_colls)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_imp_colls_sum", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_imp_colls_sum", &
+         dim_string([gnostics%dims%time]), &
          "?? [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0", "TBC", sum(h%imp_colls))
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_hypercoll", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_hypercoll", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Heating resulting from hyperviscosity -[h H(h) * T_0]", "TBC", h%hypercoll)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_hypercoll_sum", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_hypercoll_sum", &
+         dim_string([gnostics%dims%time]), &
          "Heating resulting from hyperviscosity -[h H(h) * T_0]", "TBC", sum(h%hypercoll))
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_collisions", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_collisions", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Heating resulting from collisions -[h C(h) * T_0]", "TBC", h%collisions)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_collisions_sum", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_collisions_sum", &
+         dim_string([gnostics%dims%time]), &
          "Heating resulting from collisions -[h C(h) * T_0]", "TBC", sum(h%collisions))
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_gradients", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_gradients", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Energy injection resulting from gradients [h omega_* h]", "TBC", h%gradients)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_gradients_sum", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_gradients_sum", &
+         dim_string([gnostics%dims%time]), &
          "Energy injection resulting from gradients [h omega_* h]", "TBC", sum(h%gradients))
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_heating", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_heating", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Total heating sum [h (q dchi/dt - dh/dt * T0)]", "TBC", h%heating)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_heating_sum", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_heating_sum", &
+         dim_string([gnostics%dims%time]), &
          "Total heating sum [h (q dchi/dt - dh/dt * T0)]", "TBC", sum(h%heating))
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_balance", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_balance", &
+         dim_string([gnostics%dims%time]), &
          "Sum of total heating, total injection and total change in stored &
          & free energy (should be zero)", "TBC", sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_apar", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_apar", &
+         dim_string([gnostics%dims%time]), &
          "Free energy in perp magnetic field: (k_perp A)**2", "TBC", h%eapar)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_bpar", "t", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_bpar", &
+         dim_string([gnostics%dims%time]), &
          "Free energy in par magnetic field: B_par**2", "TBC", h%ebpar)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_delfs2", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_delfs2", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Total free energy as a function of species dfs^2  ", "TBC", h%delfs2)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_hs2", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_hs2", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Non-adiabatic free energy as a function of species hs^2  ", "TBC", h%hs2)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_phis2", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_phis2", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Adiabatic free energy as a function of species phi_bar^2  ", "TBC", h%phis2)
     
     gnostics%current_results%species_heating = h%imp_colls

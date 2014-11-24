@@ -78,6 +78,7 @@ contains
        moment_units, moment_value, distributed)
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
+    use diagnostics_dimensions, only: dim_string
     use volume_averages, only: average_theta, average_kx, average_ky
     use fields_parallelization, only: field_k_local
     use mp, only: sum_allreduce
@@ -105,16 +106,19 @@ contains
     !moment_value, moment2_by_mode, distributed)
 
     call average_kx(moment2_by_mode, moment2_by_ky, distributed)
-    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"2_by_ky", "Yst", &
+    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"2_by_ky", &
+         dim_string([gnostics%dims%ky,gnostics%dims%species,gnostics%dims%time]), &
          moment_description//" squared and averaged over theta and kx", &
          "("//moment_units//")^2", moment2_by_ky)
 
     call average_ky(moment2_by_mode, moment2_by_kx, distributed)
-    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"2_by_kx", "Xst", &
+    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"2_by_kx", &
+         dim_string([gnostics%dims%kx,gnostics%dims%species,gnostics%dims%time]), &
          moment_description//" squared and averaged over theta and ky", &
          "("//moment_units//")^2", moment2_by_kx)
 
-    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"2", "st", &
+    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"2", &
+         dim_string([gnostics%dims%species,gnostics%dims%time]), &
          moment_description//" squared and averaged over theta, kx and ky", &
          "("//moment_units//")^2", sum(moment2_by_kx, 1))
 
@@ -129,21 +133,31 @@ contains
     end do
     if (gnostics%distributed) call sum_allreduce(moment_flx_surfavg)
     
-    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"_flxsurf_avg", "rXst", &
+    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"_flxsurf_avg", &
+         dim_string([gnostics%dims%ri,gnostics%dims%kx,gnostics%dims%species,gnostics%dims%time]), &
          moment_description//" flux surface averaged: &
          & averaged over theta, at ky=0 (actally ik==1),  as a function of kx" , moment_units, moment_flx_surfavg)
     
     call create_and_write_distributed_fieldlike_variable( &
-         gnostics, gnostics%rtype, moment_name, "rzXYs", moment_description, moment_units, moment_value)
+         gnostics, gnostics%rtype, moment_name, &
+         dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%kx,&
+         gnostics%dims%ky,gnostics%dims%species]), &
+         moment_description, moment_units, moment_value)
     call create_and_write_distributed_fieldlike_variable( &
-         gnostics, gnostics%rtype, moment_name//"_igomega_by_mode", "rXYst", &
+         gnostics, gnostics%rtype, moment_name//"_igomega_by_mode", &
+         dim_string([gnostics%dims%ri,gnostics%dims%kx,gnostics%dims%ky,&
+         gnostics%dims%species,gnostics%dims%time]), &
          moment_description//" at ig=igomega, as a function of kx and ky" , moment_units, moment_igomega_by_mode)
     call create_and_write_distributed_fieldlike_variable( &
-         gnostics, gnostics%rtype, moment_name//"_by_mode", "rXYst", &
+         gnostics, gnostics%rtype, moment_name//"_by_mode", &
+         dim_string([gnostics%dims%ri,gnostics%dims%kx,gnostics%dims%ky,&
+         gnostics%dims%species,gnostics%dims%time]), &
          moment_description//"  averaged over theta, as a function of kx and ky" , &
          moment_units, moment_by_mode)
     call create_and_write_distributed_fieldlike_variable( &
-         gnostics, gnostics%rtype, moment_name//"2_by_mode", "XYst", &
+         gnostics, gnostics%rtype, moment_name//"2_by_mode", &
+         dim_string([gnostics%dims%kx,gnostics%dims%ky,&
+         gnostics%dims%species,gnostics%dims%time]), &
          moment_description//" squared and averaged over theta, as a function of kx and ky" , &
          moment_units, moment2_by_mode)
 
@@ -155,7 +169,9 @@ contains
 
     if (write_moment_by_time) & 
          call create_and_write_distributed_fieldlike_variable( &
-         gnostics, gnostics%rtype, moment_name//"_t", "rzXYst", &
+         gnostics, gnostics%rtype, moment_name//"_t", &
+         dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%kx,&
+         gnostics%dims%ky,gnostics%dims%species,gnostics%dims%time]), &
          moment_description//": the whole moment, as a function of time" , &
          moment_units, moment_value)
 

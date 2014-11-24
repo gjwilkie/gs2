@@ -30,6 +30,7 @@ contains
     use kt_grids, only: ntheta0, naky
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: proc0
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
@@ -45,9 +46,10 @@ contains
     call calc_jext(gnostics,j_ext)
 
     !Write to netcdf
-    call create_and_write_variable(gnostics, gnostics%rtype, "antenna_j_ext", "XYt", &
-         "Time averaged external current in the antenna, real(kperp^2 A_antenna), &
-         &  as a function of kx and ky", "radians", j_ext)
+    call create_and_write_variable(gnostics, gnostics%rtype, "antenna_j_ext", &
+         dim_string([gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]),&
+         "Time averaged external current in the antenna, real(kperp^2 A_antenna)"// &
+         "as a function of kx and ky", "radians", j_ext)
 
     !Write to ascii
     if (proc0 .and. gnostics%write_ascii) then 
@@ -69,11 +71,14 @@ contains
     use antenna, only: antenna_w
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     real :: tmp2
     tmp2 = real(antenna_w())
-    call create_and_write_variable(gnostics, gnostics%rtype, "antenna_w", "rt", &
+    !WHY DOES THE FOLLOWING NEED 'ri' AS TMP2 IS REAL?
+    call create_and_write_variable(gnostics, gnostics%rtype, "antenna_w",  &
+         dim_string([gnostics%dims%ri,gnostics%dims%time]),&
          "antenna_w?? ", "TBC", tmp2)
   end subroutine write_lorentzian
 
