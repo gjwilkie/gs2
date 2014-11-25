@@ -116,7 +116,7 @@ contains
     real, intent(in) :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -137,7 +137,7 @@ contains
     real, intent(in), dimension(:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -158,7 +158,7 @@ contains
     real, intent(in), dimension(:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -179,7 +179,7 @@ contains
     real, intent(in), dimension(:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -200,7 +200,7 @@ contains
     real, intent(in), dimension(:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -221,7 +221,7 @@ contains
     real, intent(in), dimension(:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -242,7 +242,7 @@ contains
     real, intent(in), dimension(:,:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -263,7 +263,7 @@ contains
     integer, intent(in) :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -284,7 +284,7 @@ contains
     integer, intent(in), dimension(:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -305,7 +305,7 @@ contains
     integer, intent(in), dimension(:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -326,7 +326,7 @@ contains
     integer, intent(in), dimension(:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -347,7 +347,7 @@ contains
     integer, intent(in), dimension(:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -368,7 +368,7 @@ contains
     integer, intent(in), dimension(:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -389,7 +389,7 @@ contains
     integer, intent(in), dimension(:,:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -410,7 +410,7 @@ contains
     character, intent(in) :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -431,7 +431,7 @@ contains
     character, intent(in), dimension(:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -452,7 +452,7 @@ contains
     character, intent(in), dimension(:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -473,7 +473,7 @@ contains
     character, intent(in), dimension(:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -494,7 +494,7 @@ contains
     character, intent(in), dimension(:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -515,7 +515,7 @@ contains
     character, intent(in), dimension(:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -536,7 +536,7 @@ contains
     character, intent(in), dimension(:,:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -557,7 +557,7 @@ contains
     double precision, intent(in) :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -578,7 +578,7 @@ contains
     double precision, intent(in), dimension(:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -599,7 +599,7 @@ contains
     double precision, intent(in), dimension(:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -620,7 +620,7 @@ contains
     double precision, intent(in), dimension(:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -641,7 +641,7 @@ contains
     double precision, intent(in), dimension(:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -662,7 +662,7 @@ contains
     double precision, intent(in), dimension(:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -683,7 +683,7 @@ contains
     double precision, intent(in), dimension(:,:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -704,7 +704,7 @@ contains
     complex, intent(in) :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -725,7 +725,7 @@ contains
     complex, intent(in), dimension(:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -746,7 +746,7 @@ contains
     complex, intent(in), dimension(:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -767,7 +767,7 @@ contains
     complex, intent(in), dimension(:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -788,7 +788,7 @@ contains
     complex, intent(in), dimension(:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -809,7 +809,7 @@ contains
     complex, intent(in), dimension(:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -830,7 +830,7 @@ contains
     complex, intent(in), dimension(:,:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -851,7 +851,7 @@ contains
     complex*16, intent(in) :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -872,7 +872,7 @@ contains
     complex*16, intent(in), dimension(:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -893,7 +893,7 @@ contains
     complex*16, intent(in), dimension(:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -914,7 +914,7 @@ contains
     complex*16, intent(in), dimension(:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -935,7 +935,7 @@ contains
     complex*16, intent(in), dimension(:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -956,7 +956,7 @@ contains
     complex*16, intent(in), dimension(:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -977,7 +977,7 @@ contains
     complex*16, intent(in), dimension(:,:,:,:,:,:)  :: val
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
     if (gnostics%create .or. .not. gnostics%wryte) return
@@ -1010,6 +1010,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1019,7 +1020,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1032,13 +1033,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1104,6 +1106,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1113,7 +1116,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1126,13 +1129,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1198,6 +1202,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1207,7 +1212,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1220,13 +1225,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1292,6 +1298,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1301,7 +1308,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1314,13 +1321,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1386,6 +1394,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1395,7 +1404,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1408,13 +1417,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1480,6 +1490,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1489,7 +1500,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1502,13 +1513,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1574,6 +1586,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1583,7 +1596,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1596,13 +1609,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1668,6 +1682,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1677,7 +1692,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1690,13 +1705,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1762,6 +1778,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1771,7 +1788,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1784,13 +1801,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1856,6 +1874,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1865,7 +1884,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1878,13 +1897,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -1950,6 +1970,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -1959,7 +1980,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -1972,13 +1993,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2044,6 +2066,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2053,7 +2076,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2066,13 +2089,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2138,6 +2162,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2147,7 +2172,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2160,13 +2185,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2232,6 +2258,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2241,7 +2268,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2254,13 +2281,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2326,6 +2354,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2335,7 +2364,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2348,13 +2377,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2420,6 +2450,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2429,7 +2460,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2442,13 +2473,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2514,6 +2546,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2523,7 +2556,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2536,13 +2569,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2608,6 +2642,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2617,7 +2652,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2630,13 +2665,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2702,6 +2738,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2711,7 +2748,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2724,13 +2761,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2796,6 +2834,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2805,7 +2844,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2818,13 +2857,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2890,6 +2930,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2899,7 +2940,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -2912,13 +2953,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -2984,6 +3026,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -2993,7 +3036,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3006,13 +3049,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -3078,6 +3122,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -3087,7 +3132,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3100,13 +3145,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -3172,6 +3218,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -3181,7 +3228,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3194,13 +3241,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -3266,6 +3314,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -3275,7 +3324,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3288,13 +3337,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -3360,6 +3410,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -3369,7 +3420,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3382,13 +3433,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -3454,6 +3506,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -3463,7 +3516,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3476,13 +3529,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -3548,6 +3602,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -3557,7 +3612,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3570,13 +3625,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -3642,6 +3698,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -3651,7 +3708,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3664,13 +3721,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
@@ -3736,6 +3794,7 @@ contains
    
     !return 
     ! Find location of the x dimension
+!<DD>This may need changing if we change the string used to identify kx and ky.
     xdim = index(dimension_list, "XY")
 
     if (xdim .eq. 0) then
@@ -3745,7 +3804,7 @@ contains
     end if
  
     if (gnostics%create) then 
-       call create_variable(gnostics%sfile, variable_type, variable_name, dimension_list, variable_description, variable_units)
+       call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
@@ -3758,13 +3817,14 @@ contains
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
-          do id = 1,len(dimension_list)
+!<DD>This will need changing if we allow multi-character dimension names
+          do id = 1,len(trim(dimension_list))
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
              !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(dimension_list)
+          do id = 1,len(trim(dimension_list))
              !! Reset the starts and counts
              if (dimension_list(id:id) .eq. 't') cycle
              call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
