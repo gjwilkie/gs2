@@ -118,8 +118,13 @@ contains
   !!the file/io routines when creating variables etc.
   function make_dim_string(dim)
     type(diagnostics_dimension_type), intent(in) :: dim
-    character(len=:), allocatable :: make_dim_string
-    allocate(character(len=len(trim(dim%get_dim_name())))::make_dim_string)
+!<DD>Comment following as some old compilers don't support allocatable strings
+!at some point in the future we can reinstate this.
+!    character(len=:), allocatable :: make_dim_string
+!This is the replacement
+    character(len=dim_string_len) :: make_dim_string
+!<DD>Can't do following with older compilers
+!    allocate(character(len=len(trim(dim%get_dim_name())))::make_dim_string)
     make_dim_string=trim(dim%get_dim_name())
   end function make_dim_string
 
@@ -127,15 +132,20 @@ contains
   !!the file/io routines when creating variables etc.
   function make_dim_string_arr(dims)
     type(diagnostics_dimension_type), dimension(:), intent(in) :: dims
-    character(len=:), allocatable :: make_dim_string_arr, tmp
+!<DD>Comment following as some old compilers don't support allocatable strings
+!at some point in the future we can reinstate this.
+!    character(len=:), allocatable :: make_dim_string_arr, tmp
+!This is the replacement
+    character(len=dim_string_len*10) :: make_dim_string_arr, tmp
     character(len=*), parameter :: join_char=''
     integer :: ndim, i
 
     !Count dimensions
     ndim=size(dims)
 
-    !Make temporary storage
-    allocate(character(len=dim_string_len*ndim+len(join_char)*(ndim-1))::tmp)
+!    !Make temporary storage
+!<DD>Can't do following with older compilers
+!    allocate(character(len=dim_string_len*ndim+len(join_char)*(ndim-1))::tmp)
     tmp=''
     if(.not.(ndim.lt.1))then
        tmp=trim(dims(1)%get_dim_name())
@@ -145,8 +155,10 @@ contains
           enddo
        endif
     endif
-    allocate(character(len=len(trim(tmp)))::make_dim_string_arr)
+!<DD>Can't do following with older compilers
+!    allocate(character(len=len(trim(tmp)))::make_dim_string_arr)
     make_dim_string_arr=trim(tmp)
-    deallocate(tmp)
+!<DD>Can't do following with older compilers
+!    deallocate(tmp)
   end function make_dim_string_arr
 end module diagnostics_dimensions
