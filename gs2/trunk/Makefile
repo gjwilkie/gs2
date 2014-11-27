@@ -678,7 +678,7 @@ gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 # make can't resolve dependencies
 TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
 #export
-TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS) $(SIMPLEDATAIO_LIB_ABS)" CPPFLAGS="$(CPPFLAGS)"
+TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(SIMPLEDATAIO_LIB_ABS) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 #MAKETESTS = $(MAKE)
 
