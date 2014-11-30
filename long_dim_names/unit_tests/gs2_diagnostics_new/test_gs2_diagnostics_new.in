@@ -69,6 +69,8 @@ write_gs=.true.
 save_for_restart=.true.
 
 save_distfn=.true.
+
+enable_parallel = .true.
 /
 
 !==============================

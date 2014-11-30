@@ -17,14 +17,17 @@
 
 #include "include/simpledataio.h"
 
+
 #define ERRCODE 2
 #define ERR(e) {printf("Error: %s\n", nc_strerror(e)); exit(ERRCODE);}
 #define DEBUG_MESS if (sdatio_debug) printf
+
 
 void sdatio_init(struct sdatio_file * sfile, char * fname){
   sfile->mode = NC_NETCDF4|NC_CLOBBER;
   sfile->is_open = 0;
   sfile->is_parallel = 0;
+  sfile->has_long_dim_names = 0;
   sfile->communicator = (MPI_Comm*)malloc(sizeof(MPI_Comm));
   sfile->name = (char*)malloc(sizeof(char)*(strlen(fname)+1));
   strcpy(sfile->name, fname);
@@ -100,7 +103,7 @@ void sdatio_create_file(struct sdatio_file * sfile )  {
   sfile->n_dimensions = 0;
   sfile->n_variables = 0;
   sfile->data_written = 0;
-  /*}*/
+    /*}*/
   sdatio_end_definitions(sfile);
 }
 
@@ -137,11 +140,14 @@ void sdatio_create_file(struct sdatio_file * sfile )  {
 /**//*sdatio_end_definitions(sfile);*/
 /*}*/
 
+
+
 /***********************************************************
  *
  * Handling Dimensions
  *
  **********************************************************/
+
 
 /* Private */
 void sdatio_append_dimension(struct sdatio_file * sfile, struct sdatio_dimension * sdim){
@@ -149,6 +155,7 @@ void sdatio_append_dimension(struct sdatio_file * sfile, struct sdatio_dimension
   struct sdatio_dimension ** new_dimensions; 
   int i;
   ndims = sfile->n_dimensions + 1;
+    
 
   new_dimensions = (struct sdatio_dimension **) malloc(sizeof(struct sdatio_dimension *)*ndims);
 
@@ -173,10 +180,10 @@ void sdatio_append_dimension(struct sdatio_file * sfile, struct sdatio_dimension
 }
 
 void sdatio_add_dimension(struct sdatio_file * sfile, 
-        char * dimension_name, 
-        int size,
-        char * description,
-        char * units){
+                          char * dimension_name, 
+                          int size,
+                          char * description,
+                          char * units){
 
   struct sdatio_dimension  * sdim;
   int retval;
@@ -190,10 +197,11 @@ void sdatio_add_dimension(struct sdatio_file * sfile,
   sdatio_end_definitions(sfile);
   sdim->size = size;
   if (strlen(dimension_name)>1){
-    printf("Dimension names can only be one character long!\n");
-    abort();
+    sfile->has_long_dim_names = 1;
+    /*printf("Dimension names can only be one character long!\n");*/
+    /*abort();*/
   }
-  sdim->name = (char *)malloc(sizeof(char)*2);
+  sdim->name = (char *)malloc(sizeof(char)*(strlen(dimension_name)+1));
   strcpy(sdim->name, dimension_name);
   sdim->start = 0;
   sdatio_append_dimension(sfile, sdim);
@@ -210,6 +218,7 @@ void sdatio_print_dimensions(struct sdatio_file * sfile){
 }
 
 void sdatio_increment_start(struct sdatio_file * sfile, char * dimension_name){
+
   int found, j;
   struct sdatio_dimension * sdim;
 
@@ -218,8 +227,8 @@ void sdatio_increment_start(struct sdatio_file * sfile, char * dimension_name){
     sdim = sfile->dimensions[j];
     if (!strcmp(sdim->name, dimension_name)){
       if (sdim->size != SDATIO_UNLIMITED) {
-  printf("Dimension %s does not have unlimited size.\n", dimension_name);
-  abort();
+        printf("Dimension %s does not have unlimited size.\n", dimension_name);
+        abort();
       }   
       found = 1;
       (sdim->start)++;
@@ -236,6 +245,8 @@ void sdatio_free_dimension(struct sdatio_dimension * sdim){
   free(sdim->name);
   free(sdim);
 }
+
+
 
 /***************************************************
  *
@@ -260,24 +271,62 @@ int sdatio_netcdf_variable_type(int type){
   }
 }
 
+
 void sdatio_get_dimension_ids(struct sdatio_file * sfile, char * dimension_list, struct sdatio_variable * svar){
   int ndims;
   int i,j;
-  char dim_name[2];
+  /*char dim_name[2];*/
+  char * dim_name;
   int * dimension_ids;
-  ndims  = strlen(dimension_list);
+  int dim_name_length;
+  int counter;
+  int sep_size;
+  ndims  = svar->ndims;
+  counter = 0;
   DEBUG_MESS("ndims %d\n", ndims);
   dimension_ids = (int *) malloc(sizeof(int)*ndims);
   for (i=0;i<ndims;i++){
-    dim_name[0] = dimension_list[i];
-    dim_name[1] = dimension_list[ndims];
+    /* In the next section we set counter to 
+     * the beginning of the next dimension name and
+     * dim_name_length to the size of the name*/
+    if (sfile->has_long_dim_names){
+      sep_size = 1;
+      dim_name_length = 0;
+      /*The first condition checks that we haven't reached the end of the string*/
+      while (dimension_list[counter] && !(dimension_list[counter]==',')){
+        dim_name_length++;
+        counter++;
+      }
+      counter++;
+    }
+    else {
+      sep_size = 0;
+      dim_name_length = 1;
+      counter++;
+    }
+    if (dim_name_length < 1){
+      printf("ERROR: zero length dimension name in dimension_list %s\n", dimension_list);
+      abort();
+    }
+
+    /*dim_name[0] = dimension_list[i];*/
+    /*dim_name[1] = dimension_list[ndims];*/
+
+    /* Copy the name of the current dimension to the temporary
+     * variable dim_name*/
+    dim_name = (char *)malloc(sizeof(char)*(dim_name_length+1));
+    strncpy(dim_name, dimension_list+(counter-dim_name_length-sep_size), dim_name_length);
+    dim_name[dim_name_length] = '\0';
+    DEBUG_MESS("svar %s: dim_name_length %d, dim_name: %s, counter: %d\n", svar->name, dim_name_length, dim_name, counter); 
     DEBUG_MESS("i %d\n", i);
     DEBUG_MESS("Getting id for dim %s\n", dim_name);
+
+    /*Find the id for the dimension named dim_name*/
     dimension_ids[i] = -1;
     for (j=0;j<sfile->n_dimensions;j++){
       DEBUG_MESS("j %d\n", j);
       if (!strcmp(dim_name, sfile->dimensions[j]->name)) 
-  dimension_ids[i] = sfile->dimensions[j]->nc_id;
+        dimension_ids[i] = sfile->dimensions[j]->nc_id;
     }
     if (dimension_ids[i]==-1){
       printf("Dimension %s is undefined!\n", dim_name);
@@ -285,17 +334,19 @@ void sdatio_get_dimension_ids(struct sdatio_file * sfile, char * dimension_list,
     }
     DEBUG_MESS("Finished loop\n");
     DEBUG_MESS("dim %s has id %d \n", dim_name, dimension_ids[i]);
+    free(dim_name);
   }
   svar->dimension_ids = dimension_ids;
 
-}
 
+}
 /*Private*/
 void sdatio_append_variable(struct sdatio_file * sfile, struct sdatio_variable * svar){
   int nvars;
   struct sdatio_variable ** new_variables; 
   int i;
-  nvars = sfile->n_variables + 1; 
+  nvars = sfile->n_variables + 1;
+    
 
   new_variables = (struct sdatio_variable **) malloc(sizeof(struct sdatio_variable *)*nvars);
 
@@ -324,7 +375,7 @@ void sdatio_append_variable(struct sdatio_file * sfile, struct sdatio_variable *
 
 int sdatio_number_of_dimensions(struct sdatio_file * sfile, char * variable_name){
   struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
-  return strlen(svar->dimension_list);
+  return svar->ndims;
 }
 
 void sdatio_number_of_unlimited_dimensions(struct sdatio_file * sfile, char * variable_name, int * n){
@@ -333,13 +384,13 @@ void sdatio_number_of_unlimited_dimensions(struct sdatio_file * sfile, char * va
   int i,j;
   int found;
   *n = 0;
-  for (i=0;i<strlen(svar->dimension_list);i++){
+  for (i=0;i<svar->ndims;i++){
     found = 0;
     for (j=0;j<sfile->n_dimensions;j++){
       sdim = sfile->dimensions[j];
       if (sdim->nc_id == svar->dimension_ids[i]){
-  found = 1;
-  if (sdim->size == SDATIO_UNLIMITED) (*n)++; 
+        found = 1;
+        if (sdim->size == SDATIO_UNLIMITED) (*n)++; 
       }
     }
     if (!found) {
@@ -350,57 +401,81 @@ void sdatio_number_of_unlimited_dimensions(struct sdatio_file * sfile, char * va
   /*printf("n unlimited was %d\n", *n);*/
 }
 
+/*Private*/
+int sdatio_ndims_from_string(struct sdatio_file * sfile, char * dimension_list){
+  int i;
+  char * s = dimension_list;
+  /* This little bit of code counts the number of commas in 
+   * dimension_list string. I could have made a more readable bit
+   * of code, but this little fragment I copied from the web was 
+   * too cute to miss*/
+  for (i=0; s[i]; s[i]==',' ? i++ : *s++);
+
+  /* An empty string means no dimensions, i.e. a scalar */
+  if (strlen(dimension_list)==0) return 0;
+  /* Obv the number of dimensions is one more than
+   * the number of commas */
+  else if (sfile->has_long_dim_names || i>0) return i + 1;
+  else return strlen(dimension_list);
+}
+
 void sdatio_create_variable(struct sdatio_file * sfile,
-          int variable_type,
-          char * variable_name,
-          char * dimension_list,
-          char * description,
-          char * units){
+                            int variable_type,
+                            char * variable_name,
+                            char * dimension_list,
+                            char * description,
+                            char * units){
   int ndims;
-#ifdef PARALLEL
   int nunlim;
-#endif
   struct sdatio_variable  * svar;
   int retval;
   /*int * dimension_ids;*/
 
   /*dimension_ids = (int **)malloc(sizeof(int*));*/
 
+
   /*printf("dimension_list is %s\n", dimension_list);*/
   svar = (struct sdatio_variable *) malloc(sizeof(struct sdatio_variable));
+
+  /* Set variable name*/
+  svar->name = (char *)malloc(sizeof(char)*(strlen(variable_name)+1));
+  strcpy(svar->name, variable_name);
+
+  /*ndims = strlen(dimension_list);*/
+  ndims = sdatio_ndims_from_string(sfile, dimension_list);
+  svar->ndims = ndims;
+  DEBUG_MESS("ndims = %d for variable %s\n", ndims, variable_name);
+
   sdatio_get_dimension_ids(sfile, dimension_list, svar);
   /*svar->dimension_ids = dimension_ids;*/
 
-  ndims = strlen(dimension_list);
 
   sdatio_recommence_definitions(sfile);
   /*if (sfile->is_parallel){}*/
   /*else {*/
-  if ((retval = nc_def_var(sfile->nc_file_id, variable_name, sdatio_netcdf_variable_type(variable_type), ndims, svar->dimension_ids, &(svar->nc_id)))) ERR(retval);
-  if ((retval = nc_put_att_text(sfile->nc_file_id, svar->nc_id, "Description", strlen(description), description))) ERR(retval);
-  if ((retval = nc_put_att_text(sfile->nc_file_id, svar->nc_id, "Units", strlen(units), units))) ERR(retval);
-  /*}*/
+    if ((retval = nc_def_var(sfile->nc_file_id, variable_name, sdatio_netcdf_variable_type(variable_type), ndims, svar->dimension_ids, &(svar->nc_id)))) ERR(retval);
+    if ((retval = nc_put_att_text(sfile->nc_file_id, svar->nc_id, "Description", strlen(description), description))) ERR(retval);
+    if ((retval = nc_put_att_text(sfile->nc_file_id, svar->nc_id, "Units", strlen(units), units))) ERR(retval);
+    /*}*/
   switch (variable_type){
-  case SDATIO_INT:
-    svar->type_size = sizeof(int);
-    break;
-  case SDATIO_FLOAT:
-    svar->type_size = sizeof(float);
-    break;
-  case SDATIO_DOUBLE:
-    svar->type_size = sizeof(double);
-    break;
-  default:
-    printf("Unknown type in sdatio_create_variable\n");
-    abort();
+    case SDATIO_INT:
+      svar->type_size = sizeof(int);
+      break;
+    case SDATIO_FLOAT:
+      svar->type_size = sizeof(float);
+      break;
+    case SDATIO_DOUBLE:
+      svar->type_size = sizeof(double);
+      break;
+    default:
+      printf("Unknown type in sdatio_create_variable\n");
+      abort();
   }
 
   sdatio_end_definitions(sfile);
   
   svar->type = variable_type;
-  svar->name = (char *)malloc(sizeof(char)*(strlen(variable_name)+1));
-  strcpy(svar->name, variable_name);
-  svar->dimension_list = (char *)malloc(sizeof(char)*(ndims+1));
+  svar->dimension_list = (char *)malloc(sizeof(char)*(strlen(dimension_list)+1));
   strcpy(svar->dimension_list, dimension_list);
 
   svar->manual_starts=(int*)malloc(sizeof(int)*ndims);
@@ -414,7 +489,11 @@ void sdatio_create_variable(struct sdatio_file * sfile,
     svar->manual_offsets[i]=-1;
   }
 
+  DEBUG_MESS("Starting sdatio_append_variable\n");
+
   sdatio_append_variable(sfile, svar);
+
+  DEBUG_MESS("Ending sdatio_append_variable\n");
 
 #ifdef PARALLEL
   if (sfile->is_parallel){
@@ -440,17 +519,17 @@ void sdatio_get_counts_and_starts(struct sdatio_file * sfile, struct sdatio_vari
   struct sdatio_dimension * sdim;
   int i,j;
   int found;
-  for (i=0;i<strlen(svar->dimension_list);i++){
+  for (i=0;i<svar->ndims;i++){
     found = 0;
     for (j=0;j<sfile->n_dimensions;j++){
       sdim = sfile->dimensions[j];
       if (sdim->nc_id == svar->dimension_ids[i]){
-  if (svar->manual_starts[i] == -1) starts[i] = sdim->start;
-  else starts[i] = svar->manual_starts[i];
-  found = 1;
-  if (sdim->size == SDATIO_UNLIMITED) counts[i] = 1; 
-  else if (svar->manual_counts[i] == -1 ) counts[i] = sdim->size;
-  else counts[i] = svar->manual_counts[i];
+        if (svar->manual_starts[i] == -1) starts[i] = sdim->start;
+        else starts[i] = svar->manual_starts[i];
+        found = 1;
+        if (sdim->size == SDATIO_UNLIMITED) counts[i] = 1; 
+        else if (svar->manual_counts[i] == -1 ) counts[i] = sdim->size;
+        else counts[i] = svar->manual_counts[i];
       }
     }
     if (!found) {
@@ -463,14 +542,14 @@ void sdatio_get_offsets(struct sdatio_file * sfile, struct sdatio_variable * sva
   struct sdatio_dimension * sdim;
   int i,j;
   int found;
-  for (i=0;i<strlen(svar->dimension_list);i++){
+  for (i=0;i<svar->ndims;i++){
     found = 0;
     for (j=0;j<sfile->n_dimensions;j++){
       sdim = sfile->dimensions[j];
       if (sdim->nc_id == svar->dimension_ids[i]){
-  if (svar->manual_offsets[i] == -1) offsets[i] = starts[i];
-  else offsets[i] = svar->manual_offsets[i];
-  found = 1;
+        if (svar->manual_offsets[i] == -1) offsets[i] = starts[i];
+        else offsets[i] = svar->manual_offsets[i];
+        found = 1;
       }
     }
     if (!found) {
@@ -490,25 +569,28 @@ void sdatio_set_offset(struct sdatio_file * sfile, char * variable_name, char * 
   int found;
   int ndim;
 
+  
+
   found = 0;
-  for (i=0;i<strlen(svar->dimension_list);i++){
+  for (i=0;i<svar->ndims;i++){
     for (j=0;j<sfile->n_dimensions;j++){
       sdim = sfile->dimensions[j];
       /*printf("sdim %s, comp %d\n", sdim->name, !(strcmp(sdim->name, dimension_name)));*/
       if ((sdim->nc_id == svar->dimension_ids[i]) && !strcmp(sdim->name, dimension_name)){
-  found = 1;
+        found = 1;
         /*sdim_found = sdim;*/
-  ndim = i;
+        ndim = i;
       }
     }
   }
-  if (!found) {
-    printf("Couldn't find dimension %s for variable %s in sdatio_set_offset\n", dimension_name, svar->name);
-    abort();
-  }
-  /*printf("Start is %d\n", svar->manual_offsets[ndim]);*/
+    if (!found) {
+      printf("Couldn't find dimension %s for variable %s in sdatio_set_offset\n", dimension_name, svar->name);
+      abort();
+    }
+    /*printf("Start is %d\n", svar->manual_offsets[ndim]);*/
   svar->manual_offsets[ndim] = *offset;
   /*printf("Start is %d\n", svar->manual_starts[ndim]);*/
+
 
 }
 
@@ -520,28 +602,30 @@ void sdatio_set_start(struct sdatio_file * sfile, char * variable_name, char * d
   int found;
   int ndim;
 
+  
+
   found = 0;
-  for (i=0;i<strlen(svar->dimension_list);i++){
+  for (i=0;i<svar->ndims;i++){
     for (j=0;j<sfile->n_dimensions;j++){
       sdim = sfile->dimensions[j];
       /*printf("sdim %s, comp %d\n", sdim->name, !(strcmp(sdim->name, dimension_name)));*/
       if ((sdim->nc_id == svar->dimension_ids[i]) && !strcmp(sdim->name, dimension_name)){
-  found = 1;
+        found = 1;
         /*sdim_found = sdim;*/
-  ndim = i;
+        ndim = i;
       }
     }
   }
-  if (!found) {
-    printf("Couldn't find dimension %s for variable %s in sdatio_set_start\n", dimension_name, svar->name);
-    abort();
-  }
-  /*printf("Start is %d\n", svar->manual_starts[ndim]);*/
+    if (!found) {
+      printf("Couldn't find dimension %s for variable %s in sdatio_set_start\n", dimension_name, svar->name);
+      abort();
+    }
+    /*printf("Start is %d\n", svar->manual_starts[ndim]);*/
   svar->manual_starts[ndim] = *start;
   /*printf("Start is %d\n", svar->manual_starts[ndim]);*/
 
-}
 
+}
 void sdatio_set_count(struct sdatio_file * sfile, char * variable_name, char * dimension_name, int * count){
   struct sdatio_variable * svar = sdatio_find_variable(sfile, variable_name);
   struct sdatio_dimension * sdim;
@@ -550,26 +634,31 @@ void sdatio_set_count(struct sdatio_file * sfile, char * variable_name, char * d
   int found;
   int ndim;
 
-  found = 0;
-  for (i=0;i<strlen(svar->dimension_list);i++){
+  
+
+    found = 0;
+  for (i=0;i<svar->ndims;i++){
     for (j=0;j<sfile->n_dimensions;j++){
       sdim = sfile->dimensions[j];
       if (sdim->nc_id == svar->dimension_ids[i] && !strcmp(sdim->name, dimension_name)){
-  found = 1;
+        found = 1;
         /*sdim_found = sdim;*/
-  ndim = i;
+        ndim = i;
       }
     }
   }
-  if (!found) {
-    printf("Couldn't find dimension in sdatio_set_count\n");
-    abort();
-  }
-  /*printf("count is %d\n", svar->manual_counts[ndim]);*/
+    if (!found) {
+      printf("Couldn't find dimension %s for variable %s in sdatio_set_count\n", dimension_name, variable_name);
+      abort();
+    }
+    /*printf("count is %d\n", svar->manual_counts[ndim]);*/
   svar->manual_counts[ndim] = *count;
   /*printf("count is %d\n", svar->manual_counts[ndim]);*/
 
+
 }
+
+
 
 /* Private: used for the Fortran interface*/
 void sdatio_netcdf_inputs(struct sdatio_file * sfile, char * variable_name, int * fileid, int * varid, size_t * starts, size_t * counts, size_t * offsets){
@@ -580,6 +669,7 @@ void sdatio_netcdf_inputs(struct sdatio_file * sfile, char * variable_name, int 
   *varid = svar->nc_id;
   /*printf("varname %s, fileid %d, varid %d, starts[0] %d \n", variable_name, *fileid, *varid, starts[0]);  */
 }
+
 
 void sdatio_write_variable_private(struct sdatio_file * sfile, struct sdatio_variable * svar, size_t * counts, size_t * starts, void * address){
   int retval;
@@ -601,10 +691,11 @@ void sdatio_write_variable_private(struct sdatio_file * sfile, struct sdatio_var
     if ((retval = nc_put_vara_double(sfile->nc_file_id, svar->nc_id, starts, counts, address))) ERR(retval);
     break;
   }
-    
+  
   /*}*/
   sfile->data_written = 1;
 }
+
 
 struct sdatio_dimension * sdatio_find_dimension(struct sdatio_file * sfile, char * dimension_name){
   int i, dimension_number;
@@ -640,6 +731,7 @@ struct sdatio_variable * sdatio_find_variable(struct sdatio_file * sfile, char *
   return sfile->variables[variable_number];
 }
 
+
 void sdatio_collective(struct sdatio_file * sfile, char * variable_name){
 #ifdef PARALLEL
   int retval;
@@ -664,8 +756,11 @@ int sdatio_variable_exists(struct sdatio_file * sfile, char * variable_name){
   for (i=0;i<sfile->n_variables;i++)
     if (!strcmp(sfile->variables[i]->name, variable_name))
       return 1;
+
   return 0;
+
 }
+
 
 void sdatio_write_variable_fortran_convert(struct sdatio_file * sfile, char * variable_name, void ** address){
   /*printf("address2 is %d\n", address);*/
@@ -682,10 +777,11 @@ void sdatio_write_variable(struct sdatio_file * sfile, char * variable_name, voi
 
   /*printf("address is %d\n", address);*/
   /*printf("value is %f\n", *((float*)address));*/
+
   
   svar = sdatio_find_variable(sfile, variable_name);
 
-  ndims = strlen(svar->dimension_list);
+  ndims = svar->ndims;
   counts = (size_t*)malloc(sizeof(size_t)*ndims); 
   starts = (size_t*)malloc(sizeof(size_t)*ndims); 
 
@@ -700,6 +796,7 @@ void sdatio_write_variable(struct sdatio_file * sfile, char * variable_name, voi
 
 }
 
+
 void sdatio_write_variable_at_index(struct sdatio_file * sfile, char * variable_name, int * indexes, void * address){
   struct sdatio_variable * svar;
   svar = sdatio_find_variable(sfile, variable_name);
@@ -711,7 +808,9 @@ void sdatio_write_variable_at_index_fast(struct sdatio_file * sfile, struct sdat
   /*double * double_array;*/
   size_t * counts, * starts;
 
-  ndims = strlen(svar->dimension_list);
+
+
+  ndims = svar->ndims;
   counts = (size_t*)malloc(sizeof(size_t)*ndims); 
   starts = (size_t*)malloc(sizeof(size_t)*ndims); 
 
@@ -741,11 +840,16 @@ void sdatio_free_variable(struct sdatio_variable * svar){
 void sdatio_close(struct sdatio_file * sfile){
   int i, retval;
 
+  if (!sfile->is_open) {
+    printf("Attempting to close a file that has not been opened in sdatio_close\n");
+    abort();
+  }
+
   /*if (sfile->is_parallel){}*/
   /*else {*/
 
-  if ((retval = nc_close(sfile->nc_file_id))) ERR(retval);
-  /*}*/
+    if ((retval = nc_close(sfile->nc_file_id))) ERR(retval);
+    /*}*/
 
   sfile->is_open = 0;
   for (i=0;i<sfile->n_dimensions;i++){
@@ -755,7 +859,7 @@ void sdatio_close(struct sdatio_file * sfile){
   for (i=0;i<sfile->n_variables;i++){
     sdatio_free_variable(sfile->variables[i]);
   }
-  free(sfile->variables);
+  if (sfile->n_variables > 0) free(sfile->variables);
 
 }
 
@@ -765,7 +869,7 @@ void sdatio_sync(struct sdatio_file * sfile){
   /*if (sfile->is_parallel){}*/
   /*else {*/
   if ((retval = nc_sync(sfile->nc_file_id))) ERR(retval);
-  /*}*/
+    /*}*/
 }
 
 

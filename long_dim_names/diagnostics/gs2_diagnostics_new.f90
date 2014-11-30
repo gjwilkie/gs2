@@ -305,6 +305,7 @@ contains
     use diagnostics_turbulence, only: write_correlation_extend
     use diagnostics_antenna, only: write_jext, write_lorentzian
     use diagnostics_ascii, only: flush_output_files
+    use diagnostics_dimensions, only: dim_string
     use diagnostics_create_and_write, only: create_and_write_variable
     use collisions, only: vary_vnew
     use nonlinear_terms, only: nonlin
@@ -386,9 +387,11 @@ contains
        call run_diagnostics_to_be_updated
 
        ! Finally, write time value and update time index
-       call create_and_write_variable(gnostics, gnostics%rtype, "t", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "t", &
+            trim(dim_string(gnostics%dims%time)), &
             "Values of the time coordinate", "a/v_thr", user_time) 
-       if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
+       if (gnostics%wryte) call increment_start(gnostics%sfile, &
+         trim(dim_string(gnostics%dims%time)))
        if (gnostics%wryte) call syncfile(gnostics%sfile)
        if (proc0 .and. gnostics%write_ascii) call flush_output_files(gnostics%ascii_files)
        
@@ -449,6 +452,7 @@ contains
   end subroutine run_old_final_routines
   
   subroutine create_dimensions(add_to_file)
+    use simpledataio_write, only: real_imaginary_dimension_name
     use kt_grids, only: naky, ntheta0, nx, ny, jtwist_out, box
     use theta_grid, only: ntgrid
     use le_grids, only: negrid, nlambda
@@ -466,16 +470,16 @@ contains
     
     !Initialise the dimension instances and add to file
     !/Spectral space
-    call gnostics%dims%kx%init("X", ntheta0, "The kx dimension", "")
+    call gnostics%dims%kx%init("kx", ntheta0, "The kx dimension", "")
     if(add_to_file) call gnostics%dims%kx%add_to_file(gnostics%sfile)
-    call gnostics%dims%ky%init("Y", naky, "The ky dimension", "")
+    call gnostics%dims%ky%init("ky", naky, "The ky dimension", "")
     if(add_to_file) call gnostics%dims%ky%add_to_file(gnostics%sfile)
     !/Parallel space
-    call gnostics%dims%theta%init("z", 2*ntgrid+1, "The theta (parallel) dimension", "")
+    call gnostics%dims%theta%init("theta", 2*ntgrid+1, "The theta (parallel) dimension", "")
     if(add_to_file) call gnostics%dims%theta%add_to_file(gnostics%sfile)
     if (box) then 
        !What is this used for?
-       call gnostics%dims%theta_ext%init("j", (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), &
+       call gnostics%dims%theta_ext%init("theta_ext", (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), &
             "The theta (parallel) dimension along the extended domain", "")
        if(add_to_file) call gnostics%dims%theta_ext%add_to_file(gnostics%sfile)
     end if
@@ -490,19 +494,21 @@ contains
        if(add_to_file) call gnostics%dims%yy%add_to_file(gnostics%sfile)
     endif
     !/Velocity space
-    call gnostics%dims%energy%init("e", negrid, "The energy dimension", "")
+    call gnostics%dims%energy%init("energy", negrid, "The energy dimension", "")
     if(add_to_file) call gnostics%dims%energy%add_to_file(gnostics%sfile)
-    call gnostics%dims%lambda%init("l", nlambda, "The pitch angle dimension", "")
+    call gnostics%dims%lambda%init("lambda", nlambda, "The pitch angle dimension", "")
     if(add_to_file) call gnostics%dims%lambda%add_to_file(gnostics%sfile)
-    call gnostics%dims%vpar%init("v",negrid*nlambda,"For writing functions of vparallel", "")
+    call gnostics%dims%vpar%init("vpa",negrid*nlambda,"For writing functions of vparallel", "")
     if(add_to_file) call gnostics%dims%vpar%add_to_file(gnostics%sfile)
-    call gnostics%dims%species%init("s", nspec, "The species dimension", "")
+    call gnostics%dims%species%init("species", nspec, "The species dimension", "")
     if(add_to_file) call gnostics%dims%species%add_to_file(gnostics%sfile)
     !/Time | Note this is an unlimited dimension so the length is ignored
-    call gnostics%dims%time%init("t", 0, "The energy dimension", "", is_unlimited_in=.true.)
+    call gnostics%dims%time%init("t", 0, "The time dimension", "", is_unlimited_in=.true.)
     if(add_to_file) call gnostics%dims%time%add_to_file(gnostics%sfile)
     !/Numeric/generic
-    call gnostics%dims%ri%init("r", 2, "Real and imaginary components", "")
+    ! This tells simpledataio that we are using "ri" for real/imaginary (default is "r")
+    real_imaginary_dimension_name = 'ri'
+    call gnostics%dims%ri%init("ri", 2, "Real and imaginary components", "")
     if(add_to_file) call gnostics%dims%ri%add_to_file(gnostics%sfile)
     call gnostics%dims%generic_2%init("2", 2, "Generic 2", "")
     if(add_to_file) call gnostics%dims%generic_2%add_to_file(gnostics%sfile)

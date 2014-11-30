@@ -39,6 +39,8 @@ struct sdatio_variable {
 	int * manual_starts;
 	/* Only used for Fortran:*/
 	int * manual_offsets;
+  /* Necessary now we can have long dim names */
+  int ndims;
 };
 
 
@@ -54,6 +56,7 @@ struct sdatio_file {
   MPI_Comm * communicator;
   int mode;
   char * name;
+  int has_long_dim_names;
 };
 
 

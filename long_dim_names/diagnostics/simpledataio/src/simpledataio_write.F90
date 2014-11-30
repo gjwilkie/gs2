@@ -2,6 +2,8 @@ module simpledataio_write
   implicit none
   private
   public :: write_variable_with_offset, write_variable
+  public :: real_imaginary_dimension_name
+
 
   interface write_variable_with_offset
     module procedure write_variable_with_offset_real_0
@@ -92,6 +94,8 @@ module simpledataio_write
     module procedure write_variable_complex_16_5
     module procedure write_variable_complex_16_6
   end interface write_variable
+
+  character(len=100) :: real_imaginary_dimension_name = "r"
 
 contains
 
@@ -1363,8 +1367,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1) = real(val)
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1373,8 +1377,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1) = aimag(val)
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1418,8 +1422,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:) = real(val(:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1428,8 +1432,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:) = aimag(val(:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1473,8 +1477,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:) = real(val(:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1484,8 +1488,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:) = aimag(val(:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1530,8 +1534,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:) = real(val(:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1542,8 +1546,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:) = aimag(val(:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1589,8 +1593,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:) = real(val(:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1602,8 +1606,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:) = aimag(val(:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1650,8 +1654,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:,:) = real(val(:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1664,8 +1668,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:,:) = aimag(val(:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1713,8 +1717,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:,:,:) = real(val(:,:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1728,8 +1732,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:,:,:) = aimag(val(:,:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1778,8 +1782,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1) = real(val)
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1788,8 +1792,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1) = aimag(val)
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1833,8 +1837,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:) = real(val(:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1843,8 +1847,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:) = aimag(val(:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1888,8 +1892,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:) = real(val(:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1899,8 +1903,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:) = aimag(val(:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1945,8 +1949,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:) = real(val(:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -1957,8 +1961,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:) = aimag(val(:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -2004,8 +2008,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:) = real(val(:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -2017,8 +2021,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:) = aimag(val(:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -2065,8 +2069,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:,:) = real(val(:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -2079,8 +2083,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:,:) = aimag(val(:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -2128,8 +2132,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:,:,:) = real(val(:,:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -2143,8 +2147,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:,:,:) = aimag(val(:,:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3022,8 +3026,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1) = real(val)
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3032,8 +3036,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1) = aimag(val)
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3065,8 +3069,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:) = real(val(:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3075,8 +3079,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:) = aimag(val(:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3108,8 +3112,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:) = real(val(:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3118,8 +3122,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:) = aimag(val(:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3151,8 +3155,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:) = real(val(:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3161,8 +3165,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:) = aimag(val(:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3194,8 +3198,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:) = real(val(:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3204,8 +3208,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:) = aimag(val(:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3237,8 +3241,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:,:) = real(val(:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3247,8 +3251,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:,:) = aimag(val(:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3280,8 +3284,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:,:,:) = real(val(:,:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3290,8 +3294,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:,:,:) = aimag(val(:,:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3323,8 +3327,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1) = real(val)
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3333,8 +3337,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1) = aimag(val)
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3366,8 +3370,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:) = real(val(:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3376,8 +3380,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:) = aimag(val(:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3409,8 +3413,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:) = real(val(:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3419,8 +3423,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:) = aimag(val(:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3452,8 +3456,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:) = real(val(:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3462,8 +3466,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:) = aimag(val(:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3495,8 +3499,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:) = real(val(:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3505,8 +3509,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:) = aimag(val(:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3538,8 +3542,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:,:) = real(val(:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3548,8 +3552,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:,:) = aimag(val(:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3581,8 +3585,8 @@ contains
    allocate(counts(n2))
    allocate(offsets(n2))
    
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 1)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
    realval(1,:,:,:,:,:,:) = real(val(:,:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
@@ -3591,8 +3595,8 @@ contains
         variable_name, ', ',  nf90_strerror(status)
 
 
-   call set_count(sfile, variable_name, "r", 1)
-   call set_start(sfile, variable_name, "r", 2)
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), 2)
    realval(1,:,:,:,:,:,:) = aimag(val(:,:,:,:,:,:))
    call netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, offsets) 
    status =  nf90_put_var(fileid, varid+1, &
