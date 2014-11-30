@@ -137,7 +137,7 @@ contains
 !    character(len=:), allocatable :: make_dim_string_arr, tmp
 !This is the replacement
     character(len=dim_string_len*10) :: make_dim_string_arr, tmp
-    character(len=*), parameter :: join_char=''
+    character(len=*), parameter :: join_char=','
     integer :: ndim, i
 
     !Count dimensions
@@ -158,6 +158,7 @@ contains
 !<DD>Can't do following with older compilers
 !    allocate(character(len=len(trim(tmp)))::make_dim_string_arr)
     make_dim_string_arr=trim(tmp)
+    !write (*,*) make_dim_string_arr
 !<DD>Can't do following with older compilers
 !    deallocate(tmp)
   end function make_dim_string_arr
