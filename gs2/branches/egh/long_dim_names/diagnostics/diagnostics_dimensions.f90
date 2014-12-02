@@ -48,6 +48,7 @@ module diagnostics_dimensions
      type(diagnostics_dimension_type) :: generic_3
      type(diagnostics_dimension_type) :: generic_4
      type(diagnostics_dimension_type) :: generic_5
+     type(diagnostics_dimension_type) :: input_file_dim
   end type diagnostics_dimension_list_type
 
   interface dim_string
