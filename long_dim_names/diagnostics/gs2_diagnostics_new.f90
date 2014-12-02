@@ -52,6 +52,8 @@ contains
     use simpledataio, only: SDATIO_DOUBLE, SDATIO_FLOAT, SDATIO_INT
     use simpledataio, only: sdatio_init, simpledataio_functional
     use simpledataio, only: set_parallel, create_file
+    use diagnostics_metadata, only: write_metadata
+    use diagnostics_metadata, only: read_input_file_and_get_size
     implicit none
     type(diagnostics_init_options_type), intent(in) :: init_options
     
@@ -115,6 +117,7 @@ contains
     call init_diagnostics_velocity_space(gnostics)
     call init_diagnostics_antenna(gnostics)
     if (gnostics%write_heating) call init_diagnostics_heating(gnostics)
+    call read_input_file_and_get_size(gnostics)
     
     !gnostics%create = .true.
     ! Integer below gives the sdatio type 
@@ -133,11 +136,14 @@ contains
     end if
     if (gnostics%parallel.or.proc0) then 
        call create_file(gnostics%sfile)
+       call write_metadata(gnostics)
     end if
 
     !All procs initialise dimension data but if not parallel IO
     !only proc0 has to add them to file.
     call create_dimensions(gnostics%parallel.or.proc0)
+
+
 
     !call createfile_parallel(gnostics%sfile, trim(run_name)//'.cdf', mp_comm)
     
@@ -311,6 +317,7 @@ contains
     use nonlinear_terms, only: nonlin
     use species, only: spec, has_electron_species
     use simpledataio, only: increment_start, syncfile, closefile, set_parallel, create_file
+    use diagnostics_metadata, only: write_input_file
     implicit none
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
@@ -351,6 +358,7 @@ contains
     if (istep < 1) then
        call write_dimensions
        call write_geometry(gnostics)
+       call write_input_file(gnostics)
     end if
     
     if (istep > 0) then
@@ -457,6 +465,7 @@ contains
     use theta_grid, only: ntgrid
     use le_grids, only: negrid, nlambda
     use species, only: nspec
+    use diagnostics_metadata, only: inputfile_length
 
     implicit none
     logical, intent(in) :: add_to_file
@@ -518,6 +527,9 @@ contains
     if(add_to_file) call gnostics%dims%generic_4%add_to_file(gnostics%sfile)
     call gnostics%dims%generic_5%init("5", 5, "Generic 5", "")
     if(add_to_file) call gnostics%dims%generic_5%add_to_file(gnostics%sfile)
+    ! Special dimension for the input file
+    call gnostics%dims%input_file_dim%init("input_file_dim", inputfile_length, "Length of input file", "")
+    if(add_to_file) call gnostics%dims%input_file_dim%add_to_file(gnostics%sfile)
   end subroutine create_dimensions
 
   !subroutine create_dimensions_movie

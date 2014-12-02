@@ -107,6 +107,26 @@ void sdatio_create_file(struct sdatio_file * sfile )  {
   sdatio_end_definitions(sfile);
 }
 
+
+
+void sdatio_add_standard_metadata(struct sdatio_file * sfile){
+  time_t current_time;
+  char  strtime[40];
+  size_t count = 40;
+  current_time = time(NULL);
+  strftime(strtime, count, "%c %z", localtime(&current_time)); 
+  sdatio_add_metadata(sfile, SDATIO_CHAR, "creation_time", &strtime);
+  sdatio_add_metadata(sfile, SDATIO_INT, "creation_time_in_seconds_after_epoch", (int *)&current_time);
+  sdatio_add_metadata(sfile, SDATIO_CHAR, "simpledatio_info", 
+      "This datafile was constructed using simpledatio, a simplified netCDF interface.");
+  sdatio_add_metadata(sfile, SDATIO_CHAR, "simpledatio_url", 
+      "http://github.com/edmundhighcock/simpledataio");
+  sdatio_add_metadata(sfile, SDATIO_CHAR, "simpledatio_version", SDATIO_VERSION_STRING);
+  sdatio_add_metadata(sfile, SDATIO_CHAR, "netcdf_version", nc_inq_libvers());
+  sdatio_add_metadata(sfile, SDATIO_CHAR, "netcdf_url", "http://www.unidata.ucar.edu/software/netcdf");
+  
+}
+
 /*void sdatio_create_file_parallel_fortran(struct sdatio_file * sfile, char * fname, MPI_Fint  fcomm)  {*/
 /*#ifdef PARALLEL*/
 /*MPI_Comm comm = MPI_Comm_f2c(fcomm);*/
@@ -140,7 +160,39 @@ void sdatio_create_file(struct sdatio_file * sfile )  {
 /**//*sdatio_end_definitions(sfile);*/
 /*}*/
 
+int sdatio_netcdf_variable_type(int type){
+  switch (type){
+  case SDATIO_INT:
+    return NC_INT;
+  case SDATIO_FLOAT:
+    return NC_FLOAT;
+  case SDATIO_DOUBLE:
+    return NC_DOUBLE;
+  case SDATIO_CHAR:
+    return NC_CHAR;
+    /*case */
+    /*case SDATIO_COMPLEX_DOUBLE:*/
+    /*printf("Can't do complex yet\n");*/
+    /*abort();*/
+  default:
+    printf("Unknown data type for simple data io\n");
+    abort();
+  }
+}
 
+void sdatio_add_metadata(struct sdatio_file * sfile, const int metadata_type, const char * key, const void * value){
+  int retval;
+  sdatio_recommence_definitions(sfile);
+  switch (metadata_type){
+    case SDATIO_CHAR:
+      if ((retval = nc_put_att_text(sfile->nc_file_id, NC_GLOBAL, key, strlen(value), value))) ERR(retval);
+      break;
+    default:
+      if ((retval = nc_put_att(sfile->nc_file_id, NC_GLOBAL, key, 
+              sdatio_netcdf_variable_type(metadata_type), 1, value))) ERR(retval);
+  }
+  sdatio_end_definitions(sfile);
+}
 
 /***********************************************************
  *
@@ -254,22 +306,6 @@ void sdatio_free_dimension(struct sdatio_dimension * sdim){
  *
  * ***********************************************/
 
-int sdatio_netcdf_variable_type(int type){
-  switch (type){
-  case SDATIO_INT:
-    return NC_INT;
-  case SDATIO_FLOAT:
-    return NC_FLOAT;
-  case SDATIO_DOUBLE:
-    return NC_DOUBLE;
-  case SDATIO_COMPLEX_DOUBLE:
-    printf("Can't do complex yet\n");
-    abort();
-  default:
-    printf("Unknown data type for simple data io\n");
-    abort();
-  }
-}
 
 
 void sdatio_get_dimension_ids(struct sdatio_file * sfile, char * dimension_list, struct sdatio_variable * svar){
@@ -454,8 +490,8 @@ void sdatio_create_variable(struct sdatio_file * sfile,
   /*if (sfile->is_parallel){}*/
   /*else {*/
     if ((retval = nc_def_var(sfile->nc_file_id, variable_name, sdatio_netcdf_variable_type(variable_type), ndims, svar->dimension_ids, &(svar->nc_id)))) ERR(retval);
-    if ((retval = nc_put_att_text(sfile->nc_file_id, svar->nc_id, "Description", strlen(description), description))) ERR(retval);
-    if ((retval = nc_put_att_text(sfile->nc_file_id, svar->nc_id, "Units", strlen(units), units))) ERR(retval);
+    if ((retval = nc_put_att_text(sfile->nc_file_id, svar->nc_id, "description", strlen(description), description))) ERR(retval);
+    if ((retval = nc_put_att_text(sfile->nc_file_id, svar->nc_id, "units", strlen(units), units))) ERR(retval);
     /*}*/
   switch (variable_type){
     case SDATIO_INT:
@@ -466,6 +502,9 @@ void sdatio_create_variable(struct sdatio_file * sfile,
       break;
     case SDATIO_DOUBLE:
       svar->type_size = sizeof(double);
+      break;
+    case SDATIO_CHAR:
+      svar->type_size = sizeof(char);
       break;
     default:
       printf("Unknown type in sdatio_create_variable\n");
