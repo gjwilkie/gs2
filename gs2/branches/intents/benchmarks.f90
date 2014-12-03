@@ -1,5 +1,10 @@
 !> Helper functions for running benchmarks
 module benchmarks
+  implicit none
+
+  private
+
+  public :: benchmark_identifier
 contains
   !> A string which is used as an extension for timing files
   !! and which identifies the time when and system on which the
@@ -18,5 +23,4 @@ contains
     benchmark_identifier = &
       '.timing.'//date//'.'//trim(build_indentifier())
   end function benchmark_identifier
-
 end module benchmarks

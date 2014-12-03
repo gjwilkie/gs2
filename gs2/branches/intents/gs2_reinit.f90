@@ -1,12 +1,12 @@
 module gs2_reinit
   implicit none
 
+  private
+
   public :: reset_time_step, delt_adj
   public :: check_time_step, time_reinit
   public :: init_reinit, wnml_gs2_reinit
   public :: reduce_time_step, increase_time_step
-
-  private
 
   real :: delt_adj, dt0
   real :: delt_cushion
@@ -19,7 +19,7 @@ contains
 
   subroutine wnml_gs2_reinit(unit)
     implicit none
-    integer :: unit
+    integer, intent(in) :: unit
     write (unit, *)
     write (unit, fmt="(' &',a)") "reinit_knobs"
     write (unit, fmt="(' delt_adj = ',e17.10)") delt_adj
@@ -62,13 +62,13 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     use kt_grids, only: ntheta0, naky
     implicit none
+    integer, intent(in) :: istep 
     logical, intent(inout) :: my_exit
+    integer, intent (in), optional :: job_id
     logical :: reset_in
-    integer :: istep 
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer :: istatus
     integer, save :: nconsec=0
-    integer, intent (in), optional :: job_id
     integer :: iostat
     complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
 

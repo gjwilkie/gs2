@@ -8,12 +8,12 @@ contains
     implicit none
     character(*), intent (in) :: filename
     integer, intent (in out) :: ntheta, nperiod, ntgrid, nlambda
-    real, dimension (-ntgrid:ntgrid) :: theta
-    real, dimension (nlambda) :: alambda
-    real, dimension (-ntgrid:ntgrid) :: gbdrift, gradpar
-    real, dimension (-ntgrid:ntgrid) :: cvdrift, gds2, bmag
-    real, dimension (-ntgrid:ntgrid) :: gds21, gds22
-    real, dimension (-ntgrid:ntgrid) :: cvdrift0, gbdrift0
+    real, dimension (-ntgrid:ntgrid), intent(out) :: theta
+    real, dimension (nlambda), intent(out) :: alambda
+    real, dimension (-ntgrid:ntgrid), intent(out) :: gbdrift, gradpar
+    real, dimension (-ntgrid:ntgrid), intent(out) :: cvdrift, gds2, bmag
+    real, dimension (-ntgrid:ntgrid), intent(out) :: gds21, gds22
+    real, dimension (-ntgrid:ntgrid), intent(out) :: cvdrift0, gbdrift0
 
     integer :: nthetain, nperiodin, ntgridin, nlambdain
     integer :: i
@@ -1508,7 +1508,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
   subroutine dsmooth (n, xin, yin, yout)
     implicit none
 
-    integer n
+    integer, intent(in) :: n
     real, dimension (:), intent (in) ::  xin, yin
     real, dimension (:), intent (out) :: yout
 
@@ -1553,7 +1553,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
   subroutine d2smooth (n, xin, yin, yout)
     implicit none
 
-    integer n
+    integer, intent(in) :: n
     real, dimension (:), intent (in) ::  xin, yin
     real, dimension (:), intent (out) :: yout
 
@@ -1601,13 +1601,11 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
   subroutine smooth (n, xin, yin, var, yout, ifail)
     implicit none
 
-    integer n
+    integer, intent(in) :: n
     real, dimension (:), intent (in) :: xin, yin
     real, dimension (:), intent (out) :: yout
-    real :: var
-
-    integer ifail
-
+    real, intent(in out) :: var
+    integer, intent(out) :: ifail
 
 ! these next arrays should be double precision, which we usually get with 
 ! compiler options
