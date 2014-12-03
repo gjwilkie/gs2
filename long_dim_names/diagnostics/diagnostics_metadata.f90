@@ -14,6 +14,7 @@ contains
     use simpledataio, only: add_standard_metadata
     use runtime_tests, only: build_indentifier
     use runtime_tests, only: get_svn_rev
+    use run_parameters, only: user_comments
     type(diagnostics_type), intent(in) :: gnostics
     character (20) :: datestamp, timestamp, timezone
     character (31) :: strtime
@@ -92,6 +93,8 @@ contains
       jline(" from this file is included in the Aux ")//&
       jline(" folder in the GS2 source. To invoke it:")//&
       jline(" $ ./extract_input_file <netcdf_file>"))
+    call add_metadata(gnostics%sfile, "user_comments", &
+      trim(user_comments))
     call add_metadata(gnostics%sfile, "svn_revision", &
       trim(get_svn_rev()))
     call add_metadata(gnostics%sfile, "build_indentifier", &
