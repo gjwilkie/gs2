@@ -135,13 +135,19 @@ distclean_simpledataio:
 
 endif # ifndef USE_AUTOTOOLS
 
-diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb $(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES)
+# Commands for generating repetitive Fortran files from Ruby scripts
+diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb 
 	$(call RUBY_GENERATE,$@,$<)
-diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB) 
+diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  
 	$(call RUBY_GENERATE,$@,$<)
-diagnostics/diagnostics_ascii.f90: diagnostics/generate_diagnostics_ascii.rb  $(SIMPLEDATAIO_LIB) 
+diagnostics/diagnostics_ascii.f90: diagnostics/generate_diagnostics_ascii.rb  
 	$(call RUBY_GENERATE,$@,$<)
 
 # This must be built without promotion of reals to doubles
 diagnostics_create_and_write.o: diagnostics_create_and_write.f90
 	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
+
+
+# This line ensures that libsimpledataio is built before any of the diagnostics
+# modules
+diagnostics_ascii.o diagnostics_dimensions.o: $(SIMPLEDATAIO_LIB)
