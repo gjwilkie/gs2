@@ -37,6 +37,7 @@
 &parameters
  beta = 0.0 ! Ratio of particle to magnetic pressure (reference Beta, not total beta):  beta=n_0 T_0 /( B^2 / (8 pi))
  zeff = 1.0 ! Effective ionic charge.
+ user_comments = "This is a test of the old diagnostics module"
 /
 
 &kt_grids_knobs
