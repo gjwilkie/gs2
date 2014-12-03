@@ -29,9 +29,15 @@ module antenna
 
   use antenna_data, only: nk_stir, a_ant, b_ant
   implicit none
+
+  private
+  public :: init_antenna, dump_ant_amp, amplitude, finish_antenna, reset_init
+  public :: wnml_antenna, check_antenna, no_driver
+  public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
+
   complex :: w_antenna
   complex, dimension(:), allocatable :: w_stir
-  complex, save, dimension (:,:,:), allocatable :: apar_new, apar_old
+  complex, dimension(:,:,:), allocatable :: apar_new, apar_old
   integer, dimension(:), allocatable :: kx_stir, ky_stir, kz_stir
   real :: amplitude, t0, w_dot
   integer :: out_unit
@@ -42,76 +48,73 @@ module antenna
   logical :: ant_off = .false.
   real :: beta_s
   complex :: wtmp
-  logical, save :: initialized = .false.
-
-  private
-  public :: init_antenna, dump_ant_amp, amplitude, finish_antenna, reset_init
-  public :: wnml_antenna, check_antenna, no_driver
-  public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
+  logical :: initialized = .false.
 
 contains
 !=============================================================================
   subroutine check_antenna(report_unit)
-  use file_utils, only: run_name
-  implicit none
-  integer :: report_unit, i
-       if (no_driver) return
-       if (amplitude == 0.0) then 
+    use file_utils, only: run_name
+    implicit none
+    integer, intent(in) :: report_unit
+    integer :: i
+    if (no_driver) return
+    if (amplitude == 0.0) then 
+       write (report_unit, *) 
+       write (report_unit, fmt="('No Langevin antenna included.')")
+       write (report_unit, *) 
+    else
+       write (report_unit, *) 
+       write (report_unit, fmt="('A Langevin antenna is included, with characteristics:')")
+       write (report_unit, *) 
+       write (report_unit, fmt="('Frequency:  (',e11.4,', ',e11.4,')')") w_antenna
+       write (report_unit, fmt="('Number of independent k values: ',i3)") nk_stir
+       if (write_antenna) then
           write (report_unit, *) 
-          write (report_unit, fmt="('No Langevin antenna included.')")
+          write (report_unit, fmt="('Antenna data will be written to ',a)") trim(run_name)//'.antenna'
           write (report_unit, *) 
-       else
-          write (report_unit, *) 
-          write (report_unit, fmt="('A Langevin antenna is included, with characteristics:')")
-          write (report_unit, *) 
-          write (report_unit, fmt="('Frequency:  (',e11.4,', ',e11.4,')')") w_antenna
-          write (report_unit, fmt="('Number of independent k values: ',i3)") nk_stir
-          if (write_antenna) then
-             write (report_unit, *) 
-             write (report_unit, fmt="('Antenna data will be written to ',a)") trim(run_name)//'.antenna'
-             write (report_unit, *) 
-          end if
-          write (report_unit, fmt="('k values:')")
-          do i=1,nk_stir
-             if (trav(i)) then
-                write (report_unit, fmt="('Travelling wave:')")
-                write (report_unit, fmt="('   kx = ',i2,'    ky = ',i2,'    kz = ',i2)") &
-                     & kx_stir(i), ky_stir(i), kz_stir(i)
-             else
-                write (report_unit, fmt="('Standing wave:')")
-                write (report_unit, fmt="('   kx = ',i2,'    ky = ',i2,'    kz = ',i2)") &
-                     & kx_stir(i), ky_stir(i), kz_stir(i)
-             end if
-          end do
        end if
+       write (report_unit, fmt="('k values:')")
+       do i=1,nk_stir
+          if (trav(i)) then
+             write (report_unit, fmt="('Travelling wave:')")
+             write (report_unit, fmt="('   kx = ',i2,'    ky = ',i2,'    kz = ',i2)") &
+                  & kx_stir(i), ky_stir(i), kz_stir(i)
+          else
+             write (report_unit, fmt="('Standing wave:')")
+             write (report_unit, fmt="('   kx = ',i2,'    ky = ',i2,'    kz = ',i2)") &
+                  & kx_stir(i), ky_stir(i), kz_stir(i)
+          end if
+       end do
+    end if
   end subroutine check_antenna
 
   subroutine wnml_antenna(unit)
     implicit none
-    integer :: unit, i
+    integer, intent(in) :: unit
+    integer :: i
     character (100) :: line
     if (no_driver) return
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "driver"
-       write (unit, fmt="(' ant_off = ',L1)") ant_off
-       write (unit, fmt="(' write_antenna = ',L1)") write_antenna
-       write (unit, fmt="(' amplitude = ',e17.10)") amplitude
-       write (unit, fmt="(' w_antenna = (',e17.10,', ',e17.10,')')") w_antenna
-       write (unit, fmt="(' w_dot = ',e17.10)") w_dot
-       write (unit, fmt="(' t0 = ',e17.10)") t0
-       write (unit, fmt="(' nk_stir = ',i3)") nk_stir
-       write (unit, fmt="(' /')")
+    write (unit, *)
+    write (unit, fmt="(' &',a)") "driver"
+    write (unit, fmt="(' ant_off = ',L1)") ant_off
+    write (unit, fmt="(' write_antenna = ',L1)") write_antenna
+    write (unit, fmt="(' amplitude = ',e17.10)") amplitude
+    write (unit, fmt="(' w_antenna = (',e17.10,', ',e17.10,')')") w_antenna
+    write (unit, fmt="(' w_dot = ',e17.10)") w_dot
+    write (unit, fmt="(' t0 = ',e17.10)") t0
+    write (unit, fmt="(' nk_stir = ',i3)") nk_stir
+    write (unit, fmt="(' /')")
 
-        do i=1,nk_stir
-           write (unit, *)
-           write (line, *) i
-           write(unit, fmt="(' &',a)") trim("stir_"//trim(adjustl(line)))
-           write(unit, fmt="(' kx = ',i2,' ky = ',i2,' kz = ',i2)") &
-                kx_stir(i), ky_stir(i), kz_stir(i)
-           write(unit, fmt="(' travel = ',L1)") trav(i)
-           write(unit, fmt="(' a = (',e20.13,',',e20.13,')')") a_ant(i)
-           write(unit, fmt="(' b = (',e20.13,',',e20.13,') /')") b_ant(i)
-        end do
+    do i=1,nk_stir
+       write (unit, *)
+       write (line, *) i
+       write(unit, fmt="(' &',a)") trim("stir_"//trim(adjustl(line)))
+       write(unit, fmt="(' kx = ',i2,' ky = ',i2,' kz = ',i2)") &
+            kx_stir(i), ky_stir(i), kz_stir(i)
+       write(unit, fmt="(' travel = ',L1)") trav(i)
+       write(unit, fmt="(' a = (',e20.13,',',e20.13,')')") a_ant(i)
+       write(unit, fmt="(' b = (',e20.13,',',e20.13,') /')") b_ant(i)
+    end do
   end subroutine wnml_antenna
 
   subroutine init_antenna
@@ -119,25 +122,24 @@ contains
     use run_parameters, only: beta
     use antenna_data, only: init_antenna_data
     implicit none
-
     integer :: i
-
+    
     if (initialized) return
     initialized = .true.
-
+    
     if (.not. allocated(w_stir)) then
        call init_species
-
+       
        call read_parameters
        if (no_driver) then
           i = -1
           call init_antenna_data (i)
           return
        end if
-
+       
        allocate (w_stir(nk_stir))
     end if
-
+    
     beta_s = 0.
     if (beta > epsilon(0.0)) then
        do i=1,nspec
@@ -150,8 +152,8 @@ contains
     else
        beta_s = 2.
     end if
-
   end subroutine init_antenna
+
 !=============================================================================    
   subroutine read_parameters 
     use file_utils, only: input_unit_exist, get_indexed_namelist_unit, get_unused_unit
@@ -180,7 +182,7 @@ contains
           no_driver = .true.
        else
           if (ant_off) no_driver = .true.
-
+          
           read (unit=input_unit("driver"), nml=driver)
           
           call init_antenna_data (nk_stir)
@@ -198,12 +200,12 @@ contains
 !
           ierr = 1
           if (restarting) call init_ant_amp (a_ant, b_ant, nk_stir, ierr)
-
+          
           do i=1,nk_stir
              call get_indexed_namelist_unit (in_file, "stir", i)
              kx=1
              ky=1
-              kz=1
+             kz=1
              a = -1.
              b = -1.
              travel = .true.
@@ -266,7 +268,7 @@ contains
   subroutine finish_antenna
     use file_utils, only: close_output_file
     use antenna_data, only: finish_antenna_data
-
+    
     implicit none
 
     call finish_antenna_data
@@ -279,14 +281,13 @@ contains
   end subroutine finish_antenna
 !=============================================================================
   subroutine antenna_amplitudes (apar)
-
     use mp, only: broadcast, proc0
     use gs2_time, only: code_dt, code_time
     use kt_grids, only: naky, ntheta0, reality
     use theta_grid, only: theta, ntgrid, gradpar
     use ran, only: ranf
     use constants, only: zi
-
+    
     complex, dimension (-ntgrid:,:,:), intent(out) :: apar
     complex :: force_a, force_b
     real :: dt, sigma, time
@@ -396,8 +397,8 @@ contains
     use run_parameters, only: beta, fapar
     use theta_grid, only: ntgrid
 
-    complex, dimension (-ntgrid:,:,:) :: j_ext
-    real, dimension (-ntgrid:,:,:) :: kperp2
+    complex, dimension (-ntgrid:,:,:), intent(out) :: j_ext
+    real, dimension (-ntgrid:,:,:), intent(in) :: kperp2
     integer :: ik, it, ig
 
     if (fapar > epsilon(0.0)) then
@@ -430,10 +431,9 @@ contains
 
   subroutine a_ext_data (A_ext_old, A_ext_new)
 !      this routine returns current and previous A_ext vectors
-
     use theta_grid, only: ntgrid
-
-    complex, dimension (-ntgrid:,:,:) :: A_ext_old, A_ext_new
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent(out) :: A_ext_old, A_ext_new
 
     if (.not. allocated(apar_new)) then
        A_ext_old = 0.
@@ -447,11 +447,11 @@ contains
   end subroutine a_ext_data
 !=============================================================================
   function antenna_w ()
+    implicit none
     complex :: antenna_w
-
     antenna_w = wtmp
-
   end function antenna_w
+
 !=============================================================================
   subroutine dump_ant_amp
     use gs2_time, only: user_time
@@ -471,17 +471,13 @@ contains
   
        end do
     end if
-
   end subroutine dump_ant_amp
-!=============================================================================
 
+!=============================================================================
 ! used when interfacing GS2 with Trinity -- MAB
   subroutine reset_init
-
     implicit none
-    
     initialized = .false.
-
   end subroutine reset_init
 !=============================================================================
 end module antenna

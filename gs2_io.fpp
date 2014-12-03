@@ -2930,8 +2930,7 @@ contains
     implicit none
     integer, intent (in) :: nout
     real, intent (in) :: time
-    complex, intent(in) :: ntot0(:,:,:), density0(:,:,:), upar0(:,:,:)
-    complex, intent(in) :: tpar0(:,:,:), tperp0(:,:,:)
+    complex, dimension(:,:,:), intent(in) :: ntot0, density0, upar0, tpar0, tperp0
 # ifdef NETCDF
     real, dimension (2, nakx, naky, nspec) :: ri3
     integer, dimension (5) :: startmom, countmom

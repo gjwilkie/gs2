@@ -4,6 +4,10 @@
 
 module dist_fn_arrays
 
+  implicit none
+
+  private
+
   public :: g, gnew, g_restart_tmp, kx_shift, theta0_shift, vpa, vpac
   public :: vperp2, vpar, ittp, aj0, aj1
   public :: c_rate
@@ -40,7 +44,6 @@ module dist_fn_arrays
   ! (-ntgrid:ntgrid,ntheta0,naky,negrid,nspecies,2)
 #endif
 
-  private
 contains
 
   subroutine g_adjust (g, phi, bpar, facphi, facbpar)
@@ -113,7 +116,7 @@ contains
     integer, intent(in) :: ik, it, il, ie, is
     complex, dimension(-ntgrid:,:,g_lo%llim_proc:), intent(in) :: g
     real, intent(out):: err
-    real, optional:: tol
+    real, optional, intent(in):: tol
     real :: tolerance, dg
     integer :: iglo, ig
     logical :: started

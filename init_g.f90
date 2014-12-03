@@ -4,15 +4,15 @@
 module init_g
   implicit none
 
+  private
+
   public :: ginit
   public :: init_init_g, finish_init_g, wnml_init_g, check_init_g
   public :: width0
   public :: tstart
   public :: reset_init
   public :: init_vnmult
-  public :: new_field_init
-  private :: single_initial_kx
-  private
+  public :: new_field_init, restart_file
 
   ! knobs
   integer :: ginitopt_switch
@@ -37,7 +37,7 @@ module init_g
   real :: den2, upar2, tpar2, tperp2
   real :: tstart, scale, apar0
   logical :: chop_side, clean_init, left, even, new_field_init
-  character(300), public :: restart_file
+  character(300) :: restart_file !WARNING: This is also defined in gs2_save. This should be addressed
   character (len=150) :: restart_dir
   integer, dimension(2) :: ikk, itt
   integer, dimension(3) :: ikkk,ittt
@@ -83,183 +83,182 @@ module init_g
 contains
 
   subroutine wnml_init_g(unit)
-  use run_parameters, only: k0
-  implicit none
-  integer :: unit
-       if (.not.exist) return
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "init_g_knobs"
-       select case (ginitopt_switch)
+    use run_parameters, only: k0
+    implicit none
+    integer, intent(in) :: unit
+    if (.not.exist) return
+    write (unit, *)
+    write (unit, fmt="(' &',a)") "init_g_knobs"
+    select case (ginitopt_switch)
 
-       case (ginitopt_default)
-          write (unit, fmt="(' ginit_option = ',a)") '"default"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' width0 = ',e17.10)") width0
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+    case (ginitopt_default)
+       write (unit, fmt="(' ginit_option = ',a)") '"default"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' width0 = ',e17.10)") width0
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
-       case (ginitopt_noise)
-          write (unit, fmt="(' ginit_option = ',a)") '"noise"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' zf_init = ',e17.10)") zf_init
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
-          write (unit, fmt="(' clean_init = ',L1)") clean_init
+    case (ginitopt_noise)
+       write (unit, fmt="(' ginit_option = ',a)") '"noise"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' zf_init = ',e17.10)") zf_init
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
+       write (unit, fmt="(' clean_init = ',L1)") clean_init
 
-       case (ginitopt_xi)
-          write (unit, fmt="(' ginit_option = ',a)") '"xi"'
-          write (unit, fmt="(' width0 = ',e17.10)") width0
+    case (ginitopt_xi)
+       write (unit, fmt="(' ginit_option = ',a)") '"xi"'
+       write (unit, fmt="(' width0 = ',e17.10)") width0
 
-       case (ginitopt_xi2)
-          write (unit, fmt="(' ginit_option = ',a)") '"xi2"'
-          write (unit, fmt="(' width0 = ',e17.10)") width0
+    case (ginitopt_xi2)
+       write (unit, fmt="(' ginit_option = ',a)") '"xi2"'
+       write (unit, fmt="(' width0 = ',e17.10)") width0
 
-       case (ginitopt_zero)
-          write (unit, fmt="(' ginit_option = ',a)") '"zero"'
+    case (ginitopt_zero)
+       write (unit, fmt="(' ginit_option = ',a)") '"zero"'
 
-       case (ginitopt_test3)
-          write (unit, fmt="(' ginit_option = ',a)") '"test3"'
+    case (ginitopt_test3)
+       write (unit, fmt="(' ginit_option = ',a)") '"test3"'
 
-       case (ginitopt_convect)
-          write (unit, fmt="(' ginit_option = ',a)") '"convect"'
-          write (unit, fmt="(' k0 = ',e17.10)") k0
+    case (ginitopt_convect)
+       write (unit, fmt="(' ginit_option = ',a)") '"convect"'
+       write (unit, fmt="(' k0 = ',e17.10)") k0
 
-       case (ginitopt_rh)
-          write (unit, fmt="(' ginit_option = ',a)") '"rh"'
+    case (ginitopt_rh)
+       write (unit, fmt="(' ginit_option = ',a)") '"rh"'
 
-       case (ginitopt_restart_many)
-          write (unit, fmt="(' ginit_option = ',a)") '"many"'
-          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e17.10)") scale
+    case (ginitopt_restart_many)
+       write (unit, fmt="(' ginit_option = ',a)") '"many"'
+       write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+       write (unit, fmt="(' scale = ',e17.10)") scale
 
-       case (ginitopt_restart_small)
-          write (unit, fmt="(' ginit_option = ',a)") '"small"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' zf_init = ',e17.10)") zf_init
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
-          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e17.10)") scale
+    case (ginitopt_restart_small)
+       write (unit, fmt="(' ginit_option = ',a)") '"small"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' zf_init = ',e17.10)") zf_init
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
+       write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+       write (unit, fmt="(' scale = ',e17.10)") scale
 
-       case (ginitopt_restart_file)
-          write (unit, fmt="(' ginit_option = ',a)") '"file"'
-          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e17.10)") scale
+    case (ginitopt_restart_file)
+       write (unit, fmt="(' ginit_option = ',a)") '"file"'
+       write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+       write (unit, fmt="(' scale = ',e17.10)") scale
 
-       case (ginitopt_continue)
-          write (unit, fmt="(' ginit_option = ',a)") '"cont"'
+    case (ginitopt_continue)
+       write (unit, fmt="(' ginit_option = ',a)") '"cont"'
 
-       case (ginitopt_kz0)
-          write (unit, fmt="(' ginit_option = ',a)") '"kz0"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+    case (ginitopt_kz0)
+       write (unit, fmt="(' ginit_option = ',a)") '"kz0"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
-       case (ginitopt_nl)
-          write (unit, fmt="(' ginit_option = ',a)") '"nl"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
-          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+    case (ginitopt_nl)
+       write (unit, fmt="(' ginit_option = ',a)") '"nl"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+       write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
-       case (ginitopt_nl2)
-          write (unit, fmt="(' ginit_option = ',a)") '"nl2"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
-          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+    case (ginitopt_nl2)
+       write (unit, fmt="(' ginit_option = ',a)") '"nl2"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+       write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
-       case (ginitopt_nl3)
-          write (unit, fmt="(' ginit_option = ',a)") '"nl3"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' width0 = ',e17.10)") width0
-          write (unit, fmt="(' refac = ',e17.10)") refac
-          write (unit, fmt="(' imfac = ',e17.10)") imfac
-          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
-          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
-          write (unit, fmt="(' den0 = ',e17.10)") den0
-          write (unit, fmt="(' den1 = ',e17.10)") den1
-          write (unit, fmt="(' den2 = ',e17.10)") den2
-          write (unit, fmt="(' upar0 = ',e17.10)") upar0
-          write (unit, fmt="(' upar1 = ',e17.10)") upar1
-          write (unit, fmt="(' upar2 = ',e17.10)") upar2
-          write (unit, fmt="(' tpar0 = ',e17.10)") tpar0
-          write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
-          write (unit, fmt="(' tperp0 = ',e17.10)") tperp0
-          write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
-          write (unit, fmt="(' tperp2 = ',e17.10)") tperp2
+    case (ginitopt_nl3)
+       write (unit, fmt="(' ginit_option = ',a)") '"nl3"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' width0 = ',e17.10)") width0
+       write (unit, fmt="(' refac = ',e17.10)") refac
+       write (unit, fmt="(' imfac = ',e17.10)") imfac
+       write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+       write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
+       write (unit, fmt="(' den0 = ',e17.10)") den0
+       write (unit, fmt="(' den1 = ',e17.10)") den1
+       write (unit, fmt="(' den2 = ',e17.10)") den2
+       write (unit, fmt="(' upar0 = ',e17.10)") upar0
+       write (unit, fmt="(' upar1 = ',e17.10)") upar1
+       write (unit, fmt="(' upar2 = ',e17.10)") upar2
+       write (unit, fmt="(' tpar0 = ',e17.10)") tpar0
+       write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
+       write (unit, fmt="(' tperp0 = ',e17.10)") tperp0
+       write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
+       write (unit, fmt="(' tperp2 = ',e17.10)") tperp2
 
-       case (ginitopt_nl4)
-          write (unit, fmt="(' ginit_option = ',a)") '"nl4"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e17.10)") scale
-          write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
-          write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+    case (ginitopt_nl4)
+       write (unit, fmt="(' ginit_option = ',a)") '"nl4"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+       write (unit, fmt="(' scale = ',e17.10)") scale
+       write (unit, fmt="(' ikk(1) = ',i3,' itt(1) = ',i3)") ikk(1),itt(1)
+       write (unit, fmt="(' ikk(2) = ',i3,' itt(2) = ',i3)") ikk(2), itt(2)
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
-       case (ginitopt_nl5)
-          write (unit, fmt="(' ginit_option = ',a)") '"nl5"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e17.10)") scale
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
+    case (ginitopt_nl5)
+       write (unit, fmt="(' ginit_option = ',a)") '"nl5"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+       write (unit, fmt="(' scale = ',e17.10)") scale
+       write (unit, fmt="(' chop_side = ',L1)") chop_side
+       if (chop_side) write (unit, fmt="(' left = ',L1)") left
 
-       case (ginitopt_nl6)
-          write (unit, fmt="(' ginit_option = ',a)") '"nl6"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e17.10)") scale
+    case (ginitopt_nl6)
+       write (unit, fmt="(' ginit_option = ',a)") '"nl6"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
+       write (unit, fmt="(' scale = ',e17.10)") scale
 
-       case (ginitopt_alf)
-          write (unit, fmt="(' ginit_option = ',a)") '"alf"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+    case (ginitopt_alf)
+       write (unit, fmt="(' ginit_option = ',a)") '"alf"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
 
-       case (ginitopt_gs)
-          write (unit, fmt="(' ginit_option = ',a)") '"gs"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' refac = ',e17.10)") refac
-          write (unit, fmt="(' imfac = ',e17.10)") imfac
-          write (unit, fmt="(' den1 = ',e17.10)") den1
-          write (unit, fmt="(' upar1 = ',e17.10)") upar1
-          write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
-          write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
+    case (ginitopt_gs)
+       write (unit, fmt="(' ginit_option = ',a)") '"gs"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' refac = ',e17.10)") refac
+       write (unit, fmt="(' imfac = ',e17.10)") imfac
+       write (unit, fmt="(' den1 = ',e17.10)") den1
+       write (unit, fmt="(' upar1 = ',e17.10)") upar1
+       write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
+       write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
 
 
-       case (ginitopt_kpar)
-          write (unit, fmt="(' ginit_option = ',a)") '"kpar"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' width0 = ',e17.10)") width0
-          write (unit, fmt="(' refac = ',e17.10)") refac
-          write (unit, fmt="(' imfac = ',e17.10)") imfac
-          write (unit, fmt="(' den0 = ',e17.10)") den0
-          write (unit, fmt="(' den1 = ',e17.10)") den1
-          write (unit, fmt="(' den2 = ',e17.10)") den2
-          write (unit, fmt="(' upar0 = ',e17.10)") upar0
-          write (unit, fmt="(' upar1 = ',e17.10)") upar1
-          write (unit, fmt="(' upar2 = ',e17.10)") upar2
-          write (unit, fmt="(' tpar0 = ',e17.10)") tpar0
-          write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
-          write (unit, fmt="(' tperp0 = ',e17.10)") tperp0
-          write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
-          write (unit, fmt="(' tperp2 = ',e17.10)") tperp2
+    case (ginitopt_kpar)
+       write (unit, fmt="(' ginit_option = ',a)") '"kpar"'
+       write (unit, fmt="(' phiinit = ',e17.10)") phiinit
+       write (unit, fmt="(' width0 = ',e17.10)") width0
+       write (unit, fmt="(' refac = ',e17.10)") refac
+       write (unit, fmt="(' imfac = ',e17.10)") imfac
+       write (unit, fmt="(' den0 = ',e17.10)") den0
+       write (unit, fmt="(' den1 = ',e17.10)") den1
+       write (unit, fmt="(' den2 = ',e17.10)") den2
+       write (unit, fmt="(' upar0 = ',e17.10)") upar0
+       write (unit, fmt="(' upar1 = ',e17.10)") upar1
+       write (unit, fmt="(' upar2 = ',e17.10)") upar2
+       write (unit, fmt="(' tpar0 = ',e17.10)") tpar0
+       write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
+       write (unit, fmt="(' tperp0 = ',e17.10)") tperp0
+       write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
+       write (unit, fmt="(' tperp2 = ',e17.10)") tperp2
 
-       end select
-       write (unit, fmt="(' /')")
+    end select
+    write (unit, fmt="(' /')")
   end subroutine wnml_init_g
-
  
   subroutine check_init_g(report_unit)
-  use run_parameters, only : delt_option_switch, delt_option_auto
-  use species, only : spec, has_electron_species
-  implicit none
-  integer :: report_unit
+    use run_parameters, only : delt_option_switch, delt_option_auto
+    use species, only : spec, has_electron_species
+    implicit none
+    integer, intent(in) :: report_unit
     select case (ginitopt_switch)
     case (ginitopt_default)
        write (report_unit, fmt="('Initial conditions:')")
@@ -583,7 +582,6 @@ contains
     use mp, only: proc0, broadcast, job
     implicit none
     integer :: ind_slash
-!    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -673,8 +671,8 @@ contains
   end subroutine init_init_g
 
   subroutine ginit (restarted)
-
     use gs2_save, only: init_tstart
+    implicit none
     logical, intent (out) :: restarted
     real :: t0
     integer :: istatus
@@ -1156,22 +1154,16 @@ contains
         !write (*,*) "zeroing out kx_index: ", it, "at kx: ", akx(it)
          do ik = 1, naky
             do ig = -ntgrid, ntgrid
-               a = 0.0
-               b = 0.0 
-  !             phi(:,it,ik) = cmplx(a,b)
-               phi(ig,it,ik) = cmplx(a,b)
+               phi(ig,it,ik) = 0.
              end do
          end do
        end if
     end do
   end subroutine single_initial_kx
 
-
-
   !> Initialise the distribution function with random noise. This is the default
   !! initialisation option. Each different mode is given a random amplitude
   !! between zero and one.
-
   subroutine ginit_noise
     use species, only: spec, tracer_species
     use theta_grid, only: ntgrid 
@@ -1329,7 +1321,6 @@ contains
   !> Initialize with a single parallel mode. Only makes sense in a linear 
   !! calculation. k_parallel is specified with kpar_init or with ikpar_init 
   !! when periodic boundary conditions are used. 
-
   subroutine ginit_single_parallel_mode
     use species, only: spec, tracer_species
     use theta_grid, only: ntgrid, shat, theta 
@@ -1424,7 +1415,6 @@ contains
   !> Initialize with every parallel and perpendicular mode having equal amplitude. 
   !! Only makes sense in a linear calculation. k_parallel is specified with kpar_init 
   !! or with ikpar_init when periodic boundary conditions are used. EGH 
-
   subroutine ginit_all_modes_equal
     use species, only: spec, tracer_species
     use theta_grid, only: ntgrid, theta, ntheta 
@@ -1516,7 +1506,6 @@ contains
     gnew = g
 
   end subroutine ginit_all_modes_equal
-
   
   subroutine ginit_nl
     use species, only: spec
@@ -1570,7 +1559,6 @@ contains
   end subroutine ginit_nl
 
   subroutine ginit_nl2
-
     use species, only: spec
     use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, ntheta0 
@@ -3641,12 +3629,10 @@ contains
 
   end subroutine ginit_restart_smallflat
 
-
   !> Restart but remove all turbulence except the zonal flow (ky = 0) component upon 
   !! restarting. It can be selected by setting the input parameter ginit to "zonal_only". 
   !! The size of the zonal flows can be adjusted using the input parameter zf_init. 
   ! Author EGH
-
   subroutine ginit_restart_zonal_only
 
     use gs2_save, only: gs2_restore
@@ -3730,9 +3716,7 @@ contains
   !! It can be selected by setting the input parameter ginit to "no_zonal". 
   !! The size of the zonal flows can be adjusted using the input parameter zf_init.
   !! Author: FvW (copy of EGH code)
-
   subroutine ginit_restart_no_zonal
-
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -3788,7 +3772,6 @@ contains
   end subroutine reset_init
 
   subroutine flae (g, gavg)
-
     use species, only: spec, electron_species 
     use theta_grid, only: ntgrid, delthet, jacob
     use kt_grids, only: aky
@@ -3812,10 +3795,8 @@ contains
   end subroutine flae
 
   subroutine init_vnmult (vnm)
-
     use gs2_save, only: init_vnm
-
-    real, dimension (2) :: vnm
+    real, dimension (2), intent(in out) :: vnm
     integer :: istatus
 
     call init_vnm (vnm, istatus)
@@ -3823,11 +3804,8 @@ contains
   end subroutine init_vnmult
 
   subroutine finish_init_g
-
     implicit none
 
     initialized = .false.
-
   end subroutine finish_init_g
-
 end module init_g

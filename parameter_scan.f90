@@ -15,18 +15,19 @@ module parameter_scan
   use parameter_scan_arrays, only: scan_parameter_switch, scan_parameter_tprim, scan_parameter_g_exb
   use parameter_scan_arrays, only: scan_spec, hflux_tot, momflux_tot, phi2_tot, nout
 
+  implicit none
+
+  private
+
   public :: init_parameter_scan
   public :: finish_parameter_scan
   public :: update_scan_parameter_value
   public :: allocate_target_arrays
   public :: target_parameter_switch, scan_type_switch, scan_type_none
   public :: target_parameter_hflux_tot, target_parameter_momflux_tot, target_parameter_phi2_tot
-
-  logical :: scan_restarted
   public :: scan_restarted
 
-
-  private
+  logical :: scan_restarted
 
   integer :: target_parameter_switch, &
              scan_type_switch, &
@@ -52,7 +53,6 @@ module parameter_scan
   real :: target_val
   integer :: scan_output_file
   real :: current_target_value = 0.0
-
 
 contains
   subroutine init_parameter_scan
@@ -316,11 +316,6 @@ contains
       !if (increment_condition_satisfied) last_timestep = istep
     end select 
   end subroutine check_increment_condition_satisfied
-
-
-
-
-
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist

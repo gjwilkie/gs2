@@ -12,6 +12,8 @@ module collisions
 
   implicit none
 
+  private 
+
   public :: init_collisions, finish_collisions
   public :: read_parameters, wnml_collisions, check_collisions
   public :: solfp1
@@ -23,8 +25,10 @@ module collisions
   public :: init_lorentz_conserve, init_diffuse_conserve
   public :: init_lorentz_error, collision_model_switch
   public :: colls, hyper_colls, heating, adjust
-  public :: use_le_layout
-
+  public :: use_le_layout, collision_model_ediffuse
+  public :: collision_model_lorentz, collision_model_none
+  public :: collision_model_lorentz_test, collision_model_full
+  
   interface solfp1
      module procedure solfp1_le_layout
      module procedure solfp1_standard_layout
@@ -45,9 +49,6 @@ module collisions
      module procedure conserve_diffuse_standard_layout
   end interface 
 
-
-  private
-
   ! knobs
   logical :: use_le_layout = .false.
   logical :: const_v, conserve_moments
@@ -60,11 +61,11 @@ module collisions
   logical :: ei_coll_only
   logical :: test
   logical :: special_wfb_lorentz
-  integer, public, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
-  integer, public, parameter :: collision_model_none = 3
-  integer, public, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
-  integer, public, parameter :: collision_model_full = 6
-  integer, public, parameter :: collision_model_ediffuse = 7
+  integer, parameter :: collision_model_lorentz = 1      ! if this changes, check gs2_diagnostics
+  integer, parameter :: collision_model_none = 3
+  integer, parameter :: collision_model_lorentz_test = 5 ! if this changes, check gs2_diagnostics
+  integer, parameter :: collision_model_full = 6
+  integer, parameter :: collision_model_ediffuse = 7
 
   integer, parameter :: lorentz_scheme_default = 1
   integer, parameter :: lorentz_scheme_old = 2
@@ -72,7 +73,7 @@ module collisions
   integer, parameter :: ediff_scheme_default = 1
   integer, parameter :: ediff_scheme_old = 2
 
-  real, dimension (2), save :: vnmult = 0.0
+  real, dimension (2) :: vnmult = 0.0
   integer :: ncheck
   logical :: vary_vnew
   real :: vnfac, vnslow
@@ -154,42 +155,41 @@ module collisions
 contains
 
   subroutine check_collisions(report_unit)
-  implicit none
-  integer :: report_unit
-        select case (collision_model_switch)
-        case (collision_model_lorentz,collision_model_lorentz_test)
-           write (report_unit, fmt="('A Lorentz collision operator has been selected.')")
-           if (cfac > 0) write (report_unit, fmt="('This has both terms of the Lorentz collision operator: cfac=',e12.4)") cfac
-           if (cfac == 0) write (report_unit, fmt="('This is only a partial Lorentz collision operator (cfac=0.0)')")
-           if (const_v) write (report_unit, fmt="('This is an energy independent Lorentz collision operator (const_v=true)')")  
- !          if (hypercoll) call init_hyper_lorentz
-        case (collision_model_full)
-           write (report_unit, fmt="('Full GS2 collision operator has been selected.')")
-       end select
+    implicit none
+    integer, intent(in) :: report_unit
+    select case (collision_model_switch)
+    case (collision_model_lorentz,collision_model_lorentz_test)
+       write (report_unit, fmt="('A Lorentz collision operator has been selected.')")
+       if (cfac > 0) write (report_unit, fmt="('This has both terms of the Lorentz collision operator: cfac=',e12.4)") cfac
+       if (cfac == 0) write (report_unit, fmt="('This is only a partial Lorentz collision operator (cfac=0.0)')")
+       if (const_v) write (report_unit, fmt="('This is an energy independent Lorentz collision operator (const_v=true)')")  
+!          if (hypercoll) call init_hyper_lorentz
+    case (collision_model_full)
+       write (report_unit, fmt="('Full GS2 collision operator has been selected.')")
+    end select
   end subroutine check_collisions
 
   subroutine wnml_collisions(unit)
-  implicit none
-  integer :: unit
-     if (.not.exist) return
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "collisions_knobs"
-       select case (collision_model_switch)
-       case (collision_model_lorentz)
-          write (unit, fmt="(' collision_model = ',a)") '"lorentz"'
-          if (hypermult) write (unit, fmt="(' hypermult = ',L1)") hypermult
-       case (collision_model_lorentz_test)
-          write (unit, fmt="(' collision_model = ',a)") '"lorentz-test"'
-       case (collision_model_none)
-          write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
-       end select
-       write (unit, fmt="(' cfac = ',f6.3)") cfac
-       write (unit, fmt="(' heating = ',L1)") heating
-       write (unit, fmt="(' /')")
+    implicit none
+    integer, intent(in) :: unit
+    if (.not.exist) return
+    write (unit, *)
+    write (unit, fmt="(' &',a)") "collisions_knobs"
+    select case (collision_model_switch)
+    case (collision_model_lorentz)
+       write (unit, fmt="(' collision_model = ',a)") '"lorentz"'
+       if (hypermult) write (unit, fmt="(' hypermult = ',L1)") hypermult
+    case (collision_model_lorentz_test)
+       write (unit, fmt="(' collision_model = ',a)") '"lorentz-test"'
+    case (collision_model_none)
+       write (unit, fmt="(' collision_model = ',a)") '"collisionless"'
+    end select
+    write (unit, fmt="(' cfac = ',f6.3)") cfac
+    write (unit, fmt="(' heating = ',L1)") heating
+    write (unit, fmt="(' /')")
   end subroutine wnml_collisions
 
   subroutine init_collisions
-
     use species, only: init_species, nspec, spec
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, naky, ntheta0
@@ -1193,7 +1193,6 @@ contains
     use run_parameters, only: zeff, tunits
     use constants, only: pi
     use spfunc, only: erf => erf_ext
-
     real, dimension (:), intent (out) :: hee
     real,dimension (negrid)::heevth, hsg, hsgvth
     integer :: ik, ie, is, it, ig
@@ -2402,7 +2401,7 @@ contains
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, g1, gc1, gc2
     integer, optional, intent (in) :: diagnostics
-
+    logical, optional, intent (in) :: gtoc, ctog
     integer :: ig, it, ik, ie, is, iglo
 !CMR, 12/9/2013: 
 !CMR   New logical optional input parameters gtoc, ctog used to set
@@ -2410,7 +2409,7 @@ contains
 !CMR   to map g_lo to collision_lo, and collision_lo to g_lo.
 !CMR   All redistributes are performed by default.
 !CMR  
-    logical, optional :: gtoc, ctog
+
     logical :: g_to_c, c_to_g
 
     if (present(gtoc)) then 
@@ -2550,7 +2549,7 @@ contains
 
     implicit none
 
-    complex, dimension (:,:,le_lo%llim_proc:) :: gle
+    complex, dimension (:,:,le_lo%llim_proc:), intent (in out) :: gle
     integer, optional, intent (in) :: diagnostics
 
     integer :: ig, it, ik, il, ie, is, ile, ixi, isgn
@@ -3664,7 +3663,7 @@ contains
 
     implicit none
 
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g
 
     integer :: ie, is, ig, il, it, ik
     complex, dimension (negrid) :: delta
@@ -3757,8 +3756,8 @@ contains
 
     use gs2_layouts, only: g_lo
     use theta_grid, only: ntgrid
-    
-    character (3) :: str 
+    implicit none    
+    character (3), intent(in) :: str 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     integer :: ig, iglo
 
@@ -3779,8 +3778,8 @@ contains
     use gs2_layouts, only: lz_lo, ig_idx, ie_idx
     use le_grids, only: jend
     use theta_grid, only: ntgrid
-    
-    character (3) :: str 
+    implicit none
+    character (3), intent(in) :: str 
     complex, dimension (:,lz_lo%llim_proc:), intent (in) :: glz
     integer :: il, ilz, ig, ie, je, ilzp, ilp
 
