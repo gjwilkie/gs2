@@ -252,6 +252,12 @@ contains
             (field_option, fieldopts, fieldopt_switch, &
             ierr, "field_option in fields_knobs",.true.)
 
+       if(trim(response_dir).eq.'')then
+          write(response_file,'(A)') trim(run_name)
+       else
+          write(response_file,'(A,"/",A)') trim(response_dir),trim(run_name)
+       endif
+
     end if
 
     call broadcast (fieldopt_switch)
@@ -262,12 +268,8 @@ contains
     call broadcast (read_response)
 
     !Setup response file location
-    if(trim(response_dir).eq.'')then
-       write(response_file,'(A)') trim(run_name)
-    else
-       write(response_file,'(A,"/",A)') trim(response_dir),trim(run_name)
-    endif
     call broadcast(response_dir)
+    call broadcast(response_file)
 
     !Set the solve type specific flags
     call set_dump_and_read_response(dump_response, read_response)
