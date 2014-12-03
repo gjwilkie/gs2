@@ -60,9 +60,13 @@ contains
     if(proc0.and.debug) write (*,*) 'initializing new diagnostics'
     call init_diagnostics_config(gnostics)
     call check_parameters
+    call check_restart_file_writeable
     
     call init_volume_averages
     
+    ! Eventually we will remove this as we want the new diagnostics
+    ! module to be built even if netCDF is not available.
+    ! Or do we??
     if (.not. simpledataio_functional()) then
        if (proc0) then
           write (*,*) "WARNING: simpledataio is non-functional. &
@@ -187,7 +191,31 @@ contains
        !SHOULD THIS BE MP_ABORT? COULD WE NOT JUST DISABLE THE DIAGNOSTIC?
        stop 1
     end if
+
   end subroutine check_parameters
+
+
+  subroutine check_restart_file_writeable
+    use gs2_save, only: restart_writable
+    use mp, only: proc0, mp_abort
+    logical :: writable
+    !Verify restart file can be written
+    if((gnostics%save_for_restart.or.gnostics%save_distfn).and.(gnostics%file_safety_check))then
+       !Can we write file?
+       writable=restart_writable()
+
+       !If we can't write the restart file then we should probably quit
+       if((.not.writable).and.gnostics%save_for_restart) &
+         call mp_abort("Cannot write to test file, maybe restart_dir &
+         & doesn't exist --> Aborting.",to_screen=.true.)
+
+       !If it's just a case of save_distfn then we can carry on but print a useful mesasge
+       if((.not.writable).and.gnostics%save_distfn)then
+          if(proc0)write(6,'("Warning: Cannot write to test restart_file --> Setting save_distfn=F.")')
+          gnostics%save_distfn=.false.
+       endif
+    endif
+  end subroutine check_restart_file_writeable
 
   !> This subroutine determines which ascii output files are enabled
   !! (i.e., opened, flushed at each write, and then closed).
