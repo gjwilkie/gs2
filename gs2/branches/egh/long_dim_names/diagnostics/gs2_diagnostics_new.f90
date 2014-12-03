@@ -98,7 +98,6 @@ contains
        gnostics%rtype = SDATIO_FLOAT
     end if
     gnostics%itype = SDATIO_INT
-    !write (*,*) 'gnostics%rtype', gnostics%rtype, 'doub', SDATIO_DOUBLE, 'float', SDATIO_FLOAT
     
     gnostics%user_time_old = 0.0
     
@@ -111,6 +110,12 @@ contains
     !<DD>This is only correct if running in box mode surely?
     !    I think this should be if(aky(1)==0.0) fluxfac(1)=1.0 but I may be wrong
     if(aky(1)==0.0) gnostics%fluxfac(1) = 1.0
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!! Open Text Files (if required)
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    if (proc0) call set_ascii_file_switches
+    if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
     
     !!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Initialise submodules
@@ -123,18 +128,11 @@ contains
     if (gnostics%write_heating) call init_diagnostics_heating(gnostics)
     call read_input_file_and_get_size(gnostics)
     
-    !gnostics%create = .true.
-    ! Integer below gives the sdatio type 
-    ! which corresponds to a gs2 real
-    !gnostics%rtype = SDATIO_DOUBLE
-    
     call sdatio_init(gnostics%sfile, trim(run_name)//'.cdf')
     if (gnostics%parallel) then 
        call set_parallel(gnostics%sfile, mp_comm)
     else
        if (.not. gnostics%serial_netcdf4) then 
-          !gnostics%sfile%mode = IOR(NF90_NETCDF4,NF90_CLOBBER)
-          !else
           gnostics%sfile%mode = NF90_CLOBBER
        end if
     end if
@@ -146,27 +144,6 @@ contains
     !All procs initialise dimension data but if not parallel IO
     !only proc0 has to add them to file.
     call create_dimensions(gnostics%parallel.or.proc0)
-
-
-
-    !call createfile_parallel(gnostics%sfile, trim(run_name)//'.cdf', mp_comm)
-    
-    !!if (gnostics%write_movie) &
-    !!call createfile_parallel(gnostics%sfilemovie, trim(run_name)//'.movie.cdf', mp_comm)
-    
-    !else if (proc0) then
-      !call createfile(gnostics%sfile, trim(run_name)//'.cdf')
-      !!if (gnostics%write_movie) &
-        !!call createfile(gnostics%sfilemovie, trim(run_name)//'.movie.cdf')
-    !end if
-
-    !if (gnostics%parallel .or. proc0) then 
-      !if (gnostics%write_movie) call create_dimensions_movie
-    !end if
-    !if (gnostics%write_ascii) then 
-    if (proc0) call set_ascii_file_switches
-    if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
-    !end if
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
     
