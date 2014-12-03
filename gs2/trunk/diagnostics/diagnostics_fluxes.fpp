@@ -372,8 +372,6 @@ contains
     flux_value_temp = flux_value
 
     call broadcast(flux_value_temp)
-    !call sum_allreduce(flux_value_temp)
-    if (.not. ( abs(abs(sum(flux_value_temp))  - abs(sum(flux_value))) .lt. epsilon(0.0)) ) write (*,*) "NOT EQUAL" 
 
     total_flux_by_mode = 0.
     do ik = 1,naky
