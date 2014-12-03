@@ -1,10 +1,7 @@
 !> A module for for writing help, metadata and the input file 
 !! to the netcdf file. 
 !! 
-!! To extract the input file use this command
-!!    ncdump <outputfile> -v input_file| \
-!!      grep 'input_file = ' | sed s/.\ \;\$// | sed s/input_file.....// | sed \
-!!       s/\\\\\\\"/\\\"/g | sed s/\\\(\\\\\\\\n\ \\\)*\\\\\\\\n/\\n/g 
+!! To extract the input file use the bash utility Aux/extract_input_file
 module diagnostics_metadata
   use diagnostics_config, only: diagnostics_type
   implicit none
@@ -91,9 +88,10 @@ contains
       jline(" (*) http://sourceforge.net/projects/gyrokinetics ")//& 
       jline("       (Downloads, bug tracker) "))
     call add_metadata(gnostics%sfile, "input_file_extraction", &
-      jline(" A bash command for extracting the input file ")//&
-      jline(" from this file is printed on the wiki and in ")//&
-      jline(" the sourcefile diagnostics_metadata.f90"))
+      jline(" A bash utility for extracting the input file ")//&
+      jline(" from this file is included in the Aux ")//&
+      jline(" folder in the GS2 source. To invoke it:")//&
+      jline(" $ ./extract_input_file <netcdf_file>"))
     call add_metadata(gnostics%sfile, "svn_revision", &
       trim(get_svn_rev()))
     call add_metadata(gnostics%sfile, "build_indentifier", &
