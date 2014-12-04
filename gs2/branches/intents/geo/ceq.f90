@@ -1,14 +1,26 @@
-
 !> Reads in the geometry using a CHEASE output file.
 !! The CHEASE output file is read using the helper module
 !! read_chease.
-
 module ceq
-
 
   implicit none
 
+  public :: ceq_init, ceqin, gradient, eqitem, bgradient, Hahm_Burrell, ceq_finish
+  public :: invR,     initialize_invR
+  public :: Rpos
+  public :: Zpos
+  public :: rcenter,  initialize_rcenter 
+  public :: diameter, initialize_diameter
+  public :: btori,    initialize_btori
+  public :: dbtori,   initialize_dbtori
+  public :: qfun,     initialize_q
+  public :: pfun,     initialize_pressure
+  public :: dpfun,    initialize_dpressure
+  public :: betafun,  initialize_beta
+  public :: psi,      initialize_psi
+
   private
+
   integer :: nr, nt, i_sym
   
   real, allocatable, dimension (:)     :: rho_d, eqpsi, psi_bar, fp, beta
@@ -33,26 +45,9 @@ module ceq
   logical :: init_invR = .true.
   logical :: transp = .false.
 
-!  public :: B_psi 
-  public :: ceq_init, ceqin, gradient, eqitem, bgradient, Hahm_Burrell, ceq_finish
-
-  public :: invR,     initialize_invR
-  public :: Rpos
-  public :: Zpos
-  public :: rcenter,  initialize_rcenter 
-  public :: diameter, initialize_diameter
-  public :: btori,    initialize_btori
-  public :: dbtori,   initialize_dbtori
-  public :: qfun,     initialize_q
-  public :: pfun,     initialize_pressure
-  public :: dpfun,    initialize_dpressure
-  public :: betafun,  initialize_beta
-  public :: psi,      initialize_psi
-
   logical, parameter :: debug = .true.
 
 contains
-
   function chease_chi_index(nchi,itheta)
     integer, intent(in) :: nchi, itheta
     integer :: chease_chi_index
@@ -61,45 +56,32 @@ contains
     ! itheta  1 2 3 4 5 6 7 8 
     ! ichi    5 6 7 8 1 2 3 4         
     if (itheta > nchi/2) then 
-      chease_chi_index = itheta - nchi/2
+       chease_chi_index = itheta - nchi/2
     else
-      chease_chi_index = itheta + nchi/2
+       chease_chi_index = itheta + nchi/2
     end if
   end function chease_chi_index
     
   subroutine ceqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
-
     use constants, only: pi
     use read_chease, only: read_infile, npsi_chease, nchi_chease, b0exp_chease
     use read_chease, only: psi_chease, f_chease, q_chease, p_chease
     use read_chease, only: r_chease, z_chease
     implicit none
-    character (len=80) :: eqfile
+    character(len=80), intent(in) :: eqfile
     real, intent(out) :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid
     integer, intent(in) :: initeq
+    logical, intent(in) :: in_nt 
     integer, intent(out) :: nthg
-!    integer :: initeq, nthg
-!    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
     real :: d, R_geo
-!    logical :: in_nt
-    logical, intent(in) :: in_nt
-    
     integer :: i,j
     integer :: nchar
-!    integer :: ncid, id, i, j, ifail, nchar, istatus
-!    character(31) :: fortrancrap
-!    character(80) :: filename, eqfile
     character (len=80) :: filename
-!    integer, dimension(2) :: start, cnt
 
 !
 ! what is the best way to handle the netcdf single/double problem?
 !
-!    integer*4 :: iwork
-!    integer nz1, nz2
-!    real*4, allocatable, dimension(:) :: workr, work
-    !real, allocatable, dimension(:) :: work
     real :: f_N, psi_N
 
 
@@ -107,15 +89,11 @@ contains
 
     if(initeq == 0) return
     if (.not.in_nt) then
-
-      nchar=index(eqfile,' ')-1
+       nchar=index(eqfile,' ')-1
        filename=eqfile(1:nchar)
 !       filename=trim(eqfile) ?
-
-
-      write (*,*)  'Reading CHEASE input file: ', eqfile
-        call read_infile(filename)
-
+       write (*,*)  'Reading CHEASE input file: ', eqfile
+       call read_infile(filename)
 !     netcdf read scalar: nr
 !
 !     nz2 == number of points in radial array
@@ -145,7 +123,7 @@ contains
 
        !nz2 = npsi
        nr = npsi_chease
-
+       
 !       start(1) = 8
 !       id = ncvid (ncid, 'nxy', ifail)
 !       call ncvgt1 (ncid, id, start, iwork, ifail)
@@ -158,8 +136,8 @@ contains
 !     netcdf read scalar: nt
 !
 !     nt == number of theta grid points in theta eq grid
-      nt = nchi_chease + 1
-      B_norm_chease = b0exp_chease
+       nt = nchi_chease + 1
+       B_norm_chease = b0exp_chease
 
      
       !nt = nchi_chease
@@ -236,7 +214,7 @@ contains
        
        psi_0 = eqpsi(1)
        psi_a = eqpsi(nr)
-
+       
        psi_bar = (eqpsi-psi_0)/(psi_a-psi_0)
        !write (*,*) 'psi_bar', psi_bar
 
@@ -272,7 +250,7 @@ contains
             !else
           enddo
        enddo
-
+       
 !       cnt(1) = nz1
 !       cnt(2) = nz2
 !       id = ncvid (ncid, 'z', ifail)
@@ -328,7 +306,7 @@ contains
 
        R_psi = R_psi / aminor
        Z_psi = Z_psi / aminor
-
+       
        R_mag = R_psi(1,1)
        Z_mag = Z_psi(1,1)
 
@@ -371,21 +349,20 @@ contains
     nthg=nt
 
     if (debug) then
-      write (*,*) "Finished ceqin... imported CHEASE equilibrium"
-      write (*,*) 'Some important quantities:'
-      write (*,*) "aminor", aminor
-      write (*,*) 'R_mag', R_mag
-      write (*,*) 'B_T0', B_T0
-      write (*,*) 'f_N', f_N
-      write (*,*) 'nthg', nthg
-      write (*,*) 'beta', beta_0
+       write (*,*) "Finished ceqin... imported CHEASE equilibrium"
+       write (*,*) 'Some important quantities:'
+       write (*,*) "aminor", aminor
+       write (*,*) 'R_mag', R_mag
+       write (*,*) 'B_T0', B_T0
+       write (*,*) 'f_N', f_N
+       write (*,*) 'nthg', nthg
+       write (*,*) 'beta', beta_0
     end if
-
   end subroutine ceqin
 
   subroutine alloc_arrays(nr, nt)
-
-    integer :: nr, nt
+    implicit none
+    integer, intent(in) :: nr, nt
 
     allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), beta(nr), pressure(nr), &
          rc(nr), diam(nr), qsf(nr), rho_b(nr))
@@ -393,7 +370,7 @@ contains
     rc = 0. ; diam = 0. ; qsf = 0. ; rho_b = 0.
     allocate(R_psi(nr, nt), Z_psi(nr, nt))
     R_psi = 0.  ; Z_psi = 0.
-!    allocate(B_psi(nr, nt))
+    !    allocate(B_psi(nr, nt))
     allocate(drm(nr, nt, 2), dzm(nr, nt, 2), dbtm(nr, nt, 2), &
          dpm(nr, nt, 2), dtm(nr, nt, 2))
     drm = 0. ; dzm = 0. ; dbtm = 0. ; dpm = 0. ; dtm = 0.
@@ -414,14 +391,13 @@ contains
     if(allocated(dpcart)) deallocate(dpcart,dtcart,dbtcart)
     if(allocated(dpbish)) deallocate(dpbish,dtbish,dbtbish)
   end subroutine dealloc_arrays
-
+  
   subroutine ceq_finish
     implicit none
     call dealloc_arrays
   end subroutine ceq_finish
-    
+  
   subroutine ceq_init
-
     use constants, only: pi
     implicit none
     real, dimension(nr,nt) :: eqpsi1, eqth, eqbtor
@@ -500,8 +476,9 @@ contains
     use constants, only: pi
     implicit none
     integer i, j
-    character(1) :: char
-    real :: f(:,:), dfm(:,:,:)
+    character(1), intent(in) :: char
+    real, intent(in) :: f(:,:)
+    real, intent(out) :: dfm(:,:,:)
     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -583,10 +560,12 @@ contains
     use splines, only: inter_d_cspl
     implicit none
     
-    integer nth_used, ntm
-    character(1) char
-    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
-    real tmp(2), aa(1), daa(1), rp, rpt(1)
+    integer, intent(in) :: nth_used, ntm
+    character(1), intent(in) :: char
+    real, intent(in) :: rgrid(-ntm:), theta(-ntm:)
+    real, intent(out) :: grad(-ntm:,:)
+    real, intent(in) :: rp
+    real :: tmp(2), aa(1), daa(1), rpt(1)
     real, dimension(nr,nt,2) :: dcart
     real, dimension(nr,nt) :: f
     integer :: i
@@ -646,10 +625,11 @@ contains
     use splines, only: inter_d_cspl
     implicit none
     
-    integer :: nth_used, ntm
-    character(1) :: char
-    real :: rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
-    real :: aa(1), daa(1), rp, rpt(1)
+    integer, intent(in) :: nth_used, ntm
+    character(1), intent(in) :: char
+    real, intent(in) :: rgrid(-ntm:), theta(-ntm:), rp
+    real, intent(out) :: grad(-ntm:,:)
+    real :: aa(1), daa(1), rpt(1)
     real, dimension(nr,nt,2) ::  dbish
     integer :: i
 
@@ -695,10 +675,12 @@ contains
   subroutine eqitem(r, theta_in, f, fstar)
     use mp, only: mp_abort
     use constants, only: pi
+    real, intent(in) :: r, theta_in
+    real, intent(out) :: fstar
+    real, dimension(:,:), intent(inout) :: f
     integer :: i, j, istar, jstar
-    real :: r, thet, fstar, sign, theta_in
+    real :: thet, sign
     real :: st, dt, sr, dr
-    real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
 
 ! check for axis evaluation
@@ -875,7 +857,6 @@ contains
   end subroutine eqdcart
 
   subroutine eqdbish(dcart, dbish)
-
     implicit none
     real, dimension(:, :, :), intent (in) :: dcart
     real, dimension(:, :, :), intent(out) :: dbish
@@ -947,7 +928,8 @@ contains
 
   function initialize_psi (init) 
 
-    integer :: init, initialize_psi
+    integer, intent(in) :: init
+    integer :: initialize_psi
     
     init_psi = .false.
     if(init == 1) init_psi = .true.
@@ -956,7 +938,6 @@ contains
   end function initialize_psi
 
   function psi (r)
-   
     real, intent (in) :: r
     real :: psi
 
@@ -965,7 +946,6 @@ contains
   end function psi
 
   function mod2pi (theta)
-
     use constants, only: pi
     real, intent(in) :: theta
     real :: th, mod2pi
@@ -984,12 +964,11 @@ contains
        if(th <= pi .and. th >= -pi) out=.false.
     enddo
     mod2pi=th
-    
   end function mod2pi
    
   function initialize_diameter (init) 
-
-    integer :: init, initialize_diameter
+    integer, intent(in) :: init
+    integer :: initialize_diameter
     
     init_diameter = .false.
     if(init == 1) init_diameter = .true.
@@ -998,9 +977,9 @@ contains
   end function initialize_diameter
 
   function diameter (rp)
-  
     use splines, only: new_spline, splint, spline
-    real :: rp, diameter
+    real, intent(in) :: rp
+    real :: diameter
     type (spline), save :: spl
 
     if(init_diameter) then
@@ -1014,8 +993,8 @@ contains
   end function diameter
 
   function initialize_rcenter (init) 
-
-    integer :: init, initialize_rcenter
+    integer, intent(in) :: init
+    integer :: initialize_rcenter
     
     init_rcenter = .false.
     if(init == 1) init_rcenter = .true.
@@ -1024,9 +1003,9 @@ contains
   end function initialize_rcenter
 
   function rcenter (rp)
-  
     use splines, only: new_spline, splint, spline
-    real :: rp, rcenter
+    real, intent(in) :: rp
+    real :: rcenter
     type (spline), save :: spl
 
     if(init_rcenter) then
@@ -1041,7 +1020,8 @@ contains
 
   function initialize_dbtori (init) 
 
-    integer :: init, initialize_dbtori
+    integer, intent(in) :: init
+    integer :: initialize_dbtori
     
     init_dbtori = .false.
     if(init == 1) init_dbtori = .true.
@@ -1050,9 +1030,9 @@ contains
   end function initialize_dbtori
 
   function dbtori (pbar)
-  
     use splines, only: new_spline, dsplint, spline
-    real :: pbar, dbtori
+    real, intent(in) :: pbar
+    real :: dbtori
     type (spline), save :: spl
 
     if(init_dbtori) call new_spline(nr, psi_bar, fp, spl)
@@ -1063,31 +1043,30 @@ contains
   end function dbtori
 
   function initialize_btori (init) 
-
-    integer :: init, initialize_btori
+    integer, intent(in) :: init
+    integer :: initialize_btori
     
     init_btori = .false.
     if(init == 1) init_btori = .true.
     initialize_btori = 1
-
   end function initialize_btori
 
   function btori (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, btori
+    real, intent(in) :: pbar
+    real :: btori
     type (spline), save :: spl
 
     if(init_btori) call new_spline(nr, psi_bar, fp, spl)
     init_btori=.false.
 
     btori = splint(pbar, spl)
-
   end function btori
 
   function initialize_q (init) 
 
-    integer :: init, initialize_q
+    integer, intent(in) :: init
+    integer :: initialize_q
     
     init_q = .false.
     if(init == 1) init_q = .true.
@@ -1098,7 +1077,8 @@ contains
   function qfun (pbar)
   
     use splines, only: new_spline, splint, spline
-    real :: pbar, qfun
+    real, intent(in) :: pbar
+    real :: qfun
     type (spline), save :: spl
 
     if(init_q) call new_spline(nr, psi_bar, qsf, spl)
@@ -1110,7 +1090,8 @@ contains
 
   function initialize_pressure (init) 
 
-    integer :: init, initialize_pressure
+    integer, intent(in) :: init
+    integer :: initialize_pressure
     
     init_pressure = .false.
     if(init == 1) init_pressure = .true.
@@ -1121,7 +1102,8 @@ contains
   function pfun (pbar)
   
     use splines, only: new_spline, splint, spline
-    real :: pbar, pfun
+    real, intent(in) :: pbar
+    real :: pfun
     type (spline), save :: spl
 
     if(init_pressure) call new_spline(nr, psi_bar, pressure, spl)
@@ -1135,7 +1117,8 @@ contains
   
   function initialize_dpressure (init) 
 
-    integer :: init, initialize_dpressure
+    integer, intent(in) :: init
+    integer :: initialize_dpressure
     
     init_dpressure = .false.
     if(init == 1) init_dpressure = .true.
@@ -1146,7 +1129,8 @@ contains
   function dpfun (pbar)
   
     use splines, only: new_spline, dsplint, spline
-    real :: pbar, dpfun
+    real, intent(in) :: pbar
+    real :: dpfun
     type (spline), save :: spl
 !
 ! p_N would be B**2/mu_0 => p = beta/2 in our units
@@ -1162,7 +1146,8 @@ contains
 
   function initialize_beta (init) 
 
-    integer :: init, initialize_beta
+    integer, intent(in) :: init
+    integer :: initialize_beta
     
     init_beta = .false.
     if(init == 1) init_beta = .true.
@@ -1173,7 +1158,8 @@ contains
   function betafun (pbar)
   
     use splines, only: new_spline, splint, spline
-    real :: pbar, betafun
+    real, intent(in) :: pbar
+    real :: betafun
     type (spline), save :: spl
 
     if(pbar == 0.) then
@@ -1191,7 +1177,8 @@ contains
   subroutine Hahm_Burrell(irho, a) 
 
     real, intent(in) :: a
-    integer :: i, irho
+    integer, intent(in) :: irho
+    integer :: i
     real :: gradpsi, mag_B, rho_eq, rp1, rp2, rho1, rho2, drhodpsiq
     real, dimension(nr) :: gamma, pbar, dp, d2p, pres
 
