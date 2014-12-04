@@ -1,7 +1,24 @@
 module ideq
 
   implicit none
+
   private
+
+  public :: B_psi
+  public :: dfit_init, idfitin, gradient, eqitem, bgradient, dfit_finish
+
+  public :: invR
+  public :: Rpos
+  public :: Zpos
+  public :: btori,    initialize_btori
+  public :: dbtori,   initialize_dbtori
+  public :: qfun,     initialize_q
+  public :: pfun,     initialize_pressure
+  public :: dpfun,    initialize_dpressure
+  public :: betafun,  initialize_beta
+  public :: psi,      initialize_psi
+  public :: diameter, initialize_diameter
+  public :: rcenter,  initialize_rcenter
 
   integer :: nr, nt
 
@@ -29,24 +46,7 @@ module ideq
   logical :: init_rcenter = .true.
   logical :: init_diameter = .true.
 
-  public :: B_psi
-  public :: dfit_init, idfitin, gradient, eqitem, bgradient, dfit_finish
-
-  public :: invR
-  public :: Rpos
-  public :: Zpos
-  public :: btori,    initialize_btori
-  public :: dbtori,   initialize_dbtori
-  public :: qfun,     initialize_q
-  public :: pfun,     initialize_pressure
-  public :: dpfun,    initialize_dpressure
-  public :: betafun,  initialize_beta
-  public :: psi,      initialize_psi
-  public :: diameter, initialize_diameter
-  public :: rcenter,  initialize_rcenter
-
-contains
-  
+contains 
   subroutine idfitin(eqfile, theta, psi_0_out, psi_a_out, rmaj, B_T, amin, initeq)
     use constants, only: twopi
     use splines, only: new_periodic_spline, delete_periodic_spline, periodic_splint, periodic_spline
@@ -87,7 +87,7 @@ contains
     
     character(80) :: filename
     character (200) :: line
-    
+!What is this for?
     data init /1/
     save init
     
@@ -214,12 +214,10 @@ contains
        deallocate (d%grid(i)%theta)
     end do
     deallocate (d%grid)
-
   end subroutine idfitin
 
   subroutine alloc_arrays(nr, nt)
-
-    integer :: nr, nt
+    integer, intent(in) :: nr, nt
 
     if(.not.allocated(rho_d)) then
        allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), qsf(nr), beta(nr), pressure(nr), &
@@ -284,10 +282,6 @@ contains
     call eqdcart(dtm, dtcart)
 ! grad(theta) in Bishop form
     call eqdbish(dtcart, dtbish)
-
-    
-
-
 !    do i = 1, nw
 !       do j = 1,nh
 !          if(dfit_Z(j) == Z_mag .and. dfit_R(i) == R_mag) then
@@ -300,15 +294,15 @@ contains
 
 !    call derm(dfit_psi, dpm)
 !    call tderm(eqth, dtm)
-    
   end subroutine dfit_init
 
   subroutine derm(f, dfm, char)
     use constants, only: pi
     implicit none
-    integer i, j
-    character(1) :: char
-    real f(:,:), dfm(:,:,:)
+    real, dimension(:,:), intent(in) :: f
+    real, dimension(:,:,:), intent(out) :: dfm
+    character(1), intent(in) :: char
+    integer :: i, j
     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -347,23 +341,20 @@ contains
     do j=2,nt-1
        dfm(:,j,2)=0.5*(f(:,j+1)-f(:,j-1))
     enddo
-   
   end subroutine derm
 
   subroutine gradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
     use splines, only: inter_d_cspl
     implicit none
-
     integer, intent (in) :: nth_used, ntm
     character(1), intent (in) :: char
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
+    real, intent(in) :: rp
     real, dimension (nr, nt, 2) :: dcart
     real, dimension (2) :: tmp
     real, dimension (1) :: aa, daa, rpt
-    real :: rp
-    integer i
+    integer :: i
     
     select case(char)
     case('B') 
@@ -407,22 +398,19 @@ contains
           grad(i,2)=grad(i,2)*daa(1) * 0.5*beta_0
        enddo
     endif
-
   end subroutine gradient
 
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
     use splines, only: inter_d_cspl
     implicit none
-    
     integer, intent (in) :: nth_used, ntm
     character(1), intent (in) :: char
     real, dimension (-ntm:), intent (in)  ::  rgrid, theta
     real, dimension (-ntm:,:), intent (out) :: grad
+    real, intent(in) :: rp
     real, dimension (1) :: aa, daa, rpt
-    real :: rp
     real, dimension(nr, nt, 2) ::  dbish
-    integer i
+    integer :: i
  
     select case(char)
     case('B') 
@@ -459,19 +447,24 @@ contains
           grad(i,2)=grad(i,2)*daa(1) * 0.5*beta_0
        enddo
     endif
-
   end subroutine bgradient
 
-  subroutine eqitem(r, theta_in, f, fstar, char)
+  subroutine eqitem(r_in, theta_in, f, fstar, char)
     use constants, only: pi
     use mp, only: mp_abort
+    real, intent(in) :: r_in
+    real, intent(in) :: theta_in
+    real, dimension(:,:), intent(in) :: f
+    real, intent(out) :: fstar
+    character(1), intent(in) :: char
     integer :: i, j, istar, jstar
-    character(1) :: char
-    real :: r, thet, fstar, sign, tp, tps, theta_in
+    real :: thet, sign, tp, tps, r
     real :: st, dt, sr, dr, rt
-    real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
     
+    !Copy value to avoid any modification
+    r=r_in
+
 ! check for axis evaluation
       
     if(r == eqpsi(1)) then
@@ -494,7 +487,6 @@ contains
 ! find r on psi mesh
 
 ! disallow evaluations outside the plasma surface for now
-
     if(r == eqpsi(nr)) then
        rt = 0.9999999999*r
        if(rt > eqpsi(nr)) rt = 1.0000000001*r
@@ -600,11 +592,9 @@ contains
           dfcart(i,j,:)=dfcart(i,j,:)/denom(i,j)
        enddo
     enddo    
-
   end subroutine eqdcart
 
   subroutine eqdbish(dcart, dbish)
-
     implicit none
     real, dimension(:, :, :), intent (in) :: dcart
     real, dimension(:, :, :), intent(out) :: dbish
@@ -621,21 +611,18 @@ contains
           dbish(i,j,:) = dbish(i,j,:)/denom(i,j)
        enddo
     enddo
-
   end subroutine eqdbish
 
   function initialize_invR (init) 
-
-    integer :: init, initialize_invR
+    integer, intent(in) :: init
+    integer :: initialize_invR
     
     init_invR = .false.
     if(init == 1) init_invR = .true.
     initialize_invR = 1
-
   end function initialize_invR
 
   function invR (r, theta)
-   
     real, intent (in) :: r, theta
     real :: f, invR
     real :: th
@@ -644,11 +631,9 @@ contains
     
     call eqitem(r, th, R_psi, f, 'R')
     invR=1./f
-    
   end function invR
 
   function Rpos (r, theta)
-   
     real, intent (in) :: r, theta
     real :: f, Rpos
     real :: th
@@ -657,11 +642,9 @@ contains
     
     call eqitem(r, th, R_psi, f, 'R')
     Rpos=f
-    
   end function Rpos
 
   function Zpos (r, theta)
-   
     real, intent (in) :: r, theta
     real :: f, Zpos
     real :: th
@@ -670,26 +653,22 @@ contains
     
     call eqitem(r, th, Z_psi, f, 'Z')
     Zpos=f
-    
   end function Zpos
 
   function initialize_psi (init) 
-
-    integer :: init, initialize_psi
+    integer, intent(in) :: init
+    integer :: initialize_psi
     
     init_psi = .false.
     if(init == 1) init_psi = .true.
     initialize_psi = 1
-
   end function initialize_psi
 
   function psi (r)
-   
     real, intent (in) :: r
     real :: psi
 
     psi = r
-    
   end function psi
 
   function mod2pi (theta)
@@ -711,27 +690,24 @@ contains
        if(th <= pi .and. th >= -pi) out=.false.
     enddo
     mod2pi=th
-    
   end function mod2pi
    
   function initialize_diameter (init) 
-
-    integer :: init, initialize_diameter
+    integer, intent(in) :: init
+    integer :: initialize_diameter
     
     init_diameter = .false.
     if(init == 1) init_diameter = .true.
     initialize_diameter = 1
-
   end function initialize_diameter
 
   function diameter (rp)
-  
 ! not really the diameter in this case.  Instead, return the 
 ! normalized minor radius, measured inside the ring, in the plane of 
 ! the ring, starting at the ring and going inward.  
-
     use splines, only: new_spline, splint, spline
-    real :: rp, diameter
+    real, intent(in) :: rp
+    real :: diameter
     type (spline), save :: spl
 
     if(init_diameter) then
@@ -741,23 +717,21 @@ contains
     endif
 
     diameter = splint(rp, spl)
-
   end function diameter
 
   function initialize_rcenter (init) 
-
-    integer :: init, initialize_rcenter
+    integer, intent(in) :: init
+    integer :: initialize_rcenter
     
     init_rcenter = .false.
     if(init == 1) init_rcenter = .true.
     initialize_rcenter = 1
-
   end function initialize_rcenter
 
   function rcenter (rp)
-  
     use splines, only: new_spline, splint, spline
-    real :: rp, rcenter
+    real, intent(in) :: rp
+    real :: rcenter
     type (spline), save :: spl
 
     if(init_rcenter) then
@@ -767,77 +741,67 @@ contains
     endif
 
     rcenter = splint(rp, spl)
-
   end function rcenter
 
   function initialize_dbtori (init) 
-
-    integer :: init, initialize_dbtori
+    integer, intent(in) :: init
+    integer :: initialize_dbtori
     
     init_dbtori = .false.
     if(init == 1) init_dbtori = .true.
     initialize_dbtori = 1
-
   end function initialize_dbtori
 
   function dbtori ()
-  
     real :: dbtori
 
     dbtori = 0.
-
   end function dbtori
 
   function initialize_btori (init) 
-
-    integer :: init, initialize_btori
+    integer, intent(in) :: init
+    integer :: initialize_btori
     
     init_btori = .false.
     if(init == 1) init_btori = .true.
     initialize_btori = 1
-
   end function initialize_btori
 
   function btori ()
-  
     real :: btori
 
     btori = 0.
-
   end function btori
 
   function initialize_q (init) 
-
-    integer :: init, initialize_q
+    integer, intent(in) :: init
+    integer :: initialize_q
     
     init_q = .false.
     if(init == 1) init_q = .true.
     initialize_q = 1
-
   end function initialize_q
 
   function qfun ()
-  
     real :: qfun
 
     qfun = 0.
-
   end function qfun
 
   function initialize_pressure (init) 
-
-    integer :: init, initialize_pressure
+    integer, intent(in) :: init
+    integer :: initialize_pressure
     
     init_pressure = .false.
     if(init == 1) init_pressure = .true.
     initialize_pressure = 1
-
   end function initialize_pressure
 
   function pfun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, pfun
+    implicit none
+    real, intent(in) :: pbar
+    real :: pfun
     type (spline), save :: spl
 
     if(init_pressure) call new_spline(nr, psi_bar, pressure, spl)
@@ -846,23 +810,22 @@ contains
 ! p_N would be B**2/mu_0 => p = beta/2 in our units
 !
     pfun = 0.5*beta_0*splint(pbar, spl)
-
   end function pfun
   
   function initialize_dpressure (init) 
-
-    integer :: init, initialize_dpressure
+    integer, intent(in) :: init
+    integer :: initialize_dpressure
     
     init_dpressure = .false.
     if(init == 1) init_dpressure = .true.
     initialize_dpressure = 1
-
   end function initialize_dpressure
 
   function dpfun (pbar)
-  
     use splines, only: new_spline, dsplint, spline
-    real :: pbar, dpfun
+    implicit none
+    real, intent(in) :: pbar
+    real :: dpfun
     type (spline), save :: spl
 !
 ! p_N would be B**2/mu_0 => p = beta/2 in our units
@@ -873,23 +836,22 @@ contains
     endif
 
     dpfun = dsplint(pbar, spl)/(psi_a-psi_0) * beta_0/2.
-
   end function dpfun
 
   function initialize_beta (init) 
-
-    integer :: init, initialize_beta
+    integer, intent(in) :: init
+    integer :: initialize_beta
     
     init_beta = .false.
     if(init == 1) init_beta = .true.
     initialize_beta = 1
-
   end function initialize_beta
 
   function betafun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, betafun
+    implicit none
+    real, intent(in) :: pbar
+    real :: betafun
     type (spline), save :: spl
 
     if(pbar == 0.) then
@@ -901,12 +863,11 @@ contains
     init_beta = .false.
 
     betafun = splint(pbar, spl)
-
   end function betafun
 
+!Could we use the sorting module here?
   subroutine sort(a, b, c, d)
-
-    real, dimension(:) :: a, b, c, d
+    real, dimension(:), intent(in out) :: a, b, c, d
     real tmp
     integer :: i, j, jmax
 
@@ -923,6 +884,4 @@ contains
        enddo
     enddo
   end subroutine sort
-
-
 end module ideq

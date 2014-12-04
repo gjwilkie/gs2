@@ -3,7 +3,9 @@
 !! but tweaked to integrate closer to full GS2 runs etc.
 module ballstab
   implicit none
-  
+
+  private
+
   !Routines
   public :: init_ballstab, finish_ballstab
   public :: run_stability_check, is_unstable
@@ -11,8 +13,6 @@ module ballstab
 
   !Vars
   public :: stability
-
-  private
 
   logical :: make_salpha
   integer :: n_shat, n_beta

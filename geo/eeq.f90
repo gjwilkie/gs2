@@ -1,7 +1,10 @@
 ! This module contains routines to read from CMR's GS2D equilibrium solver
-
 module gs2d
-  use runtime_tests, only: verbosity
+  private
+
+  public :: read_gs2d, psi, b0, f, ippsi, nr, nz, p, ps
+  public :: psip, psmin, q, r0, rgrid, rmag, rsep, zgrid, zmag, zsep
+
   real, dimension(:), allocatable :: ps,amin_gs2d,q,f,p,pp
   real, dimension(:), allocatable :: rsep,zsep,rgrid,zgrid
   real, dimension(:,:), allocatable :: psi
@@ -84,11 +87,28 @@ end module gs2d
 module eeq
 
   implicit none
+
   private
+
+  public :: efit_init, efitin, gradient, eqitem, bgradient, efit_finish
+  public :: gs2din
+
+  public :: invR
+  public :: Rpos
+  public :: Zpos
+  public :: btori,    initialize_btori
+  public :: dbtori,   initialize_dbtori
+  public :: qfun,     initialize_q
+  public :: pfun,     initialize_pressure
+  public :: dpfun,    initialize_dpressure
+  public :: betafun,  initialize_beta
+  public :: bound,    initialize_bound
+  public :: psi,      initialize_psi
+  public :: verbosity  !Should this be replaced by usage of runtime_test:verbosity?
 
   integer :: nw, nh, nbbbs, ntime, ntstar
 
-  integer, public :: verbosity = 0
+  integer :: verbosity = 0  !Should this be replaced by usage of runtime_test:verbosity?
 
   real, allocatable, dimension (:) :: psi_bar, fp, qsf, pressure, beta, spsi_bar
   real, allocatable, dimension (:) :: dummy, efit_R, efit_Z, sefit_R, sefit_Z, efit_t
@@ -109,24 +129,7 @@ module eeq
   logical :: init_beta = .true.
   logical :: init_psi = .true.
 
-  public :: efit_init, efitin, gradient, eqitem, bgradient, efit_finish
-  public :: gs2din
-
-  public :: invR
-  public :: Rpos
-  public :: Zpos
-  public :: btori,    initialize_btori
-  public :: dbtori,   initialize_dbtori
-  public :: qfun,     initialize_q
-  public :: pfun,     initialize_pressure
-  public :: dpfun,    initialize_dpressure
-  public :: betafun,  initialize_beta
-  public :: bound,    initialize_bound
-  public :: psi,      initialize_psi
-
-
 contains
-  
   subroutine gs2din(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq, big)
 !
 !     This subroutine reads a GS2D output file containing 
@@ -150,20 +153,20 @@ contains
     use mp, only: mp_abort
     implicit none
 
+    character(len=80), intent(in) :: eqfile
+    real, intent(out) :: psi_0, psi_a, B_T, amin, rmaj
+    integer, intent(in) :: initeq, big
     real :: p_0
-    real :: rwid, rleft, zhei, amin, B_T
-    real :: psi_0, psi_a, rmaj, rcentr, bcentr
+    real :: rwid, rleft, zhei
+    real :: rcentr, bcentr
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
-    
-    character(80) :: filename, eqfile
-    
-    integer :: i, j, init, initeq, big, nhb, nwb, ierr
-    
+    character(80) :: filename
+    integer :: i, j, init, nhb, nwb, ierr
+    logical, parameter :: debug =.false.
+!What is the following for?        
     data init /1/
     save init
-
-    logical, parameter :: debug =.false.
     
 ! Need to generalize initialization condition if equilibrium changes
 
@@ -353,44 +356,47 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     use constants, only: pi, twopi
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
     implicit none
-
+    
+    character(len=80), intent(in) :: eqfile
+    real, intent(out) :: psi_0, psi_a, B_T, amin, rmaj
+    integer, intent(in) :: initeq, big
     real :: xdum, p_0
-    real :: rwid, rleft, zhei, amin, B_T
-    real :: psi_0, psi_a, rmaj, rcentr, bcentr
+    real :: rwid, rleft, zhei
+    real :: rcentr, bcentr
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
     
-    character(80) :: filename, eqfile
+    character(80) :: filename
     character(10) ::  char
     
-    integer :: i, j, init, ndum, initeq, big, nhb, nwb, ierr
-    
+    integer :: i, j, init, ndum, nhb, nwb, ierr
+!What is the following for?            
     data init /1/
     save init
     
 ! Need to generalize initialization condition if equilibrium changes
 
-   if (verbosity>2) write (*,*) 'Starting efitin'
+    if (verbosity>2) write (*,*) 'Starting efitin'
     if(initeq == 0) return
     init=0
     
     i=index(eqfile,' ')-1
     filename = eqfile(1:i)
-   if (verbosity>1) write (*,*) 'Opening file ', filename
+    if (verbosity>1) write (*,*) 'Opening file ', filename
     open(unit=5,file=filename,status='old',form='formatted')
     
 ! Read the data
 
-   read(5,1000) char, char, char, char, char, i, nw, nh
+    read(5,1000) char, char, char, char, char, i, nw, nh
 
-   if (verbosity>1) write (*,*) 'EFIT dimensions are: ', nw, nh
+    if (verbosity>1) write (*,*) 'EFIT dimensions are: ', nw, nh
 !   write(*,1000) char, char, char, char, char, i, nw, nh
 
     nwb = nw * big
     nhb = nh * big
-
+    
     call alloc_module_arrays(nwb, nwb, nhb, nw, nh)
-
+   
     read(5,2020) rwid, zhei, rcentr, rleft, xdum      
     read(5,2020) R_mag, Z_mag, psi_0, psi_a, bcentr
 !    write(*,2020) rwid, zhei, rcentr, rleft, xdum      
@@ -450,8 +456,6 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
       
     deallocate(zp, temp)
 
-
-
     read(5,2020) (dummy(j) ,   j = 1, nw)
     
 !    write(*,2020) (dummy(j) ,   j = 1, nw)
@@ -462,7 +466,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     nh = nhb
 !    read (5, *) nbbbs, ndum
     read(5,2022) nbbbs, ndum
-   allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
+    allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
     read(5,2020) (rbbbs(i), zbbbs(i) , i = 1, nbbbs)
 !    write (*,*) (rbbbs(i), i=1,nbbbs)
 ! get r_boundary(theta)
@@ -552,29 +556,25 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     efit_dZ = efit_Z(2) - efit_Z(1)
 
     if (.true.) then
-      write (*,*) "Finished efitin... imported EFIT equilibrium"
-      write (*,*) 'Some important quantities:'
-      write (*,*) "aminor", aminor
-      write (*,*) 'R_mag', R_mag
-      write (*,*) 'B_T0', B_T0
-      write (*,*) 'beta', beta_0
+       write (*,*) "Finished efitin... imported EFIT equilibrium"
+       write (*,*) 'Some important quantities:'
+       write (*,*) "aminor", aminor
+       write (*,*) 'R_mag', R_mag
+       write (*,*) 'B_T0', B_T0
+       write (*,*) 'beta', beta_0
     end if
 
-    1000 format(5(a10),i2,i4,i4)
-    2020 format (5e16.9)
-    2022 format (2i5)      
-
+1000 format(5(a10),i2,i4,i4)
+2020 format (5e16.9)
+2022 format (2i5)      
+    
   end subroutine efitin
 
   subroutine efit_init
-
     real, dimension(nw, nh) :: eqth 
     integer :: i, j
-!cmr nov04: adding following debug switch
-    logical, parameter :: debug=.false.
-!cmr
 
-if (verbosity > 2) write(6,*) "efit_init: do i"     
+    if (verbosity > 2) write(6,*) "efit_init: do i"     
     do i = 1, nw
        do j = 1,nh
           if(efit_Z(j) == Z_mag .and. efit_R(i) == R_mag) then
@@ -585,46 +585,46 @@ if (verbosity > 2) write(6,*) "efit_init: do i"
        enddo
     enddo
 
-if (verbosity > 2) write(6,*) "efit_init: derm"     
+    if (verbosity > 2) write(6,*) "efit_init: derm"     
     call derm(efit_psi, dpm)
-if (verbosity > 2) write(6,*) "efit_init: tderm"     
+    if (verbosity > 2) write(6,*) "efit_init: tderm"     
     call tderm(eqth, dtm)
-if (verbosity > 2) write(6,*) "efit_init: finished"     
-    
+    if (verbosity > 2) write(6,*) "efit_init: finished"     
   end subroutine efit_init
 
   subroutine tderm(f, dfm)
     use constants, only: pi
     implicit none
-    integer i, j
-    real f(:,:), dfm(:,:,:)
+    real, dimension(:,:), intent(in) :: f
+    real, dimension(:,:,:), intent(out) :: dfm
+    integer :: i, j
     
 ! EFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for EFIT output.    
 
-if (verbosity > 2) write(6,*) "efit: tderm: R boundary"     
+    if (verbosity > 2) write(6,*) "efit: tderm: R boundary"     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))/efit_dR
     
     i=nw
     dfm(i,:,1) = 0.5*(3*f(i,:)-4*f(i-1,:)+f(i-2,:))/efit_dR
    
-if (verbosity > 2) write(6,*) "efit: tderm: Z boundary"     
+    if (verbosity > 2) write(6,*) "efit: tderm: Z boundary"     
     j=1
     dfm(:,j,2) = -0.5*(3*f(:,j)-4*f(:,j+1)+f(:,j+2))/efit_dZ
     
     j=nh      
     dfm(:,j,2) = 0.5*(3*f(:,j)-4*f(:,j-1)+f(:,j-2))/efit_dZ
     
-if (verbosity > 2) write(6,*) "efit: tderm: R derivative"     
+    if (verbosity > 2) write(6,*) "efit: tderm: R derivative"     
     do i=2,nw-1
        dfm(i,:,1)=0.5*(f(i+1,:)-f(i-1,:))/efit_dR
     enddo
     
-if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"     
+    if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"     
     do j=2,nh-1
-          if (verbosity > 4) write(6,*) "efit: tderm: Z derivative, j = ", j,&
-           "/", nh-1 
+       if (verbosity > 4) write(6,*) "efit: tderm: Z derivative, j = ", j,&
+            "/", nh-1 
        do i = 1,nw
           if(f(i,j+1)-f(i,j-1) > pi) then
              dfm(i,j,2)=0.5*(f(i,j+1)-f(i,j-1)-2.*pi)/efit_dZ
@@ -634,14 +634,13 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
        enddo
     enddo
     if (verbosity > 2) write(6,*) "efit: tderm: Z derivative done"     
-    
   end subroutine tderm
 
   subroutine derm(f, dfm)
-
     implicit none
-    integer i, j
-    real f(:,:), dfm(:,:,:)
+    real, dimension(:,:), intent(in) :: f
+    real, dimension(:,:,:), intent(out) :: dfm
+    integer :: i, j
     
 ! EFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for EFIT output.    
@@ -669,14 +668,15 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
   end subroutine derm
 
   subroutine gradient(rgrid, theta, grad, char, rp, nth, ntm)
-
     use splines, only: inter_d_cspl
-    integer nth, ntm
-    character(1) char
+    implicit none
+    integer, intent(in) :: nth, ntm
+    character(len=1), intent(in) ::  char
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
-    real aa(1), daa(1), rp, rpt(1)
-    integer i
+    real, intent(in) :: rp
+    real :: aa(1), daa(1), rpt(1)
+    integer :: i
     
     grad = 0.
     do i=-nth, nth
@@ -695,16 +695,17 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
   end subroutine gradient
 
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
     use splines, only: inter_d_cspl
     implicit none
     
-    integer nth_used, ntm
-    character(1) char
-    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
-    real tmp(2), aa(1), daa(1), rp, rpt(1)
+    integer, intent(in) :: nth_used, ntm
+    character(len=1), intent(in) :: char
+    real, dimension(-ntm:), intent(in) :: rgrid, theta
+    real, dimension(-ntm:,:), intent(out) :: grad
+    real, intent(in) :: rp
+    real :: tmp(2), aa(1), daa(1), rpt(1)
     real, dimension(nw, nh, 2) ::  dbish
-    integer i
+    integer :: i
  
     dbish(:,:,1) = sqrt(dpm(:,:,1)**2 + dpm(:,:,2)**2)
     dbish(:,:,2) = 0.
@@ -744,11 +745,11 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
   subroutine eqitem(r, thetin, f, fstar)
     use mp, only: mp_abort
     implicit none
-    integer :: i, j, istar, jstar
     real, intent (in) :: r, thetin, f(:,:)
     real, intent (out) :: fstar
-    real st, dt, sr, dr
-    real r_pos, z_pos
+    integer :: i, j, istar, jstar
+    real :: st, dt, sr, dr
+    real :: r_pos, z_pos
     
     r_pos = Rpos(r, thetin)
     z_pos = Zpos(r, thetin)
@@ -811,110 +812,99 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
   end subroutine eqitem
 
   function Zpos (r, theta)
-   
     real, intent (in) :: r, theta
     real :: Zpos
     
     Zpos = Z_mag + r * sin(theta)
-
   end function Zpos
 
   function Rpos (r, theta)
-   
     real, intent (in) :: r, theta
     real :: Rpos
 
     Rpos = R_mag + r * cos(theta)
-    
   end function Rpos
 
   function invR (r, theta)
-   
     real, intent (in) :: r, theta
     real :: invR
 
     invR = 1/(R_mag + r*cos(theta))
-    
   end function invR
 
   function initialize_psi (init) 
-
-    integer :: init, initialize_psi
+    integer, intent(in) :: init
+    integer :: initialize_psi
     
     init_psi = .false.
     if(init == 1) init_psi = .true.
     initialize_psi = 1
-
   end function initialize_psi
 
   function psi (r, theta)
-   
     real, intent (in) :: r, theta
     real :: f, psi
 
     call eqitem(r, theta, efit_psi, f)
     psi = f
-    
   end function psi
    
   function initialize_btori (init) 
-
-    integer :: init, initialize_btori
+    integer, intent(in) :: init
+    integer :: initialize_btori
     
     init_btori = .false.
     if(init == 1) init_btori = .true.
     initialize_btori = 1
-
   end function initialize_btori
 
   function btori (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, btori
+    implicit none
+    real, intent(in) :: pbar
+    real :: btori
     type (spline), save :: spl
 
     if(init_btori) call new_spline(nw, psi_bar, fp, spl)
 
     btori = splint(pbar, spl)
-
   end function btori
 
   function initialize_dbtori (init) 
-
-    integer :: init, initialize_dbtori
+    integer, intent(in) :: init
+    integer :: initialize_dbtori
     
     init_dbtori = .false.
     if(init == 1) init_dbtori = .true.
     initialize_dbtori = 1
-
   end function initialize_dbtori
 
   function dbtori (pbar)
-  
     use splines, only: new_spline, dsplint, spline
-    real :: pbar, dbtori
+    implicit none
+    real, intent(in) :: pbar
+    real :: dbtori
     type (spline), save :: spl
 
     if(init_dbtori) call new_spline(nw, psi_bar, fp, spl)
 
     dbtori = dsplint(pbar, spl)/psi_N
-
   end function dbtori
 
   function initialize_q (init) 
-
-    integer :: init, initialize_q
+    integer, intent(in) :: init
+    integer :: initialize_q
     
     init_q = .false.
     if(init == 1) init_q = .true.
     initialize_q = 1
-
   end function initialize_q
 
   function qfun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, qfun
+    implicit none
+    real, intent(in) :: pbar
+    real :: qfun
     type (spline), save :: spl
 
     if(init_q) then
@@ -922,101 +912,95 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
     endif
 
     qfun = splint(pbar, spl)
-
   end function qfun
 
   function initialize_pressure (init) 
-
-    integer :: init, initialize_pressure
+    integer, intent(in) :: init
+    integer :: initialize_pressure
     
     init_pressure = .false.
     if(init == 1) init_pressure = .true.
     initialize_pressure = 1
-
   end function initialize_pressure
 
   function pfun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, pfun
+    implicit none
+    real, intent(in) :: pbar
+    real :: pfun
     type (spline), save :: spl
 
     if(init_pressure) call new_spline(nw, psi_bar, pressure, spl)
 
     pfun = splint(pbar, spl) * beta_0/2.
-
   end function pfun
 
   function initialize_dpressure (init) 
-
-    integer :: init, initialize_dpressure
+    integer, intent(in) :: init
+    integer :: initialize_dpressure
     
     init_dpressure = .false.
     if(init == 1) init_dpressure = .true.
     initialize_dpressure = 1
-
   end function initialize_dpressure
 
   function dpfun (pbar)
-  
     use splines, only: new_spline, dsplint, spline
-    real :: pbar, dpfun
+    implicit none
+    real, intent(in) :: pbar
+    real :: dpfun
     type (spline), save :: spl
 
     if(init_dpressure) call new_spline(nw, psi_bar, pressure, spl)
 
     dpfun = dsplint(pbar, spl)/psi_N * beta_0/2.
-
   end function dpfun
 
   function initialize_beta (init) 
-
-    integer :: init, initialize_beta
+    integer, intent(in) :: init
+    integer :: initialize_beta
     
     init_beta = .false.
     if(init == 1) init_beta = .true.
     initialize_beta = 1
-
   end function initialize_beta
 
   function betafun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, betafun
+    implicit none
+    real, intent(in) :: pbar
+    real :: betafun
     type (spline), save :: spl
 
     if(init_beta) call new_spline(nw, psi_bar, beta, spl)
 
     betafun = splint(pbar, spl)
-
   end function betafun
 
   function initialize_bound (init) 
-
-    integer :: init, initialize_bound
+    integer, intent(in) :: init
+    integer :: initialize_bound
     
     init_bound = .false.
     if(init == 1) init_bound = .true.
     initialize_bound = 1
-
   end function initialize_bound
 
   function bound(theta) 
-
     use splines, only: new_spline, splint, spline
-    real :: theta, bound
+    implicit none
+    real, intent(in) :: theta
+    real :: bound
     type (spline), save :: spl
 
     if(init_bound) call new_spline(nbbbs, thetab, r_bound, spl)
     init_bound = .false.
     
     bound = splint(theta, spl)
-
   end function bound    
 
   subroutine alloc_module_arrays(np, nw, nh, nws, nhs, ntime)
-
-    integer :: np, nw, nh, nws, nhs
+    integer, intent(in) :: np, nw, nh, nws, nhs
     integer, intent (in), optional :: ntime
  
     allocate(psi_bar(np), fp(np), qsf(np), pressure(np), beta(np))
@@ -1029,7 +1013,6 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
        allocate (dum2(ntime,nws), dum3(nws, nhs, ntime))
        allocate (efit_t(ntime))
     end if
-
   end subroutine alloc_module_arrays
 
   subroutine dealloc_module_arrays
@@ -1053,7 +1036,9 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
     use splines, only: new_spline, splint, delete_spline, spline
     implicit none
     real, dimension(:), intent (in) :: r, z
-    real :: a, Z_mag, r1, r2
+    real, intent(in) :: Z_mag
+    real, intent(out) :: a
+    real :: r1, r2
     integer, parameter :: nz = 5
     real, dimension(nz) :: rtmp, ztmp
     integer i, j, i1, n
@@ -1062,6 +1047,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 !               to determine r2 on inboard mid-plane
     integer :: k = 0 
     logical, parameter :: debug=.false.
+
     n = size(r)
 
     if (debug) write(6,*) "aminor:"
@@ -1141,10 +1127,10 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 
   end subroutine a_minor
 
+!Can we use something from the sorting module?
   subroutine sort(a, b, c, d)
-
-    real, dimension(:) :: a, b, c, d
-    real tmp
+    real, dimension(:), intent(in out) :: a, b, c, d
+    real :: tmp
     integer :: i, jmax
     logical :: sorted
 
@@ -1169,7 +1155,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
 ! alternative coding
 !  subroutine sort(a, b, c, d)
 !
-!    real, dimension(:) :: a, b, c, d
+!    real, dimension(:), intent(in out) :: a, b, c, d
 !    real tmp
 !    integer :: i, j, jmax
 !
