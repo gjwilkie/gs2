@@ -1,0 +1,34 @@
+
+.SUFFIXES: .fpp .f90 .c .o
+.PHONY: all clean
+
+#$(info "F90FLAGS is $(F90FLAGS)")
+#F90FLAGS = $(F90FLAGS) -I ../../
+#$(info "F90FLAGS is $(F90FLAGS)")
+#LDFLAGS += -I ../../
+#CFLAGS += -I ../../
+#CPPFLAGS += -I ../../
+
+.f90.o: 
+	$(FC) $(F90FLAGS) -c $< -I ../../
+.fpp.f90:
+	$(CPP) $(CPPFLAGS) $< $@ -I ../../
+.c.o:
+	$(CC) $(CFLAGS) -c $< -I ../../
+	
+# This prevents error messages like m2c: Command not found
+%.o : %.mod
+
+
+clean: 
+	$(CLEANCOMMAND)
+
+upload:
+	$(UPLOADCOMMAND)
+
+
+RUNCOMMAND= $(TESTCOMMAND)$(1) $(BLUEGENEARGS) $(2)
+
+BENCHMARKCOMMAND= $(call TESTEXEC,$(1))$(2) $(BLUEGENEARGS) $(3)
+
+UPLOAD_BENCHMARKS= ls $(1) | xargs -n 1 -I {} scp {} $(USER),gyrokinetics@web.sourceforge.net:htdocs/wikifiles/benchmark_data/.
