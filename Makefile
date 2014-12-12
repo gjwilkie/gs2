@@ -119,29 +119,6 @@ USE_AUTOTOOLS ?= off
 HAS_ISO_C_BINDING ?= on
 
 
-ifdef NPROCS
-	NTESTPROCS=$(NPROCS)
-else
-	NTESTPROCS=2
-endif
-
-ifdef TESTNORUN
-	TESTCOMMAND=: 
-else
-	ifdef TESTEXEC
-		TESTCOMMAND=$(TESTEXEC)
-	else
-		ifdef USE_MPI
-				TESTCOMMAND=mpirun -np $(NTESTPROCS)  
-		else
-		    TESTCOMMAND=./
-		endif
-
-	endif
-endif
-
-export TESTCOMMAND
-export NTESTPROCS
 
 #
 # * Targets:
@@ -687,78 +664,7 @@ revision:
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 
-# To save time you can set test deps yourself on the command line:
-# otherwise it builds everything just to be sure, because recursive
-# make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
-#export
-TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(SIMPLEDATAIO_LIB_ABS) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
-MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
-#MAKETESTS = $(MAKE)
-
-#export TEST_DEPS
-export TESTCOMMAND
-export gs2_mod
-#export TESTNORUN
-#export TESTFC=$(FC)
-#export TESTF90FLAGS=$(F90FLAGS)
-#export TESTCPP=$(CPP)
-#export TESTLD=$(LD)
-#export TESTLDFLAGS=$(LDFLAGS)
-#export TESTLIBS=$(LIBS)
-#export
-
-define TEST_HEADER
-	@echo ""
-	@echo ""
-	@echo "=================================="
-	@echo "           Test Results      "
-	@echo "=================================="
-endef
-
-
-unit_tests_no_message: unit_tests.o $(TEST_DEPS)
-	#cd unit_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
-	@find unit_tests -name results_of_test.txt | xargs rm -f
-	cd unit_tests && time ${MAKETESTS} 
-
-unit_tests: unit_tests_no_message
-	$(TEST_HEADER)
-	@find unit_tests -name results_of_test.txt | xargs -n 1 cat
-
-linear_tests_no_message: functional_tests.o unit_tests.o $(TEST_DEPS)
-	@find linear_tests -name results_of_test.txt | xargs rm -f
-	cd linear_tests && time ${MAKETESTS} 
-
-linear_tests: linear_tests_no_message
-	$(TEST_HEADER)
-	find linear_tests -name results_of_test.txt | xargs -n 1 cat
-
-tests: unit_tests_no_message linear_tests_no_message
-	$(TEST_HEADER)
-	@echo
-	@echo "           unit_tests"
-	@echo
-	@find unit_tests -name results_of_test.txt | xargs -n 1 cat
-	@echo
-	@echo "           linear_tests"
-	@echo
-	@find linear_tests -name results_of_test.txt | xargs -n 1 cat
-	@echo
-	@echo "=================================="
-
-test_script: unit_tests_no_message linear_tests_no_message
-	echo "" > test_script.sh
-	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
-	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
-	echo "echo \"Tests Successful\"" >> test_script.sh
-	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
-
-benchmarks: unit_tests.o $(TEST_DEPS)
-	cd benchmarks && time ${MAKETESTS} && echo && echo "Completed Benchmarks"
-
-upload_benchmarks: 
-	cd benchmarks && time ${MAKETESTS} upload && echo && echo "Completed Benchmarks"
+sinclude Makefile.tests_and_benchmarks
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
