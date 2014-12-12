@@ -27,7 +27,8 @@ upload:
 	$(UPLOADCOMMAND)
 
 
-RUNCOMMAND= $(TESTCOMMAND)$(1) $(BLUEGENEARGS) $(2)
+RUNCOMMAND= $(TESTCOMMAND)$(1) $(BLUEGENEARGS) $(2) $(3); if test "$$?" != 0; then  echo "$(1) $(3): FAIL" >> results_of_test.txt; else echo "$(1) $(3): pass" >> results_of_test.txt;  fi
+
 
 BENCHMARKCOMMAND= $(call TESTEXEC,$(1))$(2) $(BLUEGENEARGS) $(3)
 

@@ -708,15 +708,46 @@ export gs2_mod
 #export TESTLIBS=$(LIBS)
 #export
 
-unit_tests: unit_tests.o $(TEST_DEPS)
-	cd unit_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
+define TEST_HEADER
+	@echo ""
+	@echo ""
+	@echo "=================================="
+	@echo "           Test Results      "
+	@echo "=================================="
+endef
 
-linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
-	cd linear_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
 
-tests: unit_tests linear_tests
+unit_tests_no_message: unit_tests.o $(TEST_DEPS)
+	#cd unit_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
+	@find unit_tests -name results_of_test.txt | xargs rm -f
+	cd unit_tests && time ${MAKETESTS} 
 
-test_script: unit_tests linear_tests
+unit_tests: unit_tests_no_message
+	$(TEST_HEADER)
+	@find unit_tests -name results_of_test.txt | xargs -n 1 cat
+
+linear_tests_no_message: functional_tests.o unit_tests.o $(TEST_DEPS)
+	@find linear_tests -name results_of_test.txt | xargs rm -f
+	cd linear_tests && time ${MAKETESTS} 
+
+linear_tests: linear_tests_no_message
+	$(TEST_HEADER)
+	find linear_tests -name results_of_test.txt | xargs -n 1 cat
+
+tests: unit_tests_no_message linear_tests_no_message
+	$(TEST_HEADER)
+	@echo
+	@echo "           unit_tests"
+	@echo
+	@find unit_tests -name results_of_test.txt | xargs -n 1 cat
+	@echo
+	@echo "           linear_tests"
+	@echo
+	@find linear_tests -name results_of_test.txt | xargs -n 1 cat
+	@echo
+	@echo "=================================="
+
+test_script: unit_tests_no_message linear_tests_no_message
 	echo "" > test_script.sh
 	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
