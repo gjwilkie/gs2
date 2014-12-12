@@ -4,7 +4,7 @@
 !! a  linear cyclone test case and then checks that the old and
 !! new diagnostics give the same results
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT license
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 
 module checks_mod

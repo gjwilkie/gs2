@@ -3,7 +3,7 @@
 !! Currently success is defined as giving the same results as
 !! the old implicit module...could be improved by an absolute test
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT license
 !!   Written by: Edmund Highcock (edmundhighcock@sourceforge.net)
 program test_fields_local
   use unit_tests
