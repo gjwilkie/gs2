@@ -125,6 +125,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     endif
     if(present(job_id)) trin_job = job_id + 1
 
+#ifdef NEW_DIAG
+    diagnostics_init_options%initialized = (.not. first_time)
+#endif
+
     if (first_time) then
 
        ! <doc> Initialize message passing </doc>
@@ -199,7 +203,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        ! fluxes
        diagnostics_init_options%is_trinity_run = present(mpi_comm)
 
-       if (first_time) diagnostics_init_options%initialized = .false.
+       !if (first_time) diagnostics_init_options%initialized = .false.
+       !write (*,*) 'diagnostics_init_options%initialized', diagnostics_init_options%initialized
        if (.not. diagnostics_init_options%initialized) then
          call init_gs2_diagnostics_new(diagnostics_init_options)
        end if
@@ -228,7 +233,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (nensembles > 1) then
           call scope (subprocs)
        end if
-    endif
+    endif !firstime
 
     istep_end = nstep
     ilast_step = nstep
@@ -241,7 +246,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! Create variables
     if (.not. diagnostics_init_options%initialized) then
       call run_diagnostics(-1,exit)
-      diagnostics_init_options%initialized = .true.
+      !diagnostics_init_options%initialized = .true.
     end if
     ! Write initial values
     call run_diagnostics(0,exit)
