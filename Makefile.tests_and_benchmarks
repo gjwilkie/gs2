@@ -43,44 +43,45 @@ export gs2_mod
 #export TESTLIBS=$(LIBS)
 #export
 
-define TEST_HEADER
+define TEST_PRINTOUT
 	@echo ""
 	@echo ""
 	@echo "=================================="
 	@echo "           Test Results      "
+	@echo "==================================" $(1)
+	@echo
 	@echo "=================================="
+endef
+
+define TEST_RESULTS
+
+	@echo
+	@echo "=======   $(1)"
+	@echo
+	@find $(1) -name results_of_test.txt | xargs -n 1 cat
+endef
+
+define RUN_TESTS
+	@find $(1) -name results_of_test.txt | xargs rm -f
+	cd $(1) && time ${MAKETESTS} 
 endef
 
 
 unit_tests_no_message: unit_tests.o $(TEST_DEPS)
-	#cd unit_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
-	@find unit_tests -name results_of_test.txt | xargs rm -f
-	cd unit_tests && time ${MAKETESTS} 
+	$(call RUN_TESTS,unit_tests)
 
 unit_tests: unit_tests_no_message
-	$(TEST_HEADER)
-	@find unit_tests -name results_of_test.txt | xargs -n 1 cat
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
 
 linear_tests_no_message: functional_tests.o unit_tests.o $(TEST_DEPS)
-	@find linear_tests -name results_of_test.txt | xargs rm -f
-	cd linear_tests && time ${MAKETESTS} 
+	$(call RUN_TESTS,linear_tests)
 
 linear_tests: linear_tests_no_message
-	$(TEST_HEADER)
-	find linear_tests -name results_of_test.txt | xargs -n 1 cat
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
 
 tests: unit_tests_no_message linear_tests_no_message
-	$(TEST_HEADER)
-	@echo
-	@echo "           unit_tests"
-	@echo
-	@find unit_tests -name results_of_test.txt | xargs -n 1 cat
-	@echo
-	@echo "           linear_tests"
-	@echo
-	@find linear_tests -name results_of_test.txt | xargs -n 1 cat
-	@echo
-	@echo "=================================="
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,unit_tests)$(call TEST_RESULTS,linear_tests))
+
 
 test_script: unit_tests_no_message linear_tests_no_message
 	echo "" > test_script.sh
