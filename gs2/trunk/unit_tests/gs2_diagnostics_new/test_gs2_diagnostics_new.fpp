@@ -113,7 +113,7 @@ program test_gs2_diagnostics_new
     file_names(5) = 'phase'
     n_lines_files(5) = '16'
     file_names(6) = 'jext'
-    n_lines_files(6) = '16'
+    n_lines_files(6) = '0'
     file_names(7) = 'parity'
     n_lines_files(7) = '34'
 

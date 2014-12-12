@@ -133,6 +133,7 @@ module diagnostics_config
      logical :: write_final_antot
      logical :: write_gs
      logical :: save_for_restart
+     logical :: file_safety_check
      logical :: save_distfn
   end type diagnostics_type
 
@@ -265,6 +266,7 @@ contains
     logical :: write_final_antot
     logical :: write_gs
     logical :: save_for_restart
+    logical :: file_safety_check
     logical :: save_distfn
     namelist /diagnostics_config/ &
          nwrite, &
@@ -327,6 +329,7 @@ contains
          write_final_antot, &
          write_gs, &
          save_for_restart, &
+         file_safety_check, &
          save_distfn
 
     integer :: in_file
@@ -392,7 +395,8 @@ contains
        write_final_moments = .false.
        write_final_antot = .false.
        write_gs = .false.
-       save_for_restart = .true.
+       save_for_restart = .false.
+       file_safety_check = .true.
        save_distfn = .false.
 
        in_file = input_unit_exist ("diagnostics_config", exist)
@@ -458,6 +462,7 @@ contains
        gnostics%write_final_antot = write_final_antot
        gnostics%write_gs = write_gs
        gnostics%save_for_restart = save_for_restart
+       gnostics%file_safety_check = file_safety_check
        gnostics%save_distfn = save_distfn
 
     end if
@@ -522,6 +527,7 @@ contains
     call broadcast (gnostics%write_final_antot)
     call broadcast (gnostics%write_gs)
     call broadcast (gnostics%save_for_restart)
+    call broadcast (gnostics%file_safety_check)
     call broadcast (gnostics%save_distfn)
     
     if (override_screen_printout_options) then 

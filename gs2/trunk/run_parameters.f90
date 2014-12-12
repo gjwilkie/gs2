@@ -26,6 +26,8 @@ module run_parameters
   !! simple diffusive estimates of fluxes to trinity
   public :: trinity_linear_fluxes
 
+  public :: user_comments
+
   private
 
   real :: beta, zeff, tite
@@ -49,6 +51,8 @@ module run_parameters
   logical :: neo_test
 
   logical :: trinity_linear_fluxes, do_eigsolve
+
+  character(len=100000) :: user_comments
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
@@ -228,7 +232,7 @@ contains
     real, dimension (2) :: vnm_saved
 
     real :: teti  ! for back-compatibility
-    namelist /parameters/ beta, zeff, tite, teti, k0, rhostar
+    namelist /parameters/ beta, zeff, tite, teti, k0, rhostar, user_comments
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
          delt_option, margin, secondary, tertiary, faperp, harris, &
 !         avail_cpu_time, eqzip_option, include_lowflow, neo_test
@@ -259,6 +263,7 @@ contains
        trinity_linear_fluxes = .false.
        do_eigsolve = .false.
        immediate_reset = .true.
+       user_comments = ''
        
        in_file = input_unit_exist("parameters", rpexist)
 !       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)

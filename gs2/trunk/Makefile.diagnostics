@@ -40,8 +40,10 @@ libsimpledataio.a: simpledataio_write.o simpledataiof.o simpledataio.o
 simpledataio_write.o: simpledataio_write.f90 simpledataiof.o
 	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
 
-simpledataiof.o: simpledataiof.f90 simpledataio.o
+simpledataiof.o: simpledataiof.f90 simpledataio.o 
 	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
+
+simpledataio.o: diagnostics/simpledataio/include/definitions.h diagnostics/simpledataio/include/simpledataio.h
 
 #ifdef DBLE
 #CPPFLAGS+=-DSDATIO_DEFAULT_DOUBLE

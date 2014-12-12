@@ -7,7 +7,8 @@ program test_job_manage
   !use functional_tests
   !use checks_mod
   !call test_gs2('Linear CBC (unit test) to test new diagnostics', checks)
-    use gs2_main, only: run_gs2, finish_gs2
+    use gs2_main, only: run_gs2, finish_gs2, trin_finish_gs2
+    !use gs2_main, only: run_gs2, trin_finish_gs2
     use unit_tests
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics, only: finish_gs2_diagnostics
@@ -34,10 +35,18 @@ program test_job_manage
    if (proc0) call system("touch test_job_manage.stop")
    call announce_test("that gs2 doesn't run without limit when run_name.stop is present")
    start_time = timer_local()
+    call run_gs2(mp_comm)
    call process_test((timer_local() - start_time < avail_time), &
      "that gs2 doesn't run without limit when run_name.stop is present")
-    call run_gs2(mp_comm)
     if (proc0) call system("rm test_job_manage.stop")
+    !write (*,*) 'calling finish_gs2_diagnostics'
+    !call finish_gs2_diagnostics(ilast_step)
+#ifdef NEW_DIAG
+    !call finish_gs2_diagnostics_new
+#endif 
+
+    !write (*,*) 'calling trin_finish_gs2'
+    !call trin_finish_gs2
 
    call announce_test("that gs2 doesn't run without limit when avail_cpu_time is set")
    start_time = timer_local()
@@ -52,7 +61,9 @@ program test_job_manage
     call finish_gs2_diagnostics_new
 #endif 
 
-    call finish_gs2
+   call finish_gs2
+
+    !call trin_finish_gs2
 
 
 
