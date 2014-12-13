@@ -8,10 +8,10 @@ ifdef TESTNORUN
 	TESTCOMMAND=: 
 else
 	ifdef TESTEXEC
-		TESTCOMMAND=$(TESTEXEC)
+		TESTCOMMAND=$(TESTEXEC) ./
 	else
 		ifdef USE_MPI
-				TESTCOMMAND=mpirun -np $(NTESTPROCS)  
+				TESTCOMMAND=mpirun -np $(NTESTPROCS) ./
 		else
 		    TESTCOMMAND=./
 		endif
