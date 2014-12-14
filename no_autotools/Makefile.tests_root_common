@@ -7,10 +7,17 @@ TEST_MODS= ../../functional_tests.o
 # Run the tests in all subfolders unless otherwise specified
 # by setting the variable TESTS
 ifdef TESTS
-TESTS_ACTUAL = $(filter $(wildcard */.),$(patsubst %,%/.,$(TESTS)))
+TESTS_TMP = $(filter $(wildcard */.),$(patsubst %,%/.,$(TESTS)))
 else
-TESTS_ACTUAL = $(wildcard */.)
+TESTS_TMP = $(wildcard */.)
 endif
+
+ifdef EXCLUDE_TESTS
+TESTS_ACTUAL = $(filter-out $(patsubst %,%/.,$(EXCLUDE_TESTS)),$(TESTS_TMP))
+else
+TESTS_ACTUAL = TESTS_TMP
+endif
+
 
 
 
