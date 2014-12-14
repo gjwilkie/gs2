@@ -15,7 +15,7 @@ endif
 ifdef EXCLUDE_TESTS
 TESTS_ACTUAL = $(filter-out $(patsubst %,%/.,$(EXCLUDE_TESTS)),$(TESTS_TMP))
 else
-TESTS_ACTUAL = TESTS_TMP
+TESTS_ACTUAL = $(TESTS_TMP)
 endif
 
 
