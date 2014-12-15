@@ -22,10 +22,13 @@ contains
     integer, dimension(8) :: values
 
     call add_metadata(gnostics%sfile, "title", &
+      jline("")//&
       jline("=================================================")//&
       jline("                GS2 Output File")//&
-      jline("================================================="))
+      jline("=================================================")//&
+      jline(""))
     call add_metadata(gnostics%sfile, "file_description", &
+      jline("")//&
       jline(" This file contains output from the gyrokinetic")//&
       jline(" flux tube code GS2. GS2 is a code")//&
       jline(" which evolves the gyrokinetic equation, ")//&
@@ -39,16 +42,20 @@ contains
       jline(" (*) Values of moments such as density, ")//&
       jline("         parallel flow and temperature. ")//&
       jline(" The details of what is contained are controlled")//&
-      jline(" by the namelist diagnostics_config. "))
+      jline(" by the namelist diagnostics_config. ")//&
+      jline(""))
     call add_metadata(gnostics%sfile, "data_description", &
+      jline("")//&
       jline(" Most data consists of physical quantities given")//&
       jline(" as a function of one more of the five dimensions")//&
       jline(" in the GK eqn: theta, kx, ky, energy and lamda. ")// &
       jline(" Data is typically double precision real numbers.  ")//&
       jline(" Complex numbers are handled by having an extra")//&
-      jline(" dimension ri. "))
+      jline(" dimension ri. ")//&
+      jline(""))
     call add_metadata(gnostics%sfile, "normalization_description", &
-      jline("Quantities in this file are given in ")//&
+      jline("")//&
+      jline(" Quantities in this file are given in ")//&
       jline(" dimensionless form.  Dimensional quantities can")//&
       jline(" be reconstructed from these dimensionless ")//&
       jline(" quantities by multiplying by the expression ")// &
@@ -75,9 +82,11 @@ contains
       jline("    (*) Z_ref: the reference charge, which ")//&
       jline("          is always equal to the proton charge")//&
       jline(" (*) vth_ref = sqrt(2 T_ref/m_ref). ")//&
-      jline(" (*) rho_ref = vth_ref / (Z_ref B_ref / m_ref c)"))
+      jline(" (*) rho_ref = vth_ref / (Z_ref B_ref / m_ref c)")//&
+      jline(""))
 
     call add_metadata(gnostics%sfile, "gs2_help", &
+      jline("")//&
       jline(" At the time of writing you can obtain ")//&
       jline(" help for using GS2 in the following")//&
       jline(" places: ")//&
@@ -87,12 +96,15 @@ contains
             " (*) http://gyrokinetics.sourceforge.net/gs2_documentation/ "//&
       jline("       (Doxygen documentation) ")//&
       jline(" (*) http://sourceforge.net/projects/gyrokinetics ")//& 
-      jline("       (Downloads, bug tracker) "))
+      jline("       (Downloads, bug tracker) ")//&
+      jline(""))
     call add_metadata(gnostics%sfile, "input_file_extraction", &
+      jline("")//&
       jline(" A bash utility for extracting the input file ")//&
       jline(" from this file is included in the Aux ")//&
       jline(" folder in the GS2 source. To invoke it:")//&
-      jline(" $ ./extract_input_file <netcdf_file>"))
+      jline(" $ ./extract_input_file <netcdf_file>")//&
+      jline(""))
     call add_metadata(gnostics%sfile, "user_comments", &
       trim(user_comments))
     call add_metadata(gnostics%sfile, "svn_revision", &
