@@ -8,10 +8,10 @@ ifdef TESTNORUN
 	TESTCOMMAND=: 
 else
 	ifdef TESTEXEC
-		TESTCOMMAND=$(TESTEXEC)
+		TESTCOMMAND=$(TESTEXEC) ./
 	else
 		ifdef USE_MPI
-				TESTCOMMAND=mpirun -np $(NTESTPROCS)  
+				TESTCOMMAND=mpirun -np $(NTESTPROCS) ./
 		else
 		    TESTCOMMAND=./
 		endif
@@ -25,15 +25,16 @@ export NTESTPROCS
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
+#TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
+TEST_DEPS?=libgs2.a functional_tests.o benchmarks.o
 #export
-TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(SIMPLEDATAIO_LIB_ABS) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
+TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD)  -L$(SIMPLEDATAIO_LIB_DIR_ABS)" LIBS=" -lgs2 -lsimpledataio $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 #MAKETESTS = $(MAKE)
 
 #export TEST_DEPS
 export TESTCOMMAND
-export gs2_mod
+#export gs2_mod
 #export TESTNORUN
 #export TESTFC=$(FC)
 #export TESTF90FLAGS=$(F90FLAGS)
