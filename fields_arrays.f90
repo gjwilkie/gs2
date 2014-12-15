@@ -10,4 +10,7 @@ module fields_arrays
 
   !Timing data
   real, save :: time_field(2)=0.
+  
+  !For response data
+  character(len=300) :: response_file
 end module fields_arrays
