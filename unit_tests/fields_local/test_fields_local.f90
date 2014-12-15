@@ -92,7 +92,7 @@ contains
     logical :: restarted
     integer :: istep, ik, it
 
-    allocate(gbak(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+    allocate(gbak(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate(phi_imp(-ntgrid:ntgrid,ntheta0,naky))
     allocate(apar_imp(-ntgrid:ntgrid,ntheta0,naky))
     allocate(bpar_imp(-ntgrid:ntgrid,ntheta0,naky))
