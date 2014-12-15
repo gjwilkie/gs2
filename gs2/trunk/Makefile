@@ -187,6 +187,16 @@ $(warning TEST mode is not working yet)
 	override TEST =
 endif
 
+# It makes no sense to set USE_PARALLEL_NETCDF without
+# setting USE_HDF5... so we set USE_HDF5 here. 
+# If you want to use parallel-netcdf instead of netcdf/hdf5 you can 
+# override this behaviour in the system makefile
+ifdef USE_PARALLEL_NETCDF
+ifndef USE_HDF5
+	USE_HDF5=on
+endif
+endif
+
 ######################################################### PLATFORM DEPENDENCE
 
 # compile mode switches (DEBUG, TEST, PROF, OPT, STATIC, DBLE)
