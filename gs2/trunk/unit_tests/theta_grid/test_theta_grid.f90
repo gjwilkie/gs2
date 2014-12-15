@@ -6,7 +6,7 @@
 !!       to see that theta_grid gets the same coefficients in all three cases.
 !!
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT license
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 program test_theta_grid
   use unit_tests
