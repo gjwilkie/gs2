@@ -208,7 +208,7 @@ contains
          '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"'
     
     if (should_print(3)) write(*,*) trim(command)
-    !call system(" echo ""F"" > test_tmp.txt")
+    call system(" echo ""F"" > test_tmp.txt")
     call system(command)
     test_variable = .true.
     open(120349, file='test_tmp.txt')
