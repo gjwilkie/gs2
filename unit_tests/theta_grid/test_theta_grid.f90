@@ -87,7 +87,7 @@ program test_theta_grid
   ! Miller
 
   call process_test( &
-    test_results(rslt(:,1,:), miller_result(), 4.9e-1, 3.0e-1), &
+    test_results(rslt(:,1,:), miller_result(), 4.9e-8, 3.0e-1), &
     ' that Miller has not changed')
 
   call announce_test(' that Miller and CHEASE give the same result')
