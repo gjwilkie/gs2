@@ -52,15 +52,21 @@ contains
     use simpledataio, only: SDATIO_DOUBLE, SDATIO_FLOAT, SDATIO_INT
     use simpledataio, only: sdatio_init, simpledataio_functional
     use simpledataio, only: set_parallel, create_file
+    use diagnostics_metadata, only: write_metadata
+    use diagnostics_metadata, only: read_input_file_and_get_size
     implicit none
     type(diagnostics_init_options_type), intent(in) :: init_options
     
     if(proc0.and.debug) write (*,*) 'initializing new diagnostics'
     call init_diagnostics_config(gnostics)
     call check_parameters
+    call check_restart_file_writeable
     
     call init_volume_averages
     
+    ! Eventually we will remove this as we want the new diagnostics
+    ! module to be built even if netCDF is not available.
+    ! Or do we??
     if (.not. simpledataio_functional()) then
        if (proc0) then
           write (*,*) "WARNING: simpledataio is non-functional. &
@@ -92,7 +98,6 @@ contains
        gnostics%rtype = SDATIO_FLOAT
     end if
     gnostics%itype = SDATIO_INT
-    !write (*,*) 'gnostics%rtype', gnostics%rtype, 'doub', SDATIO_DOUBLE, 'float', SDATIO_FLOAT
     
     gnostics%user_time_old = 0.0
     
@@ -105,6 +110,12 @@ contains
     !<DD>This is only correct if running in box mode surely?
     !    I think this should be if(aky(1)==0.0) fluxfac(1)=1.0 but I may be wrong
     if(aky(1)==0.0) gnostics%fluxfac(1) = 1.0
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!! Open Text Files (if required)
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    if (proc0) call set_ascii_file_switches
+    if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
     
     !!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Initialise submodules
@@ -115,48 +126,24 @@ contains
     call init_diagnostics_velocity_space(gnostics)
     call init_diagnostics_antenna(gnostics)
     if (gnostics%write_heating) call init_diagnostics_heating(gnostics)
-    
-    !gnostics%create = .true.
-    ! Integer below gives the sdatio type 
-    ! which corresponds to a gs2 real
-    !gnostics%rtype = SDATIO_DOUBLE
+    call read_input_file_and_get_size(gnostics)
     
     call sdatio_init(gnostics%sfile, trim(run_name)//'.cdf')
     if (gnostics%parallel) then 
        call set_parallel(gnostics%sfile, mp_comm)
     else
        if (.not. gnostics%serial_netcdf4) then 
-          !gnostics%sfile%mode = IOR(NF90_NETCDF4,NF90_CLOBBER)
-          !else
           gnostics%sfile%mode = NF90_CLOBBER
        end if
     end if
     if (gnostics%parallel.or.proc0) then 
        call create_file(gnostics%sfile)
+       call write_metadata(gnostics)
     end if
 
     !All procs initialise dimension data but if not parallel IO
     !only proc0 has to add them to file.
     call create_dimensions(gnostics%parallel.or.proc0)
-
-    !call createfile_parallel(gnostics%sfile, trim(run_name)//'.cdf', mp_comm)
-    
-    !!if (gnostics%write_movie) &
-    !!call createfile_parallel(gnostics%sfilemovie, trim(run_name)//'.movie.cdf', mp_comm)
-    
-    !else if (proc0) then
-      !call createfile(gnostics%sfile, trim(run_name)//'.cdf')
-      !!if (gnostics%write_movie) &
-        !!call createfile(gnostics%sfilemovie, trim(run_name)//'.movie.cdf')
-    !end if
-
-    !if (gnostics%parallel .or. proc0) then 
-      !if (gnostics%write_movie) call create_dimensions_movie
-    !end if
-    !if (gnostics%write_ascii) then 
-    if (proc0) call set_ascii_file_switches
-    if (proc0) call init_diagnostics_ascii(gnostics%ascii_files)
-    !end if
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
     
@@ -181,7 +168,31 @@ contains
        !SHOULD THIS BE MP_ABORT? COULD WE NOT JUST DISABLE THE DIAGNOSTIC?
        stop 1
     end if
+
   end subroutine check_parameters
+
+
+  subroutine check_restart_file_writeable
+    use gs2_save, only: restart_writable
+    use mp, only: proc0, mp_abort
+    logical :: writable
+    !Verify restart file can be written
+    if((gnostics%save_for_restart.or.gnostics%save_distfn).and.(gnostics%file_safety_check))then
+       !Can we write file?
+       writable=restart_writable()
+
+       !If we can't write the restart file then we should probably quit
+       if((.not.writable).and.gnostics%save_for_restart) &
+         call mp_abort("Cannot write to test file, maybe restart_dir &
+         & doesn't exist --> Aborting.",to_screen=.true.)
+
+       !If it's just a case of save_distfn then we can carry on but print a useful mesasge
+       if((.not.writable).and.gnostics%save_distfn)then
+          if(proc0)write(6,'("Warning: Cannot write to test restart_file --> Setting save_distfn=F.")')
+          gnostics%save_distfn=.false.
+       endif
+    endif
+  end subroutine check_restart_file_writeable
 
   !> This subroutine determines which ascii output files are enabled
   !! (i.e., opened, flushed at each write, and then closed).
@@ -305,11 +316,13 @@ contains
     use diagnostics_turbulence, only: write_correlation_extend
     use diagnostics_antenna, only: write_jext, write_lorentzian
     use diagnostics_ascii, only: flush_output_files
+    use diagnostics_dimensions, only: dim_string
     use diagnostics_create_and_write, only: create_and_write_variable
     use collisions, only: vary_vnew
     use nonlinear_terms, only: nonlin
     use species, only: spec, has_electron_species
     use simpledataio, only: increment_start, syncfile, closefile, set_parallel, create_file
+    use diagnostics_metadata, only: write_input_file
     implicit none
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
@@ -350,6 +363,7 @@ contains
     if (istep < 1) then
        call write_dimensions
        call write_geometry(gnostics)
+       call write_input_file(gnostics)
     end if
     
     if (istep > 0) then
@@ -386,9 +400,11 @@ contains
        call run_diagnostics_to_be_updated
 
        ! Finally, write time value and update time index
-       call create_and_write_variable(gnostics, gnostics%rtype, "t", "t", &
+       call create_and_write_variable(gnostics, gnostics%rtype, "t", &
+            trim(dim_string(gnostics%dims%time)), &
             "Values of the time coordinate", "a/v_thr", user_time) 
-       if (gnostics%wryte) call increment_start(gnostics%sfile, "t")
+       if (gnostics%wryte) call increment_start(gnostics%sfile, &
+         trim(dim_string(gnostics%dims%time)))
        if (gnostics%wryte) call syncfile(gnostics%sfile)
        if (proc0 .and. gnostics%write_ascii) call flush_output_files(gnostics%ascii_files)
        
@@ -449,10 +465,12 @@ contains
   end subroutine run_old_final_routines
   
   subroutine create_dimensions(add_to_file)
+    use simpledataio_write, only: real_imaginary_dimension_name
     use kt_grids, only: naky, ntheta0, nx, ny, jtwist_out, box
     use theta_grid, only: ntgrid
     use le_grids, only: negrid, nlambda
     use species, only: nspec
+    use diagnostics_metadata, only: inputfile_length
 
     implicit none
     logical, intent(in) :: add_to_file
@@ -466,16 +484,16 @@ contains
     
     !Initialise the dimension instances and add to file
     !/Spectral space
-    call gnostics%dims%kx%init("X", ntheta0, "The kx dimension", "")
+    call gnostics%dims%kx%init("kx", ntheta0, "The kx dimension", "")
     if(add_to_file) call gnostics%dims%kx%add_to_file(gnostics%sfile)
-    call gnostics%dims%ky%init("Y", naky, "The ky dimension", "")
+    call gnostics%dims%ky%init("ky", naky, "The ky dimension", "")
     if(add_to_file) call gnostics%dims%ky%add_to_file(gnostics%sfile)
     !/Parallel space
-    call gnostics%dims%theta%init("z", 2*ntgrid+1, "The theta (parallel) dimension", "")
+    call gnostics%dims%theta%init("theta", 2*ntgrid+1, "The theta (parallel) dimension", "")
     if(add_to_file) call gnostics%dims%theta%add_to_file(gnostics%sfile)
     if (box) then 
        !What is this used for?
-       call gnostics%dims%theta_ext%init("j", (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), &
+       call gnostics%dims%theta_ext%init("theta_ext", (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), &
             "The theta (parallel) dimension along the extended domain", "")
        if(add_to_file) call gnostics%dims%theta_ext%add_to_file(gnostics%sfile)
     end if
@@ -490,19 +508,21 @@ contains
        if(add_to_file) call gnostics%dims%yy%add_to_file(gnostics%sfile)
     endif
     !/Velocity space
-    call gnostics%dims%energy%init("e", negrid, "The energy dimension", "")
+    call gnostics%dims%energy%init("energy", negrid, "The energy dimension", "")
     if(add_to_file) call gnostics%dims%energy%add_to_file(gnostics%sfile)
-    call gnostics%dims%lambda%init("l", nlambda, "The pitch angle dimension", "")
+    call gnostics%dims%lambda%init("lambda", nlambda, "The pitch angle dimension", "")
     if(add_to_file) call gnostics%dims%lambda%add_to_file(gnostics%sfile)
-    call gnostics%dims%vpar%init("v",negrid*nlambda,"For writing functions of vparallel", "")
+    call gnostics%dims%vpar%init("vpa",negrid*nlambda,"For writing functions of vparallel", "")
     if(add_to_file) call gnostics%dims%vpar%add_to_file(gnostics%sfile)
-    call gnostics%dims%species%init("s", nspec, "The species dimension", "")
+    call gnostics%dims%species%init("species", nspec, "The species dimension", "")
     if(add_to_file) call gnostics%dims%species%add_to_file(gnostics%sfile)
     !/Time | Note this is an unlimited dimension so the length is ignored
-    call gnostics%dims%time%init("t", 0, "The energy dimension", "", is_unlimited_in=.true.)
+    call gnostics%dims%time%init("t", 0, "The time dimension", "", is_unlimited_in=.true.)
     if(add_to_file) call gnostics%dims%time%add_to_file(gnostics%sfile)
     !/Numeric/generic
-    call gnostics%dims%ri%init("r", 2, "Real and imaginary components", "")
+    ! This tells simpledataio that we are using "ri" for real/imaginary (default is "r")
+    real_imaginary_dimension_name = 'ri'
+    call gnostics%dims%ri%init("ri", 2, "Real and imaginary components", "")
     if(add_to_file) call gnostics%dims%ri%add_to_file(gnostics%sfile)
     call gnostics%dims%generic_2%init("2", 2, "Generic 2", "")
     if(add_to_file) call gnostics%dims%generic_2%add_to_file(gnostics%sfile)
@@ -512,6 +532,9 @@ contains
     if(add_to_file) call gnostics%dims%generic_4%add_to_file(gnostics%sfile)
     call gnostics%dims%generic_5%init("5", 5, "Generic 5", "")
     if(add_to_file) call gnostics%dims%generic_5%add_to_file(gnostics%sfile)
+    ! Special dimension for the input file
+    call gnostics%dims%input_file_dim%init("input_file_dim", inputfile_length, "Length of input file", "")
+    if(add_to_file) call gnostics%dims%input_file_dim%add_to_file(gnostics%sfile)
   end subroutine create_dimensions
 
   !subroutine create_dimensions_movie
