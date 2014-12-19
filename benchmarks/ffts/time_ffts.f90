@@ -2,7 +2,7 @@
 !> A program that repeatedly calls add_nl for benchmarking the ffts and
 !! transposes
 !!
-!! This is free software released under GPLv3
+!! This is free software released under MIT
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 program time_ffts
   use unit_tests

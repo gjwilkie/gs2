@@ -4,7 +4,7 @@
 !! a  linear cyclone test case and then checks that the old and
 !! new diagnostics give the same results
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT license
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 
 module checks_mod
@@ -113,7 +113,7 @@ program test_gs2_diagnostics_new
     file_names(5) = 'phase'
     n_lines_files(5) = '16'
     file_names(6) = 'jext'
-    n_lines_files(6) = '16'
+    n_lines_files(6) = '0'
     file_names(7) = 'parity'
     n_lines_files(7) = '34'
 
@@ -193,9 +193,19 @@ contains
     
     test_variable=.true.
 #ifdef NEW_DIAG
-    command = "if [ ""`ncdump -v "//var_name//" test_gs2_diagnostics_new.out.nc  | tail -n "//n_lines//"`"" = &
-     &  ""`ncdump -v "//new_var_name//" test_gs2_diagnostics_new.cdf | tail -n "//n_lines//" `"" ]; &
-     & then echo ""T"" > test_tmp.txt; fi"
+!    command = "if [ ""`ncdump -v "//var_name//" test_gs2_diagnostics_new.out.nc  | tail -n "//n_lines//"`"" = &
+!     &  ""`ncdump -v "//new_var_name//" test_gs2_diagnostics_new.cdf | tail -n "//n_lines//" `"" ]; &
+!     & then echo ""T"" > test_tmp.txt; fi"
+!    write(command,'("if [ ",A,"$(./getncdat ",A," ",A,")",A," &
+!      & = ",A,"$(./getncdat ",A," ",A,")",A," ] ; &
+!      & then echo ",A," > test_tmp.txt ; fi")') &
+!         '"',"test_gs2_diagnostics_new.out.nc",var_name,'"',&
+!         '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"',"'T'"
+    
+    command = ''
+    write(command,'("./compare ",A,A," ",A,A," ",A,A," ",A,A," ",A,A)') &
+         '"',"test_gs2_diagnostics_new.out.nc",var_name,'"',&
+         '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"'
     
     if (should_print(3)) write(*,*) trim(command)
     call system(" echo ""F"" > test_tmp.txt")

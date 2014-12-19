@@ -1,54 +1,22 @@
-#include "string.h"
-#include "stdio.h"
-#include <stdlib.h>
-#include <netcdf.h>
+#include "include/definitions.h"
 
-#define SDATIO_INT 0
-#define SDATIO_FLOAT 1
-#define SDATIO_DOUBLE 2
-#define SDATIO_COMPLEX_DOUBLE 3
+/* Initialise a new sdatio_file object.*/
+void sdatio_init(struct sdatio_file * sfile, char * fname);
 
-#define SDATIO_UNLIMITED NC_UNLIMITED
+/* Free memory associated with an sdatio_file object.*/
+void sdatio_free(struct sdatio_file * sfile);
 
-
-struct sdatio_dimension {
-	char * name;
-	int size;
-	int nc_id;
-	int start;
-};
-
-struct sdatio_variable {
-	char * name;
-	int nc_id;
-	int type;
-	char * dimension_list;
-	int * dimension_ids;
-	int type_size;
-	int * manual_counts;
-	int * manual_starts;
-	/* Only used for Fortran:*/
-	int * manual_offsets;
-};
-
-
-struct sdatio_file {
-	int nc_file_id;
-	int is_parallel;
-	int n_dimensions;
-	struct sdatio_dimension ** dimensions;
-	int n_variables;
-	struct sdatio_variable ** variables;
-	int data_written;
-};
-
-
-int sdatio_debug;
+/* Switch the sdatio_file object to parallel mode and 
+ * set the MPI communicator */
+void sdatio_set_parallel(struct sdatio_file * sfile, MPI_Comm * comm);
 
 /* Open a new datafile for writing. fname is the name of the file 
  * The stuct sfile is used to store the state information
  * of the file.*/
-void sdatio_createfile(struct sdatio_file * sfile, char * fname);
+void sdatio_create_file(struct sdatio_file * sfile);
+
+/* Write metadata to the file (as a netcdf global attribute)*/
+void sdatio_add_metadata(struct sdatio_file * sfile, const int metadata_type, const char * key, const void * value);
 
 /* Create a new dimension in the file sfile. Dimension names must
  * be a single letter. */
@@ -64,6 +32,9 @@ void sdatio_print_dimensions(struct sdatio_file * sfile);
 
 /* Close the file and free all memory associated with sfile*/
 void sdatio_close(struct sdatio_file * sfile);
+
+/* Write default metadata such as simpledataio and library versions */
+void sdatio_add_standard_metadata(struct sdatio_file * sfile);
 
 /* Ensure all variables are written to disk in case of crashes*/
 void sdatio_sync(struct sdatio_file * sfile);
@@ -98,3 +69,4 @@ void sdatio_increment_start(struct sdatio_file * sfile, char * dimension_name);
 
 /* Returns 1 if the given variable exists, 0 otherwise */
 int sdatio_variable_exists(struct sdatio_file * sfile, char * variable_name);
+
