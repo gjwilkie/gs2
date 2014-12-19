@@ -6,7 +6,7 @@
 !!       to see that theta_grid gets the same coefficients in all three cases.
 !!
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT license
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 program test_theta_grid
   use unit_tests
@@ -87,7 +87,7 @@ program test_theta_grid
   ! Miller
 
   call process_test( &
-    test_results(rslt(:,1,:), miller_result(), 4.9e-1, 3.0e-1), &
+    test_results(rslt(:,1,:), miller_result(), 4.9e-8, 3.0e-1), &
     ' that Miller has not changed')
 
   call announce_test(' that Miller and CHEASE give the same result')

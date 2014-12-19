@@ -166,12 +166,13 @@ contains
     if (moment_name .eq. 'density' .and. gnostics%write_density_over_time) write_moment_by_time = .true.
     if (moment_name .eq. 'upar' .and. gnostics%write_upar_over_time) write_moment_by_time = .true.
     if (moment_name .eq. 'tperp' .and. gnostics%write_tperp_over_time) write_moment_by_time = .true.
+    !write_moment_by_time = .false.
 
     if (write_moment_by_time) & 
          call create_and_write_distributed_fieldlike_variable( &
          gnostics, gnostics%rtype, moment_name//"_t", &
-         dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%kx,&
-         gnostics%dims%ky,gnostics%dims%species,gnostics%dims%time]), &
+         trim(dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%kx,&
+         gnostics%dims%ky,gnostics%dims%species,gnostics%dims%time])), &
          moment_description//": the whole moment, as a function of time" , &
          moment_units, moment_value)
 

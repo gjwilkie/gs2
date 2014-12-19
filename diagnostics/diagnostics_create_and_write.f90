@@ -17,8 +17,8 @@ module diagnostics_create_and_write
   public :: create_and_write_variable
 
   !> These are a set of subroutines for writing variables which 
-  !! have the dimensions X and Y (for example, fields, moments or 
-  !! fluxes) which may be distributed, ie. different XY combinations
+  !! have the dimensions kx and ky (for example, fields, moments or 
+  !! fluxes) which may be distributed, ie. different kx,ky combinations
   !! may be on different processors. The locality is determined through
   !! the function field_k_local.
   public :: create_and_write_distributed_fieldlike_variable
@@ -992,6 +992,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1002,28 +1003,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     real, intent(in), dimension(:,:)  :: val
     real :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1034,38 +1063,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 2 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 2 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1088,6 +1119,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1098,28 +1130,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     real, intent(in), dimension(:,:,:)  :: val
     real :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1130,38 +1190,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 3 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 3 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1184,6 +1246,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1194,28 +1257,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     real, intent(in), dimension(:,:,:,:)  :: val
     real :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1226,38 +1317,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 4 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 4 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1280,6 +1373,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1290,28 +1384,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     real, intent(in), dimension(:,:,:,:,:)  :: val
     real :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1322,38 +1444,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 5 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 5 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1376,6 +1500,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1386,28 +1511,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     real, intent(in), dimension(:,:,:,:,:,:)  :: val
     real :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1418,38 +1571,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 6 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 6 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1472,6 +1627,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1482,28 +1638,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     integer, intent(in), dimension(:,:)  :: val
     integer :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1514,38 +1698,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 2 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 2 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1568,6 +1754,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1578,28 +1765,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     integer, intent(in), dimension(:,:,:)  :: val
     integer :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1610,38 +1825,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 3 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 3 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1664,6 +1881,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1674,28 +1892,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     integer, intent(in), dimension(:,:,:,:)  :: val
     integer :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1706,38 +1952,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 4 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 4 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1760,6 +2008,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1770,28 +2019,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     integer, intent(in), dimension(:,:,:,:,:)  :: val
     integer :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1802,38 +2079,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 5 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 5 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1856,6 +2135,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1866,28 +2146,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     integer, intent(in), dimension(:,:,:,:,:,:)  :: val
     integer :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1898,38 +2206,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 6 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 6 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -1952,6 +2262,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -1962,28 +2273,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     character, intent(in), dimension(:,:)  :: val
     character :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -1994,38 +2333,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 2 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 2 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2048,6 +2389,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2058,28 +2400,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     character, intent(in), dimension(:,:,:)  :: val
     character :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2090,38 +2460,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 3 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 3 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2144,6 +2516,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2154,28 +2527,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     character, intent(in), dimension(:,:,:,:)  :: val
     character :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2186,38 +2587,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 4 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 4 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2240,6 +2643,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2250,28 +2654,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     character, intent(in), dimension(:,:,:,:,:)  :: val
     character :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2282,38 +2714,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 5 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 5 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2336,6 +2770,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2346,28 +2781,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     character, intent(in), dimension(:,:,:,:,:,:)  :: val
     character :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2378,38 +2841,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 6 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 6 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2432,6 +2897,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2442,28 +2908,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     double precision, intent(in), dimension(:,:)  :: val
     double precision :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2474,38 +2968,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 2 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 2 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2528,6 +3024,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2538,28 +3035,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     double precision, intent(in), dimension(:,:,:)  :: val
     double precision :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2570,38 +3095,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 3 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 3 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2624,6 +3151,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2634,28 +3162,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     double precision, intent(in), dimension(:,:,:,:)  :: val
     double precision :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2666,38 +3222,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 4 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 4 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2720,6 +3278,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2730,28 +3289,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     double precision, intent(in), dimension(:,:,:,:,:)  :: val
     double precision :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2762,38 +3349,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 5 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 5 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2816,6 +3405,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2826,28 +3416,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     double precision, intent(in), dimension(:,:,:,:,:,:)  :: val
     double precision :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2858,38 +3476,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 6 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 6 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -2912,6 +3532,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -2922,28 +3543,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex, intent(in), dimension(:,:)  :: val
     complex :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -2954,38 +3603,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 2 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 2 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3008,6 +3659,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3018,28 +3670,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex, intent(in), dimension(:,:,:)  :: val
     complex :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3050,38 +3730,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 3 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 3 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3104,6 +3786,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3114,28 +3797,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex, intent(in), dimension(:,:,:,:)  :: val
     complex :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3146,38 +3857,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 4 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 4 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3200,6 +3913,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3210,28 +3924,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex, intent(in), dimension(:,:,:,:,:)  :: val
     complex :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3242,38 +3984,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 5 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 5 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3296,6 +4040,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3306,28 +4051,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex, intent(in), dimension(:,:,:,:,:,:)  :: val
     complex :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3338,38 +4111,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 6 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 6 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3392,6 +4167,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3402,28 +4178,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex*16, intent(in), dimension(:,:)  :: val
     complex*16 :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3434,38 +4238,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 2 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 2 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3488,6 +4294,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3498,28 +4305,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex*16, intent(in), dimension(:,:,:)  :: val
     complex*16 :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3530,38 +4365,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 3 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 3 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3584,6 +4421,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3594,28 +4432,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex*16, intent(in), dimension(:,:,:,:)  :: val
     complex*16 :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3626,38 +4492,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 4 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 4 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3680,6 +4548,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3690,28 +4559,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex*16, intent(in), dimension(:,:,:,:,:)  :: val
     complex*16 :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3722,38 +4619,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 5 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 5 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
@@ -3776,6 +4675,7 @@ contains
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
     use diagnostics_config, only: diagnostics_type
+    use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
     use file_utils, only: error_unit
     use fields_parallelization, only: field_k_local
@@ -3786,28 +4686,56 @@ contains
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    integer :: xdim
+    character(len=len(dimension_list)), dimension(7) :: dimension_names
+    character(len=len(dimension_list)) :: buffer
+    integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
     complex*16, intent(in), dimension(:,:,:,:,:,:)  :: val
     complex*16 :: dummy
    
     !return 
-    ! Find location of the x dimension
+    ! Check the dimension list contains kx,ky
 !<DD>This may need changing if we change the string used to identify kx and ky.
-    xdim = index(dimension_list, "XY")
+    xdim = index(dimension_list, trim(dim_string([gnostics%dims%kx,gnostics%dims%ky])))
 
     if (xdim .eq. 0) then
        write(error_unit(), *) "The function create_and_write_dstrb_field_like_variable should &
-            & only be called for arrays whose dimension list contains XY in that order"
+            & only be called for arrays whose dimension list contains kx,ky in that order"
        call mp_abort("")
     end if
+
+    ! Split the dimension list into an array of dimension names
+    idim = 0
+    count = 1
+    buffer = ''
+    dimlistlength = len(trim(dimension_list))
+    do i = 1,dimlistlength
+      !write (*,*) 'dimension_list', dimension_list, buffer, i, 'dimension_names', dimension_names
+      if (dimension_list(i:i) .eq. "," .or. (i .eq. dimlistlength)) then
+        if (i .eq. dimlistlength) then
+          buffer(count:count) = dimension_list(i:i)
+          count = count + 1
+        end if
+        idim = idim + 1
+        dimension_names(idim) = trim(buffer)
+        if (trim(dimension_names(idim)) .eq. trim(dim_string(gnostics%dims%kx))) xdim = idim
+        buffer = ''
+        count = 1
+      else
+        buffer(count:count) = dimension_list(i:i)
+        count = count + 1
+      end if
+    end do
+    !write (*,*) 'dimension_names', dimension_names(1:idim)
  
+    !write (*,*) 'starting create_variable', variable_name, trim(dimension_list)
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
        if (gnostics%distributed) then
        end if
     end if
+    !write (*,*) 'Finished create variable', variable_name
 
 
     if (gnostics%wryte) then
@@ -3818,38 +4746,40 @@ contains
           ! one write to a variable with an infinite dimension.
           ! Here we make some dummy writes to satisfy that
 !<DD>This will need changing if we allow multi-character dimension names
-          do id = 1,len(trim(dimension_list))
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), 1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), 1)
+          !write (*,*) 'Starting dummy writes'
+          do id = 1,idim
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
           call write_variable(gnostics%sfile, variable_name, dummy)
-          do id = 1,len(trim(dimension_list))
+          do id = 1,idim
              !! Reset the starts and counts
-             if (dimension_list(id:id) .eq. 't') cycle
-             call set_count(gnostics%sfile, variable_name, dimension_list(id:id), -1)
-             !call set_start(gnostics%sfile, variable_name, dimension_list(id:id), -1)
+             if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
+             call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
+             !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), -1)
           end do
           call barrier
-          call set_count(gnostics%sfile, variable_name, "X", 1)
-          call set_count(gnostics%sfile, variable_name, "Y", 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), 1)
+          call set_count(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), 1)
           call set_independent(gnostics%sfile, variable_name)
+          !write (*,*) 'Starting loop'
           do ik = 1,naky
              do it = 1,ntheta0
                 if (field_k_local(it,ik)) then
-                   call set_start(gnostics%sfile, variable_name, "X", it)
-                   call set_start(gnostics%sfile, variable_name, "Y", ik)
-                   ! Now we treat cases where X and Y are not the two most
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%kx)), it)
+                   call set_start(gnostics%sfile, variable_name, trim(dim_string(gnostics%dims%ky)), ik)
+                   ! Now we treat cases where kx and ky are not the two most
                    ! slowly varying indices
                    if (xdim < 6 - 1) then
-                      call set_count(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), 1)
+                      call set_count(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), 1)
                       ! This loop will normally be over species
                       do i1 = 1,size(val, xdim+2)
-                         call set_start(gnostics%sfile, variable_name, dimension_list(xdim+2:xdim+2), i1)
+                         call set_start(gnostics%sfile, variable_name, trim(dimension_names(xdim+2)), i1)
                          if (xdim < 6 - 2) then
-                            write (*,*) "Case with two dimensions to the right of X and Y not implemented"
+                            call mp_abort("Case with two dimensions to the right of kx and ky not implemented", .true.)
                             !<DD>Should this be an mp_abort?
-                            stop 1
+                            
                          else
                             call write_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
