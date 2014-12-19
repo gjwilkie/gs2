@@ -125,6 +125,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     endif
     if(present(job_id)) trin_job = job_id + 1
 
+#ifdef NEW_DIAG
+    diagnostics_init_options%initialized = (.not. first_time)
+#endif
+
     if (first_time) then
 
        ! <doc> Initialize message passing </doc>
@@ -188,15 +192,19 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
 #ifdef NEW_DIAG
 #ifdef NETCDF_PARALLEL
-       diagnostics_init_options%parallel_io = .true.
+       diagnostics_init_options%parallel_io_capable = .true.
 #else
-       diagnostics_init_options%parallel_io = .false.
+       diagnostics_init_options%parallel_io_capable = .false.
 #endif
 
        ! Here we check if reals have been promoted to doubles
        diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
+       ! Check whether this is a Trinity run... enforces calculation of the
+       ! fluxes
+       diagnostics_init_options%is_trinity_run = present(mpi_comm)
 
-       if (first_time) diagnostics_init_options%initialized = .false.
+       !if (first_time) diagnostics_init_options%initialized = .false.
+       !write (*,*) 'diagnostics_init_options%initialized', diagnostics_init_options%initialized
        if (.not. diagnostics_init_options%initialized) then
          call init_gs2_diagnostics_new(diagnostics_init_options)
        end if
@@ -225,7 +233,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (nensembles > 1) then
           call scope (subprocs)
        end if
-    endif
+    endif !firstime
 
     istep_end = nstep
     ilast_step = nstep
@@ -238,7 +246,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! Create variables
     if (.not. diagnostics_init_options%initialized) then
       call run_diagnostics(-1,exit)
-      diagnostics_init_options%initialized = .true.
+      !diagnostics_init_options%initialized = .true.
     end if
     ! Write initial values
     call run_diagnostics(0,exit)

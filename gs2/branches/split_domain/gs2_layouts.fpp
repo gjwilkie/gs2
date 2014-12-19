@@ -385,7 +385,7 @@ contains
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
     use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
-    use mp, only: nproc
+    use mp, only: mp_abort, nproc
     implicit none
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
@@ -426,7 +426,7 @@ contains
     .and. layout.ne.'lxyes' .and. layout.ne.'lyxes' .and. layout.ne.'xyles') &
     then
        write(6,*) "gs2_layouts: read_parameters finds illegal layout=",layout," =>stop"
-       stop
+       call mp_abort("gs2_layouts: read_parameters finds illegal layout=")
     endif
 
 ! max_unbalanced_xxf and max_unbalanced_yxf have a maximum range of 0.0 - 1.0

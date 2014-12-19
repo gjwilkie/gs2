@@ -453,7 +453,7 @@ contains
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, ia, isgn
+    integer :: iglo, ik, it, is, ig, ia
     
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)
