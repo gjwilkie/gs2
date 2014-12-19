@@ -167,6 +167,7 @@ module le_grids
   logical :: leinit = .false.
   logical :: lzinit = .false.
   logical :: einit = .false.
+  logical :: init_weights_init = .false.
 
   integer :: nmax = 500
   integer :: nterp = 100
@@ -420,6 +421,9 @@ contains
     real, dimension (:), allocatable :: lmodzeroes, wlerrtmp ! (ng2-1)
     integer :: ipt, ndiv, divmax
     logical :: eflag = .false.
+
+    if (init_weights_init) return
+    init_weights_init = .true.
 
 
     allocate(lmodzeroes(ng2-1), wlerrtmp(ng2-1))
@@ -1271,27 +1275,32 @@ contains
     use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx,intmom_sub
 ! <TT
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, sum_allreduce_sub, nproc, sum_allreduce
+    use mp, only: sum_reduce, sum_allreduce_sub, nproc, sum_allreduce, sum_reduce_sub
 
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension(:,:,:,:),allocatable :: total_small
-    integer, optional, intent(in) :: all
+    logical, optional, intent(in) :: all
     logical, optional, intent(in) :: full_arr
-    logical :: local_full_arr
+    logical :: local_full_arr, local_all
     integer :: is, il, ie, ik, it, iglo
 
     !Do we want to know the full result?
     local_full_arr=.false.
     if(present(full_arr)) local_full_arr=full_arr
+
+    ! Do all processors need to know the result?
+    local_all = .false.
+    if(present(all)) local_all = all
+
     !NOTE: Currently we're lazy and force the full_arr approach to reduce
     !over the whole array. Really we should still use the sub-communicator
     !approach and then gather the remaining data as we do for integrate_species
 
     !Allocate array and ensure is zero
-    if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then !If we're using reduce then we don't want to make array smaller
+    if(intmom_sub.and.local_all.and.(.not.local_full_arr))then !If we're using reduce then we don't want to make array smaller
 !       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=0.
        allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max))
     else
@@ -1315,12 +1324,25 @@ contains
     !Not sure that we really need to limit this to nproc>1 as if
     !we run with 1 proc MPI calls should still work ok
     if (nproc > 1) then     
-       if (present(all).and.(.not.local_full_arr)) then
-          !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
-          !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
-          !all procs in this case.
-          call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
+       if (local_all) then 
+         if (local_full_arr) then
+            call sum_allreduce (total_small)
+         else 
+           !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
+           !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
+           !all procs in this case.
+           call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
+         end if
        else
+         !if (local_full_arr) then
+            !call sum_reduce (total_small, 0)
+         !else 
+           !Complete integral over distributed velocity space
+           !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
+           !all procs in this case.
+           !call sum_reduce_sub (total_small,g_lo%xysblock_comm)
+         !end if
+
           !Complete integral over distributed velocity space but only proc0 knows the answer
           call sum_reduce (total_small, 0)
        end if
@@ -1331,7 +1353,7 @@ contains
     !this routine is more expensive than original version just using total.
     !In practice we should have two integrate_moment_c34 routines, one for sub-comms
     !and one for world-comms.
-    if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then
+    if(intmom_sub.and.local_all.and.(.not.local_full_arr))then
        total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=total_small
     else
        total=total_small
@@ -3884,6 +3906,7 @@ contains
     leinit = .false.
     lzinit = .false.
     einit = .false.
+    init_weights_init = .false.
     initialized = .false.
 
   end subroutine finish_le_grids

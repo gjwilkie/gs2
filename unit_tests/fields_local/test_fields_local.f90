@@ -3,7 +3,7 @@
 !! Currently success is defined as giving the same results as
 !! the old implicit module...could be improved by an absolute test
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT license
 !!   Written by: Edmund Highcock (edmundhighcock@sourceforge.net)
 program test_fields_local
   use unit_tests
@@ -32,7 +32,7 @@ program test_fields_local
   ! General config
   eps = 1.0e-7
 
-  if (precision(eps).lt. 11) eps = eps * 100.0
+  if (precision(eps).lt. 11) eps = eps * 1000.0
 
   ! Set up depenencies
   call init_mp
@@ -92,7 +92,7 @@ contains
     logical :: restarted
     integer :: istep, ik, it
 
-    allocate(gbak(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+    allocate(gbak(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate(phi_imp(-ntgrid:ntgrid,ntheta0,naky))
     allocate(apar_imp(-ntgrid:ntgrid,ntheta0,naky))
     allocate(bpar_imp(-ntgrid:ntgrid,ntheta0,naky))

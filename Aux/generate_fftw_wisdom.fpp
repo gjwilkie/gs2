@@ -2,7 +2,7 @@
 !> A program that calls init_transforms, to be used for generating fftw wisdom 
 !! for a given input file.
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT licence
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 program generate_fftw_wisdom
   !use unit_tests

@@ -98,6 +98,7 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -148,11 +149,23 @@ ffttester_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 diagnostics_antenna.o \
+	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
-	 diagnostics_write_omega.o \
+	 diagnostics_dimensions.o \
+	 diagnostics_fields.o \
+	 diagnostics_final_routines.o \
+	 diagnostics_fluxes.o \
+	 diagnostics_geometry.o \
+	 diagnostics_heating.o \
+	 diagnostics_metadata.o \
+	 diagnostics_moments.o \
+	 diagnostics_nonlinear_convergence.o \
+	 diagnostics_omega.o \
+	 diagnostics_screen_printout.o \
+	 diagnostics_turbulence.o \
+	 diagnostics_velocity_space.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -190,6 +203,7 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -201,6 +215,8 @@ ffttester_mod = \
 	 redistribute.o \
 	 run_parameters.o \
 	 runtime_tests.o \
+	 simpledataio_write.o \
+	 simpledataiof.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -266,11 +282,23 @@ gs2_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
+	 diagnostics_antenna.o \
+	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
-	 diagnostics_write_omega.o \
+	 diagnostics_dimensions.o \
+	 diagnostics_fields.o \
+	 diagnostics_final_routines.o \
+	 diagnostics_fluxes.o \
+	 diagnostics_geometry.o \
+	 diagnostics_heating.o \
+	 diagnostics_metadata.o \
+	 diagnostics_moments.o \
+	 diagnostics_nonlinear_convergence.o \
+	 diagnostics_omega.o \
+	 diagnostics_screen_printout.o \
+	 diagnostics_turbulence.o \
+	 diagnostics_velocity_space.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -308,6 +336,7 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -319,6 +348,8 @@ gs2_mod = \
 	 redistribute.o \
 	 run_parameters.o \
 	 runtime_tests.o \
+	 simpledataio_write.o \
+	 simpledataiof.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -401,6 +432,7 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -441,6 +473,9 @@ rungridgen_mod = \
 	 mp.o \
 	 rungridgen.o \
 	 spl.o 
+
+test_mod = \
+	 test.o 
 
 antenna.o: \
 	 antenna_data.o \
@@ -493,42 +528,178 @@ deq.o: \
 	 constants.o \
 	 mp.o \
 	 spl.o 
-diagnostics_config.o: \
-	 file_utils.o \
-	 mp.o \
-	 text_options.o 
-diagnostics_create_and_write.o: \
-	 diagnostics_config.o 
-diagnostics_write_fields.o: \
+diagnostics_antenna.o: \
+	 antenna.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
-	 fields_arrays.o \
-	 fields_parallelization.o \
+	 diagnostics_dimensions.o \
+	 dist_fn.o \
 	 kt_grids.o \
-	 run_parameters.o \
+	 mp.o \
 	 theta_grid.o \
 	 volume_averages.o 
-diagnostics_write_fluxes.o: \
+diagnostics_ascii.o: \
+	 file_utils.o 
+diagnostics_config.o: \
+	 diagnostics_ascii.o \
+	 diagnostics_dimensions.o \
+	 file_utils.o \
+	 mp.o \
+	 simpledataiof.o \
+	 species.o \
+	 text_options.o 
+diagnostics_create_and_write.o: \
+	 diagnostics_config.o \
+	 diagnostics_dimensions.o \
+	 fields_parallelization.o \
+	 file_utils.o \
+	 kt_grids.o \
+	 mp.o \
+	 simpledataio_write.o \
+	 simpledataiof.o 
+diagnostics_dimensions.o: \
+	 simpledataiof.o 
+diagnostics_fields.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
-	 diagnostics_write_omega.o \
+	 diagnostics_dimensions.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_io.o \
+	 gs2_layouts.o \
+	 gs2_transforms.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 run_parameters.o \
+	 species.o \
+	 theta_grid.o \
+	 volume_averages.o 
+diagnostics_final_routines.o: \
+	 constants.o \
+	 diagnostics_config.o \
+	 dist_fn.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_io.o \
+	 gs2_time.o \
+	 gs2_transforms.o \
+	 kt_grids.o \
+	 mp.o \
+	 run_parameters.o \
+	 species.o \
+	 spl.o \
+	 theta_grid.o \
+	 volume_averages.o 
+diagnostics_fluxes.o: \
+	 constants.o \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
+	 diagnostics_omega.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 fields_arrays.o \
 	 fields_parallelization.o \
+	 gs2_io.o \
+	 gs2_layouts.o \
 	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
-diagnostics_write_omega.o: \
+diagnostics_geometry.o: \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
+	 file_utils.o \
+	 mp.o \
+	 theta_grid.o 
+diagnostics_heating.o: \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_heating.o \
+	 kt_grids.o \
+	 mp.o \
+	 species.o \
+	 theta_grid.o 
+diagnostics_metadata.o: \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
+	 file_utils.o \
+	 mp.o \
+	 run_parameters.o \
+	 runtime_tests.o \
+	 simpledataiof.o 
+diagnostics_moments.o: \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
+	 dist_fn.o \
+	 fields_arrays.o \
+	 fields_parallelization.o \
+	 gs2_io.o \
+	 kt_grids.o \
+	 mp.o \
+	 species.o \
+	 theta_grid.o \
+	 volume_averages.o 
+diagnostics_nonlinear_convergence.o: \
+	 diagnostics_config.o \
+	 gs2_time.o \
+	 job_manage.o \
+	 mp.o 
+diagnostics_omega.o: \
 	 constants.o \
 	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
 	 fields_arrays.o \
 	 fields_parallelization.o \
 	 gs2_time.o \
-	 kt_grids.o 
+	 kt_grids.o \
+	 run_parameters.o 
+diagnostics_screen_printout.o: \
+	 diagnostics_config.o \
+	 diagnostics_omega.o \
+	 file_utils.o \
+	 kt_grids.o \
+	 mp.o \
+	 run_parameters.o \
+	 species.o \
+	 volume_averages.o 
+diagnostics_turbulence.o: \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
+	 dist_fn.o \
+	 fields_arrays.o \
+	 gs2_io.o \
+	 kt_grids.o \
+	 mp.o \
+	 species.o \
+	 theta_grid.o \
+	 volume_averages.o 
+diagnostics_velocity_space.o: \
+	 collisions.o \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
+	 dist_fn.o \
+	 fields_arrays.o \
+	 gs2_time.o \
+	 le_grids.o \
+	 mp.o \
+	 species.o 
 dist_fn.o: \
 	 antenna.o \
 	 collisions.o \
@@ -658,9 +829,7 @@ fields_local.o: \
 	 species.o \
 	 theta_grid.o 
 fields_parallelization.o: \
-	 kt_grids.o \
-	 mp.o \
-	 theta_grid.o 
+	 mp.o 
 fields_test.o: \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
@@ -737,16 +906,38 @@ gs2_diagnostics.o: \
 	 theta_grid.o \
 	 unit_tests.o 
 gs2_diagnostics_new.o: \
+	 antenna.o \
+	 collisions.o \
+	 diagnostics_antenna.o \
+	 diagnostics_ascii.o \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
-	 diagnostics_write_fields.o \
-	 diagnostics_write_fluxes.o \
-	 diagnostics_write_omega.o \
+	 diagnostics_dimensions.o \
+	 diagnostics_fields.o \
+	 diagnostics_final_routines.o \
+	 diagnostics_fluxes.o \
+	 diagnostics_geometry.o \
+	 diagnostics_heating.o \
+	 diagnostics_metadata.o \
+	 diagnostics_moments.o \
+	 diagnostics_nonlinear_convergence.o \
+	 diagnostics_omega.o \
+	 diagnostics_screen_printout.o \
+	 diagnostics_turbulence.o \
+	 diagnostics_velocity_space.o \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
 	 file_utils.o \
+	 gs2_save.o \
 	 gs2_time.o \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
+	 nonlinear_terms.o \
+	 run_parameters.o \
+	 simpledataio_write.o \
+	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
@@ -970,6 +1161,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1010,7 +1202,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -1031,6 +1224,9 @@ rungridgen.o: \
 	 gridgen4mod.o \
 	 spl.o 
 runtime_tests.o: 
+simpledataio_write.o: \
+	 simpledataiof.o 
+simpledataiof.o: 
 sorting.o: 
 species.o: \
 	 file_utils.o \
@@ -1041,6 +1237,7 @@ spfunc.o: \
 	 constants.o 
 spl.o: \
 	 mp.o 
+test.o: 
 text_options.o: \
 	 mp.o 
 theta_grid.o: \

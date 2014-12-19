@@ -669,7 +669,7 @@ contains
     call broadcast (restart_eig_id)
     ! <RN
     call init_save (restart_file)
-
+    
   end subroutine init_init_g
 
   subroutine ginit (restarted)
