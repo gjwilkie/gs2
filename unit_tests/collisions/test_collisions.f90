@@ -3,7 +3,7 @@
 !! The test results were calculated using sage and are viewable at
 !! http://www.sagenb.org/home/pub/5036
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT license
 !!   Written by: Edmund Highcock (edmundhighcock@sourceforge.net)
 program test_le_grids
   use unit_tests

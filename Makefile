@@ -119,29 +119,6 @@ USE_AUTOTOOLS ?= off
 HAS_ISO_C_BINDING ?= on
 
 
-ifdef NPROCS
-	NTESTPROCS=$(NPROCS)
-else
-	NTESTPROCS=2
-endif
-
-ifdef TESTNORUN
-	TESTCOMMAND=: 
-else
-	ifdef TESTEXEC
-		TESTCOMMAND=$(TESTEXEC)
-	else
-		ifdef USE_MPI
-				TESTCOMMAND=mpirun -np $(NTESTPROCS)  
-		else
-		    TESTCOMMAND=./
-		endif
-
-	endif
-endif
-
-export TESTCOMMAND
-export NTESTPROCS
 
 #
 # * Targets:
@@ -208,6 +185,16 @@ PGPLOT_LIB ?=
 ifdef TEST
 $(warning TEST mode is not working yet)
 	override TEST =
+endif
+
+# It makes no sense to set USE_PARALLEL_NETCDF without
+# setting USE_HDF5... so we set USE_HDF5 here. 
+# If you want to use parallel-netcdf instead of netcdf/hdf5 you can 
+# override this behaviour in the system makefile
+ifdef USE_PARALLEL_NETCDF
+ifndef USE_HDF5
+	USE_HDF5=on
+endif
 endif
 
 ######################################################### PLATFORM DEPENDENCE
@@ -687,47 +674,7 @@ revision:
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 
-# To save time you can set test deps yourself on the command line:
-# otherwise it builds everything just to be sure, because recursive
-# make can't resolve dependencies
-TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
-#export
-TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(SIMPLEDATAIO_LIB_ABS) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
-MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
-#MAKETESTS = $(MAKE)
-
-#export TEST_DEPS
-export TESTCOMMAND
-export gs2_mod
-#export TESTNORUN
-#export TESTFC=$(FC)
-#export TESTF90FLAGS=$(F90FLAGS)
-#export TESTCPP=$(CPP)
-#export TESTLD=$(LD)
-#export TESTLDFLAGS=$(LDFLAGS)
-#export TESTLIBS=$(LIBS)
-#export
-
-unit_tests: unit_tests.o $(TEST_DEPS)
-	cd unit_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
-
-linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
-	cd linear_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
-
-tests: unit_tests linear_tests
-
-test_script: unit_tests linear_tests
-	echo "" > test_script.sh
-	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
-	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
-	echo "echo \"Tests Successful\"" >> test_script.sh
-	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
-
-benchmarks: unit_tests.o $(TEST_DEPS)
-	cd benchmarks && time ${MAKETESTS} && echo && echo "Completed Benchmarks"
-
-upload_benchmarks: 
-	cd benchmarks && time ${MAKETESTS} upload && echo && echo "Completed Benchmarks"
+sinclude Makefile.tests_and_benchmarks
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^

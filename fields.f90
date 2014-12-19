@@ -216,6 +216,8 @@ contains
     use fields_implicit, only: field_subgath
     use fields_local, only: minNrow
     use fields_local, only: do_smart_update, field_local_allreduce, field_local_allreduce_sub
+    use fields_arrays, only: response_file
+    use file_utils, only: run_name
     implicit none
     type (text_option), dimension (5), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
@@ -224,8 +226,9 @@ contains
             text_option('local', fieldopt_local),&
             text_option('implicit_local', fieldopt_local)/)
     character(20) :: field_option
+    character(len=256) :: response_dir
     namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit,&
-         dump_response, read_response, minNrow, do_smart_update, field_local_allreduce, field_local_allreduce_sub
+         dump_response, read_response, minNrow, do_smart_update, field_local_allreduce, field_local_allreduce_sub, response_dir
     integer :: ierr, in_file
 
     if (proc0) then
@@ -239,6 +242,7 @@ contains
        do_smart_update=.false.
        field_local_allreduce=.false.
        field_local_allreduce_sub=.false.
+       response_dir=''
        in_file = input_unit_exist ("fields_knobs", exist)
        if (exist) read (unit=in_file, nml=fields_knobs)
 
@@ -246,6 +250,12 @@ contains
        call get_option_value &
             (field_option, fieldopts, fieldopt_switch, &
             ierr, "field_option in fields_knobs",.true.)
+
+       if(trim(response_dir).eq.'')then
+          write(response_file,'(A)') trim(run_name)
+       else
+          write(response_file,'(A,"/",A)') trim(response_dir),trim(run_name)
+       endif
 
     end if
 
@@ -255,6 +265,10 @@ contains
     call broadcast (force_maxwell_reinit)
     call broadcast (dump_response)
     call broadcast (read_response)
+
+    !Setup response file location
+    call broadcast(response_dir)
+    call broadcast(response_file)
 
     !Set the solve type specific flags
     call set_dump_and_read_response(dump_response, read_response)

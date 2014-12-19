@@ -1155,7 +1155,7 @@ contains
 
   !>A routine to dump the current response matrix to file
   subroutine dump_response_to_file_imp(suffix)
-    use file_utils, only: run_name
+    use fields_arrays, only: response_file
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: i_class, N_class, M_class, get_leftmost_it, itright
@@ -1362,7 +1362,7 @@ contains
 
           !Now make file name
           if(proc0)then
-             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,it_to_is(itmin,ik),trim(suffix_local)
+             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(response_file),ik,it_to_is(itmin,ik),trim(suffix_local)
              call gs2_save_response(tmp_arr_full,file_name)
           endif
        end do
@@ -1378,7 +1378,7 @@ contains
   !>A routine to read the response matrix from file and populate the implicit
   !response storage, note we also allocate the response storage objects
   subroutine read_response_from_file_imp(suffix)
-    use file_utils, only: run_name
+    use fields_arrays, only: response_file
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: i_class, N_class, M_class, get_leftmost_it, itright
@@ -1497,7 +1497,7 @@ contains
 
           !Now make file name
           if(proc0)then
-             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(run_name),ik,it_to_is(itmin,ik),trim(suffix_local)
+             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(response_file),ik,it_to_is(itmin,ik),trim(suffix_local)
              call gs2_restore_response(tmp_arr_full,file_name)
           endif
 

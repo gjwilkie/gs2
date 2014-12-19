@@ -6,6 +6,7 @@
 !! simpledataio_write
 module simpledataio
 
+
 #ifdef FORTRAN_NETCDF
   use netcdf 
 #endif
@@ -26,12 +27,14 @@ module simpledataio
   integer, parameter :: SDATIO_FLOAT= 1
   integer, parameter :: SDATIO_DOUBLE= 2
   integer, parameter :: SDATIO_COMPLEX_DOUBLE= 3
+  integer, parameter :: SDATIO_CHAR= 4
 
 #ifdef FORTRAN_NETCDF
   integer, parameter :: SDATIO_UNLIMITED = NF90_UNLIMITED
 #else
   integer, parameter :: SDATIO_UNLIMITED = 0
 #endif
+
 
 #ifdef ISO_C_BINDING
   type,bind(c) :: sdatio_dimension 
@@ -40,6 +43,7 @@ module simpledataio
      integer(c_int) :: nc_id
      integer(c_int) :: start
   end type sdatio_dimension
+
 
   type,bind(c) :: sdatio_variable 
      !character, dimension(:), allocatable :: name
@@ -52,6 +56,7 @@ module simpledataio
      type(c_ptr) :: manual_counts
      type(c_ptr) :: manual_starts
      type(c_ptr) :: manual_offsets
+    integer(c_int) :: ndims
   end type sdatio_variable
 
   type, bind(c) :: sdatio_file 
@@ -66,6 +71,7 @@ module simpledataio
      type(c_ptr) :: communicator
      integer(c_int) :: mode
      type(c_ptr) :: name
+    integer(c_int) :: has_long_dim_names
   end type sdatio_file
 
 #else
@@ -80,21 +86,33 @@ module simpledataio
 
 #endif
 
-  !interface 
-  !!/* Open a new datafile for writing. fname is the name of the file 
-  !!* The stuct sfile is used to store the state information
-  !!* of the file.*/
-  !!/* Create a new dimension in the file sfile. Dimension names must
-  !!* be a single letter. */
-  !subroutine sdatio_add_dimension(sfile, dimension_name, dimsize, description, units)
-  !import sdatio_file
-  !type(sdatio_file), intent(in) :: sfile
-  !character(*), intent(in) :: dimension_name
-  !integer, intent(in) :: dimsize
-  !character(*), intent(in) :: description, units
-  !end subroutine sdatio_add_dimension
-  !end interface
-  !int sdatio_debug
+!interface 
+!!/* Open a new datafile for writing. fname is the name of the file 
+ !!* The stuct sfile is used to store the state information
+ !!* of the file.*/
+!!/* Create a new dimension in the file sfile. Dimension names must
+ !!* be a single letter. */
+ !subroutine sdatio_add_dimension(sfile, dimension_name, dimsize, description, units)
+   !import sdatio_file
+   !type(sdatio_file), intent(in) :: sfile
+   !character(*), intent(in) :: dimension_name
+   !integer, intent(in) :: dimsize
+   !character(*), intent(in) :: description, units
+ !end subroutine sdatio_add_dimension
+
+
+!end interface
+
+interface add_metadata
+  module procedure add_metadata_character
+  module procedure add_metadata_integer
+  module procedure add_metadata_real
+  module procedure add_metadata_double_precision
+end interface add_metadata
+
+
+
+!int sdatio_debug
 
 contains 
 
@@ -117,9 +135,9 @@ contains
     call sdatio_init_c(sfile, fname//c_null_char)
 #else
     write (*,*) "module simpledataio was built without &
-         & the netcdf fortran library and is non-functional. You can use &
-         & the function simpledataio_functional to test &
-         & this. "
+       & the netcdf fortran library and is non-functional. You can use &
+       & the function simpledataio_functional to test &
+       & this. "
     stop
 #endif
 #else
@@ -207,10 +225,11 @@ contains
     call sdatio_add_dimension(sfile, dimension_name//c_null_char, dimsize, description//c_null_char, units//c_null_char)
 #endif
   end subroutine add_dimension
-  !char * dimension_name, 
-  !int size,
-  !char * description,
-  !char * units)
+                           !char * dimension_name, 
+                           !int size,
+                           !char * description,
+                           !char * units)
+
 
   !/* Print out a nice list of all the dimensions defined so far*/
   !void sdatio_print_dimensions(struct sdatio_file * sfile)
@@ -228,6 +247,21 @@ contains
 #endif
   end subroutine print_dimensions
 
+  !/* Add standard metadata like creation time and library versions*/
+  subroutine add_standard_metadata(sfile)
+    type(sdatio_file), intent(in) :: sfile
+#ifdef ISO_C_BINDING
+    interface
+       subroutine sdatio_add_standard_metadata(sfile) &
+           bind(c, name='sdatio_add_standard_metadata')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+       end subroutine sdatio_add_standard_metadata
+    end interface
+    call sdatio_add_standard_metadata(sfile)
+#endif
+  end subroutine add_standard_metadata
   !/* Close the file and free all memory associated with sfile*/
   !void sdatio_close(struct sdatio_file * sfile)
   subroutine closefile(sfile)
@@ -278,7 +312,8 @@ contains
     character(*), intent(in) :: description, units
     !character, dimension(:), allocatable :: dimension_list_reversed
     character(len(dimension_list)) :: dimension_list_reversed
-    integer :: i
+    character(len(dimension_list)) :: buffer
+    integer :: i, counter, reverse_index, dimlistlength, imax
 #ifdef ISO_C_BINDING
     interface
        subroutine sdatio_create_variable(sfile, variable_type, variable_name, dimension_list, description, units) &
@@ -295,9 +330,44 @@ contains
     end interface
     !allocate(dimension_list_reversed(len(dimension_list)))
     !if (len(dimension_list) .gt. 0) then
-    do i = 1,len(dimension_list)
-       dimension_list_reversed(i:i) = dimension_list(len(dimension_list)-i+1:len(dimension_list)-i+1)
-    end do
+
+    
+    dimlistlength = len(trim(dimension_list))
+    dimension_list_reversed = ''
+    if (len(dimension_list) < 2) then
+      dimension_list_reversed = dimension_list
+    else if (sfile%has_long_dim_names .eq. 1 .or. index(dimension_list, ",") .ne. 0) then
+      ! This section of code takes a string like "x,y,time"
+      ! and reverses it to give "time,y,x"
+      counter = 0
+      buffer = ''
+          !write (*,*) 'dimension_list_reversed', dimension_list_reversed, 'end', &
+            !dimension_list, 'end'
+      do i = 1,dimlistlength+1
+        imax = min(dimlistlength, i)
+        reverse_index = dimlistlength - i + 1
+        if (i .le. dimlistlength .and. dimension_list(imax:imax) .ne. ",") then
+          counter = counter + 1
+          buffer(counter:counter) = dimension_list(i:i)
+        else
+          if (i .lt. dimlistlength + 1) &
+            dimension_list_reversed(reverse_index:reverse_index) = ","
+          dimension_list_reversed(reverse_index+1:reverse_index+counter) = buffer(1:counter)
+          !write (*,*) 'dimension_list_reversed', dimension_list_reversed, 'end', &
+            !dimension_list, 'end'
+          counter = 0
+          buffer = ''
+        end if
+      end do
+      !if (len(trim(dimension_list_reversed)) .ne. len(trim(dimension_list))) then
+        !write (*,*) "There is a problem with dimension_list: ", dimension_list
+        !write (*,*) "Possible missing comma separators? "
+    else
+      !write (*,*) 'sfile%has_long_dim_names', sfile%has_long_dim_names
+      do i = 1,len(dimension_list)
+         dimension_list_reversed(i:i) = dimension_list(len(dimension_list)-i+1:len(dimension_list)-i+1)
+      end do
+    end if
     !write (*,*) 'dimension_list ', dimension_list, ' dimension_list_reversed ', dimension_list_reversed
     call sdatio_create_variable(sfile, variable_type,&
          variable_name//c_null_char, dimension_list_reversed//c_null_char, description//c_null_char, units//c_null_char)
@@ -349,7 +419,7 @@ contains
        end subroutine sdatio_set_offset
     end interface
     call sdatio_set_offset(sfile, variable_name//c_null_char, &
-         dimension_name//c_null_char, offset-1)
+                            dimension_name//c_null_char, offset-1)
 #endif
   end subroutine set_offset
 
@@ -371,7 +441,7 @@ contains
        end subroutine sdatio_set_count
     end interface
     call sdatio_set_count(sfile, variable_name//c_null_char, &
-         dimension_name//c_null_char, count)
+                            dimension_name//c_null_char, count)
 #endif
   end subroutine set_count
 
@@ -393,7 +463,7 @@ contains
        end subroutine sdatio_set_start
     end interface
     call sdatio_set_start(sfile, variable_name//c_null_char, &
-         dimension_name//c_null_char, start-1) 
+                            dimension_name//c_null_char, start-1) 
 #endif
     ! convert from 1-based to 0-based
   end subroutine set_start
@@ -575,6 +645,110 @@ contains
     end if
 #endif
   end function variable_exists
+
+  !/* Add metadata (in netCDF, a global attribute) */
+  subroutine add_metadata_character(sfile, metadata_name, metadata)
+    implicit none
+    type(sdatio_file), intent(in) :: sfile
+    character(*), intent(in) :: metadata_name
+    character(*), intent(in) :: metadata
+#ifdef ISO_C_BINDING
+    interface
+       subroutine sdatio_add_metadata(sfile, metadata_type, metadata_name, metadata) &
+            bind(c, name='sdatio_add_metadata')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         integer(c_int), value :: metadata_type
+         character(c_char) :: metadata_name(*)
+         character(c_char) :: metadata(*)
+       end subroutine sdatio_add_metadata
+    end interface
+    !allocate(dimension_list_reversed(len(dimension_list)))
+    !if (len(dimension_list) .gt. 0) then
+
+    call sdatio_add_metadata(sfile, SDATIO_CHAR,&
+         metadata_name//c_null_char, metadata//c_null_char)
+#endif
+  end subroutine add_metadata_character
+
+  !/* Add metadata (in netCDF, a global attribute) */
+  subroutine add_metadata_integer(sfile, metadata_name, metadata)
+    implicit none
+    type(sdatio_file), intent(in) :: sfile
+    character(*), intent(in) :: metadata_name
+    integer, intent(in) :: metadata
+#ifdef ISO_C_BINDING
+    interface
+       subroutine sdatio_add_metadata(sfile, metadata_type, metadata_name, metadata) &
+            bind(c, name='sdatio_add_metadata')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         integer(c_int), value :: metadata_type
+         character(c_char) :: metadata_name(*)
+         integer(c_int) :: metadata
+       end subroutine sdatio_add_metadata
+    end interface
+    !allocate(dimension_list_reversed(len(dimension_list)))
+    !if (len(dimension_list) .gt. 0) then
+
+    call sdatio_add_metadata(sfile, SDATIO_INT,&
+         metadata_name//c_null_char, metadata)
+#endif
+  end subroutine add_metadata_integer
+
+  !/* Add metadata (in netCDF, a global attribute) */
+  subroutine add_metadata_real(sfile, metadata_name, metadata)
+    implicit none
+    type(sdatio_file), intent(in) :: sfile
+    character(*), intent(in) :: metadata_name
+    real, intent(in) :: metadata
+#ifdef ISO_C_BINDING
+    interface
+       subroutine sdatio_add_metadata(sfile, metadata_type, metadata_name, metadata) &
+            bind(c, name='sdatio_add_metadata')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         integer(c_int), value :: metadata_type
+         character(c_char) :: metadata_name(*)
+         real(c_float) :: metadata
+       end subroutine sdatio_add_metadata
+    end interface
+    !allocate(dimension_list_reversed(len(dimension_list)))
+    !if (len(dimension_list) .gt. 0) then
+
+    call sdatio_add_metadata(sfile, SDATIO_FLOAT,&
+         metadata_name//c_null_char, metadata)
+#endif
+  end subroutine add_metadata_real
+
+  !/* Add metadata (in netCDF, a global attribute) */
+  subroutine add_metadata_double_precision(sfile, metadata_name, metadata)
+    implicit none
+    type(sdatio_file), intent(in) :: sfile
+    character(*), intent(in) :: metadata_name
+    double precision, intent(in) :: metadata
+#ifdef ISO_C_BINDING
+    interface
+       subroutine sdatio_add_metadata(sfile, metadata_type, metadata_name, metadata) &
+            bind(c, name='sdatio_add_metadata')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         integer(c_int), value :: metadata_type
+         character(c_char) :: metadata_name(*)
+         real(c_double) :: metadata
+       end subroutine sdatio_add_metadata
+    end interface
+    !allocate(dimension_list_reversed(len(dimension_list)))
+    !if (len(dimension_list) .gt. 0) then
+
+    call sdatio_add_metadata(sfile, SDATIO_DOUBLE,&
+         metadata_name//c_null_char, metadata)
+#endif
+  end subroutine add_metadata_double_precision
 
   !> Returns true if simpledataio is functional. simpledataio is designed to
   !! present a uniform interface on any system. If it cannot be built it presents

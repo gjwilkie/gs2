@@ -1,4 +1,5 @@
 #include "string.h"
+#include <time.h>
 #include "stdio.h"
 #include <stdlib.h>
 #include <netcdf.h>
@@ -17,8 +18,19 @@ typedef int MPI_Fint;
 #define SDATIO_FLOAT 1
 #define SDATIO_DOUBLE 2
 #define SDATIO_COMPLEX_DOUBLE 3
+#define SDATIO_CHAR 4
 
 #define SDATIO_UNLIMITED NC_UNLIMITED
+
+#define QUOTE(str) #str
+#define EXPAND_AND_QUOTE(str) QUOTE(str)
+/*#define VERSION 5.8*/
+#define SDATIO_VERSION_STRING EXPAND_AND_QUOTE( PACKAGE_VERSION )
+
+#ifndef PACKAGE_VERSION
+#define PACKAGE_VERSION 1.0.0
+#endif
+
 
 
 struct sdatio_dimension {
@@ -39,6 +51,8 @@ struct sdatio_variable {
 	int * manual_starts;
 	/* Only used for Fortran:*/
 	int * manual_offsets;
+  /* Necessary now we can have long dim names */
+  int ndims;
 };
 
 
@@ -54,6 +68,7 @@ struct sdatio_file {
   MPI_Comm * communicator;
   int mode;
   char * name;
+  int has_long_dim_names;
 };
 
 

@@ -5,7 +5,6 @@
 !! Written by Edmund Highcock
 !! edmundhighcock@sourceforge.net
 !!
-!! This is free software released under the GPLv3
 !!
 !! Available quantities are:
 !! 

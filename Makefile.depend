@@ -159,6 +159,7 @@ ffttester_mod = \
 	 diagnostics_fluxes.o \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
+	 diagnostics_metadata.o \
 	 diagnostics_moments.o \
 	 diagnostics_nonlinear_convergence.o \
 	 diagnostics_omega.o \
@@ -291,6 +292,7 @@ gs2_mod = \
 	 diagnostics_fluxes.o \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
+	 diagnostics_metadata.o \
 	 diagnostics_moments.o \
 	 diagnostics_nonlinear_convergence.o \
 	 diagnostics_omega.o \
@@ -472,6 +474,9 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
+test_mod = \
+	 test.o 
+
 antenna.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -545,6 +550,7 @@ diagnostics_config.o: \
 	 text_options.o 
 diagnostics_create_and_write.o: \
 	 diagnostics_config.o \
+	 diagnostics_dimensions.o \
 	 fields_parallelization.o \
 	 file_utils.o \
 	 kt_grids.o \
@@ -625,6 +631,15 @@ diagnostics_heating.o: \
 	 mp.o \
 	 species.o \
 	 theta_grid.o 
+diagnostics_metadata.o: \
+	 diagnostics_config.o \
+	 diagnostics_create_and_write.o \
+	 diagnostics_dimensions.o \
+	 file_utils.o \
+	 mp.o \
+	 run_parameters.o \
+	 runtime_tests.o \
+	 simpledataiof.o 
 diagnostics_moments.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
@@ -903,6 +918,7 @@ gs2_diagnostics_new.o: \
 	 diagnostics_fluxes.o \
 	 diagnostics_geometry.o \
 	 diagnostics_heating.o \
+	 diagnostics_metadata.o \
 	 diagnostics_moments.o \
 	 diagnostics_nonlinear_convergence.o \
 	 diagnostics_omega.o \
@@ -920,6 +936,7 @@ gs2_diagnostics_new.o: \
 	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
+	 simpledataio_write.o \
 	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
@@ -1220,6 +1237,7 @@ spfunc.o: \
 	 constants.o 
 spl.o: \
 	 mp.o 
+test.o: 
 text_options.o: \
 	 mp.o 
 theta_grid.o: \
