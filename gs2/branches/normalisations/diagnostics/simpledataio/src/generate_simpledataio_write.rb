@@ -111,8 +111,8 @@ EOF
    #{
 if complex 
    2.times.map{|i| "
-   call set_count(sfile, variable_name, \"r\", 1)
-   call set_start(sfile, variable_name, \"r\", #{i+1})
+   call set_count(sfile, variable_name, trim(real_imaginary_dimension_name), 1)
+   call set_start(sfile, variable_name, trim(real_imaginary_dimension_name), #{i+1})
    realval(1#{([",:"]*@dimsize).join('')}) = #{realimag[i]}(#{@dimsize==0 ? "val" : "val(#{dimension_spec})"})
    #{netcdf_inputs} 
    #{put_variable} 
@@ -162,6 +162,8 @@ module simpledataio_write
   implicit none
   private
   public :: write_variable_with_offset, write_variable
+  public :: real_imaginary_dimension_name
+
 
   interface write_variable_with_offset
 #{generators.map{|g| "  "+g.interface_name}.join("\n")}
@@ -170,6 +172,8 @@ module simpledataio_write
   interface write_variable
 #{generators_no_offset.map{|g| "  "+g.interface_name}.join("\n")}
   end interface write_variable
+
+  character(len=100) :: real_imaginary_dimension_name = "r"
 
 contains
 

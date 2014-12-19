@@ -906,7 +906,8 @@ contains
 
     if (allocated(h_hist)) deallocate (h_hist, hk_hist, hk)
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
-    if (allocated(omegahist)) deallocate (omegahist)
+    ! EGH only proc0 knows omegahist
+    if (proc0 .and. allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange1, exchange)
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
@@ -918,7 +919,8 @@ contains
     if (proc0 .and. trin_reset .and. allocated(conv_heat)) deallocate (conv_heat)
 
 ! HJL <    
-    if (allocated(domega)) deallocate(domega)
+! EGH only proc0 has domega
+    if (proc0 .and. allocated(domega)) deallocate(domega)
 ! > HJL
   end subroutine deallocate_arrays
 
@@ -3423,6 +3425,7 @@ contains
     integer :: j
     logical, optional :: debopt
     logical :: debug=.false.
+    if (debug) write(6,*) "get_omeaavg: allocate domega"
 if (.not. allocated(domega)) allocate(domega(navg,ntheta0,naky))
     if (present(debopt)) debug=debopt
 if (debug) write(6,*) "get_omeaavg: start"
@@ -3437,6 +3440,7 @@ if (debug) write(6,*) "get_omeaavg: start"
     else
        fac=1000/abs(omegatol)
     endif
+if (debug) write(6,*) "get_omeaavg: set omegahist"
     where (abs(phinew(j,:,:)+aparnew(j,:,:)+bparnew(j,:,:)) < tiny(0.0)*fac &
            .or. abs(phi(j,:,:)+apar(j,:,:)+bpar(j,:,:)) < tiny(0.0)*fac)
        omegahist(mod(istep,navg),:,:) = 0.0
@@ -3446,11 +3450,13 @@ if (debug) write(6,*) "get_omeaavg: start"
                   /(phi(j,:,:)   + apar(j,:,:)    + bpar(j,:,:)))*zi/code_dt
     end where
 
+if (debug) write(6,*) "get_omeaavg: set omegahist at istep = 0"
     !During initialisation fieldnew==field but floating error can lead to finite omegahist
     !Force omegahist=0 here to avoid erroneous values.
     !Could think about forcing omegahist=0 where abs(omegahist)<tol
     if(istep.eq.0) omegahist(:,:,:)=0.0
 
+if (debug) write(6,*) "get_omeaavg: set omegaavg"
     omegaavg = sum(omegahist/real(navg),dim=1)
 if (debug) write(6,*) "get_omegaavg: omegaavg=",omegaavg
 

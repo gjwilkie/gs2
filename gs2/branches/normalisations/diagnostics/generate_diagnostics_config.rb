@@ -123,7 +123,12 @@ input_variables_for_diagnostics_config = [
 
   # Save the current state of the simulation so 
   # that it can be restarted
-  ['logical', 'save_for_restart', '.true.'],
+  # At the moment the default is false because
+  # we don't want it to conflict with the old
+  # module, but eventually I think it should
+  # default to true. EGH
+  ['logical', 'save_for_restart', '.false.'],
+  ['logical', 'file_safety_check', '.true.'],
 
   # Save the distribution function
   ['logical', 'save_distfn', '.false.'],

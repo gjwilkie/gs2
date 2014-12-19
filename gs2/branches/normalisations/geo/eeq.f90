@@ -568,12 +568,13 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
   subroutine efit_init
 
-    real, dimension(nw, nh) :: eqth 
+    real, dimension(:, :), allocatable :: eqth 
     integer :: i, j
 !cmr nov04: adding following debug switch
     logical, parameter :: debug=.false.
 !cmr
 
+    allocate(eqth(nw,nh))
 if (verbosity > 2) write(6,*) "efit_init: do i"     
     do i = 1, nw
        do j = 1,nh
@@ -590,6 +591,7 @@ if (verbosity > 2) write(6,*) "efit_init: derm"
 if (verbosity > 2) write(6,*) "efit_init: tderm"     
     call tderm(eqth, dtm)
 if (verbosity > 2) write(6,*) "efit_init: finished"     
+    deallocate(eqth)
     
   end subroutine efit_init
 
@@ -703,8 +705,10 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
     character(1) char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
-    real, dimension(nw, nh, 2) ::  dbish
+    real, dimension(:, :, :), allocatable ::  dbish
     integer i
+
+    allocate(dbish(nw, nh, 2)) 
  
     dbish(:,:,1) = sqrt(dpm(:,:,1)**2 + dpm(:,:,2)**2)
     dbish(:,:,2) = 0.
@@ -738,6 +742,7 @@ if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"
           grad(i,2)=grad(i,2)*daa(1) * 0.5*beta_0/psi_N
        enddo
     endif
+    deallocate(dbish)
 
   end subroutine bgradient
 

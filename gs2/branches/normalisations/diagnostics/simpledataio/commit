@@ -1,7 +1,0 @@
-#!/bin/bash
-
-#autoreconf --install && ./configure --prefix=$HOME/Code/sdtest --enable-parallel CC=mpicc FC=mpif90 && make check
-
-#rm -rf autom4te.cache/
-make distclean
-git commit -av && git push
