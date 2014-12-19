@@ -283,6 +283,7 @@ contains
           if(iostat /= 0) write(6,*) 'Error ',iostat,'reading species parameters'
           close (unit=unit, iostat=iostat)
           if(iostat /= 0) write(6,*) 'Error ',iostat,'closing species parameters namelist'
+          !write (*,*) 'type is ', type
           spec(is)%z = z
           spec(is)%mass = mass
           spec(is)%dens = dens

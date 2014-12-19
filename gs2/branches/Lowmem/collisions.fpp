@@ -412,9 +412,10 @@ contains
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
-    integer :: ie, il, ik, is, isgn, iglo, all, it
+    integer :: ie, il, ik, is, isgn, iglo,  it
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
     complex, dimension(:,:,:), allocatable :: s0tmp, w0tmp, z0tmp
+    logical :: all = .true.
 
     if(use_le_layout) then
        allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -516,7 +517,7 @@ contains
           end do
        end do
 
-       all = 1
+       all = .true.
        call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
     else
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -529,7 +530,7 @@ contains
           end do
        end do
 
-       all = 1
+       all = .true.
        call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
     end if
 
@@ -838,9 +839,10 @@ contains
     complex, dimension (:,:,:), allocatable :: gtmp
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
-    integer :: ie, il, ik, is, isgn, iglo, all, it
+    integer :: ie, il, ik, is, isgn, iglo, it
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
     complex, dimension (:,:,:), allocatable :: bs0tmp, bw0tmp, bz0tmp    
+    logical :: all
 
     if(use_le_layout) then
        allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -872,7 +874,7 @@ contains
        end do
     end do
        
-    all = 1
+    all = .true.
     call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
 
     where (abs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
@@ -946,7 +948,7 @@ contains
        end do
     end do
        
-    all = 1
+    all = .true.
     call integrate_moment (gtmp, duinv, all)  ! not 1/du yet
 
     where (abs(duinv) > epsilon(0.0))  ! necessary b/c some species may have vnewk=0
@@ -2717,7 +2719,8 @@ contains
     real, dimension (:,:,:), allocatable :: vns
     complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2
 
-    integer :: isgn, iglo, ik, ie, il, is, it, all = 1
+    integer :: isgn, iglo, ik, ie, il, is, it
+    logical :: all = .true. 
 
     allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))
@@ -3023,8 +3026,9 @@ contains
 
     real, dimension (:,:,:), allocatable :: vns
 
-    integer :: isgn, iglo, ik, ie, il, is, it, all = 1
+    integer :: isgn, iglo, ik, ie, il, is, it 
     complex, dimension (:,:,:,:), allocatable :: v0y0, v1y1, v2y2    
+    logical :: all = .true.
 
     allocate (v0y0(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (v1y1(-ntgrid:ntgrid, ntheta0, naky, nspec))

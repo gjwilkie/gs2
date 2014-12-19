@@ -1,10 +1,17 @@
-! what about boundary condition contributions?  In the presence 
-! of magnetic shear, there are not always zero amplitudes at the ends
-! of the supercells.
+!> The old module for calculating and writing gs2 outputs. THIS MODULE IS NOW DEPRECATED.
+!! It is scheduled to be disabled by default on 1st Jan 2015 and removed
+!! from the repository on 1st March 2015. Do not edit or extend this module
+!! in any way apart from vital fixes. Any changes you make may not be 
+!! transferred to the new diagnostics module... please use the new diagnostics 
+!! module contained in the diagnostics folder instead.
 
 module gs2_diagnostics
   use gs2_heating, only: heating_diagnostics
   use gs2_save, only: save_many
+
+! what about boundary condition contributions?  In the presence 
+! of magnetic shear, there are not always zero amplitudes at the ends
+! of the supercells.
 
   implicit none
 
@@ -68,7 +75,7 @@ module gs2_diagnostics
 
   logical, public :: write_phi_over_time, write_apar_over_time, write_bpar_over_time !EGH
 !>GGH
-  logical :: write_jext=.false.
+  logical :: write_jext=.true.
 !<GGH
 
 ! HJL <  Variables for convergence condition testing
@@ -429,6 +436,15 @@ contains
 
     if (initialized) return
     initialized = .true.
+
+    if (proc0) write (*,*) " WARNING: &
+        & THE OLD DIAGNOSTICS MODULE IS NOW DEPRECATED.&
+        & It is scheduled to be disabled by default on 1st Jan 2015 and removed&
+        & from the repository on 1st March 2015. Do not edit or extend this module&
+        & in any way apart from vital fixes. Any changes you make may not be &
+        & transferred to the new diagnostics module... please use the new diagnostics &
+        & module contained in the diagnostics folder instead. PLEASE AMEND YOUR &
+        & SCRIPTS TO USE THE NEW OUTPUT FILE ENDING IN .cdf"
 
     call init_theta_grid
     call init_kt_grids
@@ -890,7 +906,8 @@ contains
 
     if (allocated(h_hist)) deallocate (h_hist, hk_hist, hk)
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
-    if (allocated(omegahist)) deallocate (omegahist)
+    ! EGH only proc0 knows omegahist
+    if (proc0 .and. allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange1, exchange)
     if (allocated(pflux_tormom)) deallocate (pflux_tormom) 
@@ -902,7 +919,8 @@ contains
     if (proc0 .and. trin_reset .and. allocated(conv_heat)) deallocate (conv_heat)
 
 ! HJL <    
-    if (allocated(domega)) deallocate(domega)
+! EGH only proc0 has domega
+    if (proc0 .and. allocated(domega)) deallocate(domega)
 ! > HJL
   end subroutine deallocate_arrays
 
@@ -984,20 +1002,26 @@ contains
 
     exit = .false.
 
+    ! DONE
     call do_get_omega(istep,debug,exit)
 
+    ! DONE
     if (write_hrate) call heating (istep, h, hk)
 
+    ! DONE
     if (make_movie .and. mod(istep,nmovie)==0) call do_write_movie(t) 
 
+    ! DONE
     if (write_gyx .and. mod(istep,nmovie) == 0) call write_fyx (phinew,bparnew,last)
 
+    ! DONE
     if (vary_vnew) then
        write_mod = mod(istep,ncheck)
     else
        write_mod = mod(istep,nwrite)
     end if
 
+    ! DONE
     if (write_verr .and. write_mod == 0) call do_write_verr
 
     call prof_leaving ("loop_diagnostics")
@@ -1008,13 +1032,17 @@ contains
 !########################################################
     if (mod(istep,nwrite) /= 0 .and. .not. exit) return
 
+    !DONE
     if (write_g) call write_f (last)
 
+    ! DONE
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
 
     !Note this also returns phi2, apar2, bpar2 and phitot for other diagnostics
+    ! DONE
     if (proc0) call do_write_ncloop(t,istep,phi2,apar2,bpar2,phitot)
 
+    ! DONE
     if (print_line) call do_print_line(phitot)
 
     !This wants to write the fields vs time arrays --> Remove as we now have
@@ -1022,10 +1050,13 @@ contains
     !if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
     !Instead replace with a call to nc_final_fields to keep the phi, apar and bpar
     !output arrays up to date.
+    ! DONE
     if(write_fields.and.proc0) call nc_final_fields
 
+    ! DONE
     if (write_moments) call do_write_moments !CMR
 
+    ! DONE
     if (write_cross_phase .and. has_electron_species(spec) .and. write_ascii ) call do_write_crossphase(t)
 
 !###########################
@@ -1153,6 +1184,7 @@ contains
        if (write_hrate) call broadcast (heat_avg)
     end if
 
+    ! DONE
     if (proc0) then
        if (print_flux_line) then
           if (fphi > epsilon(0.0)) then
@@ -1176,7 +1208,10 @@ contains
        end if
     end if
 
+    ! DONE UP TO HERE
+
 ! Check for convergence
+   ! DONE
     if(nonlin .and. use_nonlin_convergence) call check_nonlin_convergence(istep, heat_fluxes(1), exit)
 
     call prof_leaving ("loop_diagnostics-1")
@@ -1193,9 +1228,10 @@ contains
 
 !>GGH
        !Write out data for j_external
+       ! DONE
        if (write_ascii .and. write_jext) call do_write_jext(t,istep)
 !<GGH
-
+        ! DONE
        if (write_flux_line) then
           hflux_tot = 0.
           zflux_tot = 0.
@@ -1304,21 +1340,29 @@ contains
 
     if(scan_type_switch.ne.scan_type_none) call bcast_scan_parameter(scan_hflux,scan_momflux,scan_phi2_tot)
 
+    ! DONE
     if (write_cerr) call collision_error(phinew,bparnew,last)
 
+    ! DONE
     if (write_symmetry) call do_write_symmetry
 
+    ! DONE
     if (write_pflux_sym) call do_write_pflux_sym
     
+    ! DONE
     if (write_correlation) call do_write_correlation
 
+    ! DONE
     if (write_correlation_extend .and. istep > nstep/4) call do_write_correlation_extend(t,t_old,istep)
 
+    ! DONE
     if (write_parity) call do_write_parity(t)
 
+    ! DONE
     if (write_avg_moments) call do_write_avg_moments
 
     ! RN> output not guiding center moments in x-y plane
+    ! DONE
     if (write_full_moments_notgc) call do_write_full_moments_notgc(t)
 
 !
@@ -1327,6 +1371,7 @@ contains
     if (dump_check1) call do_write_dump_1(t)
     if (dump_check2) call do_write_dump_2(t)
 
+    ! DONE
     if (dump_fields_periodically .and. mod(istep,10*nwrite) == 0) call do_dump_fields_periodically(t)
     
     ! Update the counter in parameter_scan_arrays
@@ -1339,6 +1384,7 @@ contains
     nout = nout + 1
 
     !Flush files
+    ! DONE
     if (write_ascii .and. mod(nout, 10) == 0 .and. proc0) call flush_files
     
     !Update time
@@ -2260,9 +2306,9 @@ contains
     call calc_jext(istep,j_ext)
     do ik=1,naky
        do it = 1, ntheta0
-          if (j_ext(ik,it) .ne. 0.) then
+          if (j_ext(it,ik) .ne. 0.) then
              write (unit=jext_unit, fmt="(es12.4,i4,i4,es12.4)")  &
-                  t,it,ik,j_ext(ik,it)
+                  t,it,ik,j_ext(it,ik)
           endif
        enddo
     enddo
@@ -2916,7 +2962,7 @@ contains
     call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
     !<DD>Do all processors need to know the full result here? Only proc0 seems to do any writing.
     !If not then remove the last two arguments in the following call.
-    call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, 1, full_arr=.true.)
+    call integrate_moment (spread(aj0,2,2)*spread(aj0,2,2)*gnew*conjg(gnew), gparity, .true., full_arr=.true.)
     call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
     do is = 1, nspec
        do ik = 1, naky
@@ -3379,6 +3425,7 @@ contains
     integer :: j
     logical, optional :: debopt
     logical :: debug=.false.
+    if (debug) write(6,*) "get_omeaavg: allocate domega"
 if (.not. allocated(domega)) allocate(domega(navg,ntheta0,naky))
     if (present(debopt)) debug=debopt
 if (debug) write(6,*) "get_omeaavg: start"
@@ -3393,6 +3440,7 @@ if (debug) write(6,*) "get_omeaavg: start"
     else
        fac=1000/abs(omegatol)
     endif
+if (debug) write(6,*) "get_omeaavg: set omegahist"
     where (abs(phinew(j,:,:)+aparnew(j,:,:)+bparnew(j,:,:)) < tiny(0.0)*fac &
            .or. abs(phi(j,:,:)+apar(j,:,:)+bpar(j,:,:)) < tiny(0.0)*fac)
        omegahist(mod(istep,navg),:,:) = 0.0
@@ -3402,11 +3450,13 @@ if (debug) write(6,*) "get_omeaavg: start"
                   /(phi(j,:,:)   + apar(j,:,:)    + bpar(j,:,:)))*zi/code_dt
     end where
 
+if (debug) write(6,*) "get_omeaavg: set omegahist at istep = 0"
     !During initialisation fieldnew==field but floating error can lead to finite omegahist
     !Force omegahist=0 here to avoid erroneous values.
     !Could think about forcing omegahist=0 where abs(omegahist)<tol
     if(istep.eq.0) omegahist(:,:,:)=0.0
 
+if (debug) write(6,*) "get_omeaavg: set omegaavg"
     omegaavg = sum(omegahist/real(navg),dim=1)
 if (debug) write(6,*) "get_omegaavg: omegaavg=",omegaavg
 
