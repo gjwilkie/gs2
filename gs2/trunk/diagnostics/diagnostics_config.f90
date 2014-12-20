@@ -132,6 +132,7 @@ module diagnostics_config
      logical :: write_final_moments
      logical :: write_final_antot
      logical :: write_gs
+     integer :: nsave
      logical :: save_for_restart
      logical :: file_safety_check
      logical :: save_distfn
@@ -265,6 +266,7 @@ contains
     logical :: write_final_moments
     logical :: write_final_antot
     logical :: write_gs
+    integer :: nsave
     logical :: save_for_restart
     logical :: file_safety_check
     logical :: save_distfn
@@ -328,6 +330,7 @@ contains
          write_final_moments, &
          write_final_antot, &
          write_gs, &
+         nsave, &
          save_for_restart, &
          file_safety_check, &
          save_distfn
@@ -395,6 +398,7 @@ contains
        write_final_moments = .false.
        write_final_antot = .false.
        write_gs = .false.
+       nsave = 1000
        save_for_restart = .false.
        file_safety_check = .true.
        save_distfn = .false.
@@ -461,6 +465,7 @@ contains
        gnostics%write_final_moments = write_final_moments
        gnostics%write_final_antot = write_final_antot
        gnostics%write_gs = write_gs
+       gnostics%nsave = nsave
        gnostics%save_for_restart = save_for_restart
        gnostics%file_safety_check = file_safety_check
        gnostics%save_distfn = save_distfn
@@ -526,6 +531,7 @@ contains
     call broadcast (gnostics%write_final_moments)
     call broadcast (gnostics%write_final_antot)
     call broadcast (gnostics%write_gs)
+    call broadcast (gnostics%nsave)
     call broadcast (gnostics%save_for_restart)
     call broadcast (gnostics%file_safety_check)
     call broadcast (gnostics%save_distfn)
