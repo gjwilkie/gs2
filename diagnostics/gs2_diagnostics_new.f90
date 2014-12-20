@@ -75,6 +75,11 @@ contains
        gnostics%write_any = .false.
     end if
     if (.not. gnostics%write_any) return
+
+    ! For the moment, hardwire these so as not to 
+    ! conflict with the old module. 
+    gnostics%save_for_restart = .false.
+    gnostics%save_distfn = .false.
     
     ! Set whether this is a Trinity run.. enforces certain 
     ! calculations
@@ -226,37 +231,13 @@ contains
     use diagnostics_nonlinear_convergence, only: finish_nonlinear_convergence
     use nonlinear_terms, only: nonlin
     use dist_fn, only: write_fyx, write_f, write_poly, collision_error
-    use dist_fn_arrays, only: g_adjust
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
-    use gs2_time, only: user_dt
-    use dist_fn_arrays, only: gnew
-    use run_parameters, only: fphi, fapar, fbpar
-    use collisions, only: vnmult
-    use gs2_save, only: gs2_save_for_restart
     use simpledataio, only: closefile
     implicit none
-    integer :: istatus
     if (.not. gnostics%write_any) return
     
-    if (gnostics%save_for_restart) then
-       call gs2_save_for_restart (gnew, gnostics%user_time, user_dt, vnmult, istatus, &
-            fphi, fapar, fbpar, exit_in=.true.)
-    end if
-    
-    !<DD> Added for saving distribution function
-    if (gnostics%save_distfn) then
-       !Convert h to distribution function
-       call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
-       
-       !Save dfn, fields and velocity grids to file
-       call gs2_save_for_restart (gnew, gnostics%user_time, user_dt, vnmult, istatus, &
-            fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
-       
-       !Convert distribution function back to h
-       call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
-    end if
-    !</DD> Added for saving distribution function
+    call save_restart_dist_fn
     
     call run_old_final_routines
     
@@ -282,6 +263,35 @@ contains
     
     call finish_diagnostics_config(gnostics)
   end subroutine finish_gs2_diagnostics_new
+
+  subroutine save_restart_dist_fn
+    use run_parameters, only: fphi, fapar, fbpar
+    use collisions, only: vnmult
+    use gs2_save, only: gs2_save_for_restart
+    use fields_arrays, only: phinew, bparnew
+    use gs2_time, only: user_dt
+    use dist_fn_arrays, only: gnew
+    use dist_fn_arrays, only: g_adjust
+    integer :: istatus
+    if (gnostics%save_for_restart) then
+       call gs2_save_for_restart (gnew, gnostics%user_time, user_dt, vnmult, istatus, &
+            fphi, fapar, fbpar, exit_in=.true.)
+    end if
+    
+    !<DD> Added for saving distribution function
+    if (gnostics%save_distfn) then
+       !Convert h to distribution function
+       call g_adjust(gnew,phinew,bparnew,fphi,fbpar)
+       
+       !Save dfn, fields and velocity grids to file
+       call gs2_save_for_restart (gnew, gnostics%user_time, user_dt, vnmult, istatus, &
+            fphi, fapar, fbpar, exit_in=.true.,distfn=.true.)
+       
+       !Convert distribution function back to h
+       call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
+    end if
+    !</DD> Added for saving distribution function
+  end subroutine save_restart_dist_fn
   
   subroutine run_diagnostics_to_be_updated
     use fields_arrays, only: phinew, bparnew
@@ -370,6 +380,11 @@ contains
        call calculate_omega(gnostics)
        if (gnostics%write_heating) call calculate_heating (gnostics)
     end if
+
+    ! EGH to be reinstated when old diagnostics removed.
+    !if (mod(istep, gnostics%nsave).eq.0.or.exit) then
+      !call save_restart_dist_fn
+    !end if
 
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
        gnostics%vary_vnew_only = .false.
