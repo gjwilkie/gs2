@@ -224,6 +224,15 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        
        if (proc0) call time_message(.false.,time_init,' Initialization')
        
+#ifdef NEW_DIAG
+       ! Create variables
+       if (.not. diagnostics_init_options%initialized) then
+         call run_diagnostics(-1,exit)
+         !diagnostics_init_options%initialized = .true.
+       end if
+       ! Write initial values
+       call run_diagnostics(0,exit)
+#endif
        first_time = .false.
 
        ! When trinity starts a new step it needs to reset after initialisation
@@ -242,15 +251,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     if(present(trinity_reset)) trin_restart = .true. ! All trinity runs are restarted except the first
 
-#ifdef NEW_DIAG
-    ! Create variables
-    if (.not. diagnostics_init_options%initialized) then
-      call run_diagnostics(-1,exit)
-      !diagnostics_init_options%initialized = .true.
-    end if
-    ! Write initial values
-    call run_diagnostics(0,exit)
-#endif
 
     if (present(pflux)) call write_trinity_parameters
 
@@ -371,6 +371,8 @@ endif
            pflux_avg(is) =  diff * spec(is)%dens**2.0 * spec(is)%fprim 
            heat_avg = 0.0
          end do
+         if (present(converged)) then
+         end if
        end if
        if (size(pflux) > 1) then
           pflux(1) = pflux_avg(ions)/time_interval
@@ -446,8 +448,14 @@ endif
     use gs2_save, only: gs2_save_for_restart, finish_save
     use theta_grid, only: finish_theta_grid
     use unit_tests, only: ilast_step
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
+#endif
     
     call finish_gs2_diagnostics (ilast_step)
+#ifdef NEW_DIAG
+    call finish_gs2_diagnostics_new
+#endif
     call finish_gs2
 ! HJL Species won't change during a run so shouldn't need this    
 !    call finish_trin_species
