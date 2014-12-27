@@ -1054,11 +1054,11 @@ contains
     verb_geo = verbosity()
     job_id_geo = job_id
 
-    write(ntheta_char, "(I4)") ntheta
 !CMR
 
     if (initialized) return
     initialized = .true.
+    write(ntheta_char, "(I4)") ntheta
      call debug_message(verb, "init_theta_grid_eik: call init_theta_grid_params, ntheta="//ntheta_char)
 ! After this call, would think you have ntheta from input file
 ! stored in theta_grid_params data structure.
@@ -1066,12 +1066,14 @@ contains
 ! Instead, get it stored via the eikcoefs call below.  
     call init_theta_grid_params
 
+    write(ntheta_char, "(I4)") ntheta
      call debug_message(verb, "init_theta_grid_eik: call read_parameters, ntheta="//ntheta_char)
     call read_parameters
 !CMR replace call init_theta(ntheta) with following condition 
 !    to avoid inappropriate calls to init_theta (as in geo/et.f90)
     if(.not. gen_eq .and. .not. ppl_eq .and. &
        .not. transp_eq .and. .not. chs_eq) then 
+    write(ntheta_char, "(I4)") ntheta
      call debug_message(verb, "init_theta_grid_eik: call init_theta, ntheta="//ntheta_char)
        call init_theta (ntheta)
     endif
@@ -1080,8 +1082,10 @@ contains
     rhoc_save = rhoc
     if (itor == 0) rhoc = 1.5*delrho
 
+    write(ntheta_char, "(I4)") ntheta
      call debug_message(verb, "init_theta_grid_eik: call eikcoefs, ntheta="//ntheta_char)
     call eikcoefs (ntheta)
+    write(ntheta_char, "(I4)") ntheta
      call debug_message(verb, "init_theta_grid_eik: done, ntheta="//ntheta_char)
 
     rhoc = rhoc_save

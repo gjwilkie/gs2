@@ -145,7 +145,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
       debug = should_print(3)
     end if
     if (first_time) then
-       write (*,*) 'gs2_main::run_gs2 starting initialization', iproc, trin_job
+      if (debug) write (*,*) 'gs2_main::run_gs2 starting initialization', iproc, trin_job
 
        ! <doc> Initialize message passing </doc>
        if (present(mpi_comm)) then
@@ -186,11 +186,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
           else
              call init_file_utils (list, name="gs")
           end if
-          write (*,*) 'gs2_main::run_gs2 initialized file_utils', iproc, trin_job
+          if (debug) write (*,*) 'gs2_main::run_gs2 initialized file_utils', iproc, trin_job
        end if
        
        call broadcast (list)
-       write (*,*) 'gs2_main::run_gs2 broadcasted list', iproc, trin_job
+       if (debug) write (*,*) 'gs2_main::run_gs2 broadcasted list', iproc, trin_job
        
        ! <doc> If given a list of jobs, fork </doc>
        if (list) then
@@ -209,7 +209,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        !write (*,*) 'gs2_main::run_gs2 before broadcast, run_name = ', cbuff, iproc, trin_job
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
-       write (*,*) 'gs2_main::run_gs2 run_name = ', run_name, iproc, trin_job
+       if (debug) write (*,*) 'gs2_main::run_gs2 run_name = ', run_name, iproc, trin_job
        call init_parameter_scan
        !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
        using_measure_scatter=.false.
