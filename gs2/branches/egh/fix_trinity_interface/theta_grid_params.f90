@@ -54,14 +54,22 @@ contains
 
   subroutine read_parameters
     use file_utils, only: input_unit, input_unit_exist
+    use unit_tests, only: debug_message
     implicit none
+    integer, parameter :: verb=3
     integer :: in_file
+    character(4) :: ntheta_char
+
 !CMR,2/2/2011: add btor_slab
 ! btor_slab = btor/bpol defines direction of a flow relative to B in slab 
 ! geometry, where flow is by definition in the toroidal direction.
+
     namelist /theta_grid_parameters/ rhoc, rmaj, r_geo, eps, epsl, &
          qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri, &
          ntheta, nperiod, kp, asym, asympri, btor_slab
+    
+       call debug_message(verb, "theta_grid_params::read_parameters start")
+
 
     rhoc = 0.5
     rmaj = 3.0
