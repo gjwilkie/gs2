@@ -1,0 +1,116 @@
+#! /bin/bash
+# A script for building GS2. This is free software, released
+# under the MIT licence.
+# Written by:
+#            Edmund Highcock (edmundhighcock@users.sourceforge.net)
+
+function print_help {
+  echo ""
+  echo " GS2 Build Script"
+  echo
+  echo "This script is a utility for building GS2."
+  echo "To build gs2, execute:" 
+  echo " $ ./build_gs2 -s <system>"
+  echo 
+  echo "If you have set GK_SYSTEM you can neglect the -s"
+  echo "option."
+  echo 
+  echo "To see a list of available systems:"
+  echo " $ ./build_gs2 ls"
+  echo 
+  echo "To print the configuration for a given system:"
+  echo " $ ./build_gs2 -s <system> print_config "
+  echo 
+  echo "You can use this to configure your system"
+  echo "without building GS2 like this:"
+  echo " $ ./build_gs2 -s <system> config "
+  echo " $ source system_config"
+  echo
+  echo "It uses a standard set of choices about"
+  echo "configuration based on the value of -s. These"
+  echo "choices may need to be maintained as software is upgraded."
+  echo "If this script is being run from within a release of GS2,"
+  echo "rather than from the development repository, it can be updated"
+  echo "to the latest development version using: "
+  echo " $ ./build_gs2 update"
+  echo
+}
+
+function check_system_set {
+  if [ "$GK_SYSTEM" == "" ] 
+  then
+    echo "ERROR: Please set the -s option or set the GK_SYSTEM environment variable"
+    print_help
+    exit 1
+    #SYSTEM_SET=1
+  #else 
+    #SYSTEM_SET=0
+  fi
+}
+
+
+function run_configuration {
+make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles
+if test "$?" != "0"
+then 
+  exit 1
+fi
+}
+
+
+while getopts ":s:h" opt; do
+  case $opt in
+    s)
+      GK_SYSTEM=$OPTARG
+      ;;
+    h)
+      print_help
+      exit 0
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+  shift $((OPTIND-1))
+done
+
+case $1 in 
+  *help*)
+    print_help
+    ;;
+  config)
+    check_system_set
+    run_configuration
+    ;;
+  print_config)
+    check_system_set
+    run_configuration
+    echo
+    echo "Configuration for system $GK_SYSTEM:"
+    cat system_config
+    ;;
+  ls)
+    find Makefiles | grep Makefile | grep -Ev 'svn|gnu|g95|gcc|pgi|intel|xl' | sed 's/Makefiles.Makefile.//' | sort | xargs echo
+    ;;
+  "")
+    check_system_set
+    run_configuration
+    source system_config
+    make $MAKEFLAGS 
+    ;;
+  update)
+    echo "update function not implemented yet!"
+    exit 1
+    ;;
+  *)
+    print_help
+    ;;
+    
+esac
+
+
