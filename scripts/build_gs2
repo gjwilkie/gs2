@@ -115,8 +115,11 @@ case $1 in
     ;;
   tests|unit_tests|linear_tests)
     setup_build
+    make $1 $MAKEFLAGS
+    ;;
+  test_norun)
+    setup_build
     make $1 $MAKEFLAGS TESTNORUN=true 
-    #make $1 $MAKEFLAGS
     ;;
   up*)
     echo "update function not implemented yet!"
