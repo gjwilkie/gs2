@@ -18,6 +18,12 @@ function print_help {
   echo "To see a list of available systems:"
   echo " $ ./build_gs2 ls"
   echo 
+  echo "To run the tests: "
+  echo " $ ./build_gs2 tests"
+  echo "or:"
+  echo " $ ./build_gs2 unit_tests"
+  echo " $ ./build_gs2 linear_tests"
+  echo 
   echo "To print the configuration for a given system:"
   echo " $ ./build_gs2 -s <system> print_config "
   echo 
@@ -39,8 +45,7 @@ function print_help {
 function check_system_set {
   if [ "$GK_SYSTEM" == "" ] 
   then
-    echo "ERROR: Please set the -s option or set the GK_SYSTEM environment variable"
-    print_help
+    echo "ERROR: Please set the -s option or set the GK_SYSTEM environment variable."
     exit 1
     #SYSTEM_SET=1
   #else 
@@ -50,11 +55,17 @@ function check_system_set {
 
 
 function run_configuration {
-make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles
+make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles | grep -v 'To configure' | grep -v 'source system_config'
 if test "$?" != "0"
 then 
   exit 1
 fi
+}
+
+function setup_build {
+  check_system_set
+  run_configuration
+  source system_config
 }
 
 
@@ -95,20 +106,25 @@ case $1 in
     cat system_config
     ;;
   ls)
-    find Makefiles | grep Makefile | grep -Ev 'svn|gnu|g95|gcc|pgi|intel|xl' | sed 's/Makefiles.Makefile.//' | sort | xargs echo
+    #find Makefiles | grep Makefile | grep -Ev 'svn|gnu|g95|gcc|pgi|intel|xl' | sed 's/Makefiles.Makefile.//' | sort | xargs echo
+    find Makefiles -type f -exec grep -q STANDARD_SYSTEM_CONFIGURATION {} \; -print | grep -v svn | grep -Ev '~$|swp$' | sed 's/Makefiles.Makefile.//' | sort | xargs echo
     ;;
   "")
-    check_system_set
-    run_configuration
-    source system_config
+    setup_build
     make $MAKEFLAGS 
     ;;
-  update)
+  tests|unit_tests|linear_tests)
+    setup_build
+    make $1 $MAKEFLAGS TESTNORUN=true 
+    #make $1 $MAKEFLAGS
+    ;;
+  up*)
     echo "update function not implemented yet!"
     exit 1
     ;;
   *)
     print_help
+    echo "ERROR: Unknown command $1"
     ;;
     
 esac

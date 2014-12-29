@@ -588,7 +588,7 @@ cleanlib:
 	-rm -f *.a
 
 cleanconfig:
-	rm -f system_config
+	rm -f system_config .tmp_output
 
 distclean: unlink clean cleanlib clean_tests clean_benchmarks distclean_simpledataio cleanconfig
 
@@ -672,7 +672,7 @@ ifdef STANDARD_SYSTEM_CONFIGURATION
 system_config: Makefiles/Makefile.$(GK_SYSTEM) Makefile
 	@echo "#!/bin/bash " > system_config
 	@echo "$(STANDARD_SYSTEM_CONFIGURATION)" >> system_config
-	sed -i 's/^ //' system_config
+	@sed -i 's/^ //' system_config
 	@echo "To configure your system run"
 	@echo " $$ source system_config"
 else
