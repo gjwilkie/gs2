@@ -673,8 +673,7 @@ system_config: Makefiles/Makefile.$(GK_SYSTEM) Makefile
 	@echo "#!/bin/bash " > system_config
 	@echo "$(STANDARD_SYSTEM_CONFIGURATION)" >> system_config
 	@sed -i 's/^ //' system_config
-	@echo "To configure your system run"
-	@echo " $$ source system_config"
+
 else
 .PHONY: system_config
 system_config:
