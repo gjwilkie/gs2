@@ -155,7 +155,7 @@ class GkTestUtility
     FileUtils.makedirs('.tmp_repository')
     Dir.chdir('.tmp_repository') do
       raise "ERROR: please specify repository using the -r flag" unless @copts[:r]
-      unless system "scp #{@copts[:r]}/test_results/#{@copts[:c]}/test_data.rb ."
+      unless system "scp #{@copts[:r]}/test_results/#{@copts[:c]}/test_data.yaml ."
         File.open('test_data.yaml', 'w'){|f| f.puts Psych.dump(Hash.new)}
       end
       @existing_data = Psych.load(File.read('test_data.yaml'))
@@ -219,7 +219,7 @@ class GkTestUtility
       raise "ERROR: please specify repository using the -r flag" unless @copts[:r]
       File.open('test_data.yaml', 'w'){|f| f.puts Psych.dump(@existing_data)}
       File.open('index.html', 'w'){|f| f.puts engine.render(self)}
-      system "scp test_data.rb #{@copts[:r]}/test_results/#{@copts[:c]}/."
+      system "scp test_data.yaml #{@copts[:r]}/test_results/#{@copts[:c]}/."
       system "scp index.html #{@copts[:r]}/test_results/#{@copts[:c]}/."
     end
   end
