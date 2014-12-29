@@ -175,7 +175,7 @@ class GkTestUtility
         }.find_all{|r|
           case @copts[:c]
           when 'gs2'
-            r.revision.to_i >= 3200
+            r.revision.to_i >= 3205
             #r.revision.to_i < 3201
           else
             raise "unknown code #{@copts[:c]}"
@@ -210,7 +210,7 @@ class GkTestUtility
     upload_new_data
   end
   def sorted_results
-    @results.sort_by{|r| r.svn_revision}
+    @results.sort_by{|r| -r.svn_revision}
   end
   def upload_new_data
     FileUtils.makedirs('.tmp_repository')
