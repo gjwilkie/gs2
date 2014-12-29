@@ -118,11 +118,11 @@ case $1 in
     ;;
   "")
     setup_build
-    make $MAKE_OPTIONAL_COMMAND $MAKEFLAGS 
+    make $MAKE_OPTIONAL_COMMAND $MAKEFLAGS  GK_SYSTEM=$GK_SYSTEM
     ;;
   tests|unit_tests|linear_tests)
     setup_build
-    make $1 $MAKEFLAGS
+    make $1 $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM
     ;;
   up*)
     echo "update function not implemented yet!"
