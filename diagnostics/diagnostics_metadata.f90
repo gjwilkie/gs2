@@ -12,7 +12,7 @@ contains
   subroutine write_metadata(gnostics)
     use simpledataio, only: add_metadata
     use simpledataio, only: add_standard_metadata
-    use runtime_tests, only: build_indentifier
+    use runtime_tests, only: build_identifier
     use runtime_tests, only: get_svn_rev
     use run_parameters, only: user_comments
     type(diagnostics_type), intent(in) :: gnostics
@@ -109,8 +109,8 @@ contains
       trim(user_comments))
     call add_metadata(gnostics%sfile, "svn_revision", &
       trim(get_svn_rev()))
-    call add_metadata(gnostics%sfile, "build_indentifier", &
-      trim(build_indentifier()))
+    call add_metadata(gnostics%sfile, "build_identifier", &
+      trim(build_identifier()))
 
     call add_standard_metadata(gnostics%sfile)
   end subroutine write_metadata

@@ -1,0 +1,83 @@
+!!! 1.1
+/ %html{"xml:lang" => "en", xmlns: "http://www.w3.org/1999/xhtml"}
+%head
+  %title="Tests results for #{code}" 
+  %meta{:content => "text/html; charset=US-ASCII", "http-equiv" => "content-type"}/
+%body
+  %h1 
+    ="Test Results for #{code}"
+  %h2
+    Results Summary
+  - sorted_results.each do |res|
+    .result_summary{id: "summary"+res.id.to_s}
+      ="&nbsp;"*4
+      = res.build_identifier
+      - if res.failed
+        %font{:color=>"red"} 
+          = res.overall_result
+      - else 
+        %font{:color=>"green"} 
+          = res.overall_result
+      (author:
+      = res.svn_commiter
+      )
+      %a{href: "#detail"+res.id.to_s}
+        details
+    <br>
+  %h2
+    Detailed Results
+  - sorted_results.each do |res|
+    .result_detail{id: "detail"+res.id.to_s}
+      %h3
+        = res.build_identifier
+        - if res.failed
+          %font{:color=>"red"} 
+            = res.overall_result
+        - else 
+          %font{:color=>"green"} 
+            = res.overall_result
+        (author:
+        = res.svn_commiter
+        )
+      %a{href: "#summary"+res.id.to_s}
+        Back to list
+      <br>
+      <br>
+      - if res.build_succeeded
+        %h4
+          Build Status
+        Build successful
+        %h4
+          Results
+        = res.results.gsub(/\n/, '<br>').gsub(/passed/, '<font color="green">passed</font>').gsub(/FAILED/, '<font color="red">FAILED</font>')
+        <br><br>
+        - if res.failed
+          %h4
+            Output Log
+          %a{href: "#summary"+res.id.to_s}
+            Back to list
+          <br>
+          <br>
+          = res.output_message.gsub(/(failed)/, '<font color="red">\1</font>').gsub(/\n/, '<br>')
+          %h4
+            Error Log
+          %a{href: "#summary"+res.id.to_s}
+            Back to list
+          <br>
+          <br>
+          = res.error_message.gsub(/(Error)/, '<font color="red">\1</font>').gsub(/\n/, '<br>')
+        %h4
+          Metadata
+        = res.metadata.gsub(/^(\w+)/, '<font color="purple">\1</font>').gsub(/\n/, '<br>')
+      - else
+        %h4
+          Build Status
+        Build failed
+        %h4
+          Error Log
+        %a{href: "#summary"+res.id.to_s}
+          Back to list
+        <br>
+        <br>
+        = res.error_message.gsub(/(Error)/, '<font color="red">\1</font>').gsub(/\n/, '<br>')
+
