@@ -59,7 +59,7 @@ function check_system_set {
 
 
 function run_configuration {
-make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles | grep -v 'To configure' | grep -v 'source system_config'
+make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles 
 if test "$?" != "0"
 then 
   exit 1
