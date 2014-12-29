@@ -59,6 +59,7 @@ EOF
     #['--formats', '-f', GetoptLong::REQUIRED_ARGUMENT, "A list of formats pertaining to the various input and output files (in the order which they appear), separated by commas. If they are all the same, only one value may be given. If a value is left empty (i.e. there are two commas in a row) then the previous value will be used. Currently supported formats are #{SUPPORTED_FORMATS.inspect}. "],
     #['--merge-sources', '-m', GetoptLong::REQUIRED_ARGUMENT, "A list of which bits of information should come from which input file during a merge. Currently supported merge sources are #{SUPPORTED_MERGE_SOURCES.inspect} "],
     ['--code', '-c', GetoptLong::REQUIRED_ARGUMENT, "The name of the code (i.e. 'gs2' or 'trinity')."],
+    ['--delete', '-d', GetoptLong::NO_ARGUMENT, "Delete existing test data and start again."],
     ['--folder', '-f', GetoptLong::REQUIRED_ARGUMENT, "The folder in which to download and test the code."],
     ['--results-url', '-r', GetoptLong::REQUIRED_ARGUMENT, "The URL of the repository where the results should be uploaded to."],
     ['--system', '-s', GetoptLong::REQUIRED_ARGUMENT, "The name of the system."],
@@ -72,7 +73,7 @@ EOF
 
   # specifying flag sets a bool to be true
 
-  CLF_BOOLS = []
+  CLF_BOOLS = [:d]
 
   CLF_INVERSE_BOOLS = [] # specifying flag sets a bool to be false
 
@@ -155,7 +156,7 @@ class GkTestUtility
     FileUtils.makedirs('.tmp_repository')
     Dir.chdir('.tmp_repository') do
       raise "ERROR: please specify repository using the -r flag" unless @copts[:r]
-      unless system "scp #{@copts[:r]}/test_results/#{@copts[:c]}/test_data.yaml ."
+      unless (not @copts[:d]) and system "scp #{@copts[:r]}/test_results/#{@copts[:c]}/test_data.yaml ."
         File.open('test_data.yaml', 'w'){|f| f.puts Psych.dump(Hash.new)}
       end
       @existing_data = Psych.load(File.read('test_data.yaml'))
