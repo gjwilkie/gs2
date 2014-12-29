@@ -44,7 +44,8 @@ EXAMPLES
 EOF
 
   COMMANDS_WITH_HELP = [
-    ['upload_test', 'up', 0,  'To be run from within the GS2 source folder.', [], [:s]],
+    ['upload_test', 'up', 0,  'Run the tests within the current folder and upload the result. To be run from within the GS2 source folder.', [], [:s, :c, :r]],
+    ['run_automated_testing', 'run', 0,  'Periodically check for new revisions. If new revisions have been checked in, download them, test them and upload the results to the repository.', [], [:s, :c, :r]],
     #['display_summary_graph', 'disp', 1,  'Display a summary graph of the file using gnuplot.', ['inputfile',], [:f]],
     #['merge', 'mg', 2,  'Merge data from two input files to create a single output file. ', ['inputfile', 'outputfile(s)'], [:f, :t, :m]],
     #['write_summary_graph', 'wsg', 2,  'Write a summary graph of the file to disk using gnuplot. The file format is determined by the extension of the graph file', ['inputfile', 'graph file'], [:f,:w]],
@@ -58,8 +59,10 @@ EOF
     #['--formats', '-f', GetoptLong::REQUIRED_ARGUMENT, "A list of formats pertaining to the various input and output files (in the order which they appear), separated by commas. If they are all the same, only one value may be given. If a value is left empty (i.e. there are two commas in a row) then the previous value will be used. Currently supported formats are #{SUPPORTED_FORMATS.inspect}. "],
     #['--merge-sources', '-m', GetoptLong::REQUIRED_ARGUMENT, "A list of which bits of information should come from which input file during a merge. Currently supported merge sources are #{SUPPORTED_MERGE_SOURCES.inspect} "],
     ['--code', '-c', GetoptLong::REQUIRED_ARGUMENT, "The name of the code (i.e. 'gs2' or 'trinity')."],
-    ['--repository-url', '-r', GetoptLong::REQUIRED_ARGUMENT, "The URL of the repository where the results should be uploaded to."],
+    ['--folder', '-f', GetoptLong::REQUIRED_ARGUMENT, "The folder in which to download and test the code."],
+    ['--results-url', '-r', GetoptLong::REQUIRED_ARGUMENT, "The URL of the repository where the results should be uploaded to."],
     ['--system', '-s', GetoptLong::REQUIRED_ARGUMENT, "The name of the system."],
+    ['--url', '-u', GetoptLong::REQUIRED_ARGUMENT, "The URL of the code repository to be tested."],
 
     ]
 
@@ -116,37 +119,19 @@ class GkTestUtility
     def fetch_utility(copts)
       GkTestUtility.new(copts)
     end
+    def run_automated_testing(copts)
+      raise "Please specify a testing folder using the -f flag. This should typically be an empty folder on the first run." unless copts[:f]
+      raise "Please specify a code repository using the -u flag." unless copts[:u]
+      check_copts(copts)
+      utility = fetch_utility(copts)
+      utility.run_automated_testing
+    end
     def upload_test(copts)
       check_folder("upload_test", copts)
       check_copts(copts)
       utility = fetch_utility(copts)
       utility.add_test_result(TestResult.test(copts, Dir.pwd))
       utility.upload_new_data
-      #raise "running tests failed" unless system "./build_#{copts[:c]} tests -s #{copts[:s]} > .tmp_output"
-      #results = File.read('.tmp_output').sub(/\A.*(^=====.*Test Results.*)\Z/m, '\1')
-      #FileUtils.rm('.tmp_output')
-      #puts results
-      #build_identifier, mdata = metadata(copts)
-      #puts mdata, build_identifier
-      #svn_commiter = `svn info`.scan(/Changed Author:\s+(.*)/).flatten[0]
-      #results_hash = retrieve_existing_data(copts)
-      #results_hash[build_identifier] = {
-        #:build_identifier => build_identifier,
-        #:svn_commiter => svn_commiter,
-        #:results => results, 
-        #:metadata => mdata
-      #}
-      #results_list = ResultsList.new(copts[:c], results_hash.values.map{|hsh| TestResult.new(hsh)})
-      #upload_new_data(results_hash, results_list, copts)
-    end
-    def metadata(copts)
-      check_folder("metadata", copts)
-      check_copts(copts)
-      case copts[:c] 
-      when 'gs2'
-        #puts metadata
-      end
-      return [build_identifier, metadata]
     end
   end
 
@@ -170,13 +155,59 @@ class GkTestUtility
     FileUtils.makedirs('.tmp_repository')
     Dir.chdir('.tmp_repository') do
       raise "ERROR: please specify repository using the -r flag" unless @copts[:r]
-      unless false #system "scp #{copts[:r]}/test_results/#{copts[:c]}/test_data.rb ."
+      unless system "scp #{@copts[:r]}/test_results/#{@copts[:c]}/test_data.rb ."
         File.open('test_data.yaml', 'w'){|f| f.puts Psych.dump(Hash.new)}
       end
       @existing_data = Psych.load(File.read('test_data.yaml'))
     end
     @results = @existing_data.values.map{|hsh| TestResult.new(hsh)}
     @results.each_with_index{|r,i| r.id=i}
+  end
+  def get_revisions
+    Dir.chdir(@copts[:f]) do
+      head_revision = Revision.new("HEAD", @copts[:u])
+      head_revision.checkout
+      Dir.chdir("HEAD") do
+        system "svn log > log.txt" 
+        log = File.read("log.txt")
+        @revisions = log.split(/^-{20,}$/).map{|s| 
+          Revision.new(s.scan(/^r(\d+)/).flatten[0], @copts[:u])
+        }.find_all{|r|
+          case @copts[:c]
+          when 'gs2'
+            r.revision.to_i >= 3200
+            #r.revision.to_i < 3201
+          else
+            raise "unknown code #{@copts[:c]}"
+          end
+        }
+        
+        #p @revisions
+      end
+      #@revisions.push head_revision
+    end 
+  end
+  def untested_revisions
+    tested = @results.map{|r| r.svn_revision}
+    untested_revisions = @revisions.find_all{|rev|
+      not tested.include? rev.revision.to_i
+    }
+    untested_revisions
+  end
+  def run_automated_testing
+    get_revisions
+    untested = untested_revisions
+    p untested
+    untested.each do |r|
+      Dir.chdir @copts[:f] do
+        r.checkout
+        Dir.chdir r.revision do
+          puts 'Dir.pwd', Dir.pwd
+          add_test_result(TestResult.test(@copts, Dir.pwd))
+        end
+      end
+    end
+    upload_new_data
   end
   def sorted_results
     @results.sort_by{|r| r.svn_revision}
@@ -188,6 +219,26 @@ class GkTestUtility
       raise "ERROR: please specify repository using the -r flag" unless @copts[:r]
       File.open('test_data.yaml', 'w'){|f| f.puts Psych.dump(@existing_data)}
       File.open('index.html', 'w'){|f| f.puts engine.render(self)}
+      system "scp test_data.rb #{@copts[:r]}/test_results/#{@copts[:c]}/."
+      system "scp index.html #{@copts[:r]}/test_results/#{@copts[:c]}/."
+    end
+  end
+end
+
+class Revision
+  attr_reader :revision
+  def initialize(revision, url)
+    @revision = revision
+    @url = url
+  end
+  def checkout
+    if FileTest.exist? @revision
+      #puts "svn up -r #@revision"
+      Dir.chdir @revision do
+        raise "svn update #@revision failed" unless  system "svn up -r #@revision"
+      end
+    else
+      raise "svn failed" unless system "svn co -r #@revision #@url #@revision"
     end
   end
 end
@@ -236,10 +287,10 @@ class TestResult
     output_message = File.read('.tmp_output')
     FileUtils.rm('.tmp_output')
     FileUtils.rm('.tmp_error')
-    puts results
+    #puts results
     mdata = `ncdump linear_tests/cyclone_itg/cyclone_itg_low_res.cdf -c`.sub(/\A.*(:svn_revision.*)data.*\Z/m, '\1').gsub(/^\s*:/, '')
     build_identifier = mdata.sub(/\A.*build_identifier\s+=\s+"(.*?)".*\Z/m, '\1').split(/\./).reverse.join('.')
-    puts mdata, build_identifier
+    #puts mdata, build_identifier
     svn_commiter = `svn info`.scan(/Changed Author:\s+(.*)/).flatten[0]
     results_hash = {
         :build_identifier => build_identifier,
