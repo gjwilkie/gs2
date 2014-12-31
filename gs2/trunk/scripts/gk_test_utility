@@ -178,6 +178,8 @@ class GkTestUtility
           when 'gs2'
             r.revision.to_i >= 3205
             #r.revision.to_i < 3201
+          when 'trinity'
+            r.revision.to_i >= 3211
           else
             raise "unknown code #{@copts[:c]}"
           end
