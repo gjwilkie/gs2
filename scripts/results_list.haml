@@ -27,6 +27,7 @@
     Detailed Results
   - sorted_results.each do |res|
     .result_detail{id: "detail"+res.id.to_s}
+      <br>
       %h3
         = res.build_identifier
         - if res.failed
@@ -41,7 +42,9 @@
       %a{href: "#summary"+res.id.to_s}
         Back to list
       <br>
-      <br>
+      %h4
+        Log Message
+      = res.svn_log_message
       - if res.build_succeeded
         %h4
           Build Status

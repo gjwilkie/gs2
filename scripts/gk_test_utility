@@ -166,13 +166,13 @@ class GkTestUtility
   end
   def get_revisions
     Dir.chdir(@copts[:f]) do
-      head_revision = Revision.new("HEAD", @copts[:u])
+      head_revision = Revision.new("HEAD", @copts[:u], '')
       head_revision.checkout
       Dir.chdir("HEAD") do
         system "svn log > log.txt" 
         log = File.read("log.txt")
         @revisions = log.split(/^-{20,}$/).map{|s| 
-          Revision.new(s.scan(/^r(\d+)/).flatten[0], @copts[:u])
+          Revision.new(s.scan(/^r(\d+)/).flatten[0], @copts[:u], s)
         }.find_all{|r|
           case @copts[:c]
           when 'gs2'
@@ -206,7 +206,7 @@ class GkTestUtility
         r.checkout
         Dir.chdir r.revision do
           puts 'Dir.pwd', Dir.pwd
-          add_test_result(TestResult.test(@copts, Dir.pwd))
+          add_test_result(TestResult.test(@copts, r, Dir.pwd))
         end
       end
     end
@@ -230,9 +230,11 @@ end
 
 class Revision
   attr_reader :revision
-  def initialize(revision, url)
+  attr_reader :message 
+  def initialize(revision, url, message)
     @revision = revision
     @url = url
+    @message = message
   end
   def checkout
     if FileTest.exist? @revision
@@ -252,6 +254,8 @@ class TestResult
   attr_reader :metadata
   attr_reader :build_identifier
   attr_reader :svn_commiter
+  attr_reader :svn_revision
+  attr_reader :svn_log_message
   attr_reader :results
   attr_reader :error_message
   attr_reader :build_succeeded
@@ -263,6 +267,8 @@ class TestResult
     @results = data[:results]
     @metadata = data[:metadata]
     @svn_commiter = data[:svn_commiter]
+    @svn_revision = data[:svn_revision]
+    @svn_log_message = data[:svn_log_message]
     @error_message = data[:error_message]
     @build_succeeded = data[:build_succeeded]
     @output_message = data[:output_message]
@@ -280,30 +286,38 @@ class TestResult
       end
     end
   end
-  def svn_revision
-    build_identifier.scan(/^(\d+)/).flatten[0].to_i
-  end
-  def self.test(copts, folder)
-    build_succeeded = system "./build_#{copts[:c]} tests -s #{copts[:s]} > .tmp_output 2> .tmp_error"
+  #def svn_revision
+    #build_identifier.scan(/^(\d+)/).flatten[0].to_i
+  #end
+  def self.test(copts, revision, folder)
+    build_succeeded = system "./build_#{copts[:c]} -s #{copts[:s]} tests > .tmp_output 2> .tmp_error"
     results = File.read('.tmp_output').sub(/\A.*(^=====.*Test Results.*)\Z/m, '\1')
     error_message = File.read('.tmp_error')
     output_message = File.read('.tmp_output')
     FileUtils.rm('.tmp_output')
     FileUtils.rm('.tmp_error')
     #puts results
-    mdata = `ncdump linear_tests/cyclone_itg/cyclone_itg_low_res.cdf -c`.sub(/\A.*(:svn_revision.*)data.*\Z/m, '\1').gsub(/^\s*:/, '')
-    build_identifier = mdata.sub(/\A.*build_identifier\s+=\s+"(.*?)".*\Z/m, '\1').split(/\./).reverse.join('.')
+    case copts[:c]
+    when 'gs2'
+      mdata = `ncdump linear_tests/cyclone_itg/cyclone_itg_low_res.cdf -c`.sub(/\A.*(:svn_revision.*)data.*\Z/m, '\1').gsub(/^\s*:/, '')
+    when 'trinity'
+      mdata = ''
+    end
+    build_identifier = revision.revision + '.' + copts[:s] 
     #puts mdata, build_identifier
     svn_commiter = `svn info`.scan(/Changed Author:\s+(.*)/).flatten[0]
     results_hash = {
         :build_identifier => build_identifier,
         :svn_commiter => svn_commiter,
+        :svn_revision => revision.revision.to_i,
+        :svn_log_message => revision.message,
         :results => results, 
         :metadata => mdata,
         :build_succeeded => build_succeeded,
         :error_message => error_message,
         :output_message => output_message,
     }
+    pp results_hash
     return new(results_hash)
   end
 end
