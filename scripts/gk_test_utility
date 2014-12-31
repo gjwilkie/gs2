@@ -200,12 +200,12 @@ class GkTestUtility
   def run_automated_testing
     get_revisions
     untested = untested_revisions
-    p untested
+    p "Testing Revisions", untested.map{|r| r.revision}
     untested.each do |r|
       Dir.chdir @copts[:f] do
         r.checkout
         Dir.chdir r.revision do
-          puts 'Dir.pwd', Dir.pwd
+          #puts 'Dir.pwd', Dir.pwd
           add_test_result(TestResult.test(@copts, r, Dir.pwd))
         end
       end
@@ -217,7 +217,8 @@ class GkTestUtility
   end
   def upload_new_data
     FileUtils.makedirs('.tmp_repository')
-    engine = Haml::Engine.new(File.read('scripts/results_list.haml'))
+    dir = File.dirname(File.expand_path(__FILE__))
+    engine = Haml::Engine.new(File.read(dir+'/results_list.haml'))
     Dir.chdir('.tmp_repository') do
       raise "ERROR: please specify repository using the -r flag" unless @copts[:r]
       File.open('test_data.yaml', 'w'){|f| f.puts Psych.dump(@existing_data)}
@@ -317,7 +318,7 @@ class TestResult
         :error_message => error_message,
         :output_message => output_message,
     }
-    pp results_hash
+    #pp results_hash
     return new(results_hash)
   end
 end
