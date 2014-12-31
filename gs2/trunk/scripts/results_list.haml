@@ -44,7 +44,7 @@
       <br>
       %h4
         Log Message
-      = res.svn_log_message
+      = res.svn_log_message.gsub(/\n/, '<br>')
       - if res.build_succeeded
         %h4
           Build Status
