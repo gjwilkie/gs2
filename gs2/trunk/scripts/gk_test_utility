@@ -142,9 +142,11 @@ class GkTestUtility
 
   attr_reader :code
   attr_reader :results
+  attr_reader :url
   def initialize(copts)
     @copts=copts
     @code=copts[:c]
+    @url = copts[:u]
     retrieve_existing_data
   end
   def add_test_result(test_result)
