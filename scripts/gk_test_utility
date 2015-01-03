@@ -106,11 +106,11 @@ class GkTestUtility
       unless ['gs2', 'trinity'].include? copts[:c]
         raise "Unknown code: #{copts[:c].inspect}"
       end
-      systems = `./build_#{copts[:c]} ls`.split(/\s+/)
-      unless systems.include? copts[:s]
-        puts "This system: #{copts[:s].inspect} is not supported by the automated system"
-        raise
-      end
+      #systems = `./build_#{copts[:c]} ls`.split(/\s+/)
+      #unless systems.include? copts[:s]
+        #puts "This system: #{copts[:s].inspect} is not supported by the automated system"
+        #raise
+      #end
     end
     def check_folder(command, copts)
       unless Dir.entries(Dir.pwd).include? copts[:c]+'.f90'
@@ -156,7 +156,7 @@ class GkTestUtility
     FileUtils.makedirs('.tmp_repository')
     Dir.chdir('.tmp_repository') do
       raise "ERROR: please specify repository using the -r flag" unless @copts[:r]
-      unless (not @copts[:d]) and system "scp #{@copts[:r]}/test_results/#{@copts[:c]}/test_data.yaml ."
+      unless (not @copts[:d]) and system "scp #{@copts[:r]}/test_data.yaml ."
         File.open('test_data.yaml', 'w'){|f| f.puts Psych.dump(Hash.new)}
       end
       @existing_data = Psych.load(File.read('test_data.yaml'))
@@ -223,8 +223,8 @@ class GkTestUtility
       raise "ERROR: please specify repository using the -r flag" unless @copts[:r]
       File.open('test_data.yaml', 'w'){|f| f.puts Psych.dump(@existing_data)}
       File.open('index.html', 'w'){|f| f.puts engine.render(self)}
-      system "scp test_data.yaml #{@copts[:r]}/test_results/#{@copts[:c]}/."
-      system "scp index.html #{@copts[:r]}/test_results/#{@copts[:c]}/."
+      system "scp test_data.yaml #{@copts[:r]}/."
+      system "scp index.html #{@copts[:r]}/."
     end
   end
 end
