@@ -73,31 +73,53 @@ function setup_build {
 }
 
 
-while getopts ":s:c:h" opt; do
-  case $opt in
-    s)
-      GK_SYSTEM=$OPTARG
+while true; do
+  case "$1" in
+    -s)
+      if [ "$2" == "" ] ; then echo "Option -s requires an argument." >&2 ; exit 1; fi
+      GK_SYSTEM=$2
+      shift 2
       ;;
-    c)
-      MAKE_OPTIONAL_COMMAND=$OPTARG
+    -s*)
+      GK_SYSTEM=$(echo $1 | sed 's/-s//')
+      shift 1
       ;;
-    h)
+    -c)
+      if [ "$2" == "" ] ; then echo "Option -c requires an argument." >&2 ; exit 1; fi
+      MAKE_OPTIONAL_COMMAND=$2
+      shift 2
+      ;;
+    -c*)
+      MAKE_OPTIONAL_COMMAND=$(echo $1 | sed 's/-c//')
+      shift 1
+      ;;
+    -h*)
       print_help
       exit 0
       ;;
-    \?)
-      echo "Invalid option: -$OPTARG" >&2
+    -\?)
+      echo "Invalid option: $1" >&2
       exit 1
       ;;
-    :)
-      echo "Option -$OPTARG requires an argument." >&2
-      exit 1
+    #:)
+      #echo "Option -$OPTARG requires an argument." >&2
+      #exit 1
+      #;;
+    "")
+      break 
       ;;
-  esac
+    *)
+      COMMAND=$1
+      shift
+      ;;
+esac
 done
-shift $((OPTIND-1))
 
-case $1 in 
+case $COMMAND in 
+  man)
+    $0 help | less
+    exit 0
+    ;;
   *help*)
     print_help
     ;;
@@ -118,19 +140,20 @@ case $1 in
     ;;
   "")
     setup_build
-    make $MAKE_OPTIONAL_COMMAND $MAKEFLAGS  GK_SYSTEM=$GK_SYSTEM
+    make $MAKEFLAGS  GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND 
     ;;
   tests|unit_tests|linear_tests)
     setup_build
-    make $1 $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM
+    make $COMMAND $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM
     ;;
   up*)
     echo "update function not implemented yet!"
     exit 1
     ;;
   *)
-    print_help
-    echo "ERROR: Unknown command $1"
+    echo "ERROR: Unknown command $COMMAND. Run" 
+    echo " $ ./build_gs2 help" 
+    echo "for usage."
     ;;
     
 esac
