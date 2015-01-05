@@ -1,11 +1,4 @@
-#define CONCAT //
 
-!> A program that tests the new diagnostics module. It  runs 
-!! a  linear cyclone test case and then checks that the old and
-!! new diagnostics give the same results
-!!
-!! This is free software released under the MIT license
-!!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 
 module checks_mod
   use unit_tests
@@ -17,28 +10,61 @@ module checks_mod
     end function checks
 end module checks_mod
 
-program test_gs2_diagnostics_new
+!> A program that tests the gs2_reinit module. It  runs 
+!! a  linear cyclone test case and then forces a reinit
+!! and checks that the distribution function, fields and
+!! response matrix are the same
+!!
+!! This is free software released under the MIT license
+!!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
+
+program test_gs2_reinit
   !use functional_tests
   !use checks_mod
   !call test_gs2('Linear CBC (unit test) to test new diagnostics', checks)
+    use gs2_reinit, only: reset_time_step
+    use gs2_reinit, only: save_fields_and_dist_fn
+    use gs2_reinit, only: reinit_gk_and_field_equations
+    use gs2_reinit, only: gs2_reinit_unit_test_set_in_memory
     use gs2_main, only: run_gs2, finish_gs2
+    use gs2_main, only: gs2_main_unit_test_reset_gs2
+    use gs2_time, only: code_dt_cfl
     use unit_tests
     use unit_tests, only: should_print
     use diagnostics_config, only: override_screen_printout_options
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
-    use mp, only: broadcast
+    use mp, only: broadcast, barrier, iproc
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use dist_fn_arrays, only: gnew
     use gs2_diagnostics, only: finish_gs2_diagnostics
     use gs2_diagnostics, only: pflux_avg, qflux_avg, heat_avg, vflux_avg
+  use kt_grids, only: naky, ntheta0, init_kt_grids
+  use theta_grid, only: ntgrid, init_theta_grid
+  use gs2_layouts, only: init_gs2_layouts, g_lo, ie_idx
+  use fields_local, only: fields_local_functional, fieldmat
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
     use gs2_diagnostics_new, only: gnostics
 #endif
     implicit none
     integer :: n_vars, n_file_names
-    integer :: i
+    integer :: i, it, ik
     real :: eps
+    complex, dimension (:,:,:), allocatable :: gbak 
+    complex, dimension (:,:,:), allocatable :: phi_bak, apar_bak, bpar_bak
+    complex, dimension (:,:), allocatable :: rowbloc
+    character(len=29) :: message
+    logical :: test_result
+    logical :: dummy
+    integer :: supercell_idx
 
-    character(len=40), dimension(200) :: variables, new_variables, n_lines, file_names, n_lines_files
+
+
+    allocate(gbak(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate(phi_bak(-ntgrid:ntgrid,ntheta0,naky))
+    allocate(apar_bak(-ntgrid:ntgrid,ntheta0,naky))
+    allocate(bpar_bak(-ntgrid:ntgrid,ntheta0,naky))
+
       !variables = (/'lambda', 'phi'/), &
       !n_lines = (/'3', '30'/)
   ! General config
@@ -48,113 +74,110 @@ program test_gs2_diagnostics_new
 
   if (precision(eps).lt. 11) eps = eps * 100.0
 
-    variables(1) = 'lambda'
-    n_lines(1) = '4'
-    variables(2) = 'phi'
-    n_lines(2) = '78'
-    variables(3) = 'kx'
-    n_lines(3) = '3'
-    variables(4) = 'phi2_by_mode'
-    n_lines(4) = '10'
-    variables(5) = 't'
-    n_lines(5) = '5'
-    variables(6) = 'phi2_by_ky -p 7,11'
-    n_lines(6) = '12'
-    variables(7) = 'phi2_by_kx'
-    n_lines(7) = '12'
-    variables(8) = 'phi2_by_kx'
-    n_lines(8) = '8'
-    variables(9) = 'gds21'
-    n_lines(9) = '4'
-    variables(10) = 'bmag'
-    n_lines(10) = '4'
-    new_variables(1:10) = variables(1:10)
-
-    variables(11) = 'es_heat_by_k'
-    new_variables(11) = 'es_heat_flux_by_mode'
-    n_lines(11) = '20'
-    variables(12) = 'hflux_tot'
-    new_variables(12) = 'heat_flux_tot'
-    n_lines(12) = '4'
-    variables(13) = 'vflux_tot'
-    new_variables(13) = 'mom_flux_tot'
-    n_lines(13) = '4'
-
-    variables(14) = 'omega'
-    new_variables(14) = 'omega'
-    n_lines(14) = '4'
-    variables(15) = 'omegaavg'
-    new_variables(15) = 'omega_average'
-    n_lines(15) = '4'
-    
-    variables(16) = 'ntot00  -p 7,11'
-    new_variables(16) = 'ntot_flxsurf_avg  -p 7,11'
-    n_lines(16) = '20'
-
-    variables(17) = 'phi0'
-    new_variables(17) = 'phi_igomega_by_mode'
-    n_lines(17) = '15'
-
-    variables(18) = 'apar_heat_by_k'
-    new_variables(18) = 'apar_heat_flux_by_mode'
-    n_lines(18) = '20'
-
-    n_vars = 18
-
-
-    file_names(1) = 'heat'
-    n_lines_files(1) = '16'
-    file_names(2) = 'heat2'
-    n_lines_files(2) = '50'
-    file_names(3) = 'lpc'
-    n_lines_files(3) = '16'
-    file_names(4) = 'vres'
-    n_lines_files(4) = '16'
-    file_names(5) = 'phase'
-    n_lines_files(5) = '16'
-    file_names(6) = 'jext'
-    n_lines_files(6) = '0'
-    file_names(7) = 'parity'
-    n_lines_files(7) = '34'
-
-    n_file_names = 7
 
     call init_mp
 
-  ! Here we switch on print_line and print_flux_line if we have 
-  ! high verbosity... tests if they are working.
-  
-  if (proc0) override_screen_printout_options = should_print(3)
-  call broadcast(override_screen_printout_options)
 
     test_driver_flag = .true.
     functional_test_flag = .true.
 
-   call announce_module_test("gs2_diagnostics_new")
+   call announce_module_test("gs2_reinit")
 
     call run_gs2(mp_comm)
+
+    supercell_idx = min(iproc+2, size(fieldmat%kyb(2)%supercells))
+    allocate(rowbloc( &
+      size(fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data, 1), &
+      size(fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data, 2)))
+
+
+    phi_bak = phinew
+    apar_bak = aparnew
+    bpar_bak = bparnew
+    gbak = gnew
+    rowbloc = fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data
+
+    call save_fields_and_dist_fn
+    call reinit_gk_and_field_equations 
+
+    call announce_test('Values of fields and dist fn after reinitialising')
+    call process_test(test_fields_and_dist(), 'Values of fields and dist fn after reinitialising')
+
+    call announce_test('Value of response matrix after reinitialising')
+    call process_test(response_unchanged(), &
+      'Value of response matrix after reinitialising')
+
+
+    call gs2_reinit_unit_test_set_in_memory(.true.)
+
+    call save_fields_and_dist_fn
+    call reinit_gk_and_field_equations 
+
+    call announce_test('Values of fields and dist fn after reinitialising in memory')
+    call process_test(test_fields_and_dist(), 'Values of fields and dist fn after reinitialising in memory')
+
+    call announce_test('Value of response matrix after reinitialising in memory')
+    call process_test(response_unchanged(),&
+      'Value of response matrix after reinitialising in memory')
+
+    call reset_time_step(0, dummy)
+
+    call announce_test('Values of fields and dist fn after calling reset_time_step')
+    call process_test(test_fields_and_dist(), &
+      'Values of fields and dist fn after calling reset_time_step')
+
+    call announce_test('Value of response matrix after calling reset_time_step')
+    call process_test(response_unchanged(),&
+      'Value of response matrix after calling reset_time_step')
+
+    code_dt_cfl = 0.001
+    call reset_time_step(0, dummy)
+
+    call announce_test('Values of fields and dist fn after changing timestep')
+    call process_test(test_fields_and_dist(), 'Values of fields and dist fn after changing timestep')
+
+    call announce_test('Value of response matrix should have changed after changing timestep')
+    call process_test(.not. response_unchanged() ,&
+      'Value of response matrix should have changed after changing timestep')
+
+    code_dt_cfl = 1.0
+    call reset_time_step(0, dummy)
+    call announce_test('Values of fields and dist fn after restoring timestep')
+    call process_test(test_fields_and_dist(), 'Values of fields and dist fn after restoring timestep')
+
+    call announce_test('Value of response matrix after restoring timestep')
+    call process_test(response_unchanged() ,&
+      'Value of response matrix after restoring timestep')
+
+    dummy = gs2_main_unit_test_reset_gs2(1.0)
+    call announce_test('Values of fields and dist fn after calling gs2_reset')
+    call process_test(test_fields_and_dist(), 'Values of fields and dist fn after calling gs2_reset')
+
+    call announce_test('Value of response matrix  after calling gs2_reset')
+    call process_test(response_unchanged() ,&
+      'Value of response matrix  after calling gs2_reset')
+
+
+    dummy = gs2_main_unit_test_reset_gs2(1.5)
+    call announce_test('Values of fields and dist fn after calling gs2_reset with a factor')
+    call process_test(test_fields_and_dist(), 'Values of fields and dist fn after calling gs2_reset with a factor')
+
+    call announce_test('Value of response matrix should have changed after calling gs2_reset with a factor')
+    call process_test(.not. response_unchanged() ,&
+      'Value of response matrix should have changed after calling gs2_reset with a factor')
+
+
+
+    call barrier
 
 
     !call announce_test('results')
     !call process_test(test_function(), 'results')
 
-#ifdef NEW_DIAG
-    if (proc0) then
-      call announce_test("average heat flux")
-      call process_test( &
-        agrees_with(gnostics%current_results%species_heat_flux_avg, qflux_avg, eps), &
-        "average heat flux")
-      call announce_test("average momentum flux")
-      call process_test( &
-        agrees_with(gnostics%current_results%species_momentum_flux_avg, vflux_avg, eps), &
-        "average momentum flux")
-      call announce_test("average particle flux")
-      call process_test( &
-        agrees_with(gnostics%current_results%species_particle_flux_avg, pflux_avg, eps), &
-        "average particle flux")
-    end if
-#endif
-
+      !call announce_test("average heat flux")
+      !call process_test( &
+        !agrees_with(gnostics%current_results%species_heat_flux_avg, qflux_avg, eps), &
+        !"average heat flux")
 
 
     call finish_gs2_diagnostics(ilast_step)
@@ -164,79 +187,75 @@ program test_gs2_diagnostics_new
 #endif
     call finish_gs2
 
-    if (proc0) then
-      do i = 1,n_vars
-        call announce_test("value of "//trim(new_variables(i)))
-        call process_test(test_variable(trim(variables(i)), trim(new_variables(i)), &
-          trim(n_lines(i))), &
-          "value of "//trim(new_variables(i)))
-      end do
-      do i = 1,n_file_names
-        call announce_test("content of "//trim(file_names(i)))
-        call process_test(test_file(trim(file_names(i)), trim(n_lines_files(i))), &
-          "content of "//trim(file_names(i)))
-      end do
-    end if
-
-
-   call close_module_test("gs2_diagnostics_new")
+   call close_module_test("gs2_reinit")
 
     call finish_mp
 
+    deallocate(gbak)
+    deallocate(phi_bak)
+    deallocate(apar_bak)
+    deallocate(bpar_bak)
+
 contains
   
-  function test_variable(var_name, new_var_name, n_lines)
-    use unit_tests, only: should_print
-    character(*), intent(in) :: var_name, new_var_name, n_lines
-    logical :: test_variable
-    character(1000) ::  command 
-    
-    test_variable=.true.
-#ifdef NEW_DIAG
-!    command = "if [ ""`ncdump -v "//var_name//" test_gs2_diagnostics_new.out.nc  | tail -n "//n_lines//"`"" = &
-!     &  ""`ncdump -v "//new_var_name//" test_gs2_diagnostics_new.cdf | tail -n "//n_lines//" `"" ]; &
-!     & then echo ""T"" > test_tmp.txt; fi"
-!    write(command,'("if [ ",A,"$(./getncdat ",A," ",A,")",A," &
-!      & = ",A,"$(./getncdat ",A," ",A,")",A," ] ; &
-!      & then echo ",A," > test_tmp.txt ; fi")') &
-!         '"',"test_gs2_diagnostics_new.out.nc",var_name,'"',&
-!         '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"',"'T'"
-    
-    command = ''
-    write(command,'("./compare ",A,A," ",A,A," ",A,A," ",A,A," ",A,A)') &
-         '"',"test_gs2_diagnostics_new.out.nc",var_name,'"',&
-         '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"'
-    
-    if (should_print(3)) write(*,*) trim(command)
-    call system(" echo ""F"" > test_tmp.txt")
-    call system(command)
-    test_variable = .true.
-    open(120349, file='test_tmp.txt')
-    read(120349, '(L)') test_variable
-    close(120349)
-#endif
-  end function test_variable
-  function test_file(file_name, n_lines)
-    use unit_tests, only: should_print
-    character(*), intent(in) :: file_name, n_lines
-    logical :: test_file
-    character(1000) ::  command 
-    
-    test_file=.true.
-#ifdef NEW_DIAG
-    command = "if [ ""`cat test_gs2_diagnostics_new."//file_name//"  | tail -n "//n_lines//"`"" = &
-     &  ""`cat test_gs2_diagnostics_new.new."//file_name//"   | tail -n "//n_lines//"`"" ]; &
-     & then echo ""T"" > test_tmp.txt; fi"
-    
-    if (should_print(3)) write(*,*) trim(command)
-    call system(" echo ""F"" > test_tmp.txt")
-    call system(command)
-    !test_= .true.
-    open(120349, file='test_tmp.txt')
-    read(120349, '(L)') test_file
-    close(120349)
-#endif
-  end function test_file
+  function response_unchanged()
+    use mp, only: sum_allreduce
+    integer :: result_int
+    logical :: response_unchanged
+
+    response_unchanged = agrees_with( &
+      fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data(4,:), rowbloc(4,:), eps)
+
+    ! Response is only unchanged if it is unchanged
+    ! on all procs.
+    ! Of course it's possible to achieve the following 
+    ! with the right mpi OR-reduce command, but I 
+    ! am lazy
+    if (response_unchanged) then 
+      result_int = 0
+    else
+      result_int = 1
+    end if
+    call sum_allreduce(result_int)
+    if (result_int.eq.0) then
+      response_unchanged = .true.
+    else 
+      response_unchanged = .false.
+    end if
+  end function response_unchanged
+  function test_fields_and_dist()
+    use theta_grid, only: ntheta
+    logical :: test_fields_and_dist
+    logical :: test_result
+    integer :: ig, isgn
+    test_result = .true.
+
+    do ik = 1,naky
+      do it = 1,ntheta0
+        if (it==1 .and. ik==1) cycle
+        write(message, fmt="(A19, I2, A6, I2)") 'value of phi,  it =', it, ' ik = ', ik
+        call announce_check(message)
+        call process_check(test_result, agrees_with(phinew(:, it, ik), phi_bak(:, it, ik), eps), message)
+        write(message, fmt="(A19, I2, A6, I2)") 'value of apar, it =', it, ' ik = ', ik
+        call announce_check(message)
+        call process_check(test_result, agrees_with(aparnew(:, it, ik), apar_bak(:, it, ik), eps), message)
+        write(message, fmt="(A19, I2, A6, I2)") 'value of bpar, it =', it, ' ik = ', ik
+        call announce_check(message)
+        call process_check(test_result, agrees_with(bparnew(:, it, ik), bpar_bak(:, it, ik), eps), message)
+        !check_result =  agrees_with(phi_imp(ik, it, :), phi_loc(ik, it, :), eps) .and. check_result
+        !if (check_result) write (*,*) it,ik
+      end do
+    end do
+    do ig = -ntgrid,ntgrid
+      do isgn = 1,2
+        write(message, fmt="(A19, I2, A6, I2)") 'value of gnew, ig =', ig, ' isgn=', isgn
+        call announce_check(message)
+        call process_check(test_result, agrees_with(gnew(ig, isgn, :), gbak(ig, isgn,:), eps), message)
+      end do
+    end do
+
+    test_fields_and_dist = test_result
+  end function test_fields_and_dist
 
 
-end program test_gs2_diagnostics_new
+end program test_gs2_reinit

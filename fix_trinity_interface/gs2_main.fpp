@@ -9,6 +9,14 @@
 module gs2_main
   implicit none
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
+
+  !> Unit tests
+
+  !> This function calls reset_gs2 using
+  !! all the default parameters, multiplied
+  !! by a factor. It is used
+  !! in the gs2_reinit unit test
+  public :: gs2_main_unit_test_reset_gs2
  
 contains
 # endif
@@ -537,10 +545,34 @@ endif
 
   end subroutine finish_gs2
   
+  function gs2_main_unit_test_reset_gs2(fac)
+    use species, only: spec, nspec
+    use dist_fn, only: g_exb 
+    use mp, only: mp_abort
+    logical :: gs2_main_unit_test_reset_gs2
+    real, intent(in) :: fac
+
+    if (nspec.ne.2)  & 
+      call mp_abort("gs2_main_unit_test_reset_gs2 only works with 2 species", .true.)
+
+    call reset_gs2(nspec, &
+      (/spec(1)%dens, spec(2)%dens/)*fac, &
+      ! Deliberately leave fac off this line
+      (/spec(1)%temp, spec(2)%temp/), &
+      (/spec(1)%fprim, spec(2)%fprim/)*fac, &
+      (/spec(1)%tprim, spec(2)%tprim/)*fac, &
+      g_exb, 0.0, &
+      (/spec(1)%vnewk, spec(2)%vnewk/), &
+      1)
+
+    gs2_main_unit_test_reset_gs2 = .true.
+
+  end function gs2_main_unit_test_reset_gs2
 
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
     use dist_fn, only: d_reset => reset_init
+    use dist_fn, only: dist_fn_g_exb => g_exb
     use collisions, only: vnmult, c_reset => reset_init
     use fields, only: init_fields, f_reset => reset_init
     use init_g, only: g_reset => reset_init
@@ -554,6 +586,7 @@ endif
     use run_parameters, only: fphi, fapar, fbpar
     use antenna, only: a_reset => reset_init
     use mp, only: scope, subprocs, allprocs
+    use mp, only: mp_abort
     use run_parameters, only: trinity_linear_fluxes
 
     implicit none
@@ -566,6 +599,10 @@ endif
 
     ! doing nothing with gexb or mach for now, but in future will need to when
     ! using GS2 to evolve rotation profiles in TRINITY
+    ! EGH add a check for this.
+    if (gexb .ne. dist_fn_g_exb) call mp_abort(&
+      "ERROR: Changing g_exb in gs2_reset is not implemented yet.", .true.)
+
 
     if (trinity_linear_fluxes.and.nonlinear_mode_switch.eq.nonlinear_mode_none) &
       call reset_linear_magnitude
@@ -646,6 +683,7 @@ endif
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
+    use dist_fn, only: dist_fn_g_exb => g_exb
     !use mp, only: broadcast
 
     implicit none
@@ -658,6 +696,12 @@ endif
 
     ! for now do nothing with gexb or mach, but need to include later if want to use GS2
     ! with TRINITY to evolve rotation profiles
+    ! EGH add a check for this.
+    if (gexb .ne. dist_fn_g_exb) then 
+      write (*,*) "ERROR: Changing g_exb in gs2_reset is not implemented yet."
+      ! Can't use mp_abort here as mp may not have been initialised
+      stop 1
+    end if
 
    !call broadcast(rhoc)
    !call broadcast(qval)
