@@ -19,6 +19,9 @@ module fields_local
   !> User set parameters
   public :: dump_response, read_response
 
+  !> Made public for testing
+  public :: fieldmat
+
   !//////////////////////////////
   !// CUSTOM TYPES
   !//////////////////////////////

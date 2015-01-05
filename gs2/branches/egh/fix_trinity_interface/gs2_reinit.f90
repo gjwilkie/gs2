@@ -6,6 +6,37 @@ module gs2_reinit
   public :: init_reinit, wnml_gs2_reinit
   public :: reduce_time_step, increase_time_step
 
+  !> Save the current state of the fields and 
+  !! distribution function, either to a file 
+  !! or to a temporary array, depending on the
+  !! value of in_memory. (NB if there is 
+  !! sufficient memory to allocate a temporary
+  !! array, in_memory will be overriden to 
+  !! false).
+  public :: save_fields_and_dist_fn
+
+
+  !> This subroutine reinitializes the modules which are responsible for
+  !! solving the linear, collisonal and nonlinear parts of the GK eqn,
+  !! as well as the modules which solve the field equations. This is 
+  !! typically necessary because some parameter (e.g. the timestep) which
+  !! is used to calculate the value of cached arrays (e.g. the response
+  !! matrix) in those modules has changed. Note that this will not cause
+  !! dist_fn to reread its namelist.. thus you can change g_exb (and any
+  !! other physics parameter in any other module, of course) 
+  !! before calling this function 
+  !! and expect your changes to be preserved. The function 
+  !! save_fields_and_dist_fn must be called before this, or 
+  !! otherwise the current field and dist_fn values will be lost. The
+  !! logical flag in_memory must be given the same value that was 
+  !! set in save_fields_and_dist_fn. 
+  public :: reinit_gk_and_field_equations
+
+  !> This function overrides the in_memory flag
+  !! and should only be used if you know what
+  !! you are doing.
+  public :: gs2_reinit_unit_test_set_in_memory
+
   private
 
   real :: delt_adj, dt0
@@ -15,7 +46,14 @@ module gs2_reinit
   logical :: abort_rapid_time_step_change
   logical :: first=.true.
   logical :: in_memory
+
+    complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
 contains
+
+  subroutine gs2_reinit_unit_test_set_in_memory(in_memory_in)
+    logical, intent(in) :: in_memory_in
+    in_memory = in_memory_in
+  end subroutine gs2_reinit_unit_test_set_in_memory
 
   subroutine wnml_gs2_reinit(unit)
     implicit none
@@ -41,69 +79,21 @@ contains
     code_dt = min(code_dt*delt_adj, dt0)
   end subroutine increase_time_step
 
-  subroutine reset_time_step (istep, my_exit, job_id)
-    use collisions, only: c_reset => reset_init, vnmult
-    use dist_fn, only: d_reset => reset_init
-    use fields, only: f_reset => reset_init, init_fields, force_maxwell_reinit
-    use init_g, only: g_reset => reset_init
-    use run_parameters, only: fphi, fapar, fbpar, reset
-    use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
-    use gs2_save, only: gs2_save_for_restart
+  subroutine save_fields_and_dist_fn
     use dist_fn_arrays, only: gnew, g_restart_tmp
-    use fields_arrays, only: phinew, aparnew, bparnew
-    use gs2_time, only: user_time, code_dt_min
-    use nonlinear_terms, only: nl_reset => reset_init
+    use gs2_save, only: gs2_save_for_restart
     use mp, only: proc0
-    use file_utils, only: error_unit
-    use antenna, only: dump_ant_amp
-    use theta_grid, only: ntgrid
+    use collisions, only: vnmult
     use gs2_layouts, only: g_lo
-    use job_manage, only: time_message
-    use run_parameters, only: fphi, fapar, fbpar
+    use theta_grid, only: ntgrid
+    use file_utils, only: error_unit
     use kt_grids, only: ntheta0, naky
-    implicit none
-    logical, intent(inout) :: my_exit
-    logical :: reset_in
-    integer :: istep 
-    integer, save :: istep_last = -1 ! allow adjustment on first time step
-    integer :: istatus
-    integer, save :: nconsec=0
-    integer, intent (in), optional :: job_id
-    integer :: iostat
-    complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
-
-    if (first) call init_reinit
-    first = .false.
-
-! save fields and distribution function
-
-! calls on consecutive time steps is probably an error
-    if (istep_last + 1 == istep) then
-       nconsec=nconsec+1
-    else
-       nconsec=0
-    endif
-
-    if (nconsec .gt. 4 .and. abort_rapid_time_step_change) then
-       my_exit = .true.
-       if (proc0) write(error_unit(), *) 'Time step changing rapidly.  Abort run.'
-       return
-    end if
-
-    if (code_dt/delt_adj <= code_dt_min) then
-       code_dt = code_dt_min  ! set it so restart is ok
-       my_exit = .true.
-       if (proc0) write(error_unit(), *) 'Time step wants to fall below delt_min.  Abort run.'
-       return
-    end if
-
-    if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
-
-    !First disable the reset flag so we can call 
-    !routines needed in reinit
-    reset_in=reset
-    reset=.false.
-
+    use run_parameters, only: fphi, fapar, fbpar
+    use fields, only:  force_maxwell_reinit
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use gs2_time, only: user_time, user_dt
+    use antenna, only: dump_ant_amp
+    integer :: iostat, istatus
     !If we want to do restarts in memory then try to allocate storage
     if(in_memory)then
        !Try to allocate storage to hold g
@@ -183,22 +173,17 @@ contains
        call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
     endif
 
-    gnew = 0.
+  end subroutine save_fields_and_dist_fn
 
-! change timestep 
-
-! If timestep is too big, make it smaller
-    if (code_dt > code_dt_cfl) then
-       call reduce_time_step
-! If timestep is too small, make it bigger
-    else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
-       call increase_time_step
-    endif
-    
-    call save_dt (code_dt)
-
-    if (proc0 .and. .not. present(job_id)) write(*,*) 'Changing time step to ', user_dt
-    
+  subroutine reinit_gk_and_field_equations
+    use run_parameters, only: fphi, fapar, fbpar
+    use dist_fn_arrays, only: g_restart_tmp
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use collisions, only: c_reset => reset_init
+    use dist_fn, only: d_reset => reset_init
+    use fields, only: f_reset => reset_init, init_fields, force_maxwell_reinit
+    use init_g, only: g_reset => reset_init
+    use nonlinear_terms, only: nl_reset => reset_init
 ! prepare to reinitialize inversion matrix, etc.
     call d_reset
     call c_reset
@@ -216,7 +201,82 @@ contains
        if(fapar.gt.0) aparnew=apar_tmp
        if(fbpar.gt.0) bparnew=bpar_tmp
     endif
+    !Deallocate tmp memory
+    if(allocated(g_restart_tmp)) deallocate(g_restart_tmp)
+    if(allocated(phi_tmp)) deallocate(phi_tmp)
+    if(allocated(apar_tmp)) deallocate(apar_tmp)
+    if(allocated(bpar_tmp)) deallocate(bpar_tmp)
+  end subroutine reinit_gk_and_field_equations
 
+
+  subroutine reset_time_step (istep, my_exit, job_id)
+    use run_parameters, only: reset
+    use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
+    use dist_fn_arrays, only: gnew
+    use gs2_time, only: code_dt_min
+    use mp, only: proc0
+    use file_utils, only: error_unit
+    use job_manage, only: time_message
+    implicit none
+    logical, intent(inout) :: my_exit
+    logical :: reset_in
+    integer :: istep 
+    integer, save :: istep_last = -1 ! allow adjustment on first time step
+    integer, save :: nconsec=0
+    integer, intent (in), optional :: job_id
+
+    if (first) call init_reinit
+    first = .false.
+
+! save fields and distribution function
+
+! calls on consecutive time steps is probably an error
+    if (istep_last + 1 == istep) then
+       nconsec=nconsec+1
+    else
+       nconsec=0
+    endif
+
+    if (nconsec .gt. 4 .and. abort_rapid_time_step_change) then
+       my_exit = .true.
+       if (proc0) write(error_unit(), *) 'Time step changing rapidly.  Abort run.'
+       return
+    end if
+
+    if (code_dt/delt_adj <= code_dt_min) then
+       code_dt = code_dt_min  ! set it so restart is ok
+       my_exit = .true.
+       if (proc0) write(error_unit(), *) 'Time step wants to fall below delt_min.  Abort run.'
+       return
+    end if
+
+    if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
+
+    !First disable the reset flag so we can call 
+    !routines needed in reinit
+    reset_in=reset
+    reset=.false.
+
+    call save_fields_and_dist_fn
+
+    gnew = 0.
+
+! change timestep 
+
+! If timestep is too big, make it smaller
+    if (code_dt > code_dt_cfl) then
+       call reduce_time_step
+! If timestep is too small, make it bigger
+    else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
+       call increase_time_step
+    endif
+    
+    call save_dt (code_dt)
+
+    if (proc0 .and. .not. present(job_id)) write(*,*) 'Changing time step to ', user_dt
+
+    call reinit_gk_and_field_equations
+    
     if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
     istep_last = istep
@@ -224,11 +284,6 @@ contains
     !Now re-enable reset so we leave it in the same state as on entering
     reset=reset_in
 
-    !Deallocate tmp memory
-    if(allocated(g_restart_tmp)) deallocate(g_restart_tmp)
-    if(allocated(phi_tmp)) deallocate(phi_tmp)
-    if(allocated(apar_tmp)) deallocate(apar_tmp)
-    if(allocated(bpar_tmp)) deallocate(bpar_tmp)
   end subroutine reset_time_step
 
   subroutine check_time_step (reset, exit)

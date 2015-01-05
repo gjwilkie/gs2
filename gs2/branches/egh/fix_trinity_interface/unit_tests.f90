@@ -157,11 +157,16 @@ contains
   end subroutine announce_test
 
   subroutine process_test(rslt, test_name)
+    use mp, only: mp_abort, mp_initialized
     logical, intent (in) :: rslt
     character(*), intent(in) :: test_name
     if (.not. rslt) then 
       write(*,*) '--> ', test_name, ' failed', proc_message()
-      stop 1
+      if (mp_initialized) then 
+        call mp_abort('Failed test', .true.)
+      else
+        stop 1
+      end if
     end if
 
     if (should_print(1)) write (*,*) '--> ', test_name, ' passed', proc_message()

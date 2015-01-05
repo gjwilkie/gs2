@@ -147,7 +147,7 @@ enable_parallel = .true.
 !ALGORITHMIC CHOICES  
 !==============================
 &fields_knobs
- field_option = "implicit" ! Controls which time-advance algorithm is used for the linear terms.
+ field_option = "local" ! Controls which time-advance algorithm is used for the linear terms.
 /
 
 !==============================
@@ -160,7 +160,7 @@ enable_parallel = .true.
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
  fbpar = 1.0
  delt = 0.05 ! Time step
- nstep = 200 ! Maximum number of timesteps
+ nstep = 4 ! Maximum number of timesteps
 /
 
 !==============================
