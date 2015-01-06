@@ -571,20 +571,16 @@ endif
 
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
-    use dist_fn, only: d_reset => reset_init
     use dist_fn, only: dist_fn_g_exb => g_exb
-    use collisions, only: vnmult, c_reset => reset_init
+    use gs2_reinit, only: save_fields_and_dist_fn
+    use gs2_reinit, only: reinit_gk_and_field_equations
     use fields, only: init_fields, f_reset => reset_init
-    use init_g, only: g_reset => reset_init
-    use nonlinear_terms, only: nl_reset => reset_init
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use gs2_diagnostics, only: gd_reset => reset_init
     use gs2_save, only: gs2_save_for_restart!, gs_reset => reset_init
     use species, only: reinit_species
     use dist_fn_arrays, only: gnew
-    use gs2_time, only: code_dt, user_dt, save_dt, user_time
-    use run_parameters, only: fphi, fapar, fbpar
-    use antenna, only: a_reset => reset_init
+    use gs2_time, only: code_dt, save_dt
     use mp, only: scope, subprocs, allprocs
     use mp, only: mp_abort
     use run_parameters, only: trinity_linear_fluxes
@@ -595,7 +591,9 @@ endif
     real, intent (in) :: gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
-    integer :: istatus
+    real :: dummy
+
+    !integer :: istatus
 
     ! doing nothing with gexb or mach for now, but in future will need to when
     ! using GS2 to evolve rotation profiles in TRINITY
@@ -603,28 +601,32 @@ endif
     if (gexb .ne. dist_fn_g_exb) call mp_abort(&
       "ERROR: Changing g_exb in gs2_reset is not implemented yet.", .true.)
 
+    ! To prevent compiler warnings
+    dummy = mach
+    dummy = gexb
+
 
     if (trinity_linear_fluxes.and.nonlinear_mode_switch.eq.nonlinear_mode_none) &
       call reset_linear_magnitude
     if (nensembles > 1) call scope (subprocs)
 
-    call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+
+    call save_fields_and_dist_fn
+
+    ! EGH is this line necessary?
     gnew = 0.
 
     call save_dt (code_dt)
 
-    call d_reset
-    call c_reset
-    call f_reset
-!    if (.not. ql_flag) call g_reset
-    call g_reset(.true.)
-    call nl_reset
+    ! This call to gs2_diagnostics::reset_init sets some time averages
+    ! and counters to zero... used mainly for trinity convergence checks.
     call gd_reset
-    call a_reset
-!!    call gs_reset
+
 
     call reinit_species (ntspec, dens, temp, fprim, tprim, nu)
-    call init_fields
+
+    ! Antenna should be reset because it depends on species paramters
+    call reinit_gk_and_field_equations(reset_antenna=.true.)
 
     if (nensembles > 1) call scope (allprocs)
 
@@ -654,8 +656,19 @@ endif
 !    gnew = gnew/norm
 !    g = g/norm
      
-     phi = 0.0; apar = 0.0; bpar = 0.0
-     phinew = 0.0; aparnew = 0.0; bparnew = 0.0
+     if (fphi > 0.) then 
+       phi = 0.0 
+       phinew = 0.0
+     end if
+       
+     if (fapar > 0.) then 
+       apar = 0.0
+       aparnew = 0.0
+     end if
+     if (fbpar > 0.) then 
+       bpar = 0.0
+       bparnew = 0.0
+     end if
      g = 0.0; gnew = 0.0
 
      call ginit(dummy)
