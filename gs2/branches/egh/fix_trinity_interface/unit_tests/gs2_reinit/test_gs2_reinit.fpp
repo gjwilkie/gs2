@@ -98,7 +98,7 @@ program test_gs2_reinit
     rowbloc = fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data
 
     call save_fields_and_dist_fn
-    call reinit_gk_and_field_equations 
+    call reinit_gk_and_field_equations(reset_antenna=.true.)
 
     call announce_test('Values of fields and dist fn after reinitialising')
     call process_test(test_fields_and_dist(), 'Values of fields and dist fn after reinitialising')
@@ -111,7 +111,7 @@ program test_gs2_reinit
     call gs2_reinit_unit_test_set_in_memory(.true.)
 
     call save_fields_and_dist_fn
-    call reinit_gk_and_field_equations 
+    call reinit_gk_and_field_equations(reset_antenna=.true.) 
 
     call announce_test('Values of fields and dist fn after reinitialising in memory')
     call process_test(test_fields_and_dist(), 'Values of fields and dist fn after reinitialising in memory')

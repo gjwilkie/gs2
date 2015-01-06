@@ -175,7 +175,7 @@ contains
 
   end subroutine save_fields_and_dist_fn
 
-  subroutine reinit_gk_and_field_equations
+  subroutine reinit_gk_and_field_equations(reset_antenna)
     use run_parameters, only: fphi, fapar, fbpar
     use dist_fn_arrays, only: g_restart_tmp
     use fields_arrays, only: phinew, aparnew, bparnew
@@ -184,12 +184,16 @@ contains
     use fields, only: f_reset => reset_init, init_fields, force_maxwell_reinit
     use init_g, only: g_reset => reset_init
     use nonlinear_terms, only: nl_reset => reset_init
+    use antenna, only: a_reset => reset_init
+    logical, intent(in) :: reset_antenna
 ! prepare to reinitialize inversion matrix, etc.
     call d_reset
     call c_reset
     call f_reset
     call g_reset(.not.in_memory)
     call nl_reset
+
+    if (reset_antenna) call a_reset
 
 ! reinitialize
     call init_fields
@@ -275,7 +279,10 @@ contains
 
     if (proc0 .and. .not. present(job_id)) write(*,*) 'Changing time step to ', user_dt
 
-    call reinit_gk_and_field_equations
+    ! Don't reset antenna here because species parameters
+    ! have not changed so resetting antenna would cause
+    ! an unnecessary discontinuity
+    call reinit_gk_and_field_equations(reset_antenna=.false.)
     
     if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
