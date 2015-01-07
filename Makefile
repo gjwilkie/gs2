@@ -587,7 +587,10 @@ clean_benchmarks:
 cleanlib:
 	-rm -f *.a
 
-distclean: unlink clean cleanlib clean_tests clean_benchmarks distclean_simpledataio
+cleanconfig:
+	rm -f system_config .tmp_output
+
+distclean: unlink clean cleanlib clean_tests clean_benchmarks distclean_simpledataio cleanconfig
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
@@ -664,6 +667,18 @@ test_make:
 	@echo LIBS is $(LIBS)
 	@echo PLIBS is $(PLIBS)
 	@echo WITH_EIG is $(WITH_EIG)
+
+ifdef STANDARD_SYSTEM_CONFIGURATION
+system_config: Makefiles/Makefile.$(GK_SYSTEM) Makefile
+	@echo "#!/bin/bash " > system_config
+	@echo "$(STANDARD_SYSTEM_CONFIGURATION)" >> system_config
+	@sed -i 's/^ //' system_config
+
+else
+.PHONY: system_config
+system_config:
+	$(error "STANDARD_SYSTEM_CONFIGURATION is not defined for this system")
+endif
 
 unlink:
 	-rm -f $(F90FROMFPP) layouts_type.h
