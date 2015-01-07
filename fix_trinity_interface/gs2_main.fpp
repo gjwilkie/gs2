@@ -17,9 +17,279 @@ module gs2_main
   !! by a factor. It is used
   !! in the gs2_reinit unit test
   public :: gs2_main_unit_test_reset_gs2
+
+
+  type gs2_timers_type
+    real :: init(2) 
+    real :: advance(2) = 0.
+    real :: finish(2) = 0.
+    real :: total(2) = 0. 
+    real :: diagnostics(2)=0.
+    !real :: interval
+    real :: main_loop(2)
+  end type gs2_timers_type
+
+  type gs2_program_state_type
+
+    ! Flags indicating the current state of the 
+    ! program (used for error checking)
+    logical :: gs2_initialized = .false.
+    logical :: equations_initialized = .false.
+    logical :: diagnostics_initialized = .false.
+
+    ! Timers
+    type(gs2_timers_type) :: timers
+
+    !> The exit flag is set to true by any 
+    !! part of the main timestep loop that 
+    !! wants to cause the loop to exit
+    logical :: exit = .false.
+
+    !> Whether to print out debug messages
+    !logical :: debug = .false.
+    integer :: verb = 3
+
+    !> Parameters pertaining to Trinity runs
+    !! For historical reasons job_id is 0-based
+    !! and trin_job is 1-based. 
+    !! job_id is not to confused with the parameter
+    !! job in mp, which identifies the subjob if
+    !! running in list mode or with nensembles > 1
+    integer :: trin_job = -1
+    integer :: job_id = -1
+
+    logical :: is_trinity_job = .false.
+
+
+    !> Parameters to be used when passing in an external communicator
+    logical :: mp_comm_external = .false.
+    integer :: mp_comm
+
+    logical :: run_name_external = .false.
+    character(2000) :: run_name
+
+    !> Whether this is a list mode run
+    logical :: list
+    !> The number of identical runs happening
+    !! simultaneously (used for ensemble averaging).
+    !! Cannot be used in conjunction with list mode
+    integer :: nensembles = 1
+   
+  end type gs2_program_state_type
  
 contains
 # endif
+
+  subroutine initialize_gs2(state)
+    use file_utils, only: init_file_utils
+    use file_utils, only: run_name, run_name_target
+    use job_manage, only: checktime
+    use mp, only: init_mp, broadcast
+    use mp, only: iproc, nproc, proc0
+    use redistribute, only: using_measure_scatter
+    use run_parameters, only: avail_cpu_time
+    use runtime_tests, only: verbosity
+    use unit_tests, only: debug_message, set_job_id
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+
+    if (state%gs2_initialized .or. &
+        state%equations_initialized .or. &
+        state%diagnostics_initialized) then
+        write (*,*) 'ERROR: initialize_gs2 can only be called when &
+        & gs2_initialized, equations_initialized and diagnostics_initialized, &
+        & are all false. '
+       stop 1
+     end if
+
+    if (state%mp_comm_external) then 
+      if (state%job_id > -1) state%trin_job = state%job_id + 1
+      call set_job_id(state%trin_job)
+    end if
+
+    call debug_message(4, 'gs2_main::initialize_gs2 starting initialization')
+
+    if (state%mp_comm_external) then
+       call init_mp (state%mp_comm)
+    else
+       call init_mp
+    end if
+    call debug_message(state%verb, 'gs2_main::initialize_gs2 initialized mp')
+    ! I don't think these should be necessary
+    !call broadcast(state%trin_job)
+    !call set_job_id(trin_job)
+
+    call reset_timers(state%timers)
+    call checktime(avail_cpu_time,state%exit) ! <doc> Initialize timer </doc>
+    call debug_message(state%verb, 'gs2_main::initialize_gs2 called checktime')
+  
+    if (proc0) then
+       ! Report # of processors being used </doc>
+       if (nproc == 1) then
+         write(*,*) 'Running on ',nproc,' processors'
+       else
+         if(state%mp_comm_external) then
+            write(*,*) 'Job ',state%trin_job,'Running on ',nproc,' processors'
+         else
+            write(*,*) 'Running on ',nproc,' processors'
+         endif
+       end if
+
+       write (*,*) 
+       ! Call init_file_utils, ie. initialize the run_name, checking 
+       !  whether we are doing a Trinity run or a list of runs.
+       if (state%run_name_external) then
+          call init_file_utils (state%list, trin_run=state%run_name_external, &
+             name=state%run_name, n_ensembles=state%nensembles)
+       else
+          call init_file_utils (state%list, name="gs")
+       end if
+       call debug_message(state%verb, 'gs2_main::initialize_gs2 initialized file_utils')
+    end if
+    
+    call broadcast (state%list)
+    call debug_message(state%verb, 'gs2_main::initialize_gs2 broadcasted list')
+
+    ! Pass run name to other procs
+    if (proc0) then
+       run_name_target = trim(run_name)
+    end if
+    call broadcast (run_name_target)
+    if (.not. proc0) run_name => run_name_target
+    call debug_message(state%verb, 'gs2_main::initialize_gs2 run_name = '//run_name)
+
+    !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
+    using_measure_scatter=.false.
+
+    state%gs2_initialized = .true.
+
+  end subroutine initialize_gs2
+
+  subroutine initialize_equations(state)
+    use fields, only: init_fields
+    use parameter_scan, only: init_parameter_scan
+    use unit_tests, only: debug_message
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+       !call time_message(.false., time_init,' Initialization')
+    !call init_parameter_scan
+    call init_parameter_scan
+    !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
+    call debug_message(state%verb, 'gs2_main::initialize_equations calling init_fields')
+
+    ! This triggers initializing of all the grids, all the physics parameters
+    ! and all the modules which solve the equations
+    call init_fields
+
+  end subroutine initialize_equations
+
+  subroutine initialize_diagnostics
+  end subroutine initialize_diagnostics
+
+  subroutine evolve_equations(state)
+    type(gs2_program_state_type), intent(inout) :: state
+
+    ! Make sure exit is false before entering
+    ! timestep loop
+    state%exit = .false.
+
+  end subroutine evolve_equations
+
+  subroutine finalize_diagnostics
+  end subroutine finalize_diagnostics
+
+  subroutine finalize_equations
+  end subroutine finalize_equations
+
+  subroutine finalize_gs2(state)
+    use mp, only: finish_mp, proc0
+    use job_manage, only: time_message
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+
+    if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
+    
+    call print_times(state, state%timers)
+
+    if (.not. state%mp_comm_external) call finish_mp
+
+
+
+    !if (.not. present(mpi_comm) .and. .not. nofin) call finish_mp
+  end subroutine finalize_gs2
+
+  subroutine override_geometry
+  end subroutine override_geometry
+
+  subroutine override_profiles
+  end subroutine override_profiles
+
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !! Private subroutines
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+  subroutine reset_timers(timers)
+    type(gs2_timers_type), intent(inout) :: timers
+    timers%init = 0.
+    timers%advance = 0.
+    timers%finish = 0.
+    timers%total = 0. 
+    timers%diagnostics=0.
+    !timers%interval
+    timers%main_loop = 0.
+  end subroutine reset_timers
+
+  subroutine print_times(state, timers)
+    use mp, only: proc0
+    use redistribute, only: time_redist
+    use fields_arrays, only: time_field
+    use gs2_reinit, only: time_reinit
+    implicit none
+    type(gs2_program_state_type), intent(in) :: state
+    type(gs2_timers_type), intent(in) :: timers
+
+    if (proc0) then
+       if (state%is_trinity_job) then
+          print '(/,'' Job ID:'', i4,'', total from timer is:'', 0pf9.2,'' min'',/)', &
+               state%trin_job, state%timers%total(1)/60.
+       else
+!    if (proc0 .and. .not. nofin) then
+
+          print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+#ifdef WITH_EIG
+               &'' Eigensolver'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+#endif
+               &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+               &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+               &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+               &''(diagnostics'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
+               &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
+               &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
+               &'' total from timer is:'', 0pf9.2,'' min'',/)', &
+               timers%init(1)/60.,timers%init(1)/timers%total(1), &
+#ifdef WITH_EIG
+               timers%eigval(1)/60.,timers%eigval(1)/timers%total(1), &
+#endif
+               timers%advance(1)/60.,timers%advance(1)/timers%total(1), &
+               time_redist(1)/60.,time_redist(1)/timers%total(1), &
+               time_field(1)/60.,time_field(1)/timers%total(1), &
+               timers%diagnostics(1)/60.,timers%diagnostics(1)/timers%total(1), &
+               time_reinit(1)/60.,time_reinit(1)/timers%total(1), &
+               timers%finish(1)/60.,timers%finish(1)/timers%total(1),timers%total(1)/60.
+       endif
+    end if
+  end subroutine print_times
+
+
+
+
+
+
 
 
   !> This is the main subroutine in which gs2 is initialized, equations are advanced,
