@@ -1,6 +1,6 @@
 
 module checks_mod
-  use functional_tests
+  use functional_tests, only: check_growth_rates_equal_in_list
   public checks
   contains
     function checks()
@@ -15,7 +15,7 @@ end module checks_mod
 !! rates in the two cases
 
 program wstar_units
-  use functional_tests
+  use functional_tests, only: test_gs2
   use checks_mod
 
 

@@ -24,6 +24,7 @@ module functional_tests
   !! .true. for pass and false for .fail.
   public :: test_gs2
 
+  public :: check_growth_rates_equal_in_list
 contains
 
   subroutine announce_functional_test(test_name)
