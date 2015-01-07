@@ -1,0 +1,161 @@
+#! /bin/bash
+# A script for building GS2. This is free software, released
+# under the MIT licence.
+# Written by:
+#            Edmund Highcock (edmundhighcock@users.sourceforge.net)
+
+function print_help {
+  echo ""
+  echo " GS2 Build Script"
+  echo
+  echo "This script is a utility for building GS2."
+  echo "To build gs2, execute:" 
+  echo " $ ./build_gs2 -s <system>"
+  echo 
+  echo "If you have set GK_SYSTEM you can neglect the -s"
+  echo "option."
+  echo 
+  echo "To see a list of available systems:"
+  echo " $ ./build_gs2 ls"
+  echo 
+  echo "To run the tests: "
+  echo " $ ./build_gs2 tests -s <system>"
+  echo 
+  echo "For more specific commands you can use the "
+  echo "-c flag:"
+  echo " $ ./build_gs2 -c unit_tests"
+  echo " $ ./build_gs2 -c linear_tests"
+  echo "The -c flag passes an arbitrary string to the"
+  echo "make command."
+  echo 
+  echo "To print the configuration for a given system:"
+  echo " $ ./build_gs2 -s <system> print_config "
+  echo 
+  echo "You can use this to configure your system"
+  echo "without building GS2 like this:"
+  echo " $ ./build_gs2 -s <system> config "
+  echo " $ source system_config"
+  echo
+  echo "It uses a standard set of choices about"
+  echo "configuration based on the value of -s. These"
+  echo "choices may need to be maintained as software is upgraded."
+  echo "If this script is being run from within a release of GS2,"
+  echo "rather than from the development repository, it can be updated"
+  echo "to the latest development version using: "
+  echo " $ ./build_gs2 update"
+  echo
+}
+
+function check_system_set {
+  if [ "$GK_SYSTEM" == "" ] 
+  then
+    echo "ERROR: Please set the -s option or set the GK_SYSTEM environment variable."
+    exit 1
+    #SYSTEM_SET=1
+  #else 
+    #SYSTEM_SET=0
+  fi
+}
+
+
+function run_configuration {
+make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles 
+if test "$?" != "0"
+then 
+  exit 1
+fi
+}
+
+function setup_build {
+  check_system_set
+  run_configuration
+  source system_config
+}
+
+
+while true; do
+  case "$1" in
+    -s)
+      if [ "$2" == "" ] ; then echo "Option -s requires an argument." >&2 ; exit 1; fi
+      GK_SYSTEM=$2
+      shift 2
+      ;;
+    -s*)
+      GK_SYSTEM=$(echo $1 | sed 's/-s//')
+      shift 1
+      ;;
+    -c)
+      if [ "$2" == "" ] ; then echo "Option -c requires an argument." >&2 ; exit 1; fi
+      MAKE_OPTIONAL_COMMAND=$2
+      shift 2
+      ;;
+    -c*)
+      MAKE_OPTIONAL_COMMAND=$(echo $1 | sed 's/-c//')
+      shift 1
+      ;;
+    -h*)
+      print_help
+      exit 0
+      ;;
+    -\?)
+      echo "Invalid option: $1" >&2
+      exit 1
+      ;;
+    #:)
+      #echo "Option -$OPTARG requires an argument." >&2
+      #exit 1
+      #;;
+    "")
+      break 
+      ;;
+    *)
+      COMMAND=$1
+      shift
+      ;;
+esac
+done
+
+case $COMMAND in 
+  man)
+    $0 help | less
+    exit 0
+    ;;
+  *help*)
+    print_help
+    ;;
+  config)
+    check_system_set
+    run_configuration
+    ;;
+  print_config)
+    check_system_set
+    run_configuration
+    echo
+    echo "Configuration for system $GK_SYSTEM:"
+    cat system_config
+    ;;
+  ls)
+    #find Makefiles | grep Makefile | grep -Ev 'svn|gnu|g95|gcc|pgi|intel|xl' | sed 's/Makefiles.Makefile.//' | sort | xargs echo
+    find Makefiles -type f -exec grep -q STANDARD_SYSTEM_CONFIGURATION {} \; -print | grep -v svn | grep -Ev '~$|swp$' | sed 's/Makefiles.Makefile.//' | sort | xargs echo
+    ;;
+  "")
+    setup_build
+    make $MAKEFLAGS  GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND 
+    ;;
+  tests|unit_tests|linear_tests)
+    setup_build
+    make $COMMAND $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM
+    ;;
+  up*)
+    echo "update function not implemented yet!"
+    exit 1
+    ;;
+  *)
+    echo "ERROR: Unknown command $COMMAND. Run" 
+    echo " $ ./build_gs2 help" 
+    echo "for usage."
+    ;;
+    
+esac
+
+

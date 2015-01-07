@@ -63,6 +63,7 @@ dump_response_mod = \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
+	 constant_random.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
@@ -98,7 +99,6 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -146,6 +146,7 @@ ffttester_mod = \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
+	 constant_random.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
@@ -203,7 +204,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -279,6 +279,7 @@ gs2_mod = \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
+	 constant_random.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
@@ -336,7 +337,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -395,6 +395,7 @@ ingen_mod = \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
+	 constant_random.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
@@ -432,7 +433,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -473,9 +473,6 @@ rungridgen_mod = \
 	 mp.o \
 	 rungridgen.o \
 	 spl.o 
-
-test_mod = \
-	 test.o 
 
 antenna.o: \
 	 antenna_data.o \
@@ -522,6 +519,7 @@ collisions.o: \
 	 text_options.o \
 	 theta_grid.o 
 command_line.o: 
+constant_random.o: 
 constants.o: 
 convert.o: 
 deq.o: \
@@ -1089,6 +1087,7 @@ ingen.o: \
 	 theta_grid.o \
 	 theta_grid_params.o 
 init_g.o: \
+	 constant_random.o \
 	 constants.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
@@ -1161,7 +1160,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1202,8 +1200,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -1237,7 +1234,6 @@ spfunc.o: \
 	 constants.o 
 spl.o: \
 	 mp.o 
-test.o: 
 text_options.o: \
 	 mp.o 
 theta_grid.o: \
