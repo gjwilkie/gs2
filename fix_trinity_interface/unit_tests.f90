@@ -229,9 +229,15 @@ contains
   end subroutine print_with_stars
 
   subroutine debug_message(verbosity_level, message)
+    use mp, only: iproc, mp_initialized
     integer, intent(in) :: verbosity_level
     character(*), intent(in) :: message
-    if (should_print(verbosity_level)) write (*,*) message, " jid=", job_id
+    if (mp_initialized) then 
+      if (should_print(verbosity_level)) write (*,*) message, " jid=", job_id, &
+        " iproc=", iproc
+    else
+      if (should_print(verbosity_level)) write (*,*) message, " jid=", job_id
+    end if
   end subroutine debug_message
 
   subroutine set_job_id(jid)

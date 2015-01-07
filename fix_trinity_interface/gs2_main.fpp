@@ -18,6 +18,14 @@ module gs2_main
   !! in the gs2_reinit unit test
   public :: gs2_main_unit_test_reset_gs2
 
+  !> Starts the global wall clock timer
+  !! used by check time. This is useful
+  !! if you have multiple copies of gs2 
+  !! running but you don't want to start 
+  !! them all at the same time, but you
+  !! want them all to respect avail_cpu_time
+  public :: initialize_wall_clock_timer
+
 
   type gs2_timers_type
     real :: init(2) 
@@ -50,15 +58,13 @@ module gs2_main
     integer :: verb = 3
 
     !> Parameters pertaining to Trinity runs
-    !! For historical reasons job_id is 0-based
-    !! and trin_job is 1-based. 
-    !! job_id is not to confused with the parameter
+    !! external_job_id is not to confused with the parameter
     !! job in mp, which identifies the subjob if
     !! running in list mode or with nensembles > 1
-    integer :: trin_job = -1
-    integer :: job_id = -1
+    !integer :: trin_job = -1
+    integer :: external_job_id = -1
 
-    logical :: is_trinity_job = .false.
+    logical :: is_external_job = .false.
 
 
     !> Parameters to be used when passing in an external communicator
@@ -80,10 +86,17 @@ module gs2_main
 contains
 # endif
 
+  subroutine initialize_wall_clock_timer
+    use job_manage, only: init_checktime
+    call init_checktime
+  end subroutine initialize_wall_clock_timer
+
   subroutine initialize_gs2(state)
     use file_utils, only: init_file_utils
     use file_utils, only: run_name, run_name_target
-    use job_manage, only: checktime
+    use job_manage, only: checktime, time_message
+    use job_manage, only: init_checktime, checktime_initialized
+    use job_manage, only: job_fork
     use mp, only: init_mp, broadcast
     use mp, only: iproc, nproc, proc0
     use redistribute, only: using_measure_scatter
@@ -102,9 +115,8 @@ contains
        stop 1
      end if
 
-    if (state%mp_comm_external) then 
-      if (state%job_id > -1) state%trin_job = state%job_id + 1
-      call set_job_id(state%trin_job)
+    if (state%is_external_job) then 
+      call set_job_id(state%external_job_id)
     end if
 
     call debug_message(4, 'gs2_main::initialize_gs2 starting initialization')
@@ -120,16 +132,17 @@ contains
     !call set_job_id(trin_job)
 
     call reset_timers(state%timers)
-    call checktime(avail_cpu_time,state%exit) ! <doc> Initialize timer </doc>
-    call debug_message(state%verb, 'gs2_main::initialize_gs2 called checktime')
+    if (.not. checktime_initialized) call init_checktime ! <doc> Initialize timer </doc>
+    call debug_message(state%verb, &
+      'gs2_main::initialize_gs2 called init_checktime')
   
     if (proc0) then
        ! Report # of processors being used </doc>
        if (nproc == 1) then
-         write(*,*) 'Running on ',nproc,' processors'
+         write(*,*) 'Running on ',nproc,' processor'
        else
          if(state%mp_comm_external) then
-            write(*,*) 'Job ',state%trin_job,'Running on ',nproc,' processors'
+            write(*,*) 'Job ',state%external_job_id,'Running on ',nproc,' processors'
          else
             write(*,*) 'Running on ',nproc,' processors'
          endif
@@ -144,11 +157,24 @@ contains
        else
           call init_file_utils (state%list, name="gs")
        end if
-       call debug_message(state%verb, 'gs2_main::initialize_gs2 initialized file_utils')
+       call debug_message(state%verb, &
+         'gs2_main::initialize_gs2 initialized file_utils')
     end if
     
     call broadcast (state%list)
     call debug_message(state%verb, 'gs2_main::initialize_gs2 broadcasted list')
+
+    if (state%list) then
+       call job_fork
+       call debug_message(state%verb, 'gs2_main::initialize_gs2 called job fork')
+    else if (state%nensembles > 1) then 
+       call job_fork (n_ensembles=state%nensembles)
+       call debug_message(state%verb, &
+         'gs2_main::initialize_gs2 called job fork (nensembles>1)')
+    end if
+
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
+
 
     ! Pass run name to other procs
     if (proc0) then
@@ -167,6 +193,8 @@ contains
 
   subroutine initialize_equations(state)
     use fields, only: init_fields
+    use job_manage, only: time_message
+    use mp, only: proc0
     use parameter_scan, only: init_parameter_scan
     use unit_tests, only: debug_message
     implicit none
@@ -180,6 +208,8 @@ contains
     ! This triggers initializing of all the grids, all the physics parameters
     ! and all the modules which solve the equations
     call init_fields
+
+    if (proc0) call time_message(.false., state%timers%init,' Initialization')
 
   end subroutine initialize_equations
 
@@ -202,18 +232,39 @@ contains
   end subroutine finalize_equations
 
   subroutine finalize_gs2(state)
-    use mp, only: finish_mp, proc0
+    use file_utils, only: finish_file_utils
     use job_manage, only: time_message
+    use mp, only: finish_mp, proc0
+    use mp, only: mp_abort
+    use unit_tests, only: debug_message
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
+
+    if ((.not. state%gs2_initialized) .or. &
+        state%equations_initialized .or. &
+        state%diagnostics_initialized) then
+        write (*,*) 'ERROR: initialize_gs2 can only be called when &
+        & gs2_initialized is true, and equations_initialized &
+        & and diagnostics_initialized, &
+        & are all false. '
+       stop 1
+     end if
+
+    if (proc0) call finish_file_utils
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
     
+    call debug_message(state%verb, 'gs2_main::finalize_gs2 calling print_times')
+
     call print_times(state, state%timers)
 
+    call debug_message(state%verb, 'gs2_main::finalize_gs2 calling finish_mp')
+
     if (.not. state%mp_comm_external) call finish_mp
+
+    state%gs2_initialized = .false.
 
 
 
@@ -254,9 +305,9 @@ contains
     type(gs2_timers_type), intent(in) :: timers
 
     if (proc0) then
-       if (state%is_trinity_job) then
+       if (state%is_external_job) then
           print '(/,'' Job ID:'', i4,'', total from timer is:'', 0pf9.2,'' min'',/)', &
-               state%trin_job, state%timers%total(1)/60.
+               state%external_job_id, state%timers%total(1)/60.
        else
 !    if (proc0 .and. .not. nofin) then
 
