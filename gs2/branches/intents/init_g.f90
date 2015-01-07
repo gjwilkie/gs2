@@ -75,6 +75,11 @@ module init_g
   logical :: input_check_recon=.false.
   complex :: nkxy_pt(3), ukxy_pt(3)
   ! <RN
+
+  !> Whether to use the constant_random number
+  !! generator, which always gives the same
+  !! random numbers. Used for testing.
+  logical :: constant_random_flag
   
   logical, parameter :: debug = .false.
   logical :: initialized = .false.
@@ -860,7 +865,7 @@ contains
          eq_type, prof_width, eq_mode_u, eq_mode_n, &
          input_check_recon, nkxy_pt, ukxy_pt, &
          ikkk, ittt, phiamp, aparamp, phifrac, ikpar_init, kpar_init, &
-         ikx_init, restart_eig_id
+         ikx_init, restart_eig_id, constant_random_flag
 
     integer :: ierr, in_file
 
@@ -923,6 +928,7 @@ contains
     ikx_init = -1
     read_many=.false.
     restart_eig_id = 0
+    constant_random_flag = .false.
     ! <RN
     restart_file = trim(run_name)//".nc"
     restart_dir = "./"
@@ -1176,6 +1182,9 @@ contains
     use dist_fn, only: pass_right, init_pass_ends
     use redistribute, only: fill, delete_redist
     use ran, only: ranf
+    use constant_random, only: init_constant_random
+    use constant_random, only: finish_constant_random
+    use constant_random, only: constant_ranf=>ranf
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
@@ -1192,11 +1201,17 @@ contains
     ! keep old (it, ik) loop order to get old results exactly: 
 
     !Fill phi with random (complex) numbers between -0.5 and 0.5
+    if (constant_random_flag) call init_constant_random
     do it = 1, ntheta0
        do ik = 1, naky
           do ig = -ntgrid, ntgrid
+            if (constant_random_flag) then 
+             a = constant_ranf()-0.5
+             b = constant_ranf()-0.5
+            else
              a = ranf()-0.5
              b = ranf()-0.5
+            end if
              phi(ig,it,ik) = cmplx(a,b)
            end do
 !CMR,28/1/13: 
@@ -1232,6 +1247,7 @@ contains
           end if
        end do
     end do
+    if (constant_random_flag) call finish_constant_random
     
     !Wipe out all but one kx if requested
     if (ikx_init  > 0) call single_initial_kx(phi)

@@ -17,7 +17,6 @@ ball_mod = \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
-	 runtime_tests.o \
 	 spl.o 
 
 drive_mod = \
@@ -63,6 +62,7 @@ dump_response_mod = \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
+	 constant_random.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
@@ -137,7 +137,6 @@ eiktest_mod = \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
-	 runtime_tests.o \
 	 spl.o 
 
 ffttester_mod = \
@@ -146,6 +145,7 @@ ffttester_mod = \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
+	 constant_random.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
@@ -279,6 +279,7 @@ gs2_mod = \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
+	 constant_random.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
@@ -395,6 +396,7 @@ ingen_mod = \
 	 ceq.o \
 	 collisions.o \
 	 command_line.o \
+	 constant_random.o \
 	 constants.o \
 	 convert.o \
 	 deq.o \
@@ -474,9 +476,6 @@ rungridgen_mod = \
 	 rungridgen.o \
 	 spl.o 
 
-test_mod = \
-	 test.o 
-
 antenna.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -522,6 +521,7 @@ collisions.o: \
 	 text_options.o \
 	 theta_grid.o 
 command_line.o: 
+constant_random.o: 
 constants.o: 
 convert.o: 
 deq.o: \
@@ -760,7 +760,6 @@ ediff.o:
 eeq.o: \
 	 constants.o \
 	 mp.o \
-	 runtime_tests.o \
 	 spl.o 
 et.o: \
 	 constants.o \
@@ -1089,6 +1088,7 @@ ingen.o: \
 	 theta_grid.o \
 	 theta_grid_params.o 
 init_g.o: \
+	 constant_random.o \
 	 constants.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
@@ -1237,7 +1237,6 @@ spfunc.o: \
 	 constants.o 
 spl.o: \
 	 mp.o 
-test.o: 
 text_options.o: \
 	 mp.o 
 theta_grid.o: \
