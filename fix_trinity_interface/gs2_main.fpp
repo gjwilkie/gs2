@@ -37,6 +37,11 @@ module gs2_main
     real :: main_loop(2)
   end type gs2_timers_type
 
+  type gs2_outputs_type
+    real :: dvdrho
+    real :: grho
+  end type gs2_outputs_type
+
   type gs2_program_state_type
 
     ! Flags indicating the current state of the 
@@ -80,6 +85,9 @@ module gs2_main
     !! simultaneously (used for ensemble averaging).
     !! Cannot be used in conjunction with list mode
     integer :: nensembles = 1
+
+    ! Outputs (e.g. for Trinity)
+    type(gs2_outputs_type) :: outputs
    
   end type gs2_program_state_type
  
@@ -99,6 +107,7 @@ contains
     use job_manage, only: job_fork
     use mp, only: init_mp, broadcast
     use mp, only: iproc, nproc, proc0
+    use mp, only: trin_flag
     use redistribute, only: using_measure_scatter
     use run_parameters, only: avail_cpu_time
     use runtime_tests, only: verbosity
@@ -126,6 +135,9 @@ contains
     else
        call init_mp
     end if
+    ! We now manually set trin_flag, since we may now be passing 
+    ! in a communicator but not running trinity.
+    trin_flag = state%is_external_job
     call debug_message(state%verb, 'gs2_main::initialize_gs2 initialized mp')
     ! I don't think these should be necessary
     !call broadcast(state%trin_job)
@@ -193,8 +205,11 @@ contains
 
   subroutine initialize_equations(state)
     use fields, only: init_fields
+    use geometry, only: surfarea, dvdrhon
+    use gs2_time, only: init_tstart
+    use init_g, only: tstart
     use job_manage, only: time_message
-    use mp, only: proc0
+    use mp, only: proc0, broadcast
     use parameter_scan, only: init_parameter_scan
     use unit_tests, only: debug_message
     implicit none
@@ -202,6 +217,8 @@ contains
        !call time_message(.false., time_init,' Initialization')
     !call init_parameter_scan
     call init_parameter_scan
+
+    if (proc0) call time_message(.false., state%timers%init,' Initialization')
     !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
     call debug_message(state%verb, 'gs2_main::initialize_equations calling init_fields')
 
@@ -209,7 +226,22 @@ contains
     ! and all the modules which solve the equations
     call init_fields
 
-    if (proc0) call time_message(.false., state%timers%init,' Initialization')
+    ! Set the initial simulation time (must be after init_fields
+    ! because initial time may be read from a restart file)
+    call init_tstart(tstart)
+
+    ! Here we copy some geometric information required by 
+    ! Trinity to state%outputs
+    if (proc0) then
+       state%outputs%dvdrho = dvdrhon
+       state%outputs%grho = surfarea/dvdrhon
+    end if
+    call broadcast (state%outputs%dvdrho)
+    call broadcast (state%outputs%grho)
+    
+    if (proc0) call time_message(.false.,state%timers%init,' Initialization')
+
+    call debug_message(state%verb, 'gs2_main::initialize_equations finished')
 
   end subroutine initialize_equations
 
@@ -228,7 +260,54 @@ contains
   subroutine finalize_diagnostics
   end subroutine finalize_diagnostics
 
-  subroutine finalize_equations
+  subroutine finalize_equations(state)
+    use gs2_layouts, only: finish_layouts
+    use gs2_transforms, only: finish_transforms
+    use gs2_save, only: gs2_save_for_restart, finish_save
+    use theta_grid, only: finish_theta_grid
+    use unit_tests, only: ilast_step
+    use antenna, only: finish_antenna
+    use collisions, only: finish_collisions
+    use dist_fn, only: finish_dist_fn
+    use fields, only: finish_fields
+    use file_utils, only: finish_file_utils
+    use hyper, only: finish_hyper
+    use init_g, only: finish_init_g
+    use kt_grids, only: finish_kt_grids
+    use le_grids, only: finish_le_grids
+    use parameter_scan, only: finish_parameter_scan
+    use mp, only: proc0
+    use nonlinear_terms, only: finish_nonlinear_terms
+    use run_parameters, only: finish_run_parameters
+    use species, only: finish_species
+    use theta_grid, only: finish_theta_grid
+    use gs2_transforms, only: finish_transforms
+    use gs2_save, only: finish_save
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+
+    call finish_antenna
+    call finish_collisions
+    call finish_dist_fn
+    call finish_fields
+    call finish_hyper
+    call finish_init_g
+    call finish_theta_grid
+    call finish_kt_grids
+    call finish_le_grids
+    call finish_nonlinear_terms
+    call finish_run_parameters
+    call finish_species
+    call finish_parameter_scan
+    call finish_transforms
+    call finish_save
+! HJL Species won't change during a run so shouldn't need this    
+!    call finish_trin_species
+
+    call finish_layouts
+    call finish_transforms
+    call finish_save
+    call finish_theta_grid
   end subroutine finalize_equations
 
   subroutine finalize_gs2(state)

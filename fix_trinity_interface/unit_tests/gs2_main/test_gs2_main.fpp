@@ -27,6 +27,16 @@ program test_gs2_main
   call initialize_gs2(state)
   call finalize_gs2(state)
 
+  call initialize_gs2(state)
+  call initialize_equations(state)
+  call finalize_equations(state)
+  call finalize_gs2(state)
+
+  call initialize_gs2(state)
+  call initialize_equations(state)
+  call finalize_equations(state)
+  call finalize_gs2(state)
+
 
     !call init_mp
 
