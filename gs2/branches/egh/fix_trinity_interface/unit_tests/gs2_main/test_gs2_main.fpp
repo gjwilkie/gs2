@@ -6,13 +6,23 @@
 program test_gs2_main
   use gs2_main
   use unit_tests
-  use mp, only: finish_mp
+  use mp, only: init_mp, finish_mp, mp_comm
   implicit none
   real :: eps
   type(gs2_program_state_type) :: state
 
   eps = 1.0e-7
   if (precision(eps).lt. 11) eps = eps * 1000.0
+  
+  call init_mp
+  
+  call announce_module_test("gs2_main")
+
+  state%mp_comm_external = .true.
+  state%mp_comm = mp_comm
+
+  call initialize_gs2(state)
+  call finalize_gs2(state)
 
   call initialize_gs2(state)
   call finalize_gs2(state)
@@ -23,12 +33,11 @@ program test_gs2_main
     !test_driver_flag = .true.
     !functional_test_flag = .true.
 
-   !call announce_module_test("gs2_main")
 
 
-   !call close_module_test("gs2_main")
+  call close_module_test("gs2_main")
 
-  !call finish_mp
+  call finish_mp
 
 contains
   
