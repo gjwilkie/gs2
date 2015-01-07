@@ -136,9 +136,14 @@ contains
 
   function should_print(verbosity_level)
     use mp, only: proc0
+    use mp, only: mp_initialized
     integer, intent(in) :: verbosity_level
     logical :: should_print
-    should_print = (proc0 .and. verbosity() .ge. verbosity_level) .or. verbosity() .gt. 3
+    if (mp_initialized) then 
+      should_print = (proc0 .and. verbosity() .ge. verbosity_level) .or. verbosity() .gt. 3
+    else
+      should_print = (verbosity() .ge. verbosity_level)
+    end if
   end function should_print
 
   subroutine should_be_int(val, rslt)
