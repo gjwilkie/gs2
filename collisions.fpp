@@ -82,7 +82,7 @@ module collisions
   ! (-ntgrid:ntgrid,nlambda,max(ng2,nlambda-ng2)) lagrange coefficients for derivative error estimate
 
   real, dimension (:,:), allocatable :: fdf, fdb
-  ! (-ntgrid,ntgrid,nlambda) finite difference coefficients for derivative error estimate
+  ! (-ntgrid:ntgrid,nlambda) finite difference coefficients for derivative error estimate
 
   real, dimension (:,:,:), allocatable :: vnew, vnew_s, vnew_D, vnew_E, delvnew
   ! (naky,negrid,nspec) replicated
@@ -97,12 +97,8 @@ module collisions
   real, dimension (:,:,:,:), allocatable :: vnewh
   ! (-ntgrid:ntgrid,ntheta0,naky,nspec) replicated
 
-  ! for conservation of momentum and energy
-!  complex, dimension (:,:,:,:), allocatable :: parfac, perpfac, efac
-  ! (-ntgrid:ntgrid,ntheta0,naky,nspec)
-
   ! only for momentum conservation due to Lorentz operator (8.06)
-  complex, dimension(:,:,:), allocatable :: s0, w0, z0
+  real, dimension(:,:,:), allocatable :: s0, w0, z0
   ! The following (between the start and finish comments) are only used for LE layout
   ! start
   real, dimension (:,:,:), allocatable :: s0le, w0le, z0le
@@ -110,17 +106,13 @@ module collisions
   ! finish
 
   ! needed for momentum and energy conservation due to energy diffusion (3.08)
-  complex, dimension(:,:,:), allocatable :: bs0, bw0, bz0
+  real, dimension(:,:,:), allocatable :: bs0, bw0, bz0
 
   ! The following (between the start and finish comments) are only used for LE layout
   ! start
   real, dimension (:,:), allocatable :: vpatmp
-  complex, dimension (:,:,:), allocatable :: bs0le, bw0le, bz0le
+  real, dimension (:,:,:), allocatable :: bs0le, bw0le, bz0le
   ! finish
-
-  ! only for original parallel mom conservation (not used nowadays)
-  real, dimension (:,:,:), allocatable :: sq
-  ! (-ntgrid:ntgrid,nlambda,2) replicated
 
   real :: cfac
 
@@ -193,24 +185,11 @@ contains
     use species, only: init_species, nspec, spec
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, naky, ntheta0
-    use le_grids, only: init_le_grids, nlambda, negrid , init_map
+    use le_grids, only: init_le_grids, nlambda, negrid
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
 
     implicit none
-
-    logical :: use_lz_layout = .false.
-    logical :: use_e_layout = .false.
-! lowflow terms include higher-order corrections to GK equation
-! such as parallel nonlinearity that require derivatives in v-space.
-! most efficient way to take these derivatives is to go from g_lo to le_lo,
-! i.e., bring all energies and lambdas onto each processor
-!<DD>Note the user can still disable use_le_layout in the input file
-!    this just changes the default.
-# ifdef LOWFLOW
-    use_le_layout = .true.
-# endif
-
 
     if (initialized) return
     initialized = .true.
@@ -226,18 +205,7 @@ contains
     call init_run_parameters
     call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters
-    if( .not. use_le_layout ) then
-       select case (collision_model_switch)
-       case (collision_model_full)
-          use_lz_layout = .true.
-          use_e_layout = .true.
-       case (collision_model_lorentz,collision_model_lorentz_test)
-          use_lz_layout = .true.
-       case (collision_model_ediffuse)
-          use_e_layout = .true.
-       end select
-    end if
-    call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
+
     call init_arrays
 
   end subroutine init_collisions
@@ -349,7 +317,7 @@ contains
 
   subroutine init_arrays
     use species, only: nspec
-    use le_grids, only: negrid
+    use le_grids, only: negrid, init_map
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use dist_fn_arrays, only: c_rate
@@ -357,16 +325,44 @@ contains
     implicit none
 
     real, dimension (negrid) :: hee
+    logical :: use_lz_layout = .false.
+    logical :: use_e_layout = .false.
+! lowflow terms include higher-order corrections to GK equation
+! such as parallel nonlinearity that require derivatives in v-space.
+! most efficient way to take these derivatives is to go from g_lo to le_lo,
+! i.e., bring all energies and lambdas onto each processor
+!<DD>Note the user can still disable use_le_layout in the input file
+!    this just changes the default.
+# ifdef LOWFLOW
+    use_le_layout = .true.
+# endif
 
+    !<DD>This (potentially large) array should only be needed if 
+    !write_hrate (gs2_diagnostics) is true.
     if (.not. allocated(c_rate)) then
        allocate (c_rate(-ntgrid:ntgrid, ntheta0, naky, nspec, 3))
        c_rate = 0.
     end if
 
+    !<DD>Should probably put this first
     if (collision_model_switch == collision_model_none) then
        colls = .false.
        return
     end if
+
+    if( .not. use_le_layout ) then
+       select case (collision_model_switch)
+       case (collision_model_full)
+          use_lz_layout = .true.
+          use_e_layout = .true.
+       case (collision_model_lorentz,collision_model_lorentz_test)
+          use_lz_layout = .true.
+       case (collision_model_ediffuse)
+          use_e_layout = .true.
+       end select
+    end if
+
+    call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
 
     call init_vnew (hee)
     if (all(abs(vnew(:,1,:)) <= 2.0*epsilon(0.0))) then
@@ -418,6 +414,7 @@ contains
     real, dimension (:,:,:,:), allocatable :: vns
     integer :: ie, il, ik, is, isgn, iglo,  it
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
+    complex, dimension(:,:,:), allocatable :: s0tmp, w0tmp, z0tmp
     logical :: all = .true.
 
     if(use_le_layout) then
@@ -427,12 +424,10 @@ contains
 ! TO DO: 
 ! tunits not included anywhere yet
 
-    if (.not. allocated(z0)) then
-       allocate (z0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (w0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (s0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-    end if
-    
+    allocate(s0tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate(w0tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate(z0tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+
     allocate (gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (duinv(-ntgrid:ntgrid, ntheta0, naky, nspec))
     allocate (dtmp(-ntgrid:ntgrid, ntheta0, naky, nspec))
@@ -464,20 +459,20 @@ contains
        do isgn = 1, 2
           ! u0 = -2 nu_D^{ei} vpa J0 dt f0
           if (conservative) then
-             z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpdiff(:,isgn,il) &
+             z0tmp(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpdiff(:,isgn,il) &
                   * sqrt(energy(ie))*aj0(:,iglo)
           else
-             z0(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpa(:,isgn,iglo)*aj0(:,iglo)
+             z0tmp(:,isgn,iglo) = -2.0*code_dt*vns(ik,ie,is,3)*vpa(:,isgn,iglo)*aj0(:,iglo)
           end if
        end do
     end do
 
     if(use_le_layout) then    
-      call gather (g2le, z0, ctmp)
-      call solfp_lorentz (ctmp)
-      call scatter (g2le, ctmp, z0)   ! z0 is redefined below
+       call gather (g2le, z0tmp, ctmp)
+       call solfp_lorentz (ctmp)
+       call scatter (g2le, ctmp, z0tmp)   ! z0 is redefined below
     else
-      call solfp_lorentz (z0,dum1,dum2)   ! z0 is redefined below
+       call solfp_lorentz (z0tmp,dum1,dum2)   ! z0 is redefined below
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -486,7 +481,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           ! v0 = vpa J0 f0
-          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*z0(:,isgn,iglo)
+          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*z0tmp(:,isgn,iglo)
        end do
     end do
     
@@ -500,7 +495,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          z0(:,isgn,iglo) = z0(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
+          z0tmp(:,isgn,iglo) = z0tmp(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
        end do
     end do
 
@@ -559,22 +554,21 @@ contains
        do isgn = 1, 2
           ! u1 = -3 nu_s vpa dt J0 f_0 / du
           if (conservative) then
-             s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpdiff(:,isgn,il)*sqrt(energy(ie)) &
+             s0tmp(:,isgn,iglo) = -vns(ik,ie,is,1)*vpdiff(:,isgn,il)*sqrt(energy(ie)) &
                   * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
           else
-!             s0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
-             s0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
+             s0tmp(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
                   * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
           end if
        end do
     end do
 
     if(use_le_layout) then    
-      call gather (g2le, s0, ctmp)
-      call solfp_lorentz (ctmp)
-      call scatter (g2le, ctmp, s0)   ! s0
+       call gather (g2le, s0tmp, ctmp)
+       call solfp_lorentz (ctmp)
+       call scatter (g2le, ctmp, s0tmp)   ! s0
     else
-      call solfp_lorentz (s0,dum1,dum2)   ! s0
+       call solfp_lorentz (s0tmp,dum1,dum2)   ! s0
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -583,7 +577,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           ! v0 = vpa J0 f0
-          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*s0(:,isgn,iglo)
+          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*s0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -597,8 +591,8 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          s0(:,isgn,iglo) = s0(:,isgn,iglo) - dtmp(:,it,ik,is) &
-               * z0(:,isgn,iglo)
+          s0tmp(:,isgn,iglo) = s0tmp(:,isgn,iglo) - dtmp(:,it,ik,is) &
+               * z0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -614,10 +608,10 @@ contains
           ! v1 = nu_D vpa J0
           if (conservative) then
              gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
-                  * aj0(:,iglo)*s0(:,isgn,iglo)
+                  * aj0(:,iglo)*s0tmp(:,isgn,iglo)
           else
              gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
-                  * s0(:,isgn,iglo)
+                  * s0tmp(:,isgn,iglo)
           end if
        end do
     end do
@@ -632,7 +626,7 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          s0(:,isgn,iglo) = s0(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
+          s0tmp(:,isgn,iglo) = s0tmp(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
        end do
     end do
 
@@ -648,12 +642,11 @@ contains
        do isgn = 1, 2
           ! u2 = -3 dt J1 vperp vus a f0 / du
           if (conservative) then
-             w0(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
+             w0tmp(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
                   * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
                   / bmag
           else
-!             w0(:,isgn,iglo) = -3.*vns(ik,ie,is,2)*energy(ie)*al(il)*aj1(:,iglo) &
-             w0(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
+             w0tmp(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
                   * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
                   / bmag
           end if
@@ -661,11 +654,11 @@ contains
     end do
 
     if(use_le_layout) then    
-      call gather (g2le, w0, ctmp)
-      call solfp_lorentz (ctmp)
-      call scatter (g2le, ctmp, w0)
+       call gather (g2le, w0tmp, ctmp)
+       call solfp_lorentz (ctmp)
+       call scatter (g2le, ctmp, w0tmp)
     else
-      call solfp_lorentz (w0,dum1,dum2)
+       call solfp_lorentz (w0tmp,dum1,dum2)
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -674,7 +667,7 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do isgn = 1, 2
           ! v0 = vpa J0 f0
-          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*w0(:,isgn,iglo)
+          gtmp(:,isgn,iglo) = vpa(:,isgn,iglo)*aj0(:,iglo)*w0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -688,7 +681,7 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          w0(:,isgn,iglo) = w0(:,isgn,iglo) - z0(:,isgn,iglo)*dtmp(:,it,ik,is)
+          w0tmp(:,isgn,iglo) = w0tmp(:,isgn,iglo) - z0tmp(:,isgn,iglo)*dtmp(:,it,ik,is)
        end do
     end do
 
@@ -704,10 +697,10 @@ contains
           ! v1 = nud vpa J0 f0
           if (conservative) then
              gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*sqrt(energy(ie))*vpdiff(:,isgn,il) &
-                  * aj0(:,iglo)*w0(:,isgn,iglo)
+                  * aj0(:,iglo)*w0tmp(:,isgn,iglo)
           else
              gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
-                  * w0(:,isgn,iglo)
+                  * w0tmp(:,isgn,iglo)
           end if
        end do
     end do
@@ -722,7 +715,7 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          w0(:,isgn,iglo) = w0(:,isgn,iglo) - s0(:,isgn,iglo)*dtmp(:,it,ik,is)
+          w0tmp(:,isgn,iglo) = w0tmp(:,isgn,iglo) - s0tmp(:,isgn,iglo)*dtmp(:,it,ik,is)
        end do
     end do
 
@@ -737,7 +730,7 @@ contains
        do isgn = 1, 2
           ! v2 = nud vperp J1 f0 
           gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
-               * w0(:,isgn,iglo)
+               * w0tmp(:,isgn,iglo)
        end do
     end do
     
@@ -751,7 +744,7 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          w0(:,isgn,iglo) = w0(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
+          w0tmp(:,isgn,iglo) = w0tmp(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
        end do
     end do
 
@@ -759,49 +752,67 @@ contains
 
 
     if(use_le_layout) then    
-      allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+       
+       ! first set s0le, w0le & z0le
+       z_big = 0.0
+       z_big = cmplx(real(s0tmp), real(w0tmp))
 
-      ! first set s0le, w0le & z0le
-      z_big = 0.0
-      z_big = cmplx(real(s0), real(w0))
-
-      call gather (g2le, z_big, ctmp)
-
-      if (.not. allocated(z0le)) then
-         allocate (s0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-         allocate (w0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-         allocate (z0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-      end if
-
-      s0le = real(ctmp)
-      w0le = aimag(ctmp)
-
-      ! set z0le
-      call gather (g2le, z0, ctmp)
-
-      z0le = real(ctmp)
-
-      ! next set aj0le & aj1l
-      z_big(:,1,:) = cmplx(aj0,aj1)
-      z_big(:,2,:) = z_big(:,1,:)
+       ! get rid of z0, s0, w0 now that we've converted to z0le, s0le, w0le
+       if (allocated(s0tmp)) deallocate(s0tmp)
+       if (allocated(w0tmp)) deallocate(w0tmp)
 
       call gather (g2le, z_big, ctmp)
 
-      if (.not. allocated(aj0le)) then
-         allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-         allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-      end if
+       if (.not. allocated(s0le)) then
+          allocate (s0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+          allocate (w0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+       end if
+       
+       s0le = real(ctmp)
+       w0le = aimag(ctmp)
+       
+       ! set z0le
+       call gather (g2le, z0tmp, ctmp)
+       if (allocated(z0tmp)) deallocate(z0tmp)
+       if (.not. allocated(z0le)) allocate (z0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+       z0le = real(ctmp)
+       
+       ! next set aj0le & aj1l
+       z_big(:,1,:) = cmplx(aj0,aj1)
+       z_big(:,2,:) = z_big(:,1,:)
 
-      aj0le = real(ctmp)
-      aj1le = aimag(ctmp)
+       call gather (g2le, z_big, ctmp)
+       
+       if (.not. allocated(aj0le)) then
+          allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+          allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+       end if
 
-      deallocate (ctmp, z_big)
+       aj0le = real(ctmp)
+       aj1le = aimag(ctmp)
+       
+       deallocate (ctmp, z_big)      
+    else
+       !Only need the real components (imaginary part should be zero, just
+       !use complex arrays to allow reuse of existing integrate routines etc.) 
+       if (.not. allocated(s0)) then
+          allocate (s0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          s0=real(s0tmp)
+          deallocate(s0tmp)
+       endif
 
-      ! get rid of z0, s0, w0 now that we've converted to z0le, s0le, w0le
-      if (allocated(s0)) deallocate(s0)
-      if (allocated(z0)) deallocate(z0)
-      if (allocated(w0)) deallocate(w0)
+       if (.not. allocated(w0)) then
+          allocate (w0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          w0=real(w0tmp)
+          deallocate(w0tmp)
+       endif
 
+       if (.not. allocated(z0)) then
+          allocate (z0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          z0=real(z0tmp)
+          deallocate(z0tmp)
+       endif
     end if
     
   end subroutine init_lorentz_conserve
@@ -828,8 +839,9 @@ contains
     complex, dimension (:,:,:,:), allocatable :: duinv, dtmp
     real, dimension (:,:,:,:), allocatable :: vns
     integer :: ie, il, ik, is, isgn, iglo, it
-    logical :: all
     complex, dimension (:,:,:), allocatable :: ctmp, z_big
+    complex, dimension (:,:,:), allocatable :: bs0tmp, bw0tmp, bz0tmp    
+    logical :: all
 
     if(use_le_layout) then
       allocate (ctmp(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -838,13 +850,10 @@ contains
 ! TO DO: 
 ! tunits not included anywhere yet
 
-!    if (first) then
-    if (.not. allocated(bz0)) then
-       allocate (bz0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (bw0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (bs0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-!       first = .false.
-    end if
+
+    allocate(bs0tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate(bw0tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate(bz0tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
     allocate (gtmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (duinv(-ntgrid:ntgrid, ntheta0, naky, nspec))
@@ -888,17 +897,17 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u0 = -nu_E E dt J0 f_0 / du
-           bz0(:,isgn,iglo) = -code_dt*vnmult(2)*vnew_E(ik,ie,is) &
+          bz0tmp(:,isgn,iglo) = -code_dt*vnmult(2)*vnew_E(ik,ie,is) &
                * aj0(:,iglo)*duinv(:,it,ik,is)
        end do
     end do
 
     if(use_le_layout) then    
-      call gather (g2le, bz0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp)
-      call scatter (g2le, ctmp, bz0)   ! bz0 is redefined below
+       call gather (g2le, bz0tmp, ctmp)
+       call solfp_ediffuse_le_layout (ctmp)
+       call scatter (g2le, ctmp, bz0tmp)   ! bz0 is redefined below
     else
-      call solfp_ediffuse_standard_layout (bz0)   ! bz0 is redefined below
+       call solfp_ediffuse_standard_layout (bz0tmp)   ! bz0 is redefined below
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -911,7 +920,7 @@ contains
        do isgn = 1, 2
           ! v0 = nu_E E J0 f_0
           gtmp(:,isgn,iglo) = vnmult(2)*vnew_E(ik,ie,is)*aj0(:,iglo) &
-               * bz0(:,isgn,iglo)
+               * bz0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -925,7 +934,7 @@ contains
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          bz0(:,isgn,iglo) = bz0(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
+          bz0tmp(:,isgn,iglo) = bz0tmp(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
        end do
     end do
 
@@ -970,7 +979,7 @@ contains
        do isgn = 1, 2
           ! u1 = -3 nu_s vpa dt J0 f_0 / du
 !          if (conservative) then
-          bs0(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
+          bs0tmp(:,isgn,iglo) = -vns(ik,ie,is,1)*vpa(:,isgn,iglo) &
                * aj0(:,iglo)*code_dt*duinv(:,it,ik,is)
 !          else
 !             bs0(:,isgn,iglo) = -3.0*vns(ik,ie,is,2)*vpa(:,isgn,iglo) &
@@ -980,11 +989,11 @@ contains
     end do
 
     if(use_le_layout) then
-      call gather (g2le, bs0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp)
-      call scatter (g2le, ctmp, bs0)   ! bs0
+       call gather (g2le, bs0tmp, ctmp)
+       call solfp_ediffuse_le_layout (ctmp)
+       call scatter (g2le, ctmp, bs0tmp)   ! bs0
     else
-      call solfp_ediffuse_standard_layout (bs0)    ! s0
+       call solfp_ediffuse_standard_layout (bs0tmp)    ! s0
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -997,7 +1006,7 @@ contains
        do isgn = 1, 2
           ! v0 = nu_E E J0
           gtmp(:,isgn,iglo) = vnmult(2)*vnew_E(ik,ie,is)*aj0(:,iglo) &
-               * bs0(:,isgn,iglo)
+               * bs0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -1011,8 +1020,8 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          bs0(:,isgn,iglo) = bs0(:,isgn,iglo) - dtmp(:,it,ik,is) &
-               * bz0(:,isgn,iglo)
+          bs0tmp(:,isgn,iglo) = bs0tmp(:,isgn,iglo) - dtmp(:,it,ik,is) &
+               * bz0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -1026,7 +1035,7 @@ contains
        do isgn = 1, 2
           ! v1 = (nu_s - nu_D) vpa J0
           gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
-               * bs0(:,isgn,iglo)
+               * bs0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -1040,7 +1049,7 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          bs0(:,isgn,iglo) = bs0(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
+          bs0tmp(:,isgn,iglo) = bs0tmp(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
        end do
     end do
 
@@ -1055,18 +1064,18 @@ contains
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
           ! u0 = -3 dt J1 vperp vus a f0 / du
-          bw0(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
+          bw0tmp(:,isgn,iglo) = -vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
                * code_dt*spec(is)%smz**2*kperp2(:,it,ik)*duinv(:,it,ik,is) &
                / bmag
        end do
     end do
 
     if(use_le_layout) then    
-      call gather (g2le, bw0, ctmp)
-      call solfp_ediffuse_le_layout (ctmp)
-      call scatter (g2le, ctmp, bw0)
+       call gather (g2le, bw0tmp, ctmp)
+       call solfp_ediffuse_le_layout (ctmp)
+       call scatter (g2le, ctmp, bw0tmp)
     else
-      call solfp_ediffuse_standard_layout (bw0)
+       call solfp_ediffuse_standard_layout (bw0tmp)
     end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1079,7 +1088,7 @@ contains
        do isgn = 1, 2
           ! v0 = nu_E E J0
           gtmp(:,isgn,iglo) = vnmult(2)*vnew_E(ik,ie,is)*aj0(:,iglo) &
-               * bw0(:,isgn,iglo)
+               * bw0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -1093,7 +1102,7 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          bw0(:,isgn,iglo) = bw0(:,isgn,iglo) - bz0(:,isgn,iglo)*dtmp(:,it,ik,is)
+          bw0tmp(:,isgn,iglo) = bw0tmp(:,isgn,iglo) - bz0tmp(:,isgn,iglo)*dtmp(:,it,ik,is)
        end do
     end do
 
@@ -1107,7 +1116,7 @@ contains
        do isgn = 1, 2
           ! v1 = (nus-nud) vpa J0 f0
           gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*vpa(:,isgn,iglo)*aj0(:,iglo) &
-               * bw0(:,isgn,iglo)
+               * bw0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -1121,7 +1130,7 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          bw0(:,isgn,iglo) = bw0(:,isgn,iglo) - bs0(:,isgn,iglo)*dtmp(:,it,ik,is)
+          bw0tmp(:,isgn,iglo) = bw0tmp(:,isgn,iglo) - bs0tmp(:,isgn,iglo)*dtmp(:,it,ik,is)
        end do
     end do
 
@@ -1136,7 +1145,7 @@ contains
        do isgn = 1, 2
           ! v2 = (nus-nud) vperp J1 f0 
           gtmp(:,isgn,iglo) = vns(ik,ie,is,1)*energy(ie)*al(il)*aj1(:,iglo) &
-                  * bw0(:,isgn,iglo)
+               * bw0tmp(:,isgn,iglo)
        end do
     end do
 
@@ -1150,47 +1159,72 @@ contains
        it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn=1,2
-          bw0(:,isgn,iglo) = bw0(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
+          bw0tmp(:,isgn,iglo) = bw0tmp(:,isgn,iglo) / (1.0 + dtmp(:,it,ik,is))
        end do
     end do
 
     deallocate (gtmp, duinv, dtmp, vns)
 
-    if(use_le_layout) then    
-      if (.not. allocated(bs0le)) then
-         allocate (bs0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-         allocate (bz0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-         allocate (bw0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-      end if
-      call gather (g2le, bs0, bs0le)
-      call gather (g2le, bz0, bz0le)
-      call gather (g2le, bw0, bw0le)
+    if(use_le_layout) then
+       allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))    
+       z_big=cmplx(real(bs0tmp),real(bw0tmp))
+       deallocate (bs0tmp)
+       deallocate (bw0tmp)
+       call gather (g2le, z_big, ctmp)
+       deallocate(z_big)
+       if (.not. allocated(bs0le)) allocate (bs0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+       if (.not. allocated(bw0le)) allocate (bw0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+       bs0le = real(ctmp)
+       bw0le = aimag(ctmp)
 
-      if (.not. allocated(aj0le)) then
-         allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
-         ! next set aj0le & aj1l
-         z_big(:,1,:) = cmplx(aj0,aj1)
-         z_big(:,2,:) = z_big(:,1,:)
-         call gather (g2le, z_big, ctmp)
-         allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-         allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
-         aj0le = real(ctmp)
-         aj1le = aimag(ctmp)
-         deallocate (z_big)
-      end if
+       call gather (g2le, bz0tmp, ctmp)
+       deallocate (bz0tmp)
+       if (.not. allocated(bz0le)) allocate (bz0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+       bz0le = real(ctmp)
 
-      deallocate (ctmp)
+       if (.not. allocated(aj0le)) then
+          allocate (z_big(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))    
+          ! next set aj0le & aj1l
+          z_big(:,1,:) = cmplx(aj0,aj1)
+          z_big(:,2,:) = z_big(:,1,:)
+          call gather (g2le, z_big, ctmp)
+          deallocate (z_big)
+          allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+          allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
+          aj0le = real(ctmp)
+          aj1le = aimag(ctmp)
+       end if
+       
+       deallocate (ctmp)
+    else
+       !Only need the real components (imaginary part should be zero, just
+       !use complex arrays to allow reuse of existing integrate routines etc.)
+       if (.not. allocated(bs0)) then
+          allocate (bs0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          bs0=real(bs0tmp)
+          deallocate(bs0tmp)
+       endif
 
+       if (.not. allocated(bw0)) then
+          allocate (bw0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          bw0=real(bw0tmp)
+          deallocate(bw0tmp)
+       endif
+
+       if (.not. allocated(bz0)) then
+          allocate (bz0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          bz0=real(bz0tmp)
+          deallocate(bz0tmp)
+       endif
     end if
+ end subroutine init_diffuse_conserve
 
-  end subroutine init_diffuse_conserve
-
-  subroutine init_vnew (hee)
-    use species, only: nspec, spec, electron_species, has_electron_species
-    use le_grids, only: negrid, energy, w
-    use kt_grids, only: naky, ntheta0, kperp2
-    use theta_grid, only: ntgrid
-    use run_parameters, only: zeff, tunits
+ subroutine init_vnew (hee)
+   use species, only: nspec, spec, electron_species, has_electron_species
+   use le_grids, only: negrid, energy, w
+   use kt_grids, only: naky, ntheta0, kperp2
+   use theta_grid, only: ntgrid
+   use run_parameters, only: zeff, tunits
     use constants, only: pi
     use spfunc, only: erf => erf_ext
 
@@ -1686,6 +1720,7 @@ contains
              z_big(:,2,:) = z_big(:,1,:)
 
              call gather (g2le, z_big, ctmp)
+             deallocate (z_big)
 
              allocate (aj0le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
              allocate (aj1le(nxi+1, negrid+1, le_lo%llim_proc:le_lo%ulim_alloc))
@@ -1693,7 +1728,7 @@ contains
              aj0le = real(ctmp)
              aj1le = aimag(ctmp)
 
-             deallocate (ctmp, z_big)
+             deallocate (ctmp)
           endif
        endif
 
@@ -3889,7 +3924,6 @@ contains
     if (allocated(bz0)) deallocate (bz0, bw0, bs0)
     if (allocated(vnew)) deallocate (vnew, vnew_s, vnew_D, vnew_E, delvnew)
     if (allocated(vnewh)) deallocate (vnewh)
-    if (allocated(sq)) deallocate (sq)
 
     if(use_le_layout) then
       if (allocated(c1le)) then
