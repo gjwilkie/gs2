@@ -492,7 +492,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks clean_tests
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests nonlinear_tests benchmarks clean_tests
 
 all: $(.DEFAULT_GOAL)
 
@@ -578,6 +578,7 @@ endif
 export CLEANCOMMAND
 
 clean_tests:
+	$(MAKE) clean -C nonlinear_tests 
 	$(MAKE) clean -C linear_tests 
 	$(MAKE) clean -C unit_tests 
 

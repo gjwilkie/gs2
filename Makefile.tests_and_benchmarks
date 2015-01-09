@@ -80,7 +80,13 @@ linear_tests_no_message: functional_tests.o unit_tests.o $(TEST_DEPS)
 linear_tests: linear_tests_no_message
 	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
 
-tests: unit_tests_no_message linear_tests_no_message
+nonlinear_tests_no_message: functional_tests.o unit_tests.o $(TEST_DEPS)
+	$(call RUN_TESTS,nonlinear_tests)
+
+nonlinear_tests: nonlinear_tests_no_message
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
+
+tests: unit_tests_no_message linear_tests_no_message nonlinear_tests_no_message
 	$(call TEST_PRINTOUT,$(call TEST_RESULTS,unit_tests)$(call TEST_RESULTS,linear_tests))
 
 
@@ -88,6 +94,7 @@ test_script: unit_tests_no_message linear_tests_no_message
 	echo "" > test_script.sh
 	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	find $(PWD)/nonlinear_tests -executable | grep -v svn | grep 'nonlinear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	echo "echo \"Tests Successful\"" >> test_script.sh
 	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
 
