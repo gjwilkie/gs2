@@ -10,6 +10,11 @@ module gs2_main
   implicit none
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
 
+  public :: gs2_program_state_type
+  public :: initialize_gs2, initialize_equations
+  public :: initialize_diagnostics, evolve_equations, run_eigensolver
+  public :: finalize_diagnostics, finalize_equations, finalize_gs2
+  public :: calculate_outputs
   !> Unit tests
 
   !> This function calls reset_gs2 using
@@ -38,8 +43,21 @@ module gs2_main
   end type gs2_timers_type
 
   type gs2_outputs_type
+    !> The gradient of the flux tube volume wrt
+    !! the flux label: related to the surface
+    !! area of the flux tube
     real :: dvdrho
+    !> The average gradient of the flux tube
+    !! label <|grad rho|>
     real :: grho
+    !> Particle flux by species
+    real, dimension (:), pointer :: pflux
+    !> Heat flux by species
+    real, dimension (:), pointer :: qflux
+    !> Turbulent heating by species
+    real, dimension (:), pointer :: heat
+    !> Momentum flux
+    real :: vflux
   end type gs2_outputs_type
 
   type gs2_program_state_type
@@ -58,18 +76,56 @@ module gs2_main
     !! wants to cause the loop to exit
     logical :: exit = .false.
 
+    !> Whether the run has converged to a
+    !! stationary state
+    logical :: converged = .false.
+
+    !> Whether to run the eigenvalue solver
+    !! or not. Set equal to the input value
+    !! in intialize_equations. Typically
+    !! only important for the standalone
+    !! gs2 program
+    logical :: do_eigsolve = .false.
+
+    !> Number of timesteps in evolve_equations
+    !! It is set equal to run_parameters::nstep in 
+    !! initialize_equations and is the maximum
+    !! number of timesteps that can be run 
+    !! without reinitalising the diagnostics. 
+    !! Do not modify!
+    integer :: nstep
+
+    !> Gets set to the final value of istep
+    !! in evolve equations. Any future calls
+    !! to evolve_equations will increment this
+    !! further. A call to finalize_diagnostics
+    !! will set it back to 1. Note that setting
+    !! this manually is NOT advised. 
+    integer :: istep_end = 1
+
     !> Whether to print out debug messages
     !logical :: debug = .false.
     integer :: verb = 3
 
-    !> Parameters pertaining to Trinity runs
+    !> Parameters pertaining to cases when gs2
+    !! is being used as library.
     !! external_job_id is not to confused with the parameter
     !! job in mp, which identifies the subjob if
     !! running in list mode or with nensembles > 1
     !integer :: trin_job = -1
     integer :: external_job_id = -1
 
+    !> is_external_job should be set to true when GS2
+    !! is being used as a library 
     logical :: is_external_job = .false.
+
+    !> Set true if using trinity. This does several things: 
+    !!  * it forces the calculation of the fluxes
+    !!  * it causes the species and theta_grid name lists to use parameters
+    !!     provided by trinity
+    !! Setting this flag true automatically sets is_external_job 
+    !! to true
+    logical :: is_trinity_job = .false.
 
 
     !> Parameters to be used when passing in an external communicator
@@ -88,8 +144,15 @@ module gs2_main
 
     ! Outputs (e.g. for Trinity)
     type(gs2_outputs_type) :: outputs
+
    
   end type gs2_program_state_type
+
+  private
+
+  !> This object is used for implementing the old interface
+  !! and should not be modified
+  type(gs2_program_state_type) :: old_iface_state
  
 contains
 # endif
@@ -124,10 +187,6 @@ contains
        stop 1
      end if
 
-    if (state%is_external_job) then 
-      call set_job_id(state%external_job_id)
-    end if
-
     call debug_message(4, 'gs2_main::initialize_gs2 starting initialization')
 
     if (state%mp_comm_external) then
@@ -135,9 +194,16 @@ contains
     else
        call init_mp
     end if
+
+    if (state%is_trinity_job) state%is_external_job = .true.
+    if (state%is_external_job) then 
+      call broadcast(state%external_job_id)
+      call set_job_id(state%external_job_id)
+    end if
+
     ! We now manually set trin_flag, since we may now be passing 
     ! in a communicator but not running trinity.
-    trin_flag = state%is_external_job
+    trin_flag = state%is_trinity_job
     call debug_message(state%verb, 'gs2_main::initialize_gs2 initialized mp')
     ! I don't think these should be necessary
     !call broadcast(state%trin_job)
@@ -163,6 +229,9 @@ contains
        write (*,*) 
        ! Call init_file_utils, ie. initialize the run_name, checking 
        !  whether we are doing a Trinity run or a list of runs.
+       ! Until the logic of init_file_utils is fixed we set trin_run
+       ! when an external file name has been provided... this prevents
+       ! it overriding the name from the command line.
        if (state%run_name_external) then
           call init_file_utils (state%list, trin_run=state%run_name_external, &
              name=state%run_name, n_ensembles=state%nensembles)
@@ -211,6 +280,7 @@ contains
     use job_manage, only: time_message
     use mp, only: proc0, broadcast
     use parameter_scan, only: init_parameter_scan
+    use run_parameters, only: nstep, do_eigsolve
     use unit_tests, only: debug_message
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
@@ -241,23 +311,234 @@ contains
     
     if (proc0) call time_message(.false.,state%timers%init,' Initialization')
 
+    if (state%is_trinity_job) call write_trinity_parameters
+
+    ! Set defaults. These are typically only important
+    ! for the standalone gs2 program
+    state%nstep = nstep
+    state%do_eigsolve = do_eigsolve
+
     call debug_message(state%verb, 'gs2_main::initialize_equations finished')
+
+    call allocate_outputs(state)
 
   end subroutine initialize_equations
 
-  subroutine initialize_diagnostics
+  subroutine initialize_diagnostics(state)
+    use gs2_diagnostics, only: init_gs2_diagnostics
+    use gs2_diagnostics, only: nwrite, write_nl_flux
+    use gs2_diagnostics, only: loop_diagnostics
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: diagnostics_init_options_type
+    use gs2_diagnostics_new, only: init_gs2_diagnostics_new
+    use gs2_diagnostics_new, only: run_diagnostics
+#endif
+    use parameter_scan, only: allocate_target_arrays
+    use run_parameters, only: nstep
+    use unit_tests, only: debug_message
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+#ifdef NEW_DIAG
+    ! Configuration for the new diagnostics module
+    type(diagnostics_init_options_type) :: diagnostics_init_options
+    real :: precision_test
+
+#ifdef NETCDF_PARALLEL
+    diagnostics_init_options%parallel_io_capable = .true.
+#else
+    diagnostics_init_options%parallel_io_capable = .false.
+#endif
+
+    ! Here we check if reals have been promoted to doubles
+    diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
+    ! Check whether this is a Trinity run... enforces calculation of the
+    ! fluxes
+    diagnostics_init_options%is_trinity_run = state%is_trinity_job
+    call init_gs2_diagnostics_new(diagnostics_init_options)
+    ! Create variables and write constants
+    call run_diagnostics(-1,state%exit)
+    ! Write initial values
+    call run_diagnostics(0,state%exit)
+#endif
+
+    call debug_message(state%verb, &
+      'gs2_main::initialize_diagnostics calling init_gs2_diagnostics')
+    call init_gs2_diagnostics (state%list, nstep)
+    call allocate_target_arrays(nwrite,write_nl_flux) ! must be after init_gs2_diagnostics
+    call loop_diagnostics(0,state%exit)
+
   end subroutine initialize_diagnostics
 
-  subroutine evolve_equations(state)
+  subroutine evolve_equations(state, nstep_run)
+    use collisions, only: vnmult
+    use dist_fn_arrays, only: gnew
+    use fields, only: advance
+    use gs2_diagnostics, only: nsave, loop_diagnostics
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: run_diagnostics
+#endif
+    use gs2_reinit, only: reset_time_step
+    use gs2_reinit, only: check_time_step
+    use gs2_save, only: gs2_save_for_restart
+    use gs2_time, only: user_time, user_dt, update_time, write_dt
+    use job_manage, only: time_message, checkstop, checktime
+    use mp, only: proc0
+    use mp, only: scope, subprocs
+    use parameter_scan, only: update_scan_parameter_value
+    use run_parameters, only: reset, fphi, fapar, fbpar, nstep
+    use run_parameters, only: avail_cpu_time, margin_cpu_time
+    use unit_tests, only: ilast_step
     type(gs2_program_state_type), intent(inout) :: state
+    integer :: istep, istatus
+    integer, intent(in) :: nstep_run
+    
+    
+    if (state%nensembles > 1) &
+          call scope (subprocs)
+
+    call time_message(.false.,state%timers%main_loop,' Main Loop')
 
     ! Make sure exit is false before entering
     ! timestep loop
     state%exit = .false.
 
+    if (proc0) write (*,*) 'istep_end', state%istep_end
+
+    ! We run for nstep_run iterations, starting from whatever istep we got
+    ! to in previous calls to this function. Note that calling
+    ! finalize_diagnostics resets state%istep_end
+    do istep = state%istep_end, state%istep_end + nstep_run - 1
+
+       if (istep .gt. nstep) then
+         if (proc0) write (*,*) 'Reached maximum number of steps allowed &
+           & (set by nstep) without restarting diagnostics.'
+         exit
+       end if
+
+
+       if (proc0) call time_message(.false.,state%timers%advance,' Advance time step')
+
+       !Initialise reset to true
+       reset=.true.
+
+       do while(reset)
+          reset=.false. !So that we only do this once unless something triggers a reset
+          call advance (istep)
+
+          !If we've triggered a reset then actually reset
+          if (reset) then
+             ! if called within trinity, do not dump info to screen
+             if (state%is_external_job) then
+                call reset_time_step (istep, state%exit, state%external_job_id)
+             else       
+                call reset_time_step (istep, state%exit)
+             end if
+          end if
+          if(state%exit) exit
+       enddo
+       
+       if (nsave > 0 .and. mod(istep, nsave) == 0) &
+            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+       call update_time
+       if(proc0) call time_message(.false.,state%timers%diagnostics,' Diagnostics')
+       call loop_diagnostics (istep, state%exit)
+       if(state%exit) state%converged = .true.
+#ifdef NEW_DIAG
+       call run_diagnostics (istep, state%exit)
+#endif
+       if(proc0) call time_message(.false.,state%timers%diagnostics,' Diagnostics')
+       if (proc0) call time_message(.false.,state%timers%advance,' Advance time step')
+
+       if(.not.state%exit)then
+
+          !Note this should only trigger a reset for timesteps too small
+          !as timesteps too large are already handled
+          call check_time_step(reset,state%exit)
+          call update_scan_parameter_value(istep, reset, state%exit)
+
+          !If something has triggered a reset then reset here
+          if (reset) then
+             ! if called within trinity, do not dump info to screen
+             if (state%is_external_job) then
+                call reset_time_step (istep, state%exit, state%external_job_id)
+             else       
+                call reset_time_step (istep, state%exit)
+             end if
+          end if
+
+          if ((mod(istep,5) == 0).and.(.not.state%exit)) call checkstop(state%exit)
+          if (.not.state%exit) call checktime(avail_cpu_time,state%exit,margin_cpu_time)
+       endif
+
+       state%istep_end = istep
+
+       if (state%exit) then
+          exit
+       end if
+    end do
+
+    call time_message(.false.,state%timers%main_loop,' Main Loop')
+
+    if (proc0 .and. .not. state%is_external_job) call write_dt
+    
+    if (state%is_external_job) call print_times(state, state%timers)
+
+    ilast_step = state%istep_end
+
   end subroutine evolve_equations
 
-  subroutine finalize_diagnostics
+  subroutine run_eigensolver(state)
+#ifdef WITH_EIG
+    use eigval, only: init_eigval, finish_eigval, time_eigval
+    use eigval, only: BasicSolve
+#endif 
+    use job_manage, only: time_message
+    use mp, only: mp_abort
+    type(gs2_program_state_type), intent(inout) :: state
+#ifdef WITH_EIG
+   !Start timer
+   call time_message(.false.,time_eigval,' Eigensolver')
+
+   !Initialise slepc and the default/input eigensolver parameters
+   call init_eigval
+
+   !Create a solver based on input paramters, use it to solve and
+   !then destroy it.
+   call BasicSolve
+
+   !Tidy up
+   call finish_eigval
+
+   !Stop timer
+   call time_message(.false.,time_eigval,' Eigensolver')
+#else
+   call mp_abort("Require slepc/petsc")
+#endif
+
+  end subroutine run_eigensolver
+
+  subroutine finalize_diagnostics(state)
+    use gs2_diagnostics, only: finish_gs2_diagnostics
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: finish_gs2_diagnostics_new 
+#endif
+    use job_manage, only: time_message
+    use mp, only: proc0
+    use parameter_scan, only: deallocate_target_arrays
+    type(gs2_program_state_type), intent(inout) :: state
+
+    if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+
+#ifdef NEW_DIAG
+    call finish_gs2_diagnostics_new 
+#endif
+    call finish_gs2_diagnostics (state%istep_end)
+
+    call deallocate_target_arrays
+
+    state%istep_end = 1
+
+    if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
   end subroutine finalize_diagnostics
 
   subroutine finalize_equations(state)
@@ -273,11 +554,12 @@ contains
     use file_utils, only: finish_file_utils
     use hyper, only: finish_hyper
     use init_g, only: finish_init_g
+    use job_manage, only: time_message
     use kt_grids, only: finish_kt_grids
     use le_grids, only: finish_le_grids
-    use parameter_scan, only: finish_parameter_scan
     use mp, only: proc0
     use nonlinear_terms, only: finish_nonlinear_terms
+    use parameter_scan, only: finish_parameter_scan
     use run_parameters, only: finish_run_parameters
     use species, only: finish_species
     use theta_grid, only: finish_theta_grid
@@ -286,6 +568,9 @@ contains
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
+    if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+
+    call deallocate_outputs(state)
     call finish_antenna
     call finish_collisions
     call finish_dist_fn
@@ -308,6 +593,9 @@ contains
     call finish_transforms
     call finish_save
     call finish_theta_grid
+
+    if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+
   end subroutine finalize_equations
 
   subroutine finalize_gs2(state)
@@ -355,6 +643,71 @@ contains
 
   subroutine override_profiles
   end subroutine override_profiles
+  
+  subroutine calculate_outputs(state)
+    use gs2_diagnostics, only: start_time
+    use gs2_diagnostics, only: pflux_avg, qflux_avg, heat_avg, vflux_avg !, start_time, nwrite, write_nl_flux
+    use gs2_diagnostics, only: diffusivity
+    use gs2_diagnostics, only: ensemble_average
+    use gs2_time, only: user_time
+    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
+    use run_parameters, only: trinity_linear_fluxes
+    use species, only: nspec, spec
+    use species, only: ions, electrons, impurity
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+    real :: time_interval
+    real :: diff
+    integer :: is
+
+    time_interval = user_time-start_time
+      write (*,*) 'GETTING FLUXES'
+
+    if (state%nensembles > 1) &
+      call ensemble_average (state%nensembles, time_interval)
+
+      
+   ! Use simple gamma / k^2 estimates for transport in the 
+   ! linear case. This is for testing Trinity
+   if (trinity_linear_fluxes .and. &
+         nonlinear_mode_switch .eq. nonlinear_mode_none) then
+     diff = diffusivity()
+     do is = 1,nspec
+       ! Q = n chi grad T = n (gamma / k^2) dT / dr
+       ! = dens  n_r (gamma_N v_thr / k_N**2 rho_r a) dT / drho drho/dr
+       ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) T a / L_T drho/dr
+       ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) temp T_r tprim drho/dr_N/a
+       ! Q / (n_r  v_r T_r rho_r**2/a**2) 
+       ! = dens (gamma_N / k_N**2) temp tprim grho
+       !   
+       ! grho factored to diffusivity in diagnostics
+       qflux_avg(is) =  diff * spec(is)%dens * spec(is)%temp * spec(is)%tprim 
+       pflux_avg(is) =  diff * spec(is)%dens**2.0 * spec(is)%fprim 
+       heat_avg = 0.0
+     end do
+     !if (present(converged)) then
+     !end if
+   end if
+
+   if (size(state%outputs%pflux) > 1) then
+      state%outputs%pflux(1) = pflux_avg(ions)/time_interval
+      state%outputs%qflux(1) = qflux_avg(ions)/time_interval
+      state%outputs%heat(1) = heat_avg(ions)/time_interval
+      state%outputs%pflux(2) = pflux_avg(electrons)/time_interval
+      state%outputs%qflux(2) = qflux_avg(electrons)/time_interval
+      state%outputs%heat(2) = heat_avg(electrons)/time_interval
+      if (size(state%outputs%pflux) > 2) then
+         state%outputs%pflux(3) = pflux_avg(impurity)/time_interval
+         state%outputs%qflux(3) = qflux_avg(impurity)/time_interval
+         state%outputs%heat(3) = heat_avg(impurity)/time_interval
+      end if
+   else
+      state%outputs%pflux = pflux_avg/time_interval
+      state%outputs%qflux = qflux_avg/time_interval
+      state%outputs%heat = heat_avg/time_interval
+   end if
+   state%outputs%vflux = vflux_avg(1)/time_interval
+  end subroutine calculate_outputs
 
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -415,6 +768,19 @@ contains
     end if
   end subroutine print_times
 
+  subroutine allocate_outputs(state)
+    use species, only: nspec
+    type(gs2_program_state_type), intent(inout) :: state
+    allocate(state%outputs%pflux(nspec))
+    allocate(state%outputs%qflux(nspec))
+    allocate(state%outputs%heat(nspec))
+  end subroutine allocate_outputs
+
+  subroutine deallocate_outputs(state)
+    type(gs2_program_state_type), intent(inout) :: state
+    deallocate(state%outputs%pflux)
+    deallocate(state%outputs%qflux)
+  end subroutine deallocate_outputs
 
 
 
@@ -448,45 +814,11 @@ contains
 
 subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
      pflux, qflux, vflux, heat, dvdrho, grho, trinity_reset, converged)
+   use job_manage, only: trin_reset
 
-    use job_manage, only: checkstop, job_fork, checktime, time_message, trin_reset, trin_restart, trin_job
-    use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
-    use mp, only: max_reduce, min_reduce, sum_reduce, mp_abort
-    use file_utils, only: init_file_utils, run_name!, finish_file_utils
-    use fields, only: init_fields, advance
-    use species, only: ions, electrons, impurity, spec, nspec
-    use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
-    use parameter_scan, only: init_parameter_scan, allocate_target_arrays
-    use gs2_diagnostics, only: nsave, pflux_avg, qflux_avg, heat_avg, vflux_avg, start_time, nwrite, write_nl_flux
-    use run_parameters, only: nstep, fphi, fapar, fbpar, avail_cpu_time, margin_cpu_time
-    use run_parameters, only: trinity_linear_fluxes, do_eigsolve, reset
-    use dist_fn_arrays, only: gnew
-    use gs2_save, only: gs2_save_for_restart
-    use gs2_diagnostics, only: loop_diagnostics, ensemble_average
-    use gs2_diagnostics, only: diffusivity
-#ifdef NEW_DIAG
-    use gs2_diagnostics_new, only: run_diagnostics, init_gs2_diagnostics_new
-    use gs2_diagnostics_new, only: finish_gs2_diagnostics_new, diagnostics_init_options_type
-#endif
-    use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
-    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
-    use gs2_time, only: update_time, write_dt, init_tstart
-    use gs2_time, only: user_time, user_dt
-    use init_g, only: tstart
-    use collisions, only: vnmult
-    use geometry, only: surfarea, dvdrhon
-    use redistribute, only: time_redist, using_measure_scatter
-    use fields_arrays, only: time_field
-    use parameter_scan, only: update_scan_parameter_value
+   
+   use job_manage, only: trin_restart, trin_reset
     use unit_tests, only: functional_test_flag, ilast_step
-    use unit_tests,only: should_print
-    use unit_tests, only: set_job_id
-    use runtime_tests, only: verbosity
-    use mp, only: broadcast, iproc
-#ifdef WITH_EIG
-    use eigval, only: init_eigval, finish_eigval, time_eigval
-    use eigval, only: BasicSolve
-#endif
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
@@ -497,32 +829,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     logical, intent (in), optional :: trinity_reset
     logical, intent (out), optional :: converged
 
-    real :: time_init(2) = 0., time_advance(2) = 0., time_finish(2) = 0.
-    real :: time_total(2) = 0., time_diagnostics(2)=0.
-    real :: time_interval
-    real :: time_main_loop(2)
-#ifdef NEW_DIAG
-    real :: precision_test
-#endif
-    real :: diff
-    integer :: istep = 0, istatus, istep_end
-    integer :: is
-    logical :: exit, list
     logical :: first_time = .true.
-    logical :: nofin= .false.
     logical :: debug
-!    logical, optional, intent(in) :: nofinish
-    character (500), target :: cbuff
 
-#ifdef NEW_DIAG
-    type(diagnostics_init_options_type) :: diagnostics_init_options
-#endif
-
-    time_main_loop(1) = 0.
-    time_main_loop(2) = 0.
-    exit=.false.
-
-    debug = (verbosity() .gt. 2)
+    !debug = (verbosity() .gt. 2)
 
 
 !
@@ -534,372 +844,101 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
      
 
 ! HJL tests on Trinity optionals for load balancing
-    trin_job = -1
-    if(present(job_id)) trin_job = job_id + 1
+    old_iface_state%external_job_id = -1
+    if(present(job_id)) then
+      old_iface_state%external_job_id = job_id + 1
+      old_iface_state%is_trinity_job = .true.
+      old_iface_state%is_external_job = .true.
+    end if
     if(present(trinity_reset)) then
-       converged = .false.
+       old_iface_state%converged = .false.
        trin_reset = trinity_reset
        first_time = .true.
-       if (debug) write (*,*) 'gs2_main::run_gs2 set first_time = .true., jid=', trin_job
+       !if (debug) write (*,*) 'gs2_main::run_gs2 set first_time = .true., jid=', &
+         !old_iface_state%external_job_id
     endif
-
-#ifdef NEW_DIAG
-    diagnostics_init_options%initialized = (.not. first_time)
-#endif
-
-    if (.not. first_time) then
-      call broadcast(trin_job)
-      call set_job_id(trin_job)
-      debug = should_print(3)
+    if (present(filename)) then
+      old_iface_state%run_name_external = .true.
+      old_iface_state%run_name = filename
     end if
-    if (first_time) then
-      if (debug) write (*,*) 'gs2_main::run_gs2 starting initialization', iproc, trin_job
-
-       ! <doc> Initialize message passing </doc>
-       if (present(mpi_comm)) then
-          call init_mp (mpi_comm)
-       else
-          call init_mp
-       end if
-       call broadcast(trin_job)
-       call set_job_id(trin_job)
-       debug = should_print(3)
-       write (*,*) 'gs2_main::run_gs2 initialized mp, nproc= ', nproc, iproc, trin_job
-       call checktime(avail_cpu_time,exit) ! <doc> Initialize timer </doc>
-       write (*,*) 'gs2_main::run_gs2 called checktime, avail_cpu_time = ', avail_cpu_time, iproc, trin_job
-       
-       ! <doc> Report # of processors being used </doc>
-       if (proc0) then
-          if (nproc == 1) then
-             if (.not. nofin) then
-                write(*,*) 'Running on ',nproc,' processor'
-             end if
-          else
-             if (.not. nofin) then
-                if(present(job_id)) then
-                   write(*,*) 'Job ',trin_job,'Running on ',nproc,' processors'
-                else
-                   write(*,*) 'Running on ',nproc,' processors'
-                endif
-             end if
-          end if
-
-          write (*,*) 
-          ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
-          !  whether we are doing a [[Trinity]] run or a list of runs. </doc>
-          ! <doc>If it is a [[Trinity]] run then [[filename]] (the name of the input file?) is passed to  init_file_utils</doc>
-          ! <doc> Figure out run name or get list of jobs </doc>
-          if (present(filename)) then
-             call init_file_utils (list, trin_run=.true., name=filename, n_ensembles=nensembles)
-          else
-             call init_file_utils (list, name="gs")
-          end if
-          if (debug) write (*,*) 'gs2_main::run_gs2 initialized file_utils', iproc, trin_job
-       end if
-       
-       call broadcast (list)
-       if (debug) write (*,*) 'gs2_main::run_gs2 broadcasted list', iproc, trin_job
-       
-       ! <doc> If given a list of jobs, fork </doc>
-       if (list) then
-          call job_fork
-          if (debug) write (*,*) 'gs2_main::run_gs2 called job fork', trin_job
-       else if (present(nensembles)) then
-          if (nensembles > 1) call job_fork (n_ensembles=nensembles)
-       end if
-       if (proc0) call time_message(.false.,time_total,' Total')
-
-       if (proc0) then
-          call time_message(.false., time_init,' Initialization')
-          cbuff = trim(run_name)
-       end if
-       
-       !write (*,*) 'gs2_main::run_gs2 before broadcast, run_name = ', cbuff, iproc, trin_job
-       call broadcast (cbuff)
-       if (.not. proc0) run_name => cbuff
-       if (debug) write (*,*) 'gs2_main::run_gs2 run_name = ', run_name, iproc, trin_job
-       call init_parameter_scan
-       !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
-       using_measure_scatter=.false.
-       if (debug) write (*,*) 'gs2_main::run_gs2 calling init_fields', trin_job
-       call init_fields
-       if (debug) write (*,*) 'gs2_main::run_gs2 calling init_gs2_diagnostics', trin_job
-       call init_gs2_diagnostics (list, nstep)
-
-#ifdef NEW_DIAG
-#ifdef NETCDF_PARALLEL
-       diagnostics_init_options%parallel_io_capable = .true.
-#else
-       diagnostics_init_options%parallel_io_capable = .false.
-#endif
-
-       ! Here we check if reals have been promoted to doubles
-       diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
-       ! Check whether this is a Trinity run... enforces calculation of the
-       ! fluxes
-       diagnostics_init_options%is_trinity_run = present(mpi_comm)
-
-       !if (first_time) diagnostics_init_options%initialized = .false.
-       !write (*,*) 'diagnostics_init_options%initialized', diagnostics_init_options%initialized
-       if (.not. diagnostics_init_options%initialized) then
-         call init_gs2_diagnostics_new(diagnostics_init_options)
-       end if
-#endif
-
-       call allocate_target_arrays(nwrite,write_nl_flux) ! must be after init_gs2_diagnostics
-       call init_tstart (tstart)   ! tstart is in user units 
-       
-       if (present(dvdrho)) then
-          if (proc0) then
-             dvdrho = dvdrhon
-             grho = surfarea/dvdrhon
-          end if
-          call broadcast (dvdrho)
-          call broadcast (grho)
-       end if
-       
-       if (proc0) call time_message(.false.,time_init,' Initialization')
-       
-#ifdef NEW_DIAG
-       ! Create variables
-       if (.not. diagnostics_init_options%initialized) then
-         call run_diagnostics(-1,exit)
-         !diagnostics_init_options%initialized = .true.
-       end if
-       ! Write initial values
-       call run_diagnostics(0,exit)
-#endif
-       first_time = .false.
-
-       ! When trinity starts a new step it needs to reset after initialisation
-       if(present(trinity_reset) .and. trin_reset) return
-
-    else if (present(nensembles)) then
-       if (nensembles > 1) then
-          call scope (subprocs)
-       end if
-    endif !firstime
-
-    istep_end = nstep
-    ilast_step = nstep
-    
-    call loop_diagnostics(0,exit)
-
+    if (present(mpi_comm)) then
+      old_iface_state%mp_comm_external = .true.
+      old_iface_state%mp_comm = mpi_comm
+    end if
+    if (present(nensembles)) then
+      old_iface_state%nensembles = nensembles
+    end if
     if(present(trinity_reset)) trin_restart = .true. ! All trinity runs are restarted except the first
 
+    if (first_time) then
+      call initialize_wall_clock_timer
+      call initialize_gs2(old_iface_state)
+      call initialize_equations(old_iface_state)
+      call initialize_diagnostics(old_iface_state)
+      first_time = .false.
+    endif !firstime
 
-    if (present(pflux)) call write_trinity_parameters
 
-    call time_message(.false.,time_main_loop,' Main Loop')
-if(do_eigsolve)then
-#ifdef WITH_EIG
-   !Start timer
-   call time_message(.false.,time_eigval,' Eigensolver')
-
-   !Initialise slepc and the default/input eigensolver parameters
-   call init_eigval
-
-   !Create a solver based on input paramters, use it to solve and
-   !then destroy it.
-   call BasicSolve
-
-   !Tidy up
-   call finish_eigval
-
-   !Stop timer
-   call time_message(.false.,time_eigval,' Eigensolver')
-#else
-   call mp_abort("Require slepc/petsc")
-#endif
-else
-    do istep = 1, nstep
-
-       if (proc0) call time_message(.false.,time_advance,' Advance time step')
-
-       !Initialise reset to true
-       reset=.true.
-
-       do while(reset)
-          reset=.false. !So that we only do this once unless something triggers a reset
-          call advance (istep)
-
-          !If we've triggered a reset then actually reset
-          if (reset) then
-             ! if called within trinity, do not dump info to screen
-             if (present(job_id)) then
-                call reset_time_step (istep, exit, job_id)
-             else       
-                call reset_time_step (istep, exit)
-             end if
-          end if
-          if(exit) exit
-       enddo
-       
-       if (nsave > 0 .and. mod(istep, nsave) == 0) &
-            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
-       call update_time
-       if(proc0) call time_message(.false.,time_diagnostics,' Diagnostics')
-       call loop_diagnostics (istep, exit)
-       if(exit .and. present(converged)) converged = .true.
-#ifdef NEW_DIAG
-       call run_diagnostics (istep, exit)
-#endif
-       if(proc0) call time_message(.false.,time_diagnostics,' Diagnostics')
-       if (proc0) call time_message(.false.,time_advance,' Advance time step')
-
-       if(.not.exit)then
-
-          !Note this should only trigger a reset for timesteps too small
-          !as timesteps too large are already handled
-          call check_time_step(reset,exit)
-          call update_scan_parameter_value(istep, reset, exit)
-
-          !If something has triggered a reset then reset here
-          if (reset) then
-             ! if called within trinity, do not dump info to screen
-             if (present(job_id)) then
-                call reset_time_step (istep, exit, job_id)
-             else       
-                call reset_time_step (istep, exit)
-             end if
-          end if
-
-          if ((mod(istep,5) == 0).and.(.not.exit)) call checkstop(exit)
-          if (.not.exit) call checktime(avail_cpu_time,exit,margin_cpu_time)
-       endif
-
-       if (exit) then
-          istep_end = istep
-          ilast_step = istep
-          exit
-       end if
-    end do
-endif
-    call time_message(.false.,time_main_loop,' Main Loop')
-
-    if (proc0) call time_message(.false.,time_finish,' Finished run')
-
-    if (proc0 .and. .not. present(job_id)) call write_dt
-
-    time_interval = user_time-start_time
-
-    if (present(nensembles)) then
-       if (nensembles > 1) call ensemble_average (nensembles, time_interval)
-    end if
-
-    if (present(pflux)) then
-      
-       ! Use simple gamma / k^2 estimates for transport in the 
-       ! linear case. This is for testing Trinity
-       if (trinity_linear_fluxes .and. &
-             nonlinear_mode_switch .eq. nonlinear_mode_none) then
-         diff = diffusivity()
-         do is = 1,nspec
-           ! Q = n chi grad T = n (gamma / k^2) dT / dr
-           ! = dens  n_r (gamma_N v_thr / k_N**2 rho_r a) dT / drho drho/dr
-           ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) T a / L_T drho/dr
-           ! = dens  n_r (gamma_N v_thr rho_r **2 / k_N**2 a) temp T_r tprim drho/dr_N/a
-           ! Q / (n_r  v_r T_r rho_r**2/a**2) 
-           ! = dens (gamma_N / k_N**2) temp tprim grho
-           !   
-           ! grho factored to diffusivity in diagnostics
-           qflux_avg(is) =  diff * spec(is)%dens * spec(is)%temp * spec(is)%tprim 
-           pflux_avg(is) =  diff * spec(is)%dens**2.0 * spec(is)%fprim 
-           heat_avg = 0.0
-         end do
-         if (present(converged)) then
-         end if
-       end if
-       if (size(pflux) > 1) then
-          pflux(1) = pflux_avg(ions)/time_interval
-          qflux(1) = qflux_avg(ions)/time_interval
-          heat(1) = heat_avg(ions)/time_interval
-          pflux(2) = pflux_avg(electrons)/time_interval
-          qflux(2) = qflux_avg(electrons)/time_interval
-          heat(2) = heat_avg(electrons)/time_interval
-          if (size(pflux) > 2) then
-             pflux(3) = pflux_avg(impurity)/time_interval
-             qflux(3) = qflux_avg(impurity)/time_interval
-             heat(3) = heat_avg(impurity)/time_interval
-          end if
-       else
-          pflux = pflux_avg/time_interval
-          qflux = qflux_avg/time_interval
-          heat = heat_avg/time_interval
-       end if
-       vflux = vflux_avg(1)/time_interval
+    if(old_iface_state%do_eigsolve)then
+      call run_eigensolver(old_iface_state)
     else
-#ifdef NEW_DIAG
-       if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics_new 
-#endif
-       if (.not.nofin .and. .not. functional_test_flag ) call finish_gs2_diagnostics (istep_end)
-       if (.not.nofin .and. .not. functional_test_flag) call finish_gs2
+      call evolve_equations(old_iface_state, old_iface_state%nstep)
+    endif
+
+    if (present(converged)) converged = old_iface_state%converged
+
+
+    if (present(pflux) .or. present(dvdrho) .or. present(grho)) then
+      call calculate_outputs(old_iface_state)
+    end if
+    if (present(dvdrho)) dvdrho = old_iface_state%outputs%dvdrho
+    if (present(grho)) grho = old_iface_state%outputs%grho
+    if (present(pflux)) then
+      write (*,*) 'SETTING FLUXES'
+      pflux = old_iface_state%outputs%pflux
+      qflux = old_iface_state%outputs%qflux
+      vflux = old_iface_state%outputs%vflux
+      heat = old_iface_state%outputs%heat
+    else
+       if (.not. functional_test_flag ) &
+         call finalize_diagnostics(old_iface_state) 
     end if
 
-    if (proc0) call time_message(.false.,time_finish,' Finished run')
-
-    if (proc0) call time_message(.false.,time_total,' Total')
-
-    if (proc0) then
-       if (present(job_id)) then
-          print '(/,'' Job ID:'', i4,'', total from timer is:'', 0pf9.2,'' min'',/)', &
-               job_id+1, time_total(1)/60.
-       else if (.not. nofin) then
-!    if (proc0 .and. .not. nofin) then
-
-          print '(/,'' Initialization'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-#ifdef WITH_EIG
-               &'' Eigensolver'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-#endif
-               &'' Advance steps'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-               &''(redistribute'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
-               &''(field solve'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
-               &''(diagnostics'',T25,0pf9.3,'' min'',T40,2pf5.1,'' %)'',/, &
-               &'' Re-initialize'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/, &
-               &'' Finishing'',T25,0pf8.2,'' min'',T40,2pf5.1,'' %'',/,  &
-               &'' total from timer is:'', 0pf9.2,'' min'',/)', &
-               time_init(1)/60.,time_init(1)/time_total(1), &
-#ifdef WITH_EIG
-               time_eigval(1)/60.,time_eigval(1)/time_total(1), &
-#endif
-               time_advance(1)/60.,time_advance(1)/time_total(1), &
-               time_redist(1)/60.,time_redist(1)/time_total(1), &
-               time_field(1)/60.,time_field(1)/time_total(1), &
-               time_diagnostics(1)/60.,time_diagnostics(1)/time_total(1), &
-               time_reinit(1)/60.,time_reinit(1)/time_total(1), &
-               time_finish(1)/60.,time_finish(1)/time_total(1),time_total(1)/60.
-       endif
+    if (.not. present(mpi_comm) .and. .not. functional_test_flag) then 
+      call finalize_equations(old_iface_state)
+      call finalize_gs2(old_iface_state)
     end if
-
-    if (.not. present(mpi_comm) .and. .not. nofin) call finish_mp
     
   end subroutine run_gs2
   
 ! HJL <
   subroutine trin_finish_gs2
 
-    use gs2_layouts, only: finish_layouts
-    use gs2_transforms, only: finish_transforms
-    use gs2_diagnostics, only: finish_gs2_diagnostics
-    use gs2_save, only: gs2_save_for_restart, finish_save
-    use theta_grid, only: finish_theta_grid
-    use unit_tests, only: ilast_step
-#ifdef NEW_DIAG
-    use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
-#endif
+    call finalize_diagnostics(old_iface_state)
+    call finalize_equations(old_iface_state)
+    call finalize_gs2(old_iface_state)
+    !use gs2_layouts, only: finish_layouts
+    !use gs2_transforms, only: finish_transforms
+    !use gs2_diagnostics, only: finish_gs2_diagnostics
+    !use gs2_save, only: gs2_save_for_restart, finish_save
+    !use theta_grid, only: finish_theta_grid
+    !use unit_tests, only: ilast_step
+!#ifdef NEW_DIAG
+    !use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
+!#endif
     
-    call finish_gs2_diagnostics (ilast_step)
-#ifdef NEW_DIAG
-    call finish_gs2_diagnostics_new
-#endif
-    call finish_gs2
-! HJL Species won't change during a run so shouldn't need this    
-!    call finish_trin_species
+    !call finish_gs2_diagnostics (ilast_step)
+!#ifdef NEW_DIAG
+    !call finish_gs2_diagnostics_new
+!#endif
+    !call finish_gs2
+!! HJL Species won't change during a run so shouldn't need this    
+!!    call finish_trin_species
 
-    call finish_layouts
-    call finish_transforms
-    call finish_save
-    call finish_theta_grid
+    !call finish_layouts
+    !call finish_transforms
+    !call finish_save
+    !call finish_theta_grid
 
   end subroutine trin_finish_gs2
 ! > HJL
@@ -1025,8 +1064,11 @@ endif
 
     call reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
+
     ! Antenna should be reset because it depends on species paramters
     call reinit_gk_and_field_equations(reset_antenna=.true.)
+
+    old_iface_state%istep_end = 1
 
     if (nensembles > 1) call scope (allprocs)
 

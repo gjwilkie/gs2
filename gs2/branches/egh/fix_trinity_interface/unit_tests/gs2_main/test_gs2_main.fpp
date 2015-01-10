@@ -37,6 +37,28 @@ program test_gs2_main
   call finalize_equations(state)
   call finalize_gs2(state)
 
+  !program gs2
+    !type(gs2_program_state_type) :: state
+    call initialize_gs2(state)
+    call initialize_equations(state)
+    call initialize_diagnostics(state)
+    !if (state%eigsolve) then 
+      !call solve_eigenproblem
+    !else
+    call evolve_equations(state, state%nstep/2)
+    call evolve_equations(state, state%nstep/2)
+    ! This call should do nothing and print a warning
+    call evolve_equations(state, state%nstep/2)
+    call evolve_equations(state, state%nstep/2)
+
+    call calculate_outputs(state)
+
+
+    call finalize_diagnostics(state)
+    call finalize_equations(state)
+    call finalize_gs2(state)
+  !end program gs2
+
 
     !call init_mp
 
