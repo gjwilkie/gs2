@@ -51,14 +51,41 @@
 program gs2
 
 ! make_lib is a compiler flag used if running with 
-! trinity (coupled flux tube code)
+! an old version of trinity (coupled flux tube code)
+! MAKE_LIB is now deprecated.
 
 # ifndef MAKE_LIB 
-  use gs2_main, only: run_gs2
-# endif
+  use gs2_main, only: gs2_program_state_type
+  use gs2_main, only: initialize_gs2
+  use gs2_main, only: initialize_equations
+  use gs2_main, only: initialize_diagnostics
+  use gs2_main, only: evolve_equations
+  use gs2_main, only: run_eigensolver
+  use gs2_main, only: finalize_diagnostics
+  use gs2_main, only: finalize_equations
+  use gs2_main, only: finalize_gs2
 
   implicit none
+  type(gs2_program_state_type) :: state
+  call initialize_gs2(state)
+  call initialize_equations(state)
+  call initialize_diagnostics(state)
+  if (state%do_eigsolve) then 
+    call run_eigensolver(state)
+  else
+    call evolve_equations(state, state%nstep)
+  end if
+  call finalize_diagnostics(state)
+  call finalize_equations(state)
+  call finalize_gs2(state)
 
+# else
+
+  implicit none
   call run_gs2
+
+# endif
+
+
 
 end program gs2
