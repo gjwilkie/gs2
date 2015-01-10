@@ -117,7 +117,7 @@
  fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
  delt = 0.05 ! Time step
- nstep = 10000 ! Maximum number of timesteps
+ nstep = 400 ! Maximum number of timesteps
  avail_cpu_time = 302
 /
 
