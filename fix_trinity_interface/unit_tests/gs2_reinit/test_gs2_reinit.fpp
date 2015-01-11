@@ -23,7 +23,7 @@ program test_gs2_reinit
   !use checks_mod
   !call test_gs2('Linear CBC (unit test) to test new diagnostics', checks)
     use gs2_reinit, only: reset_time_step
-    use gs2_reinit, only: save_fields_and_dist_fn
+    use gs2_init, only: save_fields_and_dist_fn
     use gs2_reinit, only: reinit_gk_and_field_equations
     use gs2_reinit, only: gs2_reinit_unit_test_set_in_memory
     use gs2_main, only: run_gs2, finish_gs2

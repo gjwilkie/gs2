@@ -83,6 +83,7 @@ dump_response_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_heating.o \
+	 gs2_init.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -99,7 +100,6 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -206,7 +206,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -341,7 +340,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -421,6 +419,7 @@ ingen_mod = \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
 	 gs2_heating.o \
+	 gs2_init.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
@@ -439,7 +438,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -735,6 +733,30 @@ dist_fn_arrays.o: \
 	 mp.o \
 	 species.o \
 	 theta_grid.o 
+dist_fn_back.o: \
+	 antenna.o \
+	 collisions.o \
+	 constants.o \
+	 dist_fn_arrays.o \
+	 file_utils.o \
+	 geometry.o \
+	 gs2_heating.o \
+	 gs2_layouts.o \
+	 gs2_time.o \
+	 gs2_transforms.o \
+	 hyper.o \
+	 kt_grids.o \
+	 le_derivatives.o \
+	 le_grids.o \
+	 mp.o \
+	 nonlinear_terms.o \
+	 prof.o \
+	 redistribute.o \
+	 run_parameters.o \
+	 species.o \
+	 spfunc.o \
+	 text_options.o \
+	 theta_grid.o 
 drive.o: \
 	 regression.o 
 dump_grids.o: \
@@ -952,7 +974,26 @@ gs2_heating.o: \
 	 mp.o \
 	 species.o 
 gs2_init.o: \
-	 fields.o 
+	 antenna.o \
+	 collisions.o \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
+	 fields.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_layouts.o \
+	 gs2_save.o \
+	 gs2_time.o \
+	 hyper.o \
+	 init_g.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 nonlinear_terms.o \
+	 run_parameters.o \
+	 species.o \
+	 theta_grid.o \
+	 unit_tests.o 
 gs2_io.o: \
 	 constants.o \
 	 convert.o \
@@ -987,7 +1028,6 @@ gs2_main.o: \
 	 gs2_diagnostics.o \
 	 gs2_diagnostics_new.o \
 	 gs2_init.o \
-	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -1015,16 +1055,13 @@ gs2_reinit.o: \
 	 fields.o \
 	 fields_arrays.o \
 	 file_utils.o \
-	 gs2_layouts.o \
-	 gs2_save.o \
+	 gs2_init.o \
 	 gs2_time.o \
 	 init_g.o \
 	 job_manage.o \
-	 kt_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
-	 run_parameters.o \
-	 theta_grid.o 
+	 run_parameters.o 
 gs2_save.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -1173,7 +1210,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1214,8 +1250,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

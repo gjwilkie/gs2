@@ -118,17 +118,21 @@ contains
     use fields_implicit, only: init_fields_implicit
     use fields_test, only: init_fields_test
     use fields_local, only: init_fields_local
+    use unit_tests, only: debug_message
     implicit none
+    integer, parameter :: verb=3
     logical, parameter :: debug = .false.
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       if (debug) write(6,*) "init_fields: init_fields_implicit"
+       call debug_message(verb, &
+         "fields::fields_init_response init_fields_implicit")
        call init_fields_implicit
     case (fieldopt_test)
-       if (debug) write(6,*) "init_fields: init_fields_test"
+       call debug_message(verb, "fields::fields_init_response init_fields_test")
        call init_fields_test
     case (fieldopt_local)
-       if (debug) write(6,*) "init_fields: init_fields_local"
+       call debug_message(verb, &
+         "fields::fields_init_response init_fields_local")
        call init_fields_local
     case default
        !Silently ignore unsupported field options

@@ -28,6 +28,18 @@ module gs2_init
   public :: init_level_type
   public :: init_level_list
   public :: init
+  !> Save the current state of the fields and 
+  !! distribution function, either to a file 
+  !! or to a temporary array, depending on the
+  !! value of in_memory. (NB if there is 
+  !! sufficient memory to allocate a temporary
+  !! array, in_memory will be overriden to 
+  !! false).
+  public :: save_fields_and_dist_fn
+  public :: load_saved_field_values
+
+  public :: in_memory
+
   private
 
   !> A type for labelling the different init
@@ -36,25 +48,26 @@ module gs2_init
     !> The init_level reaches gs2
     !! when initialize_gs2 has been called.
     integer :: gs2 = 1
-    integer :: theta_grid = 2
-    integer :: kt_grids = 3
-    integer :: gs2_layouts = 4
+    integer :: gs2_layouts = 2
+    integer :: theta_grid = 3
+    integer :: kt_grids = 4
     integer :: gs2_save = 5
     integer :: run_parameters = 6
     integer :: hyper = 7
     integer :: init_g = 8
     integer :: species = 9
     integer :: le_grids = 10
-    integer :: dist_fn_layouts = 11
-    integer :: nonlinear_terms = 12
-    integer :: antenna = 13
-    integer :: dist_fn_parameters = 14
+    integer :: antenna = 11
+    integer :: dist_fn_parameters = 12
+    integer :: dist_fn_layouts = 13
+    integer :: nonlinear_terms = 14
     integer :: dist_fn_arrays = 15
     integer :: dist_fn_level_1 = 16
     integer :: dist_fn_level_2 = 17
-    integer :: dist_fn_level_3 = 18
-    integer :: collisions = 19
-    integer :: fields = 20
+    integer :: override_timestep = 18
+    integer :: dist_fn_level_3 = 19
+    integer :: collisions = 20
+    integer :: fields = 21
   end type init_level_list_type
 
   type(init_level_list_type) :: init_level_list
@@ -68,6 +81,10 @@ module gs2_init
     !> A list of possible init levels
     !type(init_level_list_type) :: levels
   end type init_level_type
+
+  complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
+  logical :: fields_and_dist_fn_saved = .false.
+  logical :: in_memory = .false.  
 contains
   !> Initialize gs2 to the level of target_level.
   !! The init_level_type current contains info
@@ -94,22 +111,23 @@ contains
       return
     else
       if (up) then 
+        if (current%level .lt. init_level_list%gs2_layouts) call gs2_layouts
         if (current%level .lt. init_level_list%theta_grid) call theta_grid
         if (current%level .lt. init_level_list%kt_grids) call kt_grids
-        if (current%level .lt. init_level_list%gs2_layouts) call gs2_layouts
         if (current%level .lt. init_level_list%gs2_save) call gs2_save
         if (current%level .lt. init_level_list%run_parameters) call run_parameters
         if (current%level .lt. init_level_list%hyper) call hyper
         if (current%level .lt. init_level_list%init_g) call init_g
         if (current%level .lt. init_level_list%species) call species
         if (current%level .lt. init_level_list%le_grids) call le_grids
-        if (current%level .lt. init_level_list%dist_fn_layouts) call dist_fn_layouts
-        if (current%level .lt. init_level_list%nonlinear_terms) call nonlinear_terms
         if (current%level .lt. init_level_list%antenna) call antenna
         if (current%level .lt. init_level_list%dist_fn_parameters) call dist_fn_parameters
+        if (current%level .lt. init_level_list%dist_fn_layouts) call dist_fn_layouts
+        if (current%level .lt. init_level_list%nonlinear_terms) call nonlinear_terms
         if (current%level .lt. init_level_list%dist_fn_arrays) call dist_fn_arrays
         if (current%level .lt. init_level_list%dist_fn_level_1) call dist_fn_level_1
         if (current%level .lt. init_level_list%dist_fn_level_2) call dist_fn_level_2
+        if (current%level .lt. init_level_list%override_timestep) call override_timestep
         if (current%level .lt. init_level_list%dist_fn_level_3) call dist_fn_level_3
         if (current%level .lt. init_level_list%collisions) call collisions
         if (current%level .lt. init_level_list%fields) call fields
@@ -117,25 +135,42 @@ contains
         if (current%level .le. init_level_list%fields) call fields
         if (current%level .le. init_level_list%collisions) call collisions
         if (current%level .le. init_level_list%dist_fn_level_3) call dist_fn_level_3
+        if (current%level .le. init_level_list%override_timestep) call override_timestep
         if (current%level .le. init_level_list%dist_fn_level_2) call dist_fn_level_2
         if (current%level .le. init_level_list%dist_fn_level_1) call dist_fn_level_1
         if (current%level .le. init_level_list%dist_fn_arrays) call dist_fn_arrays
-        if (current%level .le. init_level_list%dist_fn_parameters) call dist_fn_parameters
-        if (current%level .le. init_level_list%antenna) call antenna
         if (current%level .le. init_level_list%nonlinear_terms) call nonlinear_terms
         if (current%level .le. init_level_list%dist_fn_layouts) call dist_fn_layouts
+        if (current%level .le. init_level_list%dist_fn_parameters) call dist_fn_parameters
+        if (current%level .le. init_level_list%antenna) call antenna
         if (current%level .le. init_level_list%le_grids) call le_grids
         if (current%level .le. init_level_list%species) call species
         if (current%level .le. init_level_list%init_g) call init_g
         if (current%level .le. init_level_list%hyper) call hyper
         if (current%level .le. init_level_list%run_parameters) call run_parameters
         if (current%level .le. init_level_list%gs2_save) call gs2_save
-        if (current%level .le. init_level_list%gs2_layouts) call gs2_layouts
         if (current%level .le. init_level_list%kt_grids) call kt_grids
         if (current%level .le. init_level_list%theta_grid) call theta_grid
+        if (current%level .le. init_level_list%gs2_layouts) call gs2_layouts
       end if
     end if
     contains
+      subroutine gs2_layouts
+        use unit_tests, only: debug_message
+        use gs2_layouts, only: init_gs2_layouts
+        use gs2_layouts, only: finish_gs2_layouts
+        if (up) call init_gs2_layouts
+        if (down) call finish_gs2_layouts
+       
+        if (up) then
+          call debug_message(2, 'gs2_init::init reached init level... gs2_layouts   ')
+          current%level = 2
+        else  ! (down)
+          call debug_message(2, 'gs2_init::init left init level... gs2_layouts   ')
+          current%level = 2 - 1
+        end if
+      end subroutine gs2_layouts
+
       subroutine theta_grid
         use unit_tests, only: debug_message
         use theta_grid, only: init_theta_grid
@@ -145,10 +180,10 @@ contains
        
         if (up) then
           call debug_message(2, 'gs2_init::init reached init level... theta_grid   ')
-          current%level = 2
+          current%level = 3
         else  ! (down)
           call debug_message(2, 'gs2_init::init left init level... theta_grid   ')
-          current%level = 2 - 1
+          current%level = 3 - 1
         end if
       end subroutine theta_grid
 
@@ -161,28 +196,12 @@ contains
        
         if (up) then
           call debug_message(2, 'gs2_init::init reached init level... kt_grids   ')
-          current%level = 3
-        else  ! (down)
-          call debug_message(2, 'gs2_init::init left init level... kt_grids   ')
-          current%level = 3 - 1
-        end if
-      end subroutine kt_grids
-
-      subroutine gs2_layouts
-        use unit_tests, only: debug_message
-        use gs2_layouts, only: init_gs2_layouts
-        use gs2_layouts, only: finish_gs2_layouts
-        if (up) call init_gs2_layouts
-        if (down) call finish_gs2_layouts
-       
-        if (up) then
-          call debug_message(2, 'gs2_init::init reached init level... gs2_layouts   ')
           current%level = 4
         else  ! (down)
-          call debug_message(2, 'gs2_init::init left init level... gs2_layouts   ')
+          call debug_message(2, 'gs2_init::init left init level... kt_grids   ')
           current%level = 4 - 1
         end if
-      end subroutine gs2_layouts
+      end subroutine kt_grids
 
       subroutine gs2_save
         use unit_tests, only: debug_message
@@ -281,41 +300,6 @@ contains
         end if
       end subroutine le_grids
 
-      subroutine dist_fn_layouts
-        use unit_tests, only: debug_message
-        use gs2_layouts, only: init_dist_fn_layouts
-        use gs2_layouts, only: finish_dist_fn_layouts
-        use kt_grids, only: naky, ntheta0
-        use le_grids, only: nlambda, negrid
-        use species, only: nspec
-        if (up) call init_dist_fn_layouts(naky, ntheta0, nlambda, negrid, nspec) 
-        if (down) call finish_dist_fn_layouts
-       
-        if (up) then
-          call debug_message(2, 'gs2_init::init reached init level... dist_fn_layouts   ')
-          current%level = 11
-        else  ! (down)
-          call debug_message(2, 'gs2_init::init left init level... dist_fn_layouts   ')
-          current%level = 11 - 1
-        end if
-      end subroutine dist_fn_layouts
-
-      subroutine nonlinear_terms
-        use unit_tests, only: debug_message
-        use nonlinear_terms, only: init_nonlinear_terms
-        use nonlinear_terms, only: finish_nonlinear_terms
-        if (up) call init_nonlinear_terms
-        if (down) call finish_nonlinear_terms
-       
-        if (up) then
-          call debug_message(2, 'gs2_init::init reached init level... nonlinear_terms   ')
-          current%level = 12
-        else  ! (down)
-          call debug_message(2, 'gs2_init::init left init level... nonlinear_terms   ')
-          current%level = 12 - 1
-        end if
-      end subroutine nonlinear_terms
-
       subroutine antenna
         use unit_tests, only: debug_message
         use antenna, only: init_antenna
@@ -325,10 +309,10 @@ contains
        
         if (up) then
           call debug_message(2, 'gs2_init::init reached init level... antenna   ')
-          current%level = 13
+          current%level = 11
         else  ! (down)
           call debug_message(2, 'gs2_init::init left init level... antenna   ')
-          current%level = 13 - 1
+          current%level = 11 - 1
         end if
       end subroutine antenna
 
@@ -341,12 +325,47 @@ contains
        
         if (up) then
           call debug_message(2, 'gs2_init::init reached init level... dist_fn_parameters   ')
-          current%level = 14
+          current%level = 12
         else  ! (down)
           call debug_message(2, 'gs2_init::init left init level... dist_fn_parameters   ')
-          current%level = 14 - 1
+          current%level = 12 - 1
         end if
       end subroutine dist_fn_parameters
+
+      subroutine dist_fn_layouts
+        use unit_tests, only: debug_message
+        use gs2_layouts, only: init_dist_fn_layouts
+        use gs2_layouts, only: finish_dist_fn_layouts
+        use kt_grids, only: naky, ntheta0
+        use le_grids, only: nlambda, negrid
+        use species, only: nspec
+        if (up) call init_dist_fn_layouts(naky, ntheta0, nlambda, negrid, nspec) 
+        if (down) call finish_dist_fn_layouts
+       
+        if (up) then
+          call debug_message(2, 'gs2_init::init reached init level... dist_fn_layouts   ')
+          current%level = 13
+        else  ! (down)
+          call debug_message(2, 'gs2_init::init left init level... dist_fn_layouts   ')
+          current%level = 13 - 1
+        end if
+      end subroutine dist_fn_layouts
+
+      subroutine nonlinear_terms
+        use unit_tests, only: debug_message
+        use nonlinear_terms, only: init_nonlinear_terms
+        use nonlinear_terms, only: finish_nonlinear_terms
+        if (up) call init_nonlinear_terms
+        if (down) call finish_nonlinear_terms
+       
+        if (up) then
+          call debug_message(2, 'gs2_init::init reached init level... nonlinear_terms   ')
+          current%level = 14
+        else  ! (down)
+          call debug_message(2, 'gs2_init::init left init level... nonlinear_terms   ')
+          current%level = 14 - 1
+        end if
+      end subroutine nonlinear_terms
 
       subroutine dist_fn_arrays
         use unit_tests, only: debug_message
@@ -396,6 +415,19 @@ contains
         end if
       end subroutine dist_fn_level_2
 
+      subroutine override_timestep
+        use unit_tests, only: debug_message
+
+       
+        if (up) then
+          call debug_message(2, 'gs2_init::init reached init level... override_timestep   ')
+          current%level = 18
+        else  ! (down)
+          call debug_message(2, 'gs2_init::init left init level... override_timestep   ')
+          current%level = 18 - 1
+        end if
+      end subroutine override_timestep
+
       subroutine dist_fn_level_3
         use unit_tests, only: debug_message
         use dist_fn, only: init_dist_fn_level_3
@@ -405,10 +437,10 @@ contains
        
         if (up) then
           call debug_message(2, 'gs2_init::init reached init level... dist_fn_level_3   ')
-          current%level = 18
+          current%level = 19
         else  ! (down)
           call debug_message(2, 'gs2_init::init left init level... dist_fn_level_3   ')
-          current%level = 18 - 1
+          current%level = 19 - 1
         end if
       end subroutine dist_fn_level_3
 
@@ -421,10 +453,10 @@ contains
        
         if (up) then
           call debug_message(2, 'gs2_init::init reached init level... collisions   ')
-          current%level = 19
+          current%level = 20
         else  ! (down)
           call debug_message(2, 'gs2_init::init left init level... collisions   ')
-          current%level = 19 - 1
+          current%level = 20 - 1
         end if
       end subroutine collisions
 
@@ -437,13 +469,139 @@ contains
        
         if (up) then
           call debug_message(2, 'gs2_init::init reached init level... fields   ')
-          current%level = 20
+          current%level = 21
         else  ! (down)
           call debug_message(2, 'gs2_init::init left init level... fields   ')
-          current%level = 20 - 1
+          current%level = 21 - 1
         end if
       end subroutine fields
 
   end subroutine init
+
+  subroutine save_fields_and_dist_fn
+    use dist_fn_arrays, only: gnew, g_restart_tmp
+    use gs2_save, only: gs2_save_for_restart
+    use mp, only: proc0, broadcast
+    use collisions, only: vnmult
+    use gs2_layouts, only: g_lo
+    use theta_grid, only: ntgrid
+    use file_utils, only: error_unit
+    use kt_grids, only: ntheta0, naky
+    use run_parameters, only: fphi, fapar, fbpar
+    use fields, only:  force_maxwell_reinit
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use gs2_time, only: user_time, user_dt
+    use antenna, only: dump_ant_amp
+    use file_utils, only: input_unit, input_unit_exist
+    integer :: iostat, istatus
+    integer :: in_file
+    logical :: exist
+
+
+    namelist /init_knobs/ in_memory
+
+    if (proc0) then
+       in_file = input_unit_exist("init_knobs",exist)
+       if(exist) read (unit=in_file, nml=init_knobs)
+    endif
+
+    !If we want to do restarts in memory then try to allocate storage
+    if(in_memory)then
+       !Try to allocate storage to hold g
+       allocate(g_restart_tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc),stat=iostat)
+
+       !If allocate failed
+       if(iostat.ne.0)then
+          !Disable in_memory flag
+          in_memory=.false.
+          !Print error message
+          if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for g --> Reverting to file based restart"
+       else
+          !Copy into temporary
+          g_restart_tmp=gnew
+       endif
+
+       !!!!
+       !! NOW WE MAKE COPIES OF THE FIELDS
+       !! --> Don't bother if force_maxwell_reinit as we're going to recalculate
+       !!!!
+
+       !Try to allocate storage to hold phi
+       if(fphi.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(phi_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for phi --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             phi_tmp=phinew
+          endif
+       endif
+
+       !Try to allocate storage to hold apar
+       if(fapar.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(apar_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for apar --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             apar_tmp=aparnew
+          endif
+       endif
+
+       !Try to allocate storage to hold bpar
+       if(fbpar.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(bpar_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for bpar --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             bpar_tmp=bparnew
+          endif
+       endif
+
+    endif
+
+    if(.not.in_memory)then
+       !Should really do this with in_memory=.true. as well but
+       !not sure that we really need to as we never read in the dumped data.
+       if (proc0) call dump_ant_amp
+
+       call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+    endif
+    fields_and_dist_fn_saved = .true.
+
+  end subroutine save_fields_and_dist_fn
+  subroutine load_saved_field_values
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields, only: force_maxwell_reinit
+    use dist_fn_arrays, only: g_restart_tmp
+    use run_parameters, only: fphi, fapar, fbpar
+    if(in_memory.and.(.not.force_maxwell_reinit))then
+       if(fphi.gt.0) phinew=phi_tmp
+       if(fapar.gt.0) aparnew=apar_tmp
+       if(fbpar.gt.0) bparnew=bpar_tmp
+    endif
+    !Deallocate tmp memory
+    if(allocated(g_restart_tmp)) deallocate(g_restart_tmp)
+    if(allocated(phi_tmp)) deallocate(phi_tmp)
+    if(allocated(apar_tmp)) deallocate(apar_tmp)
+    if(allocated(bpar_tmp)) deallocate(bpar_tmp)
+    fields_and_dist_fn_saved = .false.
+  end subroutine load_saved_field_values
 end module gs2_init
 

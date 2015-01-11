@@ -9,32 +9,41 @@
 
 class GenerateInit
 
-  DEPENDENCIES = {'antenna' => ['species'],
-                  'theta_grid' => [],
-                  'kt_grids' => [],
-                  'gs2_layouts' => [],
-                  'gs2_save' => [],
-                  'run_parameters' => ['kt_grids'],
-                  'hyper' => ['kt_grids', 'gs2_layouts'],
-                  'init_g' => ['gs2_layouts'],
-                  'species' => [],
-                  'dist_fn_parameters' => ['gs2_layouts', 'species', 'theta_grid',
-                                            'kt_grids', 'le_grids'   ],
-                  'dist_fn_arrays' => ['dist_fn_parameters', 'run_parameters',
-                                       'nonlinear_terms', 'dist_fn_layouts','nonlinear_terms' ],
-                  'le_grids' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid'],
-                  'dist_fn_layouts' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid'],
-                  'nonlinear_terms' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 
-                                        'le_grids', 'dist_fn_layouts'],
-                  'collisions' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 
-                                   'le_grids', 'dist_fn_layouts', 'run_parameters',
-                                    'dist_fn_level_2'],
-                  'dist_fn_level_1' => ['dist_fn_arrays'], 
-                  'dist_fn_level_2' => ['dist_fn_level_1'], 
-                  'dist_fn_level_3' => ['dist_fn_level_2', 'hyper'],
-
-                  'fields' => ['collisions', 'antenna', 'dist_fn_level_3']
-  }
+  # Initialization levels should be listed in order of cost
+  # with highest cost at the top. Overrides should all be at
+  # the bottome to make sure they appear as high as possible
+  # in the level list.
+  DEPENDENCIES = [
+                  ['fields' , ['collisions', 'antenna', 'dist_fn_level_3']],
+                  ['dist_fn_level_3' , ['dist_fn_level_2', 'hyper', 'override_timestep']],
+                  ['dist_fn_level_1' , ['dist_fn_arrays']], 
+                  ['collisions' ,
+                    ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 'le_grids',
+                      'dist_fn_layouts', 'run_parameters', 'dist_fn_level_3']],
+                  ['nonlinear_terms' ,
+                    ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 'le_grids',
+                      'dist_fn_layouts']],
+                  ['gs2_layouts' , []],
+                  ['le_grids' ,
+                    ['species', 'kt_grids', 'gs2_layouts', 'theta_grid']],
+                  ['antenna' , ['species', 'run_parameters']],
+                  ['theta_grid' , []],
+                  ['kt_grids' , []],
+                  ['gs2_save' , []],
+                  ['run_parameters' , ['kt_grids']],
+                  ['hyper' , ['kt_grids', 'gs2_layouts']],
+                  ['init_g' , ['gs2_layouts']],
+                  ['species' , []],
+                  ['dist_fn_parameters' , 
+                    ['gs2_layouts', 'species', 'theta_grid', 'kt_grids', 'le_grids'   ]],
+                  ['dist_fn_arrays' , 
+                    ['dist_fn_parameters', 'run_parameters', 'nonlinear_terms',
+                      'dist_fn_layouts','nonlinear_terms' ]],
+                  ['dist_fn_layouts' ,
+                    ['species', 'kt_grids', 'gs2_layouts', 'theta_grid']],
+                  ['dist_fn_level_2' , ['dist_fn_level_1']], 
+                  ['override_timestep' , ['run_parameters']],
+  ]
                   
 
                   
@@ -49,12 +58,32 @@ class GenerateInit
             #['nonlinear_terms', 'collisions'],
             #['fields'],
            #].flatten
-  deps = DEPENDENCIES.dup
-  while deps.keys.size > 0
-    deps.keys.each do |k|
-      if deps[k] - LEVELS == []
-        LEVELS.push k
-        deps.delete k
+
+  # Here we make a hash of {module => [dependencies]}
+  # We can't make DEPENDENCIES itself a hash because 
+  # we care about the order in which the modules
+  # are listed and older versions of Ruby may not 
+  # preserve the order of keys in a hash
+  deps = {}
+  DEPENDENCIES.each{|mod,dependencies| deps[mod] = dependencies}
+  modules_remaining = DEPENDENCIES.map{|mod,dependencies| mod}
+
+  p deps, 'deps'
+  #exit
+
+  while modules_remaining.size > 0
+    p 'modules_remaining', modules_remaining, 'LEVELS', LEVELS
+    #deps.keys.each do |k|
+      #if deps[k] - LEVELS == []
+        #LEVELS.push k
+        #deps.delete k
+      #end 
+    #end
+    modules_remaining.each do |mod|
+      if deps[mod] - LEVELS == [] # i.e. all dependencies already in LEVELS
+        LEVELS.push mod
+        modules_remaining.delete mod
+        break
       end 
     end
   end 
@@ -95,6 +124,10 @@ class GenerateInit
         use unit_tests, only: debug_message
 #{
         case @level_name
+        when /override.*/
+          # Nothing needs to be done for the overrides,
+          # they are just placeholders
+          str = "\n"
         when 'dist_fn_layouts'
           str = <<EOF2
         use gs2_layouts, only: init_#@level_name
@@ -172,6 +205,18 @@ module gs2_init
   public :: init_level_type
   public :: init_level_list
   public :: init
+  !> Save the current state of the fields and 
+  !! distribution function, either to a file 
+  !! or to a temporary array, depending on the
+  !! value of in_memory. (NB if there is 
+  !! sufficient memory to allocate a temporary
+  !! array, in_memory will be overriden to 
+  !! false).
+  public :: save_fields_and_dist_fn
+  public :: load_saved_field_values
+
+  public :: in_memory
+
   private
 
   !> A type for labelling the different init
@@ -194,6 +239,10 @@ module gs2_init
     !> A list of possible init levels
     !type(init_level_list_type) :: levels
   end type init_level_type
+
+  complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
+  logical :: fields_and_dist_fn_saved = .false.
+  logical :: in_memory = .false.  
 contains
   !> Initialize gs2 to the level of target_level.
   !! The init_level_type current contains info
@@ -228,6 +277,132 @@ contains
     contains
 #{generators.map{|g| g.subroutine}.join("\n")}
   end subroutine init
+
+  subroutine save_fields_and_dist_fn
+    use dist_fn_arrays, only: gnew, g_restart_tmp
+    use gs2_save, only: gs2_save_for_restart
+    use mp, only: proc0, broadcast
+    use collisions, only: vnmult
+    use gs2_layouts, only: g_lo
+    use theta_grid, only: ntgrid
+    use file_utils, only: error_unit
+    use kt_grids, only: ntheta0, naky
+    use run_parameters, only: fphi, fapar, fbpar
+    use fields, only:  force_maxwell_reinit
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use gs2_time, only: user_time, user_dt
+    use antenna, only: dump_ant_amp
+    use file_utils, only: input_unit, input_unit_exist
+    integer :: iostat, istatus
+    integer :: in_file
+    logical :: exist
+
+
+    namelist /init_knobs/ in_memory
+
+    if (proc0) then
+       in_file = input_unit_exist("init_knobs",exist)
+       if(exist) read (unit=in_file, nml=init_knobs)
+    endif
+
+    !If we want to do restarts in memory then try to allocate storage
+    if(in_memory)then
+       !Try to allocate storage to hold g
+       allocate(g_restart_tmp(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc),stat=iostat)
+
+       !If allocate failed
+       if(iostat.ne.0)then
+          !Disable in_memory flag
+          in_memory=.false.
+          !Print error message
+          if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for g --> Reverting to file based restart"
+       else
+          !Copy into temporary
+          g_restart_tmp=gnew
+       endif
+
+       !!!!
+       !! NOW WE MAKE COPIES OF THE FIELDS
+       !! --> Don't bother if force_maxwell_reinit as we're going to recalculate
+       !!!!
+
+       !Try to allocate storage to hold phi
+       if(fphi.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(phi_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for phi --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             phi_tmp=phinew
+          endif
+       endif
+
+       !Try to allocate storage to hold apar
+       if(fapar.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(apar_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for apar --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             apar_tmp=aparnew
+          endif
+       endif
+
+       !Try to allocate storage to hold bpar
+       if(fbpar.gt.0.and.(.not.force_maxwell_reinit).and.in_memory)then
+          allocate(bpar_tmp(-ntgrid:ntgrid,ntheta0,naky),stat=iostat)
+
+          !If allocate failed
+          if(iostat.ne.0)then
+             !Disable in_memory flag
+             in_memory=.false.
+             !Print error message
+             if (proc0) write(error_unit(), *) "Couldn't allocate temporary storage for bpar --> Reverting to file based restart"
+          else
+             !Copy into temporary
+             bpar_tmp=bparnew
+          endif
+       endif
+
+    endif
+
+    if(.not.in_memory)then
+       !Should really do this with in_memory=.true. as well but
+       !not sure that we really need to as we never read in the dumped data.
+       if (proc0) call dump_ant_amp
+
+       call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+    endif
+    fields_and_dist_fn_saved = .true.
+
+  end subroutine save_fields_and_dist_fn
+  subroutine load_saved_field_values
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use fields, only: force_maxwell_reinit
+    use dist_fn_arrays, only: g_restart_tmp
+    use run_parameters, only: fphi, fapar, fbpar
+    if(in_memory.and.(.not.force_maxwell_reinit))then
+       if(fphi.gt.0) phinew=phi_tmp
+       if(fapar.gt.0) aparnew=apar_tmp
+       if(fbpar.gt.0) bparnew=bpar_tmp
+    endif
+    !Deallocate tmp memory
+    if(allocated(g_restart_tmp)) deallocate(g_restart_tmp)
+    if(allocated(phi_tmp)) deallocate(phi_tmp)
+    if(allocated(apar_tmp)) deallocate(apar_tmp)
+    if(allocated(bpar_tmp)) deallocate(bpar_tmp)
+    fields_and_dist_fn_saved = .false.
+  end subroutine load_saved_field_values
 end module gs2_init
 
 EOF
