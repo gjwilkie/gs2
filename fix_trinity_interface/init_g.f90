@@ -583,7 +583,7 @@ contains
   end subroutine check_init_g
 
   subroutine init_init_g
-    use gs2_save, only: init_save, read_many
+    use gs2_save, only: set_restart_file, read_many
     use gs2_layouts, only: init_gs2_layouts
     use mp, only: proc0, broadcast, job
     implicit none
@@ -673,7 +673,7 @@ contains
     call broadcast (kpar_init)
     call broadcast (restart_eig_id)
     ! <RN
-    call init_save (restart_file)
+    call set_restart_file (restart_file)
     
   end subroutine init_init_g
 

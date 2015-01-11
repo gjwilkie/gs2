@@ -104,7 +104,7 @@ contains
     call init_run_parameters
     call debug_message(verb, "init_fields: init_dist_fn")
     call init_dist_fn
-    call debug_message(verb, "init_fields: init_parameter_scan")
+    !call debug_message(verb, "init_fields: init_parameter_scan")
     !call init_parameter_scan
     call debug_message(verb, "init_fields: init_antenna")
     call init_antenna !Must come before allocate_arrays so we know if we need apar_ext

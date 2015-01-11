@@ -7,6 +7,7 @@
 !! include this module and call run_gs2.
 
 module gs2_main
+  use gs2_init, only: init_level_type, init_level_list
   implicit none
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
 
@@ -67,6 +68,12 @@ module gs2_main
     logical :: gs2_initialized = .false.
     logical :: equations_initialized = .false.
     logical :: diagnostics_initialized = .false.
+
+    !> A type for keeping track of the current
+    !! initialization level of gs2
+    type(init_level_type) :: init
+
+
 
     ! Timers
     type(gs2_timers_type) :: timers
@@ -178,14 +185,13 @@ contains
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
-    if (state%gs2_initialized .or. &
-        state%equations_initialized .or. &
-        state%diagnostics_initialized) then
-        write (*,*) 'ERROR: initialize_gs2 can only be called when &
-        & gs2_initialized, equations_initialized and diagnostics_initialized, &
-        & are all false. '
-       stop 1
-     end if
+    if (state%init%level .ge. init_level_list%gs2) then
+      write  (*,*) "ERROR: Called initialize_gs2 twice &
+        without calling finalize_gs2"
+      stop 1
+    end if
+
+
 
     call debug_message(4, 'gs2_main::initialize_gs2 starting initialization')
 
@@ -268,7 +274,8 @@ contains
     !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
     using_measure_scatter=.false.
 
-    state%gs2_initialized = .true.
+    !state%gs2_initialized = .true.
+    state%init%level = init_level_list%gs2
 
   end subroutine initialize_gs2
 
@@ -276,6 +283,7 @@ contains
     use fields, only: init_fields
     use geometry, only: surfarea, dvdrhon
     use gs2_time, only: init_tstart
+    use gs2_init, only: init
     use init_g, only: tstart
     use job_manage, only: time_message
     use mp, only: proc0, broadcast
@@ -294,7 +302,7 @@ contains
 
     ! This triggers initializing of all the grids, all the physics parameters
     ! and all the modules which solve the equations
-    call init_fields
+    call init(state%init, init_level_list%fields)
 
     ! Set the initial simulation time (must be after init_fields
     ! because initial time may be read from a restart file)
@@ -544,7 +552,7 @@ contains
   subroutine finalize_equations(state)
     use gs2_layouts, only: finish_layouts
     use gs2_transforms, only: finish_transforms
-    use gs2_save, only: gs2_save_for_restart, finish_save
+    use gs2_save, only: gs2_save_for_restart, finish_gs2_save
     use theta_grid, only: finish_theta_grid
     use unit_tests, only: ilast_step
     use antenna, only: finish_antenna
@@ -564,7 +572,7 @@ contains
     use species, only: finish_species
     use theta_grid, only: finish_theta_grid
     use gs2_transforms, only: finish_transforms
-    use gs2_save, only: finish_save
+    use gs2_save, only: finish_gs2_save
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
@@ -585,13 +593,13 @@ contains
     call finish_species
     call finish_parameter_scan
     call finish_transforms
-    call finish_save
+    call finish_gs2_save
 ! HJL Species won't change during a run so shouldn't need this    
 !    call finish_trin_species
 
     call finish_layouts
     call finish_transforms
-    call finish_save
+    call finish_gs2_save
     call finish_theta_grid
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
@@ -607,15 +615,23 @@ contains
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
-    if ((.not. state%gs2_initialized) .or. &
-        state%equations_initialized .or. &
-        state%diagnostics_initialized) then
-        write (*,*) 'ERROR: initialize_gs2 can only be called when &
-        & gs2_initialized is true, and equations_initialized &
-        & and diagnostics_initialized, &
-        & are all false. '
-       stop 1
-     end if
+    if (state%init%level .ne. init_level_list%gs2) then
+      write  (*,*) "ERROR: Called finalize_gs2 at the &
+        & wrong init_level (perhaps you have called finalize_gs2 &
+        & without calling initialize_gs2, or without calling &
+        & finalize_equations"
+      stop 1
+    end if
+
+    !if ((.not. state%gs2_initialized) .or. &
+        !state%equations_initialized .or. &
+        !state%diagnostics_initialized) then
+        !write (*,*) 'ERROR: initialize_gs2 can only be called when &
+        !& gs2_initialized is true, and equations_initialized &
+        !& and diagnostics_initialized, &
+        !& are all false. '
+       !stop 1
+     !end if
 
     if (proc0) call finish_file_utils
 
@@ -631,8 +647,9 @@ contains
 
     if (.not. state%mp_comm_external) call finish_mp
 
-    state%gs2_initialized = .false.
+    !state%gs2_initialized = .false.
 
+    state%init%level = 0
 
 
     !if (.not. present(mpi_comm) .and. .not. nofin) call finish_mp
@@ -962,7 +979,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use species, only: finish_species
     use theta_grid, only: finish_theta_grid
     use gs2_transforms, only: finish_transforms
-    use gs2_save, only: finish_save
+    use gs2_save, only: finish_gs2_save
     implicit none
 
     call finish_antenna
@@ -979,7 +996,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call finish_species
     call finish_parameter_scan
     call finish_transforms
-    call finish_save
+    call finish_gs2_save
     if (proc0) call finish_file_utils
 
   end subroutine finish_gs2
