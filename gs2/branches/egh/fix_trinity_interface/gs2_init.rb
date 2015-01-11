@@ -18,17 +18,22 @@ class GenerateInit
                   'hyper' => ['kt_grids', 'gs2_layouts'],
                   'init_g' => ['gs2_layouts'],
                   'species' => [],
+                  'dist_fn_parameters' => ['gs2_layouts', 'species', 'theta_grid',
+                                            'kt_grids', 'le_grids'   ],
+                  'dist_fn_arrays' => ['dist_fn_parameters', 'run_parameters',
+                                       'nonlinear_terms', 'dist_fn_layouts','nonlinear_terms' ],
                   'le_grids' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid'],
                   'dist_fn_layouts' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid'],
                   'nonlinear_terms' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 
                                         'le_grids', 'dist_fn_layouts'],
                   'collisions' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 
-                                        'le_grids', 'dist_fn_layouts', 'run_parameters'],
-                  'dist_fn' => ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 
-                                 'le_grids', 'dist_fn_layouts', 'run_parameters',
-                                'collisions', 'nonlinear_terms', 'hyper'],
+                                   'le_grids', 'dist_fn_layouts', 'run_parameters',
+                                    'dist_fn_level_2'],
+                  'dist_fn_level_1' => ['dist_fn_arrays'], 
+                  'dist_fn_level_2' => ['dist_fn_level_1'], 
+                  'dist_fn_level_3' => ['dist_fn_level_2', 'hyper'],
 
-                  'fields' => ['collisions', 'antenna']
+                  'fields' => ['collisions', 'antenna', 'dist_fn_level_3']
   }
                   
 
@@ -62,6 +67,14 @@ class GenerateInit
   
   def initialize(level)
     @level_name = level
+    @module_name = case level
+                   when 'dist_fn_layouts' 
+                     'gs2_layouts' 
+                   when /^dist_fn_*/
+                     'dist_fn'
+                   else
+                     @level_name
+                   end
     @level_number = @@level_counter
     @@level_counter += 1
   end
@@ -71,10 +84,10 @@ class GenerateInit
   end 
 
   def up
-    "if (current%level < init_level_list%#@level_name) call #@level_name"
+    "if (current%level .lt. init_level_list%#@level_name) call #@level_name"
   end  
   def down
-    "if (current%level > init_level_list%#@level_name) call #@level_name"
+    "if (current%level .le. init_level_list%#@level_name) call #@level_name"
   end  
   def subroutine
     return <<EOF
@@ -94,16 +107,16 @@ class GenerateInit
 EOF2
         when 'le_grids'
           str = <<EOF2
-        use #@level_name, only: init_#@level_name
-        use #@level_name, only: finish_#@level_name
+        use #@module_name, only: init_#@level_name
+        use #@module_name, only: finish_#@level_name
         logical :: dummy1, dummy2
         if (up) call init_#@level_name(dummy1, dummy2)
         if (down) call finish_#@level_name
 EOF2
         else
           str = <<EOF2
-        use #@level_name, only: init_#@level_name
-        use #@level_name, only: finish_#@level_name
+        use #@module_name, only: init_#@level_name
+        use #@module_name, only: finish_#@level_name
         if (up) call init_#@level_name
         if (down) call finish_#@level_name
 EOF2
@@ -111,8 +124,13 @@ EOF2
         str
         
 }       
-        if (up) call debug_message(2, 'gs2_init::init reached init level... #@level_name   ')
-        if (down) call debug_message(2, 'gs2_init::init left init level... #@level_name   ')
+        if (up) then
+          call debug_message(2, 'gs2_init::init reached init level... #@level_name   ')
+          current%level = #@level_number
+        else  ! (down)
+          call debug_message(2, 'gs2_init::init left init level... #@level_name   ')
+          current%level = #@level_number - 1
+        end if
       end subroutine #@level_name
 EOF
   end
@@ -171,6 +189,8 @@ module gs2_init
   type init_level_type
     !> The current init level
     integer :: level = 0
+    !> Whether or not diagnostics have been initialized
+    logical :: diagnostics_initialized = .false.
     !> A list of possible init levels
     !type(init_level_list_type) :: levels
   end type init_level_type
