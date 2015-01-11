@@ -99,6 +99,7 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -186,6 +187,7 @@ ffttester_mod = \
 	 gs2_diagnostics.o \
 	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
+	 gs2_init.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_main.o \
@@ -204,6 +206,7 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -319,6 +322,7 @@ gs2_mod = \
 	 gs2_diagnostics.o \
 	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
+	 gs2_init.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_main.o \
@@ -337,6 +341,7 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -434,6 +439,7 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -945,6 +951,8 @@ gs2_diagnostics_new.o: \
 gs2_heating.o: \
 	 mp.o \
 	 species.o 
+gs2_init.o: \
+	 fields.o 
 gs2_io.o: \
 	 constants.o \
 	 convert.o \
@@ -978,6 +986,7 @@ gs2_main.o: \
 	 geometry.o \
 	 gs2_diagnostics.o \
 	 gs2_diagnostics_new.o \
+	 gs2_init.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -1164,6 +1173,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1204,7 +1214,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

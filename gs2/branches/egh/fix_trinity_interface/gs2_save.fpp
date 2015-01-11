@@ -27,10 +27,11 @@ module gs2_save
 
   implicit none
 
-  public :: gs2_restore, gs2_save_for_restart, finish_save
+  public :: gs2_restore, gs2_save_for_restart, finish_gs2_save
   public :: read_many, save_many, gs2_save_response, gs2_restore_response
   public :: restore_current_scan_parameter_value
-  public :: init_save, init_dt, init_tstart, init_ant_amp
+  public :: init_gs2_save, init_dt, init_tstart, init_ant_amp
+  public :: set_restart_file
   public :: init_vnm, restart_writable, EigNetcdfID
   public :: init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
 !# ifdef NETCDF
@@ -1416,14 +1417,17 @@ contains
     restart_writable=writable
   end function restart_writable
 
-  subroutine init_save (file)
+  subroutine init_gs2_save
+  end subroutine init_gs2_save
+
+  subroutine set_restart_file (file)
     character(300), intent (in) :: file
     
     restart_file = file
 
-  end subroutine init_save
+  end subroutine set_restart_file
 
-  subroutine finish_save
+  subroutine finish_gs2_save
 #ifdef NETCDF    
     if (allocated(tmpr)) deallocate(tmpr)
     if (allocated(tmpi)) deallocate(tmpi)
@@ -1435,7 +1439,7 @@ contains
     initialized = .false.
     initialized_dfn = .false.
 #endif
-  end subroutine finish_save
+  end subroutine finish_gs2_save
 
   subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
 # ifdef NETCDF
