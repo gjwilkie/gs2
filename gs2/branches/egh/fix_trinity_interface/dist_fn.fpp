@@ -1446,6 +1446,8 @@ subroutine check_dist_fn(report_unit)
     if (bessinit) return
     bessinit = .true.
 
+    write(*,*) 'Allocating aj0', ntgrid, g_lo%llim_proc, g_lo%ulim_alloc
+
     allocate (aj0(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (aj1(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
 

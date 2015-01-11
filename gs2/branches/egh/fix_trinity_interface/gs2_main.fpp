@@ -177,7 +177,7 @@ contains
     use job_manage, only: job_fork
     use mp, only: init_mp, broadcast
     use mp, only: iproc, nproc, proc0
-    use mp, only: trin_flag
+    use mp, only: trin_flag, job
     use redistribute, only: using_measure_scatter
     use run_parameters, only: avail_cpu_time
     use runtime_tests, only: verbosity
@@ -253,6 +253,7 @@ contains
 
     if (state%list) then
        call job_fork
+       call set_job_id(job)
        call debug_message(state%verb, 'gs2_main::initialize_gs2 called job fork')
     else if (state%nensembles > 1) then 
        call job_fork (n_ensembles=state%nensembles)
@@ -991,7 +992,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
     use dist_fn, only: dist_fn_g_exb => g_exb
-    use gs2_reinit, only: save_fields_and_dist_fn
+    use gs2_init, only: save_fields_and_dist_fn
     use gs2_reinit, only: reinit_gk_and_field_equations
     use fields, only: init_fields, f_reset => reset_init
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
