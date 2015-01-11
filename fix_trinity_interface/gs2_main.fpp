@@ -550,58 +550,21 @@ contains
   end subroutine finalize_diagnostics
 
   subroutine finalize_equations(state)
-    use gs2_layouts, only: finish_layouts
-    use gs2_transforms, only: finish_transforms
-    use gs2_save, only: gs2_save_for_restart, finish_gs2_save
-    use theta_grid, only: finish_theta_grid
-    use unit_tests, only: ilast_step
-    use antenna, only: finish_antenna
-    use collisions, only: finish_collisions
-    use dist_fn, only: finish_dist_fn
-    use fields, only: finish_fields
-    use file_utils, only: finish_file_utils
-    use hyper, only: finish_hyper
-    use init_g, only: finish_init_g
+    use gs2_init, only: init
     use job_manage, only: time_message
-    use kt_grids, only: finish_kt_grids
-    use le_grids, only: finish_le_grids
     use mp, only: proc0
-    use nonlinear_terms, only: finish_nonlinear_terms
     use parameter_scan, only: finish_parameter_scan
-    use run_parameters, only: finish_run_parameters
-    use species, only: finish_species
-    use theta_grid, only: finish_theta_grid
-    use gs2_transforms, only: finish_transforms
-    use gs2_save, only: finish_gs2_save
+    use unit_tests, only: debug_message
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
 
+    call debug_message(state%verb, 'gs2_main::finalize_equations starting')
+
     call deallocate_outputs(state)
-    call finish_antenna
-    call finish_collisions
-    call finish_dist_fn
-    call finish_fields
-    call finish_hyper
-    call finish_init_g
-    call finish_theta_grid
-    call finish_kt_grids
-    call finish_le_grids
-    call finish_nonlinear_terms
-    call finish_run_parameters
-    call finish_species
     call finish_parameter_scan
-    call finish_transforms
-    call finish_gs2_save
-! HJL Species won't change during a run so shouldn't need this    
-!    call finish_trin_species
-
-    call finish_layouts
-    call finish_transforms
-    call finish_gs2_save
-    call finish_theta_grid
-
+    call init(state%init, init_level_list%gs2)
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
 
   end subroutine finalize_equations
