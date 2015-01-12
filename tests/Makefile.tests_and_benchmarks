@@ -22,6 +22,17 @@ endif
 export TESTCOMMAND
 export NTESTPROCS
 
+#Set the level of testing, currently loosely defined as
+# 0 : Only most basic tests included
+# 1 : Most simple tests run
+# 2 : More expensive tests (say a few minutes on 8 cores)
+# 3 : Very expensive tests (say more than 10 minutes on 8 cores)
+#etc.
+ifndef TEST_LEVEL
+       TEST_LEVEL:=1
+endif
+export TEST_LEVEL
+
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
@@ -63,7 +74,7 @@ define TEST_RESULTS
 endef
 
 define RUN_TESTS
-	@find $(1) -name results_of_test.txt | xargs rm -f
+	@find $(TEST_DIR)/$(1) -name results_of_test.txt | xargs rm -f
 	cd $(TEST_DIR)/$(1) && time ${MAKETESTS} 
 endef
 
