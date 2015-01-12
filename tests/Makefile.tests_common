@@ -10,11 +10,11 @@
 #CPPFLAGS += -I ../../
 
 .f90.o: 
-	$(FC) $(F90FLAGS) -c $< -I ../../
+	$(FC) $(F90FLAGS) -c $< -I $(GK_HEAD_DIR)
 .fpp.f90:
-	$(CPP) $(CPPFLAGS) $< $@ -I ../../
+	$(CPP) $(CPPFLAGS) $< $@ -I $(GK_HEAD_DIR)
 .c.o:
-	$(CC) $(CFLAGS) -c $< -I ../../
+	$(CC) $(CFLAGS) -c $< -I $(GK_HEAD_DIR)
 	
 # This prevents error messages like m2c: Command not found
 %.o : %.mod
