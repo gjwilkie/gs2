@@ -137,10 +137,6 @@ module dist_fn
   complex, dimension (:,:,:), allocatable :: g_adj
   ! (N(links), 2, -g-layout-)
 
-!  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
-  complex, dimension (:,:,:), allocatable, save :: gexp_1, gexp_2, gexp_3
-  ! (-ntgrid:ntgrid,2, -g-layout-)
-
   ! momentum conservation
 !  complex, dimension (:,:), allocatable :: g3int
 !  real, dimension (:,:,:), allocatable :: sq
@@ -3347,10 +3343,10 @@ endif
   subroutine allocate_arrays
     use kt_grids, only: naky,  box
     use theta_grid, only: ntgrid, shat
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, gexp
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
-    use nonlinear_terms, only: nonlin
+    use nonlinear_terms, only: nonlin, nl_order
     use run_parameters, only: fapar
     implicit none
 !    logical :: alloc = .true.
@@ -3368,18 +3364,14 @@ endif
           endif
        endif
 #ifdef LOWFLOW
-       allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (gexp_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
+       allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       gexp=0.
 #else
        if (nonlin) then
-          allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          allocate (gexp_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
+          allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+          gexp = 0.
        else
-          allocate (gexp_1(1,2,1), gexp_2(1,2,1), gexp_3(1,2,1))
+          allocate (gexp(1,1,2,1))
        end if
 #endif
        if (boundary_option_switch == boundary_option_linked) then
@@ -3436,8 +3428,7 @@ endif
     if (istep.eq.0 .or. .not.cllc) then
 !CMR do the usual LC when computing response matrix
        !Calculate the explicit nonlinear terms
-       call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-         phi, apar, bpar, istep, bkdiff(1))
+       call add_explicit_terms (phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
@@ -3450,8 +3441,7 @@ endif
 !CMR on first half step at istep=1 do CL with all redists
        call vspace_derivatives (gnew, g, g0, phi, bpar, phinew, bparnew, modep)
        !Calculate the explicit nonlinear terms
-       call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-         phi, apar, bpar, istep, bkdiff(1))
+       call add_explicit_terms (phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
@@ -3461,8 +3451,7 @@ endif
 !CMR on first half step do CL with all redists without gtoc redist
        call vspace_derivatives (gnew, g, g0, phi, bpar, phinew, bparnew, modep,gtoc=.false.)
        !Calculate the explicit nonlinear terms
-       call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-         phi, apar, bpar, istep, bkdiff(1))
+       call add_explicit_terms (phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
        call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
@@ -3473,8 +3462,7 @@ endif
        !Calculate the explicit nonlinear terms 
        !NB following call should be unnecessary as NL terms not added on second
        !    half of istep: keeping for now as may be needed by some code
-       call add_explicit_terms (gexp_1, gexp_2, gexp_3, &
-         phi, apar, bpar, istep, bkdiff(1))
+       call add_explicit_terms (phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
 
        !Solve for gnew
@@ -4185,7 +4173,7 @@ endif
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits
     use gs2_time, only: code_dt
-    use nonlinear_terms, only: nonlin
+    use nonlinear_terms, only: nonlin, get_exp_source
     use hyper, only: D_res
     use constants, only: zi
     implicit none
@@ -4302,55 +4290,17 @@ endif
           endif
 
 #ifdef LOWFLOW
-          select case (istep)
-          case (0)
-             ! nothing
-          case (1)
-             do ig = -ntgrid, ntgrid-1
-                if (il < ittp(ig)) cycle
-                source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
-             end do
-          case (2) 
-             do ig = -ntgrid, ntgrid-1
-                if (il < ittp(ig)) cycle
-                source(ig) = source(ig) + 0.5*code_dt*( &
-                     1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
-             end do
-          case default
-             do ig = -ntgrid, ntgrid-1
-                if (il < ittp(ig)) cycle
-                source(ig) = source(ig) + 0.5*code_dt*( &
-                     (23./12.)*gexp_1(ig,isgn,iglo) &
-                     - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                     + (5./12.) *gexp_3(ig,isgn,iglo))
-             end do
-          end select
+          do ig = -ntgrid, ntgrid-1
+             if (il < ittp(ig)) cycle
+             source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+          end do
 #else
 ! add in nonlinear terms 
           if (nonlin) then         
-             select case (istep)
-             case (0)
-                ! nothing
-             case (1)
-                do ig = -ntgrid, ntgrid-1
-                   if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
-                end do
-             case (2) 
-                do ig = -ntgrid, ntgrid-1
-                   if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*( &
-                        1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
-                end do                   
-             case default
-                do ig = -ntgrid, ntgrid-1
-                   if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*( &
-                          (23./12.)*gexp_1(ig,isgn,iglo) &
-                        - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                        + (5./12.) *gexp_3(ig,isgn,iglo))
-                end do
-             end select
+             do ig = -ntgrid, ntgrid-1
+                if (il < ittp(ig)) cycle
+                source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+             end do
           end if
 #endif
 
@@ -4450,49 +4400,15 @@ endif
       end do
 
 #ifdef LOWFLOW
-      select case (istep)
-      case (0)
-         ! nothing
-      case (1)
-         do ig = -ntgrid, ntgrid-1
-            source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
-         end do
-      case (2) 
-         do ig = -ntgrid, ntgrid-1
-            source(ig) = source(ig) + 0.5*code_dt*( &
-                 1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
-         end do
-      case default
-         do ig = -ntgrid, ntgrid-1
-            source(ig) = source(ig) + 0.5*code_dt*( &
-                 (23./12.)*gexp_1(ig,isgn,iglo) &
-                 - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                 + (5./12.) *gexp_3(ig,isgn,iglo))
-         end do
-      end select
+      do ig = -ntgrid, ntgrid-1
+         source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+      end do
 #else
 ! add in nonlinear terms 
       if (nonlin) then         
-         select case (istep)
-         case (0)
-            ! nothing
-         case (1)
-            do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
-            end do
-         case (2) 
-            do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*( &
-                    1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
-            end do
-         case default
-            do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*( &
-                      (23./12.)*gexp_1(ig,isgn,iglo) &
-                    - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                    + (5./12.) *gexp_3(ig,isgn,iglo))
-            end do
-         end select
+         do ig = -ntgrid, ntgrid-1
+            source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+         end do
       end if
 #endif
 
@@ -4516,7 +4432,7 @@ endif
     use species, only: spec
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_time, only: code_dt
-    use nonlinear_terms, only: nonlin
+    use nonlinear_terms, only: nonlin, get_exp_source
     use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -4623,29 +4539,10 @@ endif
 
           ! add in nonlinear terms 
           if (nonlin) then         
-             select case (istep)
-             case (0)
-                ! nothing
-             case (1)
-                do ig = -ntgrid, ntgrid-1
-                   if (il < ittp(ig)) cycle
-                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
-                end do
-             case (2) 
-                do ig = -ntgrid, ntgrid-1
-                   if (il < ittp(ig)) cycle
-                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
-                        1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
-                end do
-             case default
-                do ig = -ntgrid, ntgrid-1
-                   if (il < ittp(ig)) cycle
-                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
-                        (23./12.)*gexp_1(ig,isgn,iglo) &
-                        - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                        + (5./12.) *gexp_3(ig,isgn,iglo))
-                end do
-             end select
+             do ig = -ntgrid, ntgrid-1
+                if (il < ittp(ig)) cycle
+                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+             end do
           end if
        end if
     end if
@@ -4689,26 +4586,9 @@ endif
 
 ! add in nonlinear terms 
       if (nonlin) then         
-         select case (istep)
-         case (0)
-            ! nothing
-         case (1)
-            do ig = -ntgrid, ntgrid-1
-               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*gexp_1(ig,isgn,iglo)
-            end do
-         case (2) 
-            do ig = -ntgrid, ntgrid-1
-               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
-                    1.5*gexp_1(ig,isgn,iglo) - 0.5*gexp_2(ig,isgn,iglo))
-            end do
-         case default
-            do ig = -ntgrid, ntgrid-1
-               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
-                      (23./12.)*gexp_1(ig,isgn,iglo) &
-                    - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                    + (5./12.) *gexp_3(ig,isgn,iglo))
-            end do
-         end select
+         do ig = -ntgrid, ntgrid-1
+            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+         end do
       end if
 
     end subroutine set_source_opt
@@ -8900,7 +8780,7 @@ endif
   subroutine finish_dist_fn
     use redistribute, only: delete_redist
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
-    use dist_fn_arrays, only: aj0, aj1   
+    use dist_fn_arrays, only: aj0, aj1, gexp
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
 #ifdef LOWFLOW
     use lowflow, only: finish_lowflow_terms
@@ -8929,7 +8809,7 @@ endif
     if (allocated(g_adj)) deallocate (g_adj)
     if (allocated(g)) deallocate (g, gnew, g0)
     if (allocated(source_coeffs)) deallocate(source_coeffs)
-    if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
+    if (allocated(gexp)) deallocate (gexp)
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
     if (allocated(theta0_shift)) deallocate (theta0_shift)
