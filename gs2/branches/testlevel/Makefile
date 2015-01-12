@@ -223,6 +223,10 @@ sinclude Makefile.local
 
 #############################################################################
 
+#Record the top level path
+GK_HEAD_DIR:=$(PWD)
+export GK_HEAD_DIR
+
 UTILS=utils
 GEO=geo
 
@@ -577,13 +581,6 @@ endif
 
 export CLEANCOMMAND
 
-clean_tests:
-	$(MAKE) clean -C linear_tests 
-	$(MAKE) clean -C unit_tests 
-
-clean_benchmarks:
-	$(MAKE) clean -C benchmarks 
-
 cleanlib:
 	-rm -f *.a
 
@@ -689,7 +686,9 @@ revision:
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 
-sinclude Makefile.tests_and_benchmarks
+#This is the location of the individual test suites
+TEST_DIR:=tests
+sinclude $(TEST_DIR)/Makefile.tests_and_benchmarks
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
