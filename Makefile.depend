@@ -71,6 +71,7 @@ dump_response_mod = \
 	 dist_fn_arrays.o \
 	 dump_response.o \
 	 eeq.o \
+	 explicit_schemes.o \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
@@ -99,6 +100,7 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -170,6 +172,7 @@ ffttester_mod = \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
+	 explicit_schemes.o \
 	 fft_work.o \
 	 ffttester.o \
 	 fields.o \
@@ -204,6 +207,7 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -237,6 +241,7 @@ generate_fftw_wisdom_mod = \
 	 deq.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
+	 explicit_schemes.o \
 	 fft_work.o \
 	 fields_arrays.o \
 	 file_utils.o \
@@ -303,6 +308,7 @@ gs2_mod = \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
+	 explicit_schemes.o \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
@@ -337,6 +343,7 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -402,6 +409,7 @@ ingen_mod = \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
+	 explicit_schemes.o \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
@@ -433,6 +441,7 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -763,6 +772,7 @@ eeq.o: \
 et.o: \
 	 constants.o \
 	 geometry.o 
+explicit_schemes.o: 
 fft_work.o: \
 	 constants.o \
 	 mp.o 
@@ -1160,6 +1170,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1167,6 +1178,7 @@ netcdf_utils.o: \
 nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
+	 explicit_schemes.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
@@ -1200,7 +1212,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

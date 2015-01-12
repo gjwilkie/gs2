@@ -5,11 +5,13 @@ module nonlinear_terms
 !
 ! missing factors of B_a/B(theta) in A_perp terms??
 !
+  use explicit_schemes, only: multistep_scheme
+
   implicit none
 
   public :: init_nonlinear_terms, finish_nonlinear_terms
   public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
-  public :: add_explicit_terms
+  public :: add_explicit_terms, nl_order, get_exp_source
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
   public :: nonlinear_terms_unit_test_time_add_nl, cfl
 
@@ -17,10 +19,8 @@ module nonlinear_terms
 
   ! knobs
   integer, public :: nonlinear_mode_switch
-  integer :: flow_mode_switch !THIS IS NOT SUPPORTED, SHOULD BE REMOVED?
 
   integer, public, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
-  integer, public, parameter :: flow_mode_off = 1, flow_mode_on = 2
 
 
   real, save, dimension (:,:), allocatable :: ba, gb, bracket
@@ -45,10 +45,14 @@ module nonlinear_terms
   logical :: accelerated = .false.
 
   logical :: exist
-  
+
+  !!Advance scheme
+  type(multistep_scheme) :: multistep !Currently only Adams-Bashforth supported
+  integer :: nl_order !Order of method to use
+  integer, parameter :: max_adams_order=5 
+
 contains
   
-
   subroutine check_nonlinear_terms(report_unit,delt_adj)
     use gs2_time, only: code_dt_min
     use kt_grids, only: box
@@ -88,14 +92,6 @@ contains
           write (report_unit, *) 
        end if
 
-       if (flow_mode_switch == flow_mode_on) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('flow_mode=on is not allowed.  Flow mode is buggy.')") 
-          write (report_unit, fmt="('THIS IS AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
        write (report_unit, fmt="('The minimum delt ( code_dt_min ) = ',e11.4)") code_dt_min
        write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e11.4)") code_delt_max
        write (report_unit, fmt="('The maximum delt < ',f10.4,' * min(Delta_perp/v_perp). (cfl)')") cfl
@@ -130,6 +126,7 @@ contains
     use gs2_layouts, only: init_dist_fn_layouts, yxf_lo, accelx_lo
     use gs2_layouts, only: init_gs2_layouts
     use gs2_transforms, only: init_transforms
+    use mp, only: proc0
     implicit none
     logical :: dum1, dum2
     logical, parameter :: debug=.false.
@@ -152,6 +149,16 @@ contains
     
 
     call read_parameters
+
+    !Setup the multistep scheme
+    !Could have case select here to allow support for different schemes
+    call multistep%init(max_adams_order,'Adams-Bashforth')
+    call multistep%set_coeffs(1,[1.0])
+    call multistep%set_coeffs(2,[3.0/2.0,-1.0/2.0])
+    call multistep%set_coeffs(3,[23.0/12.0,-4.0/3.0,5.0/12.0])
+    call multistep%set_coeffs(4,[55.0/24.0,-59.0/24.0,37.0/24.0,-3.0/8.0])
+    call multistep%set_coeffs(5,[1901.0/720.0,-1387.0/360.0,109.0/30.0,-637.0/360.0,251.0/720.0])
+    !if(proc0)call multistep%print
 
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlinear_mode_switch /= nonlinear_mode_none) then
@@ -190,24 +197,19 @@ contains
             text_option('off', nonlinear_mode_none), &
             text_option('on', nonlinear_mode_on) /)
     character(20) :: nonlinear_mode
-    type (text_option), dimension (3), parameter :: flowopts = &
-         (/ text_option('default', flow_mode_off), &
-            text_option('off', flow_mode_off), &
-            text_option('on', flow_mode_on) /)
-    character(20) :: flow_mode
-    namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
+    namelist /nonlinear_terms_knobs/ nonlinear_mode, cfl, nl_order, &
          C_par, C_perp, p_x, p_y, p_z, zip, nl_forbid_force_zero
     integer :: ierr, in_file
 
     if (proc0) then
        nonlinear_mode = 'default'
-       flow_mode = 'default'
        cfl = 0.1
        C_par = 0.1
        C_perp = 0.1
        p_x = 6.0
        p_y = 6.0
        p_z = 6.0
+       nl_order = 3
 
        in_file=input_unit_exist("nonlinear_terms_knobs",exist)
        if(exist) read (unit=in_file,nml=nonlinear_terms_knobs)
@@ -216,13 +218,9 @@ contains
        call get_option_value &
             (nonlinear_mode, nonlinearopts, nonlinear_mode_switch, &
             ierr, "nonlinear_mode in nonlinear_terms_knobs",.true.)
-       call get_option_value &
-            (flow_mode, flowopts, flow_mode_switch, &
-            ierr, "flow_mode in nonlinear_terms_knobs",.true.)
     end if
 
     call broadcast (nonlinear_mode_switch)
-    call broadcast (flow_mode_switch)
     call broadcast (cfl)
     call broadcast (C_par) 
     call broadcast (C_perp) 
@@ -231,11 +229,7 @@ contains
     call broadcast (p_z)
     call broadcast (nl_forbid_force_zero)
     call broadcast (zip)
-
-    if (flow_mode_switch == flow_mode_on) then
-       if (proc0) write(*,*) 'Forcing flow_mode = off'
-       flow_mode_switch = flow_mode_off
-    endif
+    call broadcast (nl_order)
 
     if (nonlinear_mode_switch == nonlinear_mode_on)  then
        algorithm = 1 
@@ -244,17 +238,140 @@ contains
 
   end subroutine read_parameters
 
-  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd)
+  !>Calculate the explicit source term at given location
+  !!Note, doesn't include 0.5*dt needed to actually advance
+  function get_exp_source(ig,isgn,iglo,istep,orderIn)
+    use dist_fn_arrays, only: gexp
+    implicit none
+    complex :: get_exp_source
+    integer, intent(in) :: ig, isgn, iglo, istep
+    integer, intent(in), optional ::orderIn
+    integer :: desiredOrder,order, i
+
+    !Initialise return value
+    get_exp_source=0.0
+
+    !Exit early if no steps taken
+    if(istep.eq.0) return
+
+    !Set the target order
+    desiredOrder=nl_order
+    if(present(orderIn)) desiredOrder=orderIn
+
+    !Set the order to use 
+    order=min(desiredOrder,istep)
+
+    !Build up term
+    do i=1,order
+       get_exp_source=get_exp_source+multistep%get_coeff(order,i)*gexp(i,ig,isgn,iglo)
+    enddo    
+  end function get_exp_source
+
+  !>Estimate the maximum relative error in exp source
+  !!by finding max difference between source with largest
+  !!order and one order less.
+  function max_exp_source_error(istep)
+    use mp, only: max_allreduce, proc0, iproc, sum_allreduce
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
+    use theta_grid, only: ntgrid
+    implicit none
+    integer, intent(in) :: istep
+    real :: max_exp_source_error
+    real :: max_rel_err
+    integer :: order, ig, iglo, isgn, ik, it, il, ie, is, nskip
+    complex :: tmpAns, tmpEst
+    real :: tmpErr, averr
+    !Set default value
+    max_exp_source_error=0.
+
+    !Exit early if no steps taken
+    if(istep.eq.0) return
+
+    !Set the order to use 
+    order=min(nl_order,istep)
+
+    !If order is 1 then can't estimate error
+    if(order.le.1) return
+
+    !Now calculate max relative error
+    max_rel_err=0.
+    averr=0.
+    nskip=0
+    do ig=-ntgrid,ntgrid
+       do isgn=1,2
+          do iglo=g_lo%llim_proc,g_lo%ulim_proc
+
+             !Get "correct" answer
+             tmpAns=get_exp_source(ig,isgn,iglo,istep,order)
+
+             !Skip small values
+             if(abs(tmpAns).lt.epsilon(0.0)) then
+                nskip=nskip+1
+                cycle
+             endif
+
+             !Get "estimate" answer
+             tmpEst=get_exp_source(ig,isgn,iglo,istep,order-1)
+
+             tmpErr=abs((tmpAns-tmpEst)/(tmpAns))
+             averr=averr+tmpErr/((g_lo%ulim_world+1)*2*(2*ntgrid+1))
+             ! if((tmpErr.gt.1.0).and.(tmpErr.gt.max_rel_err))then
+             !    ik=ik_idx(g_lo,iglo)
+             !    it=it_idx(g_lo,iglo)
+             !    il=il_idx(g_lo,iglo)
+             !    ie=ie_idx(g_lo,iglo)
+             !    is=is_idx(g_lo,iglo)
+!                write(6,'("Large error on proc ",I0," (istep ",I0,") Ans ",E17.5E4," Est ",E17.5E4," Err ",E17.5E4," iktles,isgn,ig ",7(I0," "))') iproc,istep,abs(tmpAns),abs(tmpEst),tmpErr,ik,it,il,ie,is,isgn,ig
+             ! endif
+
+             !Update max_rel_err
+             max_rel_err=max(max_rel_err,tmpErr)
+          enddo
+       enddo
+    enddo
+
+    !Reduct over procs
+    call sum_allreduce(nskip)
+    call sum_allreduce(averr)
+    averr=averr*(((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))/(((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))-nskip))
+    call max_allreduce(max_rel_err)
+    max_exp_source_error=max_rel_err
+    if(proc0.and.((max_exp_source_error).gt.1.0))then
+       write(6,'("Estimated error in NL source is ",F12.5,"% with averr ",F12.5,"% Skipping ",I0)') max_exp_source_error*100,averr*100,nskip
+    else
+       if(proc0) write(6,'("Error less than 100% : ",I0," avg:",F12.5,"%")') int(max_exp_source_error*100),averr*100
+    endif
+  end function max_exp_source_error
+
+  subroutine shift_exp(gexp,istep)
+    implicit none
+    complex, dimension(:,:,:,:), intent(inout) :: gexp
+    integer, intent(in) :: istep
+    integer :: order, i
+
+    !Exit early if no steps taken
+    if(istep.eq.0) return
+
+    !Set the order to use 
+    order=min(nl_order,istep)
+
+    !Shift along terms
+    do i=order,2,-1
+       gexp(i,:,:,:)=gexp(i-1,:,:,:)
+    enddo
+  end subroutine shift_exp
+
+  subroutine add_explicit_terms (phi, apar, bpar, istep, bd)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
+    use dist_fn_arrays, only: gexp
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
     real :: dt_cfl
-    logical, save :: nl = .true.
+    logical, parameter :: nl = .true.
 
     select case (nonlinear_mode_switch)
     case (nonlinear_mode_none)
@@ -263,17 +380,16 @@ contains
        call save_dt_cfl (dt_cfl)
 #ifdef LOWFLOW
        if (istep /=0) &
-            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd)
+            call add_explicit (gexp, phi, apar, bpar, istep, bd)
 #endif
     case (nonlinear_mode_on)
 !       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, nl)
+       if (istep /= 0) call add_explicit (gexp, phi, apar, bpar, istep, bd, nl)
     end select
   end subroutine add_explicit_terms
 
 
-  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd,  nl)
-
+  subroutine add_explicit (gexp, phi, apar, bpar, istep, bd,  nl)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use dist_fn_arrays, only: g
@@ -281,7 +397,7 @@ contains
     use run_parameters, only: reset
     implicit none
 
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
+    complex, dimension (:,-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: gexp
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
@@ -290,7 +406,7 @@ contains
     integer :: istep_last = 0
     integer :: iglo, ik, it
     real :: zero
-    real :: dt_cfl
+    real :: dt_cfl, maxerr
 
     if (initializing) then
        if (present(nl)) then
@@ -307,24 +423,23 @@ contains
     if (istep /= istep_last) then
 
        zero = epsilon(0.0)
-       g3 = g2
-       g2 = g1
+       call shift_exp(gexp,istep)
 
        ! if running nonlinearly, then compute the nonlinear term at grid points
        ! and store it in g1
        if (present(nl)) then
-          call add_nl (g1, phi, apar, bpar)
+          call add_nl (gexp(1,:,:,:), phi, apar, bpar)
           if(reset) return !Return if resetting
-          ! takes g1 at grid points and returns 2*g1 at cell centers
-          call center (g1)
+          ! takes gexp(1,:,:,:) at grid points and returns 2*gexp(1,:,:,:) at cell centers
+          call center (gexp(1,:,:,:))
        else
-          g1 = 0.
+          gexp(1,:,:,:) = 0.
        end if
 
 #ifdef LOWFLOW
        ! do something
 #endif
-
+       maxerr=max_exp_source_error(istep)
     end if
 
     if (zip) then
@@ -335,10 +450,8 @@ contains
 !          if (it /= 1) then
           if (ik /= 1) then
 !          if (ik == 2 .and. it == 1) then
-             g (:,1,iglo) = 0.
-             g (:,2,iglo) = 0.
-             g1(:,1,iglo) = 0.
-             g1(:,2,iglo) = 0.
+             g (:,:,iglo) = 0.
+             gexp(1,:,:,iglo) = 0.
           end if
        end do
     end if
@@ -722,7 +835,7 @@ contains
     
     initialized = .false.
     initializing = .true.
-
+    call multistep%finish
   end subroutine reset_init
 
   subroutine finish_init
@@ -740,7 +853,7 @@ contains
 
     nonlin = .false. ; alloc = .true. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
-
+    call multistep%finish
   end subroutine finish_nonlinear_terms
 
 end module nonlinear_terms
