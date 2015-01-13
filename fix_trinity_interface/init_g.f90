@@ -11,6 +11,8 @@ module init_g
   public :: reset_init
   public :: init_vnmult
   public :: new_field_init
+  public :: ginitopt_restart_many
+  public :: ginitopt_restart_memory
   private :: single_initial_kx
   private
 
@@ -677,15 +679,23 @@ contains
     
   end subroutine init_init_g
 
-  subroutine ginit (restarted)
+  subroutine ginit (restarted, override_ginitopt_switch)
 
     use gs2_save, only: init_tstart
     logical, intent (out) :: restarted
+    integer, intent(in), optional :: override_ginitopt_switch
     real :: t0
     integer :: istatus
+    integer :: ginitopt_actual
+
+    if (present(override_ginitopt_switch)) then
+      ginitopt_actual = override_ginitopt_switch
+    else
+      ginitopt_actual = ginitopt_switch
+    end if
 
     restarted = .false.
-    select case (ginitopt_switch)
+    select case (ginitopt_actual)
     case (ginitopt_default)
        call ginit_default
     case (ginitopt_default_odd)

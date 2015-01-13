@@ -164,14 +164,17 @@ contains
     if (debug) write(6,*) "init_fields: nl_finish_init"
     call nl_finish_init
 
-    if (debug) write(6,*) "init_fields: ginit"
-    call ginit (restarted)
-    if (restarted .and. .not. force_maxwell_reinit) return
-    if (debug) write(6,*) "init_fields: init_antenna"
-    call init_antenna
+    ! EGH Commented out the following lines as they are now
+    ! handled by gs2_init
 
-    !Set the initial fields
-    call set_init_fields
+    !if (debug) write(6,*) "init_fields: ginit"
+    !call ginit (restarted)
+    !if (restarted .and. .not. force_maxwell_reinit) return
+    !if (debug) write(6,*) "init_fields: init_antenna"
+    !call init_antenna
+
+    !!Set the initial fields
+    !call set_init_fields
 
     !If running in flux tube disable evolution of ky=kx=0 mode
     if(gridopt_switch.eq.gridopt_box) kwork_filter(1,1)=.true.
@@ -470,7 +473,13 @@ contains
 
     implicit none
 
-    call reset_init
+    initialized  = .false.
+    phi = 0.
+    phinew = 0.
+    apar = 0.
+    aparnew = 0.
+    bpar = .0
+    bparnew = 0.
     
     select case (fieldopt_switch)
     case (fieldopt_implicit)

@@ -3393,6 +3393,11 @@ contains
 
     call init_fields_local
 
+    ! check that we can finish and then init
+    call finish_fields_local
+
+    call init_fields_local
+
     fields_local_unit_test_init_fields_matrixlocal = .true.
 
   end function fields_local_unit_test_init_fields_matrixlocal
@@ -3580,6 +3585,7 @@ contains
 !!NOTE: Don't currently free the sub-communicators which is bad
     call pc%reset
     call fieldmat%reset
+    !reinit = .true.
     initialised=.false.
   end subroutine finish_fields_local
 

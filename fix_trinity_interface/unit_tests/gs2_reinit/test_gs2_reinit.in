@@ -37,8 +37,8 @@
       write_movie = .true.
       write_heating = .true.
 
-      write_g = .true.
-      write_lpoly = .true.
+      write_g = .false.
+      write_lpoly = .false.
 
       omegatol = -0.001
 
