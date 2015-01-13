@@ -16,6 +16,8 @@ module gs2_main
   public :: initialize_diagnostics, evolve_equations, run_eigensolver
   public :: finalize_diagnostics, finalize_equations, finalize_gs2
   public :: calculate_outputs
+
+  public :: old_iface_state
   !> Unit tests
 
   !> This function calls reset_gs2 using
@@ -172,6 +174,7 @@ contains
   subroutine initialize_gs2(state)
     use file_utils, only: init_file_utils
     use file_utils, only: run_name, run_name_target
+    use gs2_init, only: init_gs2_init
     use job_manage, only: checktime, time_message
     use job_manage, only: init_checktime, checktime_initialized
     use job_manage, only: job_fork
@@ -275,6 +278,9 @@ contains
     !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
     using_measure_scatter=.false.
 
+    !> Initialize the gs2 initialization system
+    call init_gs2_init
+
     !state%gs2_initialized = .true.
     state%init%level = init_level_list%gs2
 
@@ -303,7 +309,7 @@ contains
 
     ! This triggers initializing of all the grids, all the physics parameters
     ! and all the modules which solve the equations
-    call init(state%init, init_level_list%fields)
+    call init(state%init, init_level_list%full)
 
     ! Set the initial simulation time (must be after init_fields
     ! because initial time may be read from a restart file)
@@ -438,9 +444,9 @@ contains
           if (reset) then
              ! if called within trinity, do not dump info to screen
              if (state%is_external_job) then
-                call reset_time_step (istep, state%exit, state%external_job_id)
+                call reset_time_step (state%init, istep, state%exit, state%external_job_id)
              else       
-                call reset_time_step (istep, state%exit)
+                call reset_time_step (state%init, istep, state%exit)
              end if
           end if
           if(state%exit) exit
@@ -469,9 +475,9 @@ contains
           if (reset) then
              ! if called within trinity, do not dump info to screen
              if (state%is_external_job) then
-                call reset_time_step (istep, state%exit, state%external_job_id)
+                call reset_time_step (state%init, istep, state%exit, state%external_job_id)
              else       
-                call reset_time_step (istep, state%exit)
+                call reset_time_step (state%init, istep, state%exit)
              end if
           end if
 
@@ -572,6 +578,7 @@ contains
 
   subroutine finalize_gs2(state)
     use file_utils, only: finish_file_utils
+    use gs2_init, only: finish_gs2_init
     use job_manage, only: time_message
     use mp, only: finish_mp, proc0
     use mp, only: mp_abort
@@ -596,6 +603,8 @@ contains
         !& are all false. '
        !stop 1
      !end if
+
+    call finish_gs2_init
 
     if (proc0) call finish_file_utils
 
@@ -975,6 +984,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (nspec.ne.2)  & 
       call mp_abort("gs2_main_unit_test_reset_gs2 only works with 2 species", .true.)
 
+    write (*,*) 'HEREEEE'
+
     call reset_gs2(nspec, &
       (/spec(1)%dens, spec(2)%dens/)*fac, &
       ! Deliberately leave fac off this line
@@ -984,6 +995,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
       g_exb, 0.0, &
       (/spec(1)%vnewk, spec(2)%vnewk/), &
       1)
+    write (*,*) 'HERAAAA'
 
     gs2_main_unit_test_reset_gs2 = .true.
 
@@ -992,8 +1004,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
     use dist_fn, only: dist_fn_g_exb => g_exb
-    use gs2_init, only: save_fields_and_dist_fn
-    use gs2_reinit, only: reinit_gk_and_field_equations
+    use gs2_init, only: save_fields_and_dist_fn, init, init_level_list
     use fields, only: init_fields, f_reset => reset_init
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use gs2_diagnostics, only: gd_reset => reset_init
@@ -1042,12 +1053,18 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! and counters to zero... used mainly for trinity convergence checks.
     call gd_reset
 
+    call init(old_iface_state%init, init_level_list%species)
 
     call reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
+    write (*,*) 'HERTTTT'
+
 
     ! Antenna should be reset because it depends on species paramters
-    call reinit_gk_and_field_equations(reset_antenna=.true.)
+    !call reinit_gk_and_field_equations(reset_antenna=.true.)
+    call init(old_iface_state%init, init_level_list%full)
+
+    write (*,*) 'HERAAA'
 
     old_iface_state%istep_end = 1
 

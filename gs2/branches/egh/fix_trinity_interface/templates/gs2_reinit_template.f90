@@ -22,7 +22,7 @@ module gs2_reinit
   !! otherwise the current field and dist_fn values will be lost. The
   !! logical flag in_memory must be given the same value that was 
   !! set in save_fields_and_dist_fn. 
-  !public :: reinit_gk_and_field_equations
+  public :: reinit_gk_and_field_equations
 
   !> This function overrides the in_memory flag
   !! and should only be used if you know what
@@ -73,6 +73,38 @@ contains
   end subroutine increase_time_step
 
 
+  subroutine reinit_gk_and_field_equations(reset_antenna)
+    use run_parameters, only: fphi, fapar, fbpar
+    use dist_fn_arrays, only: g_restart_tmp
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use collisions, only: c_reset => reset_init
+    use dist_fn, only: d_reset => reset_init
+    use fields, only: f_reset => finish_fields, init_fields
+    use init_g, only: g_reset => reset_init
+    use nonlinear_terms, only: nl_reset => reset_init
+    use antenna, only: a_reset => reset_init
+    use gs2_init, only: load_saved_field_values
+    logical, intent(in) :: reset_antenna
+! prepare to reinitialize inversion matrix, etc.
+    call d_reset
+    call c_reset
+    call f_reset
+    call g_reset(.not.in_memory)
+    call nl_reset
+
+    if (reset_antenna) call a_reset
+
+    write (*,*) 'EEEETTTT'
+
+! reinitialize
+    call init_fields
+
+    write (*,*) 'EEEEFFF'
+
+!Update fields if done in memory
+!Don't need/want to update if force_maxwell_reinit
+    call load_saved_field_values
+  end subroutine reinit_gk_and_field_equations
 
 
 
@@ -152,7 +184,7 @@ contains
     ! have not changed so resetting antenna would cause
     ! an unnecessary discontinuity
     !call reinit_gk_and_field_equations(reset_antenna=.false.)
-    call init(current_init, init_level_list%full)
+    call init(current_init, init_level_list%fields)
     
     if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 

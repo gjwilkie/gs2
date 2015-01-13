@@ -23,21 +23,23 @@ program test_gs2_reinit
   !use checks_mod
   !call test_gs2('Linear CBC (unit test) to test new diagnostics', checks)
     use gs2_reinit, only: reset_time_step
-    use gs2_init, only: save_fields_and_dist_fn
-    use gs2_reinit, only: reinit_gk_and_field_equations
+    use gs2_init, only: save_fields_and_dist_fn, init
     use gs2_reinit, only: gs2_reinit_unit_test_set_in_memory
     use gs2_main, only: run_gs2, finish_gs2
+    use gs2_init, only:  init, init_level_list
     use gs2_main, only: gs2_main_unit_test_reset_gs2
+    use gs2_main, only: finalize_diagnostics, initialize_diagnostics
     use gs2_time, only: code_dt_cfl
+    use gs2_main, only: old_iface_state
+    use fields, only: finish_fields, init_fields
+    use fields_local, only: init_fields_local, finish_fields_local
     use unit_tests
     use unit_tests, only: should_print
-    use diagnostics_config, only: override_screen_printout_options
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use mp, only: broadcast, barrier, iproc
     use fields_arrays, only: phinew, aparnew, bparnew
     use dist_fn_arrays, only: gnew
     use gs2_diagnostics, only: finish_gs2_diagnostics
-    use gs2_diagnostics, only: pflux_avg, qflux_avg, heat_avg, vflux_avg
   use kt_grids, only: naky, ntheta0, init_kt_grids
   use theta_grid, only: ntgrid, init_theta_grid
   use gs2_layouts, only: init_gs2_layouts, g_lo, ie_idx
@@ -85,6 +87,19 @@ program test_gs2_reinit
 
     call run_gs2(mp_comm)
 
+    call announce_test('init down and up')
+    call finalize_diagnostics(old_iface_state)
+    !call finish_fields_local
+    !call init_fields_local
+    call finish_fields
+    call init_fields
+    call init(old_iface_state%init, init_level_list%collisions)
+    call init(old_iface_state%init, init_level_list%full)
+    call init(old_iface_state%init, init_level_list%gs2)
+    call init(old_iface_state%init, init_level_list%full)
+    call initialize_diagnostics(old_iface_state)
+    call process_test(.true., 'init down and up')
+
     supercell_idx = min(iproc+2, size(fieldmat%kyb(2)%supercells))
     allocate(rowbloc( &
       size(fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data, 1), &
@@ -98,7 +113,9 @@ program test_gs2_reinit
     rowbloc = fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data
 
     call save_fields_and_dist_fn
-    call reinit_gk_and_field_equations(reset_antenna=.true.)
+    !call reinit_gk_and_field_equations(reset_antenna=.true.)
+    call init(old_iface_state%init, init_level_list%override_timestep)
+    call init(old_iface_state%init, init_level_list%full)
 
     call announce_test('Values of fields and dist fn after reinitialising')
     call process_test(test_fields_and_dist(), 'Values of fields and dist fn after reinitialising')
@@ -111,7 +128,9 @@ program test_gs2_reinit
     call gs2_reinit_unit_test_set_in_memory(.true.)
 
     call save_fields_and_dist_fn
-    call reinit_gk_and_field_equations(reset_antenna=.true.) 
+    call init(old_iface_state%init, init_level_list%override_timestep)
+    call init(old_iface_state%init, init_level_list%full)
+    !call reinit_gk_and_field_equations(reset_antenna=.true.) 
 
     call announce_test('Values of fields and dist fn after reinitialising in memory')
     call process_test(test_fields_and_dist(), 'Values of fields and dist fn after reinitialising in memory')
@@ -120,7 +139,7 @@ program test_gs2_reinit
     call process_test(response_unchanged(),&
       'Value of response matrix after reinitialising in memory')
 
-    call reset_time_step(0, dummy)
+    call reset_time_step(old_iface_state%init, 0, dummy)
 
     call announce_test('Values of fields and dist fn after calling reset_time_step')
     call process_test(test_fields_and_dist(), &
@@ -131,7 +150,7 @@ program test_gs2_reinit
       'Value of response matrix after calling reset_time_step')
 
     code_dt_cfl = 0.001
-    call reset_time_step(0, dummy)
+    call reset_time_step(old_iface_state%init, 0, dummy)
 
     call announce_test('Values of fields and dist fn after changing timestep')
     call process_test(test_fields_and_dist(), 'Values of fields and dist fn after changing timestep')
@@ -141,7 +160,7 @@ program test_gs2_reinit
       'Value of response matrix should have changed after changing timestep')
 
     code_dt_cfl = 1.0
-    call reset_time_step(0, dummy)
+    call reset_time_step(old_iface_state%init, 0, dummy)
     call announce_test('Values of fields and dist fn after restoring timestep')
     call process_test(test_fields_and_dist(), 'Values of fields and dist fn after restoring timestep')
 
@@ -176,7 +195,6 @@ program test_gs2_reinit
 
       !call announce_test("average heat flux")
       !call process_test( &
-        !agrees_with(gnostics%current_results%species_heat_flux_avg, qflux_avg, eps), &
         !"average heat flux")
 
 
