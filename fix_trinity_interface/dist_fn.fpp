@@ -49,6 +49,7 @@ module dist_fn
   public :: init_dist_fn_level_3
   public :: finish_dist_fn_level_3
 
+  public :: override_parameter
 
   !!> init_vpar is called by init_dist_fn should only be called separately 
   !!! for testing purposes
@@ -867,6 +868,22 @@ subroutine check_dist_fn(report_unit)
     if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
     if (allocated(wstar)) deallocate (wstar)
   end subroutine finish_dist_fn_level_3
+
+  subroutine override_parameter(parameter_label, val)
+    use profile_overrides, only: og_exb, omach
+    use gs2_init, only: init, init_level_list
+    use mp, only: mp_abort
+    implicit none
+    integer, intent(in) :: parameter_label
+    real, intent(in) :: val
+
+    select case (parameter_label)
+    case (og_exb)
+      g_exb = val
+    case (omach)
+      call mp_abort("Overriding mach not implemented yet", .true.)
+    end select
+  end subroutine override_parameter
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist

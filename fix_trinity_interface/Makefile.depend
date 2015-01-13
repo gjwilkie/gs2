@@ -45,6 +45,7 @@ dump_grids_mod = \
 	 leq.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 overrides.o \
 	 peq.o \
 	 read_chease.o \
 	 redistribute.o \
@@ -100,8 +101,10 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
@@ -206,8 +209,10 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -260,6 +265,7 @@ generate_fftw_wisdom_mod = \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
@@ -340,8 +346,10 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -438,8 +446,10 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -1039,6 +1049,7 @@ gs2_main.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -1048,19 +1059,12 @@ gs2_main.o: \
 	 theta_grid_params.o \
 	 unit_tests.o 
 gs2_reinit.o: \
-	 antenna.o \
-	 collisions.o \
-	 dist_fn.o \
 	 dist_fn_arrays.o \
-	 fields.o \
-	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_init.o \
 	 gs2_time.o \
-	 init_g.o \
 	 job_manage.o \
 	 mp.o \
-	 nonlinear_terms.o \
 	 run_parameters.o 
 gs2_save.o: \
 	 antenna_data.o \
@@ -1210,6 +1214,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1230,6 +1235,7 @@ nonlinear_terms.o: \
 	 theta_grid.o 
 om.o: \
 	 command_line.o 
+overrides.o: 
 parameter_scan.o: \
 	 dist_fn.o \
 	 file_utils.o \
@@ -1250,7 +1256,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -1279,6 +1286,7 @@ species.o: \
 	 file_utils.o \
 	 job_manage.o \
 	 mp.o \
+	 overrides.o \
 	 text_options.o 
 spfunc.o: \
 	 constants.o 
