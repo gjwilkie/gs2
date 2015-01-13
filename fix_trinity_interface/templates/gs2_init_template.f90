@@ -254,7 +254,7 @@ contains
     use run_parameters, only: fphi, fapar, fbpar
     logical :: restarted
 
-    write (*,*) 'set_init_field in_memory', in_memory
+    write (*,*) 'set_init_field in_memory', in_memory, fields_and_dist_fn_saved
 
     if (.not. fields_and_dist_fn_saved) then 
       ! This is the usual initial setup 

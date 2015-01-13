@@ -1053,14 +1053,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! and counters to zero... used mainly for trinity convergence checks.
     call gd_reset
 
-    call init(old_iface_state%init, init_level_list%species)
+    call init(old_iface_state%init, init_level_list%override_profiles)
 
     call reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
     write (*,*) 'HERTTTT'
 
 
-    ! Antenna should be reset because it depends on species paramters
     !call reinit_gk_and_field_equations(reset_antenna=.true.)
     call init(old_iface_state%init, init_level_list%full)
 
