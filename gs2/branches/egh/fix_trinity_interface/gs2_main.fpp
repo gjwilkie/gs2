@@ -159,6 +159,11 @@ module gs2_main
 
   private
 
+  interface override
+    module procedure override_parameter_spec
+    module procedure override_parameter_nospec
+  end interface override
+
   !> This object is used for implementing the old interface
   !! and should not be modified
   type(gs2_program_state_type) :: old_iface_state
@@ -631,8 +636,54 @@ contains
   subroutine override_geometry
   end subroutine override_geometry
 
-  subroutine override_profiles
-  end subroutine override_profiles
+  subroutine override_parameter_spec(state, parameter_label, species_index, val)
+    use profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
+    use profile_overrides, only: profile_overrides_set
+    use gs2_init, only: init, init_level_list
+    use species, only: op_spec => override_parameter
+    use mp, only: mp_abort
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+    integer, intent(in) :: parameter_label, species_index
+    real, intent(in) :: val
+
+
+    select case (parameter_label)
+    case (otemp, odens, ofprim, otprim, ovnewk)
+      call init(state%init, init_level_list%override_profiles)
+      profile_overrides_set = .true.
+      call op_spec(parameter_label, species_index, val)
+    case default
+      write (*,*) "Unknown parameter label: ", parameter_label
+      call mp_abort("Unknown parameter label in override", .true.)
+    end select
+
+
+
+  end subroutine override_parameter_spec
+
+  subroutine override_parameter_nospec(state, parameter_label, val)
+    use profile_overrides, only: profile_overrides_set
+    use profile_overrides, only: og_exb, omach
+    use gs2_init, only: init, init_level_list
+    use mp, only: mp_abort
+    use dist_fn, only: op_dist_fn => override_parameter
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+    integer, intent(in) :: parameter_label
+    real, intent(in) :: val
+
+
+    select case (parameter_label)
+    case (og_exb, omach)
+      call init(state%init, init_level_list%override_profiles)
+      profile_overrides_set = .true.
+      call op_dist_fn(parameter_label, val)
+    case default
+      write (*,*) "Unknown parameter label: ", parameter_label
+      call mp_abort("Unknown parameter label in override", .true.)
+    end select
+  end subroutine override_parameter_nospec
   
   subroutine calculate_outputs(state)
     use gs2_diagnostics, only: start_time
@@ -987,8 +1038,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     write (*,*) 'HEREEEE'
 
     call reset_gs2(nspec, &
-      (/spec(1)%dens, spec(2)%dens/)*fac, &
-      ! Deliberately leave fac off this line
+      ! Deliberately leave fac off the next 2 lines
+      ! so QN is unaffected
+      (/spec(1)%dens, spec(2)%dens/), &
       (/spec(1)%temp, spec(2)%temp/), &
       (/spec(1)%fprim, spec(2)%fprim/)*fac, &
       (/spec(1)%tprim, spec(2)%tprim/)*fac, &
@@ -1015,12 +1067,15 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use mp, only: scope, subprocs, allprocs
     use mp, only: mp_abort
     use run_parameters, only: trinity_linear_fluxes
+    use species, only: nspec, spec, impurity, ions, electrons
+    use profile_overrides, only: otprim, ofprim, otemp, odens, ovnewk, og_exb, omach
 
     implicit none
 
     integer, intent (in) :: ntspec, nensembles
     real, intent (in) :: gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
+    integer :: is
 
     real :: dummy
 
@@ -1031,7 +1086,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! EGH add a check for this.
     if (gexb .ne. dist_fn_g_exb) call mp_abort(&
       "ERROR: Changing g_exb in gs2_reset is not implemented yet.", .true.)
-
+    if (ntspec .gt. nspec) call mp_abort(&
+      "Cannot pass more species to reset_gs2 than nspec", .true.)
     ! To prevent compiler warnings
     dummy = mach
     dummy = gexb
@@ -1039,34 +1095,30 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     if (trinity_linear_fluxes.and.nonlinear_mode_switch.eq.nonlinear_mode_none) &
       call reset_linear_magnitude
+
     if (nensembles > 1) call scope (subprocs)
 
-
     call save_fields_and_dist_fn
-
     ! EGH is this line necessary?
     gnew = 0.
-
     call save_dt (code_dt)
-
     ! This call to gs2_diagnostics::reset_init sets some time averages
     ! and counters to zero... used mainly for trinity convergence checks.
     call gd_reset
 
-    call init(old_iface_state%init, init_level_list%override_profiles)
+    do is = 1,nspec
+      call override(old_iface_state, odens, is, dens(is))
+      call override(old_iface_state, otemp, is, temp(is))
+      call override(old_iface_state, ofprim, is, fprim(is))
+      call override(old_iface_state, otprim, is, tprim(is))
+      call override(old_iface_state, ovnewk, is, nu(is))
+    end do
+    call override(old_iface_state, og_exb, gexb)
+    ! mach doesn't do anything atm
+    !call override(old_iface_state, omach, mach)
 
-    call reinit_species (ntspec, dens, temp, fprim, tprim, nu)
-
-    write (*,*) 'HERTTTT'
-
-
-    !call reinit_gk_and_field_equations(reset_antenna=.true.)
     call init(old_iface_state%init, init_level_list%full)
-
-    write (*,*) 'HERAAA'
-
     old_iface_state%istep_end = 1
-
     if (nensembles > 1) call scope (allprocs)
 
   end subroutine reset_gs2

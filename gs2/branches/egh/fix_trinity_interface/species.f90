@@ -8,6 +8,7 @@ module species
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
+  public :: override_parameter
 
   type :: specie
      real :: z
@@ -414,6 +415,31 @@ contains
         end do
      end if
   end subroutine determine_species_order
+
+  subroutine override_parameter(parameter_label, species_index, val)
+    use mp, only: proc0, mp_abort
+    use profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
+    integer, intent(in) :: parameter_label, species_index
+    real, intent(in) :: val
+    if (species_index .gt. nspec) then
+      call mp_abort("species_index .gt. nspec in override_profiles", .true.)
+    end if
+
+    select case (parameter_label)
+    case (otprim)
+      spec(species_index)%tprim = val
+    case (ofprim)
+      spec(species_index)%fprim = val
+    case (otemp)
+      spec(species_index)%temp = val
+    case (odens)
+      spec(species_index)%dens = val
+    case (ovnewk)
+      spec(species_index)%vnewk = val
+    end select
+
+    call calculate_and_broadcast_species_properties
+  end subroutine override_parameter
 
   subroutine calculate_and_broadcast_species_properties
     use mp, only: proc0, broadcast
