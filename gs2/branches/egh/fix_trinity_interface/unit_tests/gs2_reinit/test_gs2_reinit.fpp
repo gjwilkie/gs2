@@ -100,6 +100,11 @@ program test_gs2_reinit
     call initialize_diagnostics(old_iface_state)
     call process_test(.true., 'init down and up')
 
+    call announce_test('init down to species and up')
+    call init(old_iface_state%init, init_level_list%collisions)
+    call init(old_iface_state%init, init_level_list%full)
+    call process_test(.true., 'init down to species and up')
+
     supercell_idx = min(iproc+2, size(fieldmat%kyb(2)%supercells))
     allocate(rowbloc( &
       size(fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data, 1), &
