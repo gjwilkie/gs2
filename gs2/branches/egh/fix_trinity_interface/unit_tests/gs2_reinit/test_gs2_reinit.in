@@ -148,6 +148,7 @@ enable_parallel = .true.
 !==============================
 &fields_knobs
  field_option = "local" ! Controls which time-advance algorithm is used for the linear terms.
+ force_maxwell_reinit = .true.
 /
 
 !==============================

@@ -1330,7 +1330,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine init_vperp2
 
   subroutine init_vpar
-    use dist_fn_arrays, only: vpa, vpar, vpac, vperp2
+    use dist_fn_arrays, only: vpa, vpar, vpac
     use species, only: spec
     use theta_grid, only: ntgrid, delthet, bmag, gradpar
     use le_grids, only: energy, al
@@ -1348,7 +1348,7 @@ subroutine check_dist_fn(report_unit)
        !allocate (vperp2 (-ntgrid:ntgrid,  g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vpar   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     endif
-    vpa = 0. ; vpac = 0. ; vperp2 = 0. ; vpar = 0.
+    vpa = 0. ; vpac = 0.; vpar = 0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        al1 = al(il_idx(g_lo,iglo))

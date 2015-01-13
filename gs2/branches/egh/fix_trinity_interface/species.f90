@@ -383,6 +383,65 @@ contains
   end subroutine finish_trin_species
 
 
+  subroutine determine_species_order
+    use mp, only: broadcast, proc0, mp_abort
+
+    implicit none
+
+    integer is
+     if (nspec == 1) then
+        ions = 1
+        electrons = 0
+        impurity = 0
+     else
+        ! if 2 or more species in GS2 calculation, figure out which is main ion
+        ! and which is electron via mass (main ion mass assumed to be one)
+        do is = 1, nspec
+           if (abs(spec(is)%mass-1.0) <= epsilon(0.0)) then
+              ions = is
+           else if (spec(is)%mass < 0.3) then
+              ! for electrons, assuming electrons are at least a factor of 3 less massive
+              ! than main ion and other ions are no less than 30% the mass of the main ion
+              electrons = is
+           else if (spec(is)%mass > 1.0 + epsilon(0.0)) then
+              impurity = is
+           else
+              if (proc0) write (*,*) &
+                   "Error: TRINITY requires the main ions to have mass 1", &
+                   "and the secondary ions to be impurities (mass > 1)"
+              call mp_abort("Error: TRINITY requires the main ions to have mass 1 and the secondary ions to be impurities (mass > 1)")
+           end if
+        end do
+     end if
+  end subroutine determine_species_order
+
+  subroutine calculate_and_broadcast_species_properties
+    use mp, only: proc0, broadcast
+    integer :: is
+    if (proc0) then 
+      do is = 1, nspec
+         spec(is)%stm = sqrt(spec(is)%temp/spec(is)%mass)
+         spec(is)%zstm = spec(is)%z/sqrt(spec(is)%temp*spec(is)%mass)
+         spec(is)%tz = spec(is)%temp/spec(is)%z
+         spec(is)%zt = spec(is)%z/spec(is)%temp
+         spec(is)%smz = abs(sqrt(spec(is)%temp*spec(is)%mass)/spec(is)%z)
+      end do
+    end if
+    call broadcast (nspec)
+
+    do is = 1, nspec
+       call broadcast (spec(is)%dens)
+       call broadcast (spec(is)%temp)
+       call broadcast (spec(is)%fprim)
+       call broadcast (spec(is)%tprim)
+       call broadcast (spec(is)%vnewk)
+       call broadcast (spec(is)%stm)
+       call broadcast (spec(is)%zstm)
+       call broadcast (spec(is)%tz)
+       call broadcast (spec(is)%zt)
+       call broadcast (spec(is)%smz)
+    end do
+  end subroutine calculate_and_broadcast_species_properties
 
   subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
 
@@ -400,30 +459,7 @@ contains
     if(trin_restart) first = .true.
 
     if (first) then
-       if (nspec == 1) then
-          ions = 1
-          electrons = 0
-          impurity = 0
-       else
-          ! if 2 or more species in GS2 calculation, figure out which is main ion
-          ! and which is electron via mass (main ion mass assumed to be one)
-          do is = 1, nspec
-             if (abs(spec(is)%mass-1.0) <= epsilon(0.0)) then
-                ions = is
-             else if (spec(is)%mass < 0.3) then
-                ! for electrons, assuming electrons are at least a factor of 3 less massive
-                ! than main ion and other ions are no less than 30% the mass of the main ion
-                electrons = is
-             else if (spec(is)%mass > 1.0 + epsilon(0.0)) then
-                impurity = is
-             else
-                if (proc0) write (*,*) &
-                     "Error: TRINITY requires the main ions to have mass 1", &
-                     "and the secondary ions to be impurities (mass > 1)"
-                call mp_abort("Error: TRINITY requires the main ions to have mass 1 and the secondary ions to be impurities (mass > 1)")
-             end if
-          end do
-       end if
+       call determine_species_order
        first = .false.
     end if
 
@@ -467,35 +503,14 @@ contains
           end if
        end if
 
-       do is = 1, nspec
-          spec(is)%stm = sqrt(spec(is)%temp/spec(is)%mass)
-          spec(is)%zstm = spec(is)%z/sqrt(spec(is)%temp*spec(is)%mass)
-          spec(is)%tz = spec(is)%temp/spec(is)%z
-          spec(is)%zt = spec(is)%z/spec(is)%temp
-          spec(is)%smz = abs(sqrt(spec(is)%temp*spec(is)%mass)/spec(is)%z)
-
-!          write (*,100) 'reinit_species', rhoc_ms, spec(is)%temp, spec(is)%fprim, &
-!               spec(is)%tprim, spec(is)%vnewk, real(is)
-       end do
 
     end if
 
+    call calculate_and_broadcast_species_properties
+
 !100 format (a15,9(1x,1pg18.11))
 
-    call broadcast (nspec)
 
-    do is = 1, nspec
-       call broadcast (spec(is)%dens)
-       call broadcast (spec(is)%temp)
-       call broadcast (spec(is)%fprim)
-       call broadcast (spec(is)%tprim)
-       call broadcast (spec(is)%vnewk)
-       call broadcast (spec(is)%stm)
-       call broadcast (spec(is)%zstm)
-       call broadcast (spec(is)%tz)
-       call broadcast (spec(is)%zt)
-       call broadcast (spec(is)%smz)
-    end do
 
   end subroutine reinit_species
 
