@@ -31,8 +31,10 @@ program test_gs2_reinit
     use gs2_main, only: finalize_diagnostics, initialize_diagnostics
     use gs2_time, only: code_dt_cfl
     use gs2_main, only: old_iface_state
+    use gs2_main, only: override
+    use gs2_miller_geometry_overrides, only: oqval
     use fields, only: finish_fields, init_fields
-    use fields_local, only: init_fields_local, finish_fields_local
+    !use fields_local, only: init_fields_local, finish_fields_local
     use unit_tests
     use unit_tests, only: should_print
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
@@ -182,13 +184,31 @@ program test_gs2_reinit
       'Value of response matrix  after calling gs2_reset')
 
 
-    dummy = gs2_main_unit_test_reset_gs2(1.5)
+    dummy = gs2_main_unit_test_reset_gs2(2.0)
     call announce_test('Values of fields and dist fn after calling gs2_reset with a factor')
     call process_test(test_fields_and_dist(), 'Values of fields and dist fn after calling gs2_reset with a factor')
 
     call announce_test('Value of response matrix should have changed after calling gs2_reset with a factor')
     call process_test(.not. response_unchanged() ,&
       'Value of response matrix should have changed after calling gs2_reset with a factor')
+
+    dummy = gs2_main_unit_test_reset_gs2(0.5)
+    call announce_test('Values of fields and dist fn after calling gs2_reset to initial')
+    call process_test(test_fields_and_dist(), 'Values of fields and dist fn after calling gs2_reset to _initial')
+
+    call announce_test('Value of response matrix  after calling gs2_reset to initial')
+    call process_test(response_unchanged() ,&
+      'Value of response matrix  after calling gs2_reset to initial')
+
+    call save_fields_and_dist_fn
+    call override(old_iface_state, oqval, 2.0) 
+    call init(old_iface_state%init, init_level_list%full)
+    call announce_test('Values of fields and dist fn after changing qinp')
+    call process_test(test_fields_and_dist(fields_changed=.true.), 'Values of fields and dist fn after changing qinp')
+
+    call announce_test('Value of response matrix  after changing qinp')
+    call process_test(.not. response_unchanged() ,&
+      'Value of response matrix  after changing qinp')
 
 
 
@@ -246,12 +266,16 @@ contains
       response_unchanged = .false.
     end if
   end function response_unchanged
-  function test_fields_and_dist()
+  function test_fields_and_dist(fields_changed)
     use theta_grid, only: ntheta
     logical :: test_fields_and_dist
     logical :: test_result
+    logical, intent(in), optional :: fields_changed
+    logical :: fields_changed_actual = .false.
     integer :: ig, isgn
     test_result = .true.
+
+    if (present(fields_changed)) fields_changed_actual = fields_changed
 
     do ik = 1,naky
       do it = 1,ntheta0
@@ -269,6 +293,7 @@ contains
         !if (check_result) write (*,*) it,ik
       end do
     end do
+    if (.not. test_result .and. fields_changed_actual) test_result = .true.
     do ig = -ntgrid,ntgrid
       do isgn = 1,2
         write(message, fmt="(A19, I2, A6, I2)") 'value of gnew, ig =', ig, ' isgn=', isgn

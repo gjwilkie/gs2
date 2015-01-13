@@ -71,6 +71,10 @@ module gs2_init
     integer :: level = 0
     !> Whether or not diagnostics have been initialized
     logical :: diagnostics_initialized = .false.
+
+    logical :: profile_overrides_set = .false.
+    logical :: miller_geometry_overrides_set = .false.
+
     !> A list of possible init levels
     !type(init_level_list_type) :: levels
   end type init_level_type

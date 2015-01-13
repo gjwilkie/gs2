@@ -16,6 +16,7 @@ module gs2_main
   public :: initialize_diagnostics, evolve_equations, run_eigensolver
   public :: finalize_diagnostics, finalize_equations, finalize_gs2
   public :: calculate_outputs
+  public :: override
 
   public :: old_iface_state
   !> Unit tests
@@ -637,8 +638,7 @@ contains
   end subroutine override_geometry
 
   subroutine override_parameter_spec(state, parameter_label, species_index, val)
-    use profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
-    use profile_overrides, only: profile_overrides_set
+    use gs2_profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
     use gs2_init, only: init, init_level_list
     use species, only: op_spec => override_parameter
     use mp, only: mp_abort
@@ -651,7 +651,7 @@ contains
     select case (parameter_label)
     case (otemp, odens, ofprim, otprim, ovnewk)
       call init(state%init, init_level_list%override_profiles)
-      profile_overrides_set = .true.
+      state%init%profile_overrides_set = .true.
       call op_spec(parameter_label, species_index, val)
     case default
       write (*,*) "Unknown parameter label: ", parameter_label
@@ -663,11 +663,14 @@ contains
   end subroutine override_parameter_spec
 
   subroutine override_parameter_nospec(state, parameter_label, val)
-    use profile_overrides, only: profile_overrides_set
-    use profile_overrides, only: og_exb, omach
+    use gs2_profile_overrides, only: og_exb, omach
+    use gs2_miller_geometry_overrides, only: orhoc,  oqval,  oshat,  orgeo_lcfs
+    use gs2_miller_geometry_overrides, only: orgeo_local, okap, okappri, otri
+    use gs2_miller_geometry_overrides, only: otripri, oshift, obetaprim
     use gs2_init, only: init, init_level_list
     use mp, only: mp_abort
     use dist_fn, only: op_dist_fn => override_parameter
+    use theta_grid_params, only: op_theta_grid_params => override_parameter
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
     integer, intent(in) :: parameter_label
@@ -676,9 +679,15 @@ contains
 
     select case (parameter_label)
     case (og_exb, omach)
-      call init(state%init, init_level_list%override_profiles)
-      profile_overrides_set = .true.
+      call init(state%init, init_level_list%override_profiles)  
+      state%init%profile_overrides_set = .true.
       call op_dist_fn(parameter_label, val)
+    case (orhoc,  oqval,  oshat,  orgeo_lcfs, &
+          orgeo_local, okap, okappri, otri, &
+          otripri, oshift, obetaprim)
+      call init(state%init, init_level_list%override_miller_geometry)  
+      state%init%miller_geometry_overrides_set = .true.
+      call op_theta_grid_params(parameter_label, val)
     case default
       write (*,*) "Unknown parameter label: ", parameter_label
       call mp_abort("Unknown parameter label in override", .true.)
@@ -1068,7 +1077,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use mp, only: mp_abort
     use run_parameters, only: trinity_linear_fluxes
     use species, only: nspec, spec, impurity, ions, electrons
-    use profile_overrides, only: otprim, ofprim, otemp, odens, ovnewk, og_exb, omach
+    use gs2_profile_overrides, only: otprim, ofprim, otemp, odens, ovnewk, og_exb, omach
 
     implicit none
 
