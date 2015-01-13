@@ -870,7 +870,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine finish_dist_fn_level_3
 
   subroutine override_parameter(parameter_label, val)
-    use profile_overrides, only: og_exb, omach
+    use gs2_profile_overrides, only: og_exb, omach
     use gs2_init, only: init, init_level_list
     use mp, only: mp_abort
     implicit none

@@ -113,7 +113,10 @@ enable_parallel = .true.
 !  
 !==============================
 &theta_grid_knobs
- equilibrium_option = "s-alpha" ! Controls which geometric assumptions are used in the run.
+ equilibrium_option = "eik" ! Controls which geometric assumptions are used in the run.
+/
+&theta_grid_eik_knobs
+ local_eq = .true.
 /
 
 !==============================

@@ -418,7 +418,7 @@ contains
 
   subroutine override_parameter(parameter_label, species_index, val)
     use mp, only: proc0, mp_abort
-    use profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
+    use gs2_profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
     integer, intent(in) :: parameter_label, species_index
     real, intent(in) :: val
     if (species_index .gt. nspec) then

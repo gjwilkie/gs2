@@ -5,6 +5,7 @@ module theta_grid_params
   public :: finish_theta_grid_params
   public :: wnml_theta_grid_params
   public :: write_trinity_parameters
+  public :: override_parameter
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
@@ -187,5 +188,40 @@ contains
     betaprim_trin = betaprim_in
 
   end subroutine init_trin_geo
+
+  subroutine override_parameter(parameter_label, val)
+    use mp, only: proc0, mp_abort
+    use gs2_miller_geometry_overrides, only: orhoc,  oqval,  oshat,  orgeo_lcfs
+    use gs2_miller_geometry_overrides, only: orgeo_local, okap, okappri, otri
+    use gs2_miller_geometry_overrides, only: otripri, oshift, obetaprim
+    integer, intent(in) :: parameter_label
+    real, intent(in) :: val
+
+    select case (parameter_label)
+    case(orhoc)
+      rhoc = val
+    case(oqval)
+      qinp = val
+    case(oshat)
+      shat = val
+    case(orgeo_lcfs)
+      r_geo = val
+    case(orgeo_local)
+      rmaj = val
+    case(okap)
+      akappa = val
+    case(okappri)
+      akappri = val
+    case(otri)
+      tri = val
+    case(otripri)
+      tripri = val
+    case(oshift)
+      shift = val
+    case(obetaprim)
+      betaprim = val
+    end select
+
+  end subroutine override_parameter
 
 end module theta_grid_params

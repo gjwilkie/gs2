@@ -1722,7 +1722,8 @@ contains
     call finish_theta_grid_salpha
     call finish_theta_grid_eik
     call finish_theta_grid_file
-    call finish_theta_grid_params
+    ! This is now handled separately by gs2_init
+    !call finish_theta_grid_params
     call deallocate_arrays
 
   end subroutine finish_theta_grid
