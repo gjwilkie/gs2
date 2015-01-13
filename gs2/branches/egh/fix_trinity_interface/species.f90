@@ -9,6 +9,7 @@ module species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
   public :: override_parameter
+  public :: determine_species_order
 
   type :: specie
      real :: z

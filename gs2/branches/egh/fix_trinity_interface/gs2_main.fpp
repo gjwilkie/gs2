@@ -1077,6 +1077,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use mp, only: mp_abort
     use run_parameters, only: trinity_linear_fluxes
     use species, only: nspec, spec, impurity, ions, electrons
+    use species, only: determine_species_order
     use gs2_profile_overrides, only: otprim, ofprim, otemp, odens, ovnewk, og_exb, omach
 
     implicit none
@@ -1085,6 +1086,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real, intent (in) :: gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     integer :: is
+    integer :: refspec
+    integer, dimension(ntspec) :: gs2_spec
 
     real :: dummy
 
@@ -1115,14 +1118,35 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! and counters to zero... used mainly for trinity convergence checks.
     call gd_reset
 
+    call determine_species_order
+    if (nspec==1) then
+      gs2_spec(1) = ions
+      ! The species with the reference DENSITY
+      ! NB ref temp is always ions (trin spec 1)
+      refspec = 1
+    else if (nspec==2) then 
+      gs2_spec(1) = ions
+      gs2_spec(2) = electrons
+      ! For two species or more, ref dens is electrons (trin spec 2)
+      refspec = 2
+    else if (nspec==3) then
+      gs2_spec(1) = ions
+      gs2_spec(2) = electrons
+      gs2_spec(3) = impurity
+      refspec = electrons
+    else
+      call mp_abort("Can't handle more than 3 species in reset_gs2", .true.)
+    end if
+
     do is = 1,nspec
-      call override(old_iface_state, odens, is, dens(is))
-      call override(old_iface_state, otemp, is, temp(is))
-      call override(old_iface_state, ofprim, is, fprim(is))
-      call override(old_iface_state, otprim, is, tprim(is))
-      call override(old_iface_state, ovnewk, is, nu(is))
+      call override(old_iface_state, odens, gs2_spec(is), dens(is)/dens(refspec))
+      ! Temp gs2_spec(is) always normalised to the main ions
+      call override(old_iface_state, otemp, gs2_spec(is), temp(is)/temp(1))
+      call override(old_iface_state, ofprim, gs2_spec(is), fprim(is))
+      call override(old_iface_state, otprim, gs2_spec(is), tprim(is))
+      call override(old_iface_state, ovnewk, gs2_spec(is), nu(is))
     end do
-    call override(old_iface_state, og_exb, gexb)
+    !call override(old_iface_state, og_exb, gexb)
     ! mach doesn't do anything atm
     !call override(old_iface_state, omach, mach)
 
