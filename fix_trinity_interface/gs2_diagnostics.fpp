@@ -826,6 +826,7 @@ contains
     use antenna, only: dump_ant_amp
     use kt_grids, only: naky, ntheta0
     use gs2_time, only: user_time, user_dt
+    use le_grids, only: finish_weights
     implicit none
     integer, intent (in) :: istep
     integer :: istatus
@@ -836,6 +837,7 @@ contains
     if (write_g) call write_f (last)
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
     if (write_cerr) call collision_error (phinew, bparnew, last)
+    if (write_verr .and. proc0) call finish_weights
 
     !Close some of the open ascii output files
     call close_files

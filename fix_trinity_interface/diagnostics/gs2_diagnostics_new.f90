@@ -229,6 +229,7 @@ contains
     use diagnostics_config, only: finish_diagnostics_config
     use diagnostics_antenna, only: finish_diagnostics_antenna
     use diagnostics_nonlinear_convergence, only: finish_nonlinear_convergence
+    use diagnostics_velocity_space, only: finish_diagnostics_velocity_space
     use nonlinear_terms, only: nonlin
     use dist_fn, only: write_fyx, write_f, write_poly, collision_error
     use mp, only: proc0
@@ -245,6 +246,7 @@ contains
     call finish_diagnostics_fluxes
     call finish_diagnostics_omega
     call finish_diagnostics_antenna(gnostics)
+    call finish_diagnostics_velocity_space(gnostics)
     if (nonlin.and.gnostics%use_nonlin_convergence) call finish_nonlinear_convergence(gnostics)
     if (gnostics%write_heating) call finish_diagnostics_heating(gnostics)
     if (gnostics%parallel .or. proc0) then
