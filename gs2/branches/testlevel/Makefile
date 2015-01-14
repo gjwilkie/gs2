@@ -372,6 +372,7 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
+#Setup the flags for using the eigensolver
 ifdef WITH_EIG
 	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
 	ifdef PETSC_ARCH
@@ -392,9 +393,10 @@ ifdef WITH_EIG
 	CFLAGS += -DWITH_EIG 
 endif 
 
+#Make empty targets if not using the new diagnostics
 ifeq ($(USE_NEW_DIAG),on)
 #ifdef USE_NEW_DIAG
-sinclude Makefile.diagnostics
+sinclude diagnostics/Makefile.diagnostics
 else
 distclean_simpledataio:
 clean_simpledataio:
