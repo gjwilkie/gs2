@@ -49,7 +49,7 @@ module nonlinear_terms
   !!Advance scheme
   type(multistep_scheme) :: multistep !Currently only Adams-Bashforth supported
   integer :: nl_order !Order of method to use
-  integer, parameter :: max_adams_order=5 
+  integer, parameter :: max_adams_order=6 
 
 contains
   
@@ -153,11 +153,14 @@ contains
     !Setup the multistep scheme
     !Could have case select here to allow support for different schemes
     call multistep%init(max_adams_order,'Adams-Bashforth')
-    call multistep%set_coeffs(1,[1.0])
-    call multistep%set_coeffs(2,[3.0/2.0,-1.0/2.0])
-    call multistep%set_coeffs(3,[23.0/12.0,-4.0/3.0,5.0/12.0])
-    call multistep%set_coeffs(4,[55.0/24.0,-59.0/24.0,37.0/24.0,-3.0/8.0])
-    call multistep%set_coeffs(5,[1901.0/720.0,-1387.0/360.0,109.0/30.0,-637.0/360.0,251.0/720.0])
+    !Note it is possible to calculate these coefficients for any arbritary order
+    !if we ever decide we want to support this.
+    call multistep%set_coeffs(1,[1]/1.0)
+    call multistep%set_coeffs(2,[3,-1]/2.0)
+    call multistep%set_coeffs(3,[23,-16,5]/12.0)
+    call multistep%set_coeffs(4,[55,-59,37,-9]/24.0)
+    call multistep%set_coeffs(5,[1901,-2774,2616,-1274,251]/720.0)
+    call multistep%set_coeffs(6,[4277,-7923,9982,-7298,2877,-475]/1440.0)
     !if(proc0)call multistep%print
 
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
@@ -267,8 +270,8 @@ contains
     enddo    
   end function get_exp_source
 
-  !>Estimate the maximum relative error in exp source
-  !!by finding max difference between source with largest
+  !>Estimate the maximum and average relative error in explicit
+  !!source by finding max/avg difference between source with largest
   !!order and one order less.
   function max_exp_source_error(istep)
     use mp, only: max_allreduce, proc0, iproc, sum_allreduce
@@ -293,10 +296,12 @@ contains
     !If order is 1 then can't estimate error
     if(order.le.1) return
 
-    !Now calculate max relative error
+    !Initialise
     max_rel_err=0.
     averr=0.
     nskip=0
+
+    !Now calculate max relative error
     do ig=-ntgrid,ntgrid
        do isgn=1,2
           do iglo=g_lo%llim_proc,g_lo%ulim_proc
@@ -313,15 +318,19 @@ contains
              !Get "estimate" answer
              tmpEst=get_exp_source(ig,isgn,iglo,istep,order-1)
 
+             !Calculate relative error
              tmpErr=abs((tmpAns-tmpEst)/(tmpAns))
+
+             !Update average error
              averr=averr+tmpErr/((g_lo%ulim_world+1)*2*(2*ntgrid+1))
+
              ! if((tmpErr.gt.1.0).and.(tmpErr.gt.max_rel_err))then
              !    ik=ik_idx(g_lo,iglo)
              !    it=it_idx(g_lo,iglo)
              !    il=il_idx(g_lo,iglo)
              !    ie=ie_idx(g_lo,iglo)
              !    is=is_idx(g_lo,iglo)
-!                write(6,'("Large error on proc ",I0," (istep ",I0,") Ans ",E17.5E4," Est ",E17.5E4," Err ",E17.5E4," iktles,isgn,ig ",7(I0," "))') iproc,istep,abs(tmpAns),abs(tmpEst),tmpErr,ik,it,il,ie,is,isgn,ig
+             !    write(6,'("Large error on proc ",I0," (istep ",I0,") Ans ",E17.5E4," Est ",E17.5E4," Err ",E17.5E4," iktles,isgn,ig ",7(I0," "))') iproc,istep,abs(tmpAns),abs(tmpEst),tmpErr,ik,it,il,ie,is,isgn,ig
              ! endif
 
              !Update max_rel_err
@@ -330,19 +339,36 @@ contains
        enddo
     enddo
 
-    !Reduct over procs
+    !##
+    !Average error
+    !##
+    !Reduce over procs
     call sum_allreduce(nskip)
     call sum_allreduce(averr)
+
+    !Note to get accurate average need to multiply by total number of grid points
+    !(which we divide by in producing averr) and divide by total number of grid
+    !points minus the number of skipped points.
     averr=averr*(((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))/(((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))-nskip))
+
+    !##
+    !Maximum error
+    !##
     call max_allreduce(max_rel_err)
     max_exp_source_error=max_rel_err
+
+    !##
+    !Reporting
+    !##
     if(proc0.and.((max_exp_source_error).gt.1.0))then
-       write(6,'("Estimated error in NL source is ",F12.5,"% with averr ",F12.5,"% Skipping ",I0)') max_exp_source_error*100,averr*100,nskip
+       write(6,'("Estimated error in NL source is ",F12.5,"% with averr ",F12.5,"%")') max_exp_source_error*100,averr*100
     else
        if(proc0) write(6,'("Error less than 100% : ",I0," avg:",F12.5,"%")') int(max_exp_source_error*100),averr*100
     endif
   end function max_exp_source_error
 
+  !>Moves steps along one (discarding oldest)
+  !!to create space to store current step
   subroutine shift_exp(gexp,istep)
     implicit none
     complex, dimension(:,:,:,:), intent(inout) :: gexp

@@ -87,7 +87,7 @@ nonlinear_tests: nonlinear_tests_no_message
 	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
 
 tests: unit_tests_no_message linear_tests_no_message nonlinear_tests_no_message
-	$(call TEST_PRINTOUT,$(call TEST_RESULTS,unit_tests)$(call TEST_RESULTS,linear_tests))
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,unit_tests)$(call TEST_RESULTS,linear_tests)$(call TEST_RESULTS,nonlinear_tests))
 
 
 test_script: unit_tests_no_message linear_tests_no_message
