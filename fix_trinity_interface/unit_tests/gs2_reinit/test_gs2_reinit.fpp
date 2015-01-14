@@ -31,8 +31,7 @@ program test_gs2_reinit
     use gs2_main, only: finalize_diagnostics, initialize_diagnostics
     use gs2_time, only: code_dt_cfl
     use gs2_main, only: old_iface_state
-    use gs2_main, only: override
-    use gs2_miller_geometry_overrides, only: oqval
+    use gs2_main, only: prepare_miller_geometry_overrides
     use fields, only: finish_fields, init_fields
     !use fields_local, only: init_fields_local, finish_fields_local
     use unit_tests
@@ -201,7 +200,10 @@ program test_gs2_reinit
       'Value of response matrix  after calling gs2_reset to initial')
 
     call save_fields_and_dist_fn
-    call override(old_iface_state, oqval, 2.0) 
+    !call override(old_iface_state, oqval, 2.0) 
+    call prepare_miller_geometry_overrides(old_iface_state)
+    old_iface_state%init%mgeo_ov%override_qinp = .true.
+    old_iface_state%init%mgeo_ov%qinp = 2.0 
     call init(old_iface_state%init, init_level_list%full)
     call announce_test('Values of fields and dist fn after changing qinp')
     call process_test(test_fields_and_dist(fields_changed=.true.), 'Values of fields and dist fn after changing qinp')

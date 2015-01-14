@@ -450,7 +450,7 @@ DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && ech
 # in fact, they are stored in the repository 
 # because some antique systems don't have ruby
 FORTFROMRUBY=$(subst generate_,,$(patsubst %.rb,%.f90,$(wildcard *.rb */*.rb)))
-FORTFROMRUBY+= gs2_init.rb
+FORTFROMRUBY+= gs2_init.f90 overrides.f90
 # Has to be added separately as doesn't end in f90
 #FORTFROMRUBY+=diagnostics/simpledataio/src/simpledataio_write.F90
 # ... but we treat simpledataio as a separate library so don't include for now

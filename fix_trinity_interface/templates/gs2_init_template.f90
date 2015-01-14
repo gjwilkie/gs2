@@ -29,6 +29,8 @@
 !! Written by:
 !!            Edmund Highcock (edmundhighcock@users.sourceforge.net)
 module gs2_init
+  use overrides, only: miller_geometry_overrides_type
+  use overrides, only: profiles_overrides_type
   !> A type for storing the current initialization
   !! status.
   public :: init_level_type
@@ -71,9 +73,8 @@ module gs2_init
     integer :: level = 0
     !> Whether or not diagnostics have been initialized
     logical :: diagnostics_initialized = .false.
-
-    logical :: profile_overrides_set = .false.
-    logical :: miller_geometry_overrides_set = .false.
+    type(miller_geometry_overrides_type) :: mgeo_ov
+    type(profiles_overrides_type) :: prof_ov
 
     !> A list of possible init levels
     !type(init_level_list_type) :: levels

@@ -33,7 +33,7 @@ class GenerateInit
     ['antenna' , ['species', 'run_parameters', 'override_profiles']],
     ['theta_grid' , ['theta_grid_params', 'override_miller_geometry']],
     ['theta_grid_params' , []],
-    ['kt_grids' , []],
+    ['kt_grids' , ['theta_grid']],
     ['gs2_save' , []],
     ['run_parameters' , ['kt_grids']],
     ['hyper' , ['kt_grids', 'gs2_layouts']],
@@ -79,11 +79,11 @@ class GenerateInit
   DEPENDENCIES.each{|mod,dependencies| deps[mod] = dependencies}
   modules_remaining = DEPENDENCIES.map{|mod,dependencies| mod}
 
-  p deps, 'deps'
+  #p deps, 'deps'
   #exit
 
   while modules_remaining.size > 0
-    p 'modules_remaining', modules_remaining, 'LEVELS', LEVELS
+    #p 'modules_remaining', modules_remaining, 'LEVELS', LEVELS
     #deps.keys.each do |k|
       #if deps[k] - LEVELS == []
         #LEVELS.push k
@@ -99,7 +99,7 @@ class GenerateInit
     end
   end 
   
-  p LEVELS, 'LEVELS'
+  #p LEVELS, 'LEVELS'
 
   GS2_LEVEL = 1
 
@@ -135,12 +135,22 @@ class GenerateInit
         use unit_tests, only: debug_message
 #{
         case @level_name
-        when 'full'
+        when 'full', 'override_timestep'
           str = "\n"
-        when /override.*/
-          # Nothing needs to be done for the overrides,
-          # they are just placeholders
-          str = "\n"
+        when /override_miller_geometry/
+          str = <<EOF2
+          use theta_grid_params, only: tgpso=>set_overrides
+          if (up() .and. current%mgeo_ov%set) call tgpso(current%mgeo_ov)
+
+EOF2
+        when /override_profiles/
+          str = <<EOF2
+          use dist_fn, only: dfso=>set_overrides
+          use species, only: sso=>set_overrides
+          if (up() .and. current%prof_ov%set) call dfso(current%prof_ov)
+          if (up() .and. current%prof_ov%set) call sso(current%prof_ov)
+
+EOF2
         when 'set_initial_values'
           str = <<EOF2
           if (up()) call set_initial_field_and_dist_fn_values
