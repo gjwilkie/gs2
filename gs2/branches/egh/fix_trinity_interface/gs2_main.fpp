@@ -950,28 +950,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call finalize_diagnostics(old_iface_state)
     call finalize_equations(old_iface_state)
     call finalize_gs2(old_iface_state)
-    !use gs2_layouts, only: finish_layouts
-    !use gs2_transforms, only: finish_transforms
-    !use gs2_diagnostics, only: finish_gs2_diagnostics
-    !use gs2_save, only: gs2_save_for_restart, finish_save
-    !use theta_grid, only: finish_theta_grid
-    !use unit_tests, only: ilast_step
-!#ifdef NEW_DIAG
-    !use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
-!#endif
-    
-    !call finish_gs2_diagnostics (ilast_step)
-!#ifdef NEW_DIAG
-    !call finish_gs2_diagnostics_new
-!#endif
-    !call finish_gs2
-!! HJL Species won't change during a run so shouldn't need this    
-!!    call finish_trin_species
-
-    !call finish_layouts
-    !call finish_transforms
-    !call finish_save
-    !call finish_theta_grid
 
   end subroutine trin_finish_gs2
 ! > HJL
@@ -1049,11 +1027,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     use dist_fn, only: dist_fn_g_exb => g_exb
     use gs2_init, only: save_fields_and_dist_fn, init, init_level_list
-    use fields, only: init_fields, f_reset => reset_init
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use gs2_diagnostics, only: gd_reset => reset_init
     use gs2_save, only: gs2_save_for_restart!, gs_reset => reset_init
-    use species, only: reinit_species
     use dist_fn_arrays, only: gnew
     use gs2_time, only: code_dt, save_dt
     use mp, only: scope, subprocs, allprocs
@@ -1302,8 +1278,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
   subroutine gs2_trin_init (rhoc, qval, shat, rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, &
        betaprim, ntspec, dens, temp, fprim, tprim, gexb, mach, nu, use_gs2_geo)
 
-    use species, only: init_trin_species
-    use theta_grid_params, only: init_trin_geo
     use dist_fn, only: dist_fn_g_exb => g_exb
     use old_interface_store
     !use mp, only: broadcast
@@ -1318,38 +1292,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     ! for now do nothing with gexb or mach, but need to include later if want to use GS2
     ! with TRINITY to evolve rotation profiles
-    ! EGH add a check for this.
-    if (gexb .ne. dist_fn_g_exb) then 
-      write (*,*) "ERROR: Changing g_exb in gs2_reset is not implemented yet."
-      ! Can't use mp_abort here as mp may not have been initialised
-      stop 1
-    end if
-
-   !call broadcast(rhoc)
-   !call broadcast(qval)
-   !call broadcast(shat)
-   !call broadcast(rgeo_lcfs)
-   !call broadcast(rgeo_local)
-   !call broadcast(kap)
-   !call broadcast(kappri)
-   !call broadcast(tri)
-   !call broadcast(tripri)
-   !call broadcast(shift)
- 
-   !call broadcast(betaprim)
-   !call broadcast(ntspec)
-   !call broadcast(dens)
-   !call broadcast(temp)
-   !call broadcast(fprim)
-   !call broadcast(tprim)
-   !call broadcast(gexb)
-   !call broadcast(mach)
-   !call broadcast(nu)
-   !call broadcast(use_gs2_geo)
-
-    !call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
-    !if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &
-         !rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, betaprim)
      if (.not. allocated(dens_store)) then
        allocate(dens_store(ntspec))
        allocate(temp_store(ntspec))
