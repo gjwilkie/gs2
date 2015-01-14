@@ -1,7 +1,7 @@
 module species
   implicit none
 
-  public :: init_species, finish_species, reinit_species, init_trin_species, finish_trin_species
+  public :: init_species, finish_species !, reinit_species, init_trin_species, finish_trin_species
   public :: write_trinity_parameters
   public :: wnml_species, check_species
   public :: nspec, specie, spec
@@ -198,7 +198,7 @@ contains
   end subroutine wnml_species
 
   subroutine init_species
-    use mp, only: trin_flag
+    !use mp, only: trin_flag
     implicit none
 !    logical, save :: initialized = .false.
 
@@ -206,10 +206,10 @@ contains
     initialized = .true.
 
     call read_parameters
-    if (trin_flag) then
-       call reinit_species (ntspec_trin, dens_trin, &
-         temp_trin, fprim_trin, tprim_trin, nu_trin)
-    endif
+    !if (trin_flag) then
+       !call reinit_species (ntspec_trin, dens_trin, &
+         !temp_trin, fprim_trin, tprim_trin, nu_trin)
+    !endif
   end subroutine init_species
 
   subroutine read_parameters
@@ -370,21 +370,8 @@ contains
 
   end subroutine finish_species
 
-  subroutine finish_trin_species
 
-    implicit none
-
-    call finish_species
-
-    if (allocated(dens_trin)) deallocate(dens_trin)
-    if (allocated(temp_trin)) deallocate(temp_trin)
-    if (allocated(fprim_trin)) deallocate(fprim_trin)
-    if (allocated(tprim_trin)) deallocate(tprim_trin)
-    if (allocated(nu_trin)) deallocate(nu_trin)
-
-  end subroutine finish_trin_species
-
-
+  !> This routine is used only for Trinity
   subroutine determine_species_order
     use mp, only: broadcast, proc0, mp_abort
 
@@ -431,30 +418,6 @@ contains
     call calculate_and_broadcast_species_properties
   end subroutine set_overrides
 
-  !subroutine override_parameter(parameter_label, species_index, val)
-    !use mp, only: proc0, mp_abort
-    !use gs2_profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
-    !integer, intent(in) :: parameter_label, species_index
-    !real, intent(in) :: val
-    !if (species_index .gt. nspec) then
-      !call mp_abort("species_index .gt. nspec in override_profiles", .true.)
-    !end if
-
-    !select case (parameter_label)
-    !case (otprim)
-      !spec(species_index)%tprim = val
-    !case (ofprim)
-      !spec(species_index)%fprim = val
-    !case (otemp)
-      !spec(species_index)%temp = val
-    !case (odens)
-      !spec(species_index)%dens = val
-    !case (ovnewk)
-      !spec(species_index)%vnewk = val
-    !end select
-
-    !call calculate_and_broadcast_species_properties
-  !end subroutine override_parameter
 
   subroutine calculate_and_broadcast_species_properties
     use mp, only: proc0, broadcast
@@ -484,77 +447,6 @@ contains
     end do
   end subroutine calculate_and_broadcast_species_properties
 
-  subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
-
-    use mp, only: broadcast, proc0, mp_abort
-    use job_manage, only: trin_restart
-
-    implicit none
-
-    integer, intent (in) :: ntspec
-    real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
-
-    integer :: is
-    logical, save :: first = .true.
-
-    if(trin_restart) first = .true.
-
-    if (first) then
-       call determine_species_order
-       first = .false.
-    end if
-
-    if (proc0) then
-
-       nspec = ntspec
-
-       ! TRINITY passes in species in following order: main ion, electron, impurity (if present)
-
-       ! for now, hardwire electron density to be reference density
-       ! main ion temperature is reference temperature
-       ! main ion mass is assumed to be the reference mass
-       
-       ! if only 1 species in the GS2 calculation, it is assumed to be main ion
-       ! and ion density = electron density
-       if (nspec == 1) then
-          spec(1)%dens = 1.0
-          spec(1)%temp = 1.0
-          spec(1)%fprim = fprim(1)
-          spec(1)%tprim = tprim(1)
-          spec(1)%vnewk = nu(1)
-       else
-          spec(ions)%dens = dens(1)/dens(2)
-          spec(ions)%temp = 1.0
-          spec(ions)%fprim = fprim(1)
-          spec(ions)%tprim = tprim(1)
-          spec(ions)%vnewk = nu(1)
-
-          spec(electrons)%dens = 1.0
-          spec(electrons)%temp = temp(2)/temp(1)
-          spec(electrons)%fprim = fprim(2)
-          spec(electrons)%tprim = tprim(2)
-          spec(electrons)%vnewk = nu(2)
-
-          if (nspec > 2) then
-             spec(impurity)%dens = dens(3)/dens(2)
-             spec(impurity)%temp = temp(3)/temp(1)
-             spec(impurity)%fprim = fprim(3)
-             spec(impurity)%tprim = tprim(3)
-             spec(impurity)%vnewk = nu(3)
-          end if
-       end if
-
-
-    end if
-
-    call calculate_and_broadcast_species_properties
-
-!100 format (a15,9(1x,1pg18.11))
-
-
-
-  end subroutine reinit_species
-
   subroutine write_trinity_parameters(trinpars_unit)
     integer, intent(in) :: trinpars_unit
     integer :: is
@@ -574,27 +466,5 @@ contains
 
   end subroutine write_trinity_parameters
 
-  subroutine init_trin_species (ntspec_in, dens_in, temp_in, fprim_in, tprim_in, nu_in)
-
-    implicit none
-
-    integer, intent (in) :: ntspec_in
-    real, dimension (:), intent (in) :: dens_in, fprim_in, temp_in, tprim_in, nu_in
-
-
-    if (.not. allocated(dens_trin)) allocate (dens_trin(size(dens_in)))
-    if (.not. allocated(fprim_trin)) allocate (fprim_trin(size(fprim_in)))
-    if (.not. allocated(temp_trin)) allocate (temp_trin(size(temp_in)))
-    if (.not. allocated(tprim_trin)) allocate (tprim_trin(size(tprim_in)))
-    if (.not. allocated(nu_trin)) allocate (nu_trin(size(nu_in)))
-
-    ntspec_trin = ntspec_in
-    dens_trin = dens_in
-    temp_trin = temp_in
-    fprim_trin = fprim_in
-    tprim_trin = tprim_in
-    nu_trin = nu_in
-
-  end subroutine init_trin_species
 
 end module species
