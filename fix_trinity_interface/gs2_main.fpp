@@ -1,3 +1,14 @@
+module old_interface_store
+    integer :: ntspec_store
+    real :: rhoc_store, qval_store, shat_store, rgeo_lcfs_store, rgeo_local_store
+    real :: kap_store, kappri_store, tri_store, tripri_store, shift_store
+    real :: betaprim_store, gexb_store, mach_store
+    real, dimension (:), allocatable :: dens_store, fprim_store, temp_store, tprim_store, nu_store
+    logical :: use_gs2_geo_store
+    logical :: override_profiles = .false.
+    logical :: override_miller_geometry = .false.
+end module old_interface_store
+
 # ifndef MAKE_LIB
 
 !> This module contains the functions gs2_main::run_gs2, gs2_main::finish_gs2 and gs2_main::reset_gs2, whose
@@ -160,6 +171,10 @@ module gs2_main
 
   private
 
+
+  integer :: refspec
+  integer, dimension(:), allocatable :: gs2spec_from_trin
+
   interface override
     module procedure override_parameter_spec
     module procedure override_parameter_nospec
@@ -216,9 +231,10 @@ contains
       call set_job_id(state%external_job_id)
     end if
 
-    ! We now manually set trin_flag, since we may now be passing 
-    ! in a communicator but not running trinity.
-    trin_flag = state%is_trinity_job
+    ! All subroutines that use this are now no longer 
+    ! needed and will be deleted
+    trin_flag = .false. 
+
     call debug_message(state%verb, 'gs2_main::initialize_gs2 initialized mp')
     ! I don't think these should be necessary
     !call broadcast(state%trin_job)
@@ -867,8 +883,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
    use job_manage, only: trin_reset
 
    
-   use job_manage, only: trin_restart, trin_reset
+   use job_manage, only: trin_restart, trin_reset, time_message
     use unit_tests, only: functional_test_flag, ilast_step
+    use mp, only: proc0
+    use old_interface_store, only: override_profiles, override_miller_geometry
     implicit none
 
     integer, intent (in), optional :: mpi_comm, job_id, nensembles
@@ -923,6 +941,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (first_time) then
       call initialize_wall_clock_timer
       call initialize_gs2(old_iface_state)
+      if (override_profiles .or. override_miller_geometry) then 
+        if (proc0) call time_message(.false., old_iface_state%timers%init,' Initialization')
+        call old_interface_set_overrides
+        if (proc0) call time_message(.false., old_iface_state%timers%init,' Initialization')
+      end if
       call initialize_equations(old_iface_state)
       call initialize_diagnostics(old_iface_state)
       first_time = .false.
@@ -1086,8 +1109,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real, intent (in) :: gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     integer :: is
-    integer :: refspec
-    integer, dimension(ntspec) :: gs2_spec
 
     real :: dummy
 
@@ -1118,33 +1139,16 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! and counters to zero... used mainly for trinity convergence checks.
     call gd_reset
 
-    call determine_species_order
-    if (nspec==1) then
-      gs2_spec(1) = ions
-      ! The species with the reference DENSITY
-      ! NB ref temp is always ions (trin spec 1)
-      refspec = 1
-    else if (nspec==2) then 
-      gs2_spec(1) = ions
-      gs2_spec(2) = electrons
-      ! For two species or more, ref dens is electrons (trin spec 2)
-      refspec = 2
-    else if (nspec==3) then
-      gs2_spec(1) = ions
-      gs2_spec(2) = electrons
-      gs2_spec(3) = impurity
-      refspec = electrons
-    else
-      call mp_abort("Can't handle more than 3 species in reset_gs2", .true.)
-    end if
 
+    call determine_gs2spec_from_trin(ntspec)
     do is = 1,nspec
-      call override(old_iface_state, odens, gs2_spec(is), dens(is)/dens(refspec))
-      ! Temp gs2_spec(is) always normalised to the main ions
-      call override(old_iface_state, otemp, gs2_spec(is), temp(is)/temp(1))
-      call override(old_iface_state, ofprim, gs2_spec(is), fprim(is))
-      call override(old_iface_state, otprim, gs2_spec(is), tprim(is))
-      call override(old_iface_state, ovnewk, gs2_spec(is), nu(is))
+     
+      call override(old_iface_state, odens, gs2spec_from_trin(is), dens(is)/dens(refspec))
+      ! Temp is always normalised to the main ions
+      call override(old_iface_state, otemp, gs2spec_from_trin(is), temp(is)/temp(1))
+      call override(old_iface_state, ofprim, gs2spec_from_trin(is), fprim(is))
+      call override(old_iface_state, otprim, gs2spec_from_trin(is), tprim(is))
+      call override(old_iface_state, ovnewk, gs2spec_from_trin(is), nu(is))
     end do
     !call override(old_iface_state, og_exb, gexb)
     ! mach doesn't do anything atm
@@ -1155,6 +1159,74 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (nensembles > 1) call scope (allprocs)
 
   end subroutine reset_gs2
+
+  subroutine old_interface_set_overrides
+    use old_interface_store
+    use gs2_profile_overrides, only: otprim, ofprim, otemp, odens, ovnewk, og_exb, omach
+    use gs2_miller_geometry_overrides, only: orhoc,  oqval,  oshat,  orgeo_lcfs
+    use gs2_miller_geometry_overrides, only: orgeo_local, okap, okappri, otri
+    use gs2_miller_geometry_overrides, only: otripri, oshift, obetaprim
+    use gs2_init, only: init, init_level_list
+    integer :: is
+
+    if (override_miller_geometry) then 
+      call override(old_iface_state, orhoc, rhoc_store)
+      call override(old_iface_state, oqval, qval_store)
+      call override(old_iface_state, oshat, shat_store)
+      call override(old_iface_state, orgeo_lcfs, rgeo_lcfs_store)
+      call override(old_iface_state, orgeo_local, rgeo_local_store)
+      call override(old_iface_state, okap, kap_store)
+      call override(old_iface_state, okappri, kappri_store)
+      call override(old_iface_state, otri, tri_store)
+      call override(old_iface_state, otripri, tripri_store)
+      call override(old_iface_state, oshift, shift_store)
+      call override(old_iface_state, obetaprim, betaprim_store)
+    end if
+
+
+    call determine_gs2spec_from_trin(ntspec_store)
+    do is = 1,ntspec_store
+     
+      call override(old_iface_state, &
+        odens, gs2spec_from_trin(is), dens_store(is)/dens_store(refspec))
+      ! Temp is always normalised to the main ions
+      call override(old_iface_state, &
+        otemp, gs2spec_from_trin(is), temp_store(is)/temp_store(1))
+      call override(old_iface_state, &
+        ofprim, gs2spec_from_trin(is), fprim_store(is))
+      call override(old_iface_state, &
+        otprim, gs2spec_from_trin(is), tprim_store(is))
+      call override(old_iface_state, &
+        ovnewk, gs2spec_from_trin(is), nu_store(is))
+    end do
+  end subroutine old_interface_set_overrides
+
+  subroutine determine_gs2spec_from_trin(ntspec)
+    use species, only: determine_species_order, spec, nspec, impurity, ions
+    use species, only: electrons
+    use mp, only: mp_abort
+    integer, intent(in) :: ntspec
+    call determine_species_order
+    if (.not. allocated(gs2spec_from_trin)) allocate(gs2spec_from_trin(ntspec))
+    if (nspec==1) then
+      gs2spec_from_trin(1) = ions
+      ! The species with the reference DENSITY
+      ! NB ref temp is always ions (trin spec 1)
+      refspec = 1
+    else if (nspec==2) then 
+      gs2spec_from_trin(1) = ions
+      gs2spec_from_trin(2) = electrons
+      ! For two species or more, ref dens is electrons (trin spec 2)
+      refspec = 2
+    else if (nspec==3) then
+      gs2spec_from_trin(1) = ions
+      gs2spec_from_trin(2) = electrons
+      gs2spec_from_trin(3) = impurity
+      refspec = electrons
+    else
+      call mp_abort("Can't handle more than 3 species in reset_gs2", .true.)
+    end if
+  end subroutine determine_gs2spec_from_trin
 
   subroutine reset_linear_magnitude
     use dist_fn_arrays, only: g, gnew
@@ -1221,6 +1293,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
     use dist_fn, only: dist_fn_g_exb => g_exb
+    use old_interface_store
     !use mp, only: broadcast
 
     implicit none
@@ -1261,12 +1334,44 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
    !call broadcast(mach)
    !call broadcast(nu)
    !call broadcast(use_gs2_geo)
-    call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
-    if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &
-         rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, betaprim)
+
+    !call init_trin_species (ntspec, dens, temp, fprim, tprim, nu)
+    !if (.not. use_gs2_geo) call init_trin_geo (rhoc, qval, shat, &
+         !rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, betaprim)
+     if (.not. allocated(dens_store)) then
+       allocate(dens_store(ntspec))
+       allocate(temp_store(ntspec))
+       allocate(tprim_store(ntspec))
+       allocate(fprim_store(ntspec))
+       allocate(nu_store(ntspec))
+     end if
+     ntspec_store = ntspec
+     dens_store = dens
+     temp_store = temp
+     tprim_store = tprim
+     fprim_store = fprim
+     nu_store = nu
+     override_profiles = .true.
+     if (.not. use_gs2_geo) then
+       rhoc_store = rhoc
+       qval_store = qval
+       shat_store = shat
+       rgeo_lcfs_store = rgeo_lcfs
+       rgeo_local_store = rgeo_local
+       kap_store = kap
+       kappri_store = kappri
+       tri_store = tri
+       tripri_store = tripri
+       shift_store = shift
+       betaprim_store = betaprim
+       override_miller_geometry = .true.
+     end if
+     
     
   end subroutine gs2_trin_init
 
 # ifndef MAKE_LIB
 end module gs2_main
 # endif
+
+
