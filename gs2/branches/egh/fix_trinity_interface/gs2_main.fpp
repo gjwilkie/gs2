@@ -27,7 +27,9 @@ module gs2_main
   public :: initialize_diagnostics, evolve_equations, run_eigensolver
   public :: finalize_diagnostics, finalize_equations, finalize_gs2
   public :: calculate_outputs
-  public :: override
+
+  public :: prepare_miller_geometry_overrides
+  public :: prepare_profiles_overrides
 
   public :: old_iface_state
   !> Unit tests
@@ -175,10 +177,6 @@ module gs2_main
   integer :: refspec
   integer, dimension(:), allocatable :: gs2spec_from_trin
 
-  interface override
-    module procedure override_parameter_spec
-    module procedure override_parameter_nospec
-  end interface override
 
   !> This object is used for implementing the old interface
   !! and should not be modified
@@ -233,6 +231,7 @@ contains
 
     ! All subroutines that use this are now no longer 
     ! needed and will be deleted
+    !trin_flag = state%is_trinity_job
     trin_flag = .false. 
 
     call debug_message(state%verb, 'gs2_main::initialize_gs2 initialized mp')
@@ -348,7 +347,6 @@ contains
     
     if (proc0) call time_message(.false.,state%timers%init,' Initialization')
 
-    if (state%is_trinity_job) call write_trinity_parameters
 
     ! Set defaults. These are typically only important
     ! for the standalone gs2 program
@@ -432,6 +430,8 @@ contains
     
     if (state%nensembles > 1) &
           call scope (subprocs)
+
+    if (state%is_trinity_job) call write_trinity_parameters
 
     call time_message(.false.,state%timers%main_loop,' Main Loop')
 
@@ -650,65 +650,25 @@ contains
     !if (.not. present(mpi_comm) .and. .not. nofin) call finish_mp
   end subroutine finalize_gs2
 
-  subroutine override_geometry
-  end subroutine override_geometry
-
-  subroutine override_parameter_spec(state, parameter_label, species_index, val)
-    use gs2_profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
+  subroutine prepare_miller_geometry_overrides(state)
+    use overrides, only: init_miller_geometry_overrides
     use gs2_init, only: init, init_level_list
-    use species, only: op_spec => override_parameter
-    use mp, only: mp_abort
-    implicit none
     type(gs2_program_state_type), intent(inout) :: state
-    integer, intent(in) :: parameter_label, species_index
-    real, intent(in) :: val
+    ! Initialize to the level below so that overrides are triggered
+    call init(state%init, init_level_list%override_miller_geometry-1)
+    call init_miller_geometry_overrides(state%init%mgeo_ov)
+  end subroutine prepare_miller_geometry_overrides
 
-
-    select case (parameter_label)
-    case (otemp, odens, ofprim, otprim, ovnewk)
-      call init(state%init, init_level_list%override_profiles)
-      state%init%profile_overrides_set = .true.
-      call op_spec(parameter_label, species_index, val)
-    case default
-      write (*,*) "Unknown parameter label: ", parameter_label
-      call mp_abort("Unknown parameter label in override", .true.)
-    end select
-
-
-
-  end subroutine override_parameter_spec
-
-  subroutine override_parameter_nospec(state, parameter_label, val)
-    use gs2_profile_overrides, only: og_exb, omach
-    use gs2_miller_geometry_overrides, only: orhoc,  oqval,  oshat,  orgeo_lcfs
-    use gs2_miller_geometry_overrides, only: orgeo_local, okap, okappri, otri
-    use gs2_miller_geometry_overrides, only: otripri, oshift, obetaprim
+  subroutine prepare_profiles_overrides(state)
+    use overrides, only: init_profiles_overrides
     use gs2_init, only: init, init_level_list
-    use mp, only: mp_abort
-    use dist_fn, only: op_dist_fn => override_parameter
-    use theta_grid_params, only: op_theta_grid_params => override_parameter
-    implicit none
+    use species, only: nspec
     type(gs2_program_state_type), intent(inout) :: state
-    integer, intent(in) :: parameter_label
-    real, intent(in) :: val
+    ! Initialize to the level below so that overrides are triggered
+    call init(state%init, init_level_list%override_profiles-1)
+    call init_profiles_overrides(state%init%prof_ov, nspec)
+  end subroutine prepare_profiles_overrides
 
-
-    select case (parameter_label)
-    case (og_exb, omach)
-      call init(state%init, init_level_list%override_profiles)  
-      state%init%profile_overrides_set = .true.
-      call op_dist_fn(parameter_label, val)
-    case (orhoc,  oqval,  oshat,  orgeo_lcfs, &
-          orgeo_local, okap, okappri, otri, &
-          otripri, oshift, obetaprim)
-      call init(state%init, init_level_list%override_miller_geometry)  
-      state%init%miller_geometry_overrides_set = .true.
-      call op_theta_grid_params(parameter_label, val)
-    case default
-      write (*,*) "Unknown parameter label: ", parameter_label
-      call mp_abort("Unknown parameter label in override", .true.)
-    end select
-  end subroutine override_parameter_nospec
   
   subroutine calculate_outputs(state)
     use gs2_diagnostics, only: start_time
@@ -1101,7 +1061,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use run_parameters, only: trinity_linear_fluxes
     use species, only: nspec, spec, impurity, ions, electrons
     use species, only: determine_species_order
-    use gs2_profile_overrides, only: otprim, ofprim, otemp, odens, ovnewk, og_exb, omach
 
     implicit none
 
@@ -1109,6 +1068,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real, intent (in) :: gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     integer :: is
+    integer :: isg
 
     real :: dummy
 
@@ -1139,17 +1099,40 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     ! and counters to zero... used mainly for trinity convergence checks.
     call gd_reset
 
+    call prepare_profiles_overrides(old_iface_state)
+
 
     call determine_gs2spec_from_trin(ntspec)
     do is = 1,nspec
-     
-      call override(old_iface_state, odens, gs2spec_from_trin(is), dens(is)/dens(refspec))
-      ! Temp is always normalised to the main ions
-      call override(old_iface_state, otemp, gs2spec_from_trin(is), temp(is)/temp(1))
-      call override(old_iface_state, ofprim, gs2spec_from_trin(is), fprim(is))
-      call override(old_iface_state, otprim, gs2spec_from_trin(is), tprim(is))
-      call override(old_iface_state, ovnewk, gs2spec_from_trin(is), nu(is))
+      isg = gs2spec_from_trin(is)
+      old_iface_state%init%prof_ov%override_dens(isg) = .true.
+      old_iface_state%init%prof_ov%dens(isg) = dens(is)/dens(refspec)
+
+      old_iface_state%init%prof_ov%override_temp(isg) = .true.
+      old_iface_state%init%prof_ov%temp(isg) = temp(is)/temp(1)
+
+      old_iface_state%init%prof_ov%override_fprim(isg) = .true.
+      old_iface_state%init%prof_ov%fprim(isg) = fprim(is)
+
+      old_iface_state%init%prof_ov%override_tprim(isg) = .true.
+      old_iface_state%init%prof_ov%tprim(isg) = tprim(is)
+
+      old_iface_state%init%prof_ov%override_vnewk(isg) = .true.
+      old_iface_state%init%prof_ov%vnewk(isg) = nu(is)
+
+      !call override(old_iface_state, odens, gs2spec_from_trin(is), dens(is)/dens(refspec))
+      !! Temp is always normalised to the main ions
+      !call override(old_iface_state, otemp, gs2spec_from_trin(is), temp(is)/temp(1))
+      !call override(old_iface_state, ofprim, gs2spec_from_trin(is), fprim(is))
+      !call override(old_iface_state, otprim, gs2spec_from_trin(is), tprim(is))
+      !call override(old_iface_state, ovnewk, gs2spec_from_trin(is), nu(is))
     end do
+
+    !old_iface_state%init%prof_ov%override_g_exb = .true.
+    !old_iface_state%init%prof_ov%g_exb = gexb
+    !old_iface_state%init%prof_ov%override_mach = .true.
+    !old_iface_state%init%prof_ov%mach = mach
+
     !call override(old_iface_state, og_exb, gexb)
     ! mach doesn't do anything atm
     !call override(old_iface_state, omach, mach)
@@ -1162,43 +1145,72 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
   subroutine old_interface_set_overrides
     use old_interface_store
-    use gs2_profile_overrides, only: otprim, ofprim, otemp, odens, ovnewk, og_exb, omach
-    use gs2_miller_geometry_overrides, only: orhoc,  oqval,  oshat,  orgeo_lcfs
-    use gs2_miller_geometry_overrides, only: orgeo_local, okap, okappri, otri
-    use gs2_miller_geometry_overrides, only: otripri, oshift, obetaprim
     use gs2_init, only: init, init_level_list
-    integer :: is
+    integer :: is, isg
 
     if (override_miller_geometry) then 
-      call override(old_iface_state, orhoc, rhoc_store)
-      call override(old_iface_state, oqval, qval_store)
-      call override(old_iface_state, oshat, shat_store)
-      call override(old_iface_state, orgeo_lcfs, rgeo_lcfs_store)
-      call override(old_iface_state, orgeo_local, rgeo_local_store)
-      call override(old_iface_state, okap, kap_store)
-      call override(old_iface_state, okappri, kappri_store)
-      call override(old_iface_state, otri, tri_store)
-      call override(old_iface_state, otripri, tripri_store)
-      call override(old_iface_state, oshift, shift_store)
-      call override(old_iface_state, obetaprim, betaprim_store)
+      call prepare_miller_geometry_overrides(old_iface_state)
+      old_iface_state%init%mgeo_ov%override_rhoc = .true.
+      old_iface_state%init%mgeo_ov%rhoc = rhoc_store
+      old_iface_state%init%mgeo_ov%override_qinp = .true.
+      old_iface_state%init%mgeo_ov%qinp = qval_store
+      old_iface_state%init%mgeo_ov%override_shat = .true.
+      old_iface_state%init%mgeo_ov%shat = shat_store
+      old_iface_state%init%mgeo_ov%override_rgeo_lcfs = .true.
+      old_iface_state%init%mgeo_ov%rgeo_lcfs = rgeo_lcfs_store
+      old_iface_state%init%mgeo_ov%override_rgeo_local = .true.
+      old_iface_state%init%mgeo_ov%rgeo_local = rgeo_local_store
+      old_iface_state%init%mgeo_ov%override_akappa = .true.
+      old_iface_state%init%mgeo_ov%akappa = kap_store
+      old_iface_state%init%mgeo_ov%override_akappri = .true.
+      old_iface_state%init%mgeo_ov%akappri = kappri_store
+      old_iface_state%init%mgeo_ov%override_tri = .true.
+      old_iface_state%init%mgeo_ov%tri = tri_store
+      old_iface_state%init%mgeo_ov%override_tripri = .true.
+      old_iface_state%init%mgeo_ov%tripri = tripri_store
+      old_iface_state%init%mgeo_ov%override_shift = .true.
+      old_iface_state%init%mgeo_ov%shift = shift_store
+      old_iface_state%init%mgeo_ov%override_betaprim = .true.
+      old_iface_state%init%mgeo_ov%betaprim = betaprim_store
     end if
 
 
-    call determine_gs2spec_from_trin(ntspec_store)
-    do is = 1,ntspec_store
-     
-      call override(old_iface_state, &
-        odens, gs2spec_from_trin(is), dens_store(is)/dens_store(refspec))
-      ! Temp is always normalised to the main ions
-      call override(old_iface_state, &
-        otemp, gs2spec_from_trin(is), temp_store(is)/temp_store(1))
-      call override(old_iface_state, &
-        ofprim, gs2spec_from_trin(is), fprim_store(is))
-      call override(old_iface_state, &
-        otprim, gs2spec_from_trin(is), tprim_store(is))
-      call override(old_iface_state, &
-        ovnewk, gs2spec_from_trin(is), nu_store(is))
-    end do
+    if (override_profiles) then
+      call prepare_profiles_overrides(old_iface_state)
+      call determine_gs2spec_from_trin(ntspec_store)
+      do is = 1,ntspec_store
+        isg = gs2spec_from_trin(is)
+        old_iface_state%init%prof_ov%override_dens(isg) = .true.
+        old_iface_state%init%prof_ov%dens(isg) = dens_store(is)/dens_store(refspec)
+
+        old_iface_state%init%prof_ov%override_temp(isg) = .true.
+        old_iface_state%init%prof_ov%temp(isg) = temp_store(is)/temp_store(1)
+
+        old_iface_state%init%prof_ov%override_fprim(isg) = .true.
+        old_iface_state%init%prof_ov%fprim(isg) = fprim_store(is)
+
+        old_iface_state%init%prof_ov%override_tprim(isg) = .true.
+        old_iface_state%init%prof_ov%tprim(isg) = tprim_store(is)
+
+        old_iface_state%init%prof_ov%override_vnewk(isg) = .true.
+        old_iface_state%init%prof_ov%vnewk(isg) = nu_store(is)
+      !do is = 1,ntspec_store
+       
+        !call override(old_iface_state, &
+          !odens, gs2spec_from_trin(is), dens_store(is)/dens_store(refspec))
+        !! Temp is always normalised to the main ions
+        !call override(old_iface_state, &
+          !otemp, gs2spec_from_trin(is), temp_store(is)/temp_store(1))
+        !call override(old_iface_state, &
+          !ofprim, gs2spec_from_trin(is), fprim_store(is))
+        !call override(old_iface_state, &
+          !otprim, gs2spec_from_trin(is), tprim_store(is))
+        !call override(old_iface_state, &
+          !ovnewk, gs2spec_from_trin(is), nu_store(is))
+      end do
+    end if
+    override_profiles = .false.
+    override_miller_geometry = .false.
   end subroutine old_interface_set_overrides
 
   subroutine determine_gs2spec_from_trin(ntspec)
@@ -1210,14 +1222,14 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (.not. allocated(gs2spec_from_trin)) allocate(gs2spec_from_trin(ntspec))
     if (nspec==1) then
       gs2spec_from_trin(1) = ions
-      ! The species with the reference DENSITY
-      ! NB ref temp is always ions (trin spec 1)
-      refspec = 1
+      ! ref temp is always ions (trin spec 1)
+      ! For one species, reference dens is ions
+      refspec = ions
     else if (nspec==2) then 
       gs2spec_from_trin(1) = ions
       gs2spec_from_trin(2) = electrons
       ! For two species or more, ref dens is electrons (trin spec 2)
-      refspec = 2
+      refspec = electrons
     else if (nspec==3) then
       gs2spec_from_trin(1) = ions
       gs2spec_from_trin(2) = electrons

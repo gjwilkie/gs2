@@ -101,7 +101,6 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -209,7 +208,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -346,7 +344,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -392,6 +389,7 @@ ideal_ball_mod = \
 	 leq.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 overrides.o \
 	 peq.o \
 	 read_chease.o \
 	 runtime_tests.o \
@@ -446,7 +444,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -730,6 +727,7 @@ dist_fn.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 prof.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -1000,9 +998,11 @@ gs2_init.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid.o \
+	 theta_grid_params.o \
 	 unit_tests.o 
 gs2_io.o: \
 	 constants.o \
@@ -1049,7 +1049,6 @@ gs2_main.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
-	 overrides.o \
 	 parameter_scan.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -1214,7 +1213,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1256,8 +1254,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -1307,6 +1304,7 @@ theta_grid.o: \
 	 unit_tests.o 
 theta_grid_params.o: \
 	 file_utils.o \
+	 overrides.o \
 	 unit_tests.o 
 unit_tests.o: \
 	 mp.o \

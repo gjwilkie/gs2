@@ -8,7 +8,7 @@ module species
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
-  public :: override_parameter
+  public :: set_overrides
   public :: determine_species_order
 
   type :: specie
@@ -417,30 +417,44 @@ contains
      end if
   end subroutine determine_species_order
 
-  subroutine override_parameter(parameter_label, species_index, val)
-    use mp, only: proc0, mp_abort
-    use gs2_profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
-    integer, intent(in) :: parameter_label, species_index
-    real, intent(in) :: val
-    if (species_index .gt. nspec) then
-      call mp_abort("species_index .gt. nspec in override_profiles", .true.)
-    end if
-
-    select case (parameter_label)
-    case (otprim)
-      spec(species_index)%tprim = val
-    case (ofprim)
-      spec(species_index)%fprim = val
-    case (otemp)
-      spec(species_index)%temp = val
-    case (odens)
-      spec(species_index)%dens = val
-    case (ovnewk)
-      spec(species_index)%vnewk = val
-    end select
-
+  subroutine set_overrides(prof_ov)
+    use overrides, only: profiles_overrides_type
+    type(profiles_overrides_type), intent(in) :: prof_ov
+    integer :: is
+    do is = 1,nspec
+      if (prof_ov%override_tprim(is)) spec(is)%tprim = prof_ov%tprim(is)
+      if (prof_ov%override_fprim(is)) spec(is)%fprim = prof_ov%fprim(is)
+      if (prof_ov%override_temp(is)) spec(is)%temp = prof_ov%temp(is)
+      if (prof_ov%override_dens(is)) spec(is)%dens = prof_ov%dens(is)
+      if (prof_ov%override_vnewk(is)) spec(is)%vnewk = prof_ov%vnewk(is)
+    end do
     call calculate_and_broadcast_species_properties
-  end subroutine override_parameter
+  end subroutine set_overrides
+
+  !subroutine override_parameter(parameter_label, species_index, val)
+    !use mp, only: proc0, mp_abort
+    !use gs2_profile_overrides, only: otemp, odens, ofprim, otprim, ovnewk
+    !integer, intent(in) :: parameter_label, species_index
+    !real, intent(in) :: val
+    !if (species_index .gt. nspec) then
+      !call mp_abort("species_index .gt. nspec in override_profiles", .true.)
+    !end if
+
+    !select case (parameter_label)
+    !case (otprim)
+      !spec(species_index)%tprim = val
+    !case (ofprim)
+      !spec(species_index)%fprim = val
+    !case (otemp)
+      !spec(species_index)%temp = val
+    !case (odens)
+      !spec(species_index)%dens = val
+    !case (ovnewk)
+      !spec(species_index)%vnewk = val
+    !end select
+
+    !call calculate_and_broadcast_species_properties
+  !end subroutine override_parameter
 
   subroutine calculate_and_broadcast_species_properties
     use mp, only: proc0, broadcast

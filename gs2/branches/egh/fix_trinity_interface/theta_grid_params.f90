@@ -5,7 +5,7 @@ module theta_grid_params
   public :: finish_theta_grid_params
   public :: wnml_theta_grid_params
   public :: write_trinity_parameters
-  public :: override_parameter
+  public :: set_overrides
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
@@ -189,39 +189,22 @@ contains
 
   end subroutine init_trin_geo
 
-  subroutine override_parameter(parameter_label, val)
-    use mp, only: proc0, mp_abort
-    use gs2_miller_geometry_overrides, only: orhoc,  oqval,  oshat,  orgeo_lcfs
-    use gs2_miller_geometry_overrides, only: orgeo_local, okap, okappri, otri
-    use gs2_miller_geometry_overrides, only: otripri, oshift, obetaprim
-    integer, intent(in) :: parameter_label
-    real, intent(in) :: val
+  subroutine set_overrides(mgeo_ov)
+    use overrides, only: miller_geometry_overrides_type
+    type(miller_geometry_overrides_type), intent(in) :: mgeo_ov
+          write (*,*) 'Calling tgpso'
+    if (mgeo_ov%override_rhoc) rhoc = mgeo_ov%rhoc
+    if (mgeo_ov%override_qinp) qinp = mgeo_ov%qinp
+    if (mgeo_ov%override_shat) shat = mgeo_ov%shat
+    if (mgeo_ov%override_rgeo_lcfs) r_geo = mgeo_ov%rgeo_lcfs
+    if (mgeo_ov%override_rgeo_local) rmaj = mgeo_ov%rgeo_local
+    if (mgeo_ov%override_akappa) akappa = mgeo_ov%akappa
+    if (mgeo_ov%override_akappri) akappri = mgeo_ov%akappri
+    if (mgeo_ov%override_tri) tri = mgeo_ov%tri
+    if (mgeo_ov%override_tripri) tripri = mgeo_ov%tripri
+    if (mgeo_ov%override_shift) shift = mgeo_ov%shift
+    if (mgeo_ov%override_betaprim) betaprim = mgeo_ov%betaprim
+  end subroutine set_overrides
 
-    select case (parameter_label)
-    case(orhoc)
-      rhoc = val
-    case(oqval)
-      qinp = val
-    case(oshat)
-      shat = val
-    case(orgeo_lcfs)
-      r_geo = val
-    case(orgeo_local)
-      rmaj = val
-    case(okap)
-      akappa = val
-    case(okappri)
-      akappri = val
-    case(otri)
-      tri = val
-    case(otripri)
-      tripri = val
-    case(oshift)
-      shift = val
-    case(obetaprim)
-      betaprim = val
-    end select
-
-  end subroutine override_parameter
 
 end module theta_grid_params
