@@ -884,7 +884,7 @@ if (debug) write(6,*) 'get_namelists: returning'
      use kt_grids, only: gridopt_box, naky, ntheta0, nx, ny
 !     use le_grids, only: leok_le_grids, check_le_grids
      use le_grids, only: negrid, nlambda
-     use nonlinear_terms, only: nonlin, cfl, check_nonlinear_terms
+     use nonlinear_terms, only: nonlin, check_nonlinear_terms
      use run_parameters, only: check_run_parameters
      use run_parameters, only: beta, tite, margin
      use run_parameters, only: nstep, wstar_units
