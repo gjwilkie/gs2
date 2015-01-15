@@ -12,16 +12,14 @@ module nonlinear_terms
   public :: init_nonlinear_terms, finish_nonlinear_terms
   public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
   public :: add_explicit_terms, nl_order, get_exp_source
-  public :: finish_init, reset_init, algorithm, nonlin, accelerated
+  public :: finish_init, reset_init, nonlin, accelerated
   public :: nonlinear_terms_unit_test_time_add_nl, cfl
 
   private
 
   ! knobs
-  integer, public :: nonlinear_mode_switch
-
-  integer, public, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
-
+  integer :: nonlinear_mode_switch
+  integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
 
   real, save, dimension (:,:), allocatable :: ba, gb, bracket
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
@@ -32,15 +30,10 @@ module nonlinear_terms
 ! CFL coefficients
   real :: cfl, cflx, cfly
 
-! hyperviscosity coefficients
-  real :: C_par, C_perp, p_x, p_y, p_z
-
-  integer :: algorithm = 1
   logical :: nonlin = .false.
   logical :: initialized = .false.
   logical :: initializing = .true.
-  logical :: alloc = .true.
-  logical :: zip = .false.
+  logical :: zip = .false. !If true disable explicit source for all but ik==1
   logical :: nl_forbid_force_zero = .true.
   logical :: accelerated = .false.
 
@@ -49,7 +42,7 @@ module nonlinear_terms
   !!Advance scheme
   type(multistep_scheme) :: multistep !Currently only Adams-Bashforth supported
   integer :: nl_order !Order of method to use
-  integer, parameter :: max_adams_order=6 
+  integer, parameter :: max_adams_order=6
 
 contains
   
@@ -104,8 +97,8 @@ contains
 
 
   subroutine wnml_nonlinear_terms(unit)
-  implicit none
-  integer :: unit
+    implicit none
+    integer :: unit
     if (.not. exist) return
     if (nonlinear_mode_switch == nonlinear_mode_on) then
        write (unit, *)
@@ -113,6 +106,7 @@ contains
        write (unit, fmt="(' nonlinear_mode = ',a)") '"on"'
        write (unit, fmt="(' cfl = ',e17.10)") cfl
        write (unit, fmt="(' nl_forbid_force_zero = ',L1)") nl_forbid_force_zero
+       write (unit, fmt="(' nl_order = ',I0)") nl_order
        if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
     endif
@@ -168,19 +162,25 @@ contains
        call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
 
        if (debug) write(6,*) "init_nonlinear_terms: allocations"
-       if (alloc) then
-          if (accelerated) then
+
+       !Note: These three arrays don't need to be allocated all the time
+       !they are only used within add_nl and then the result is discarded
+       !to reduce peak memory consumption could move allocate/deallocate
+       !to add_nl routine.
+       if (accelerated) then
+          if(.not.allocated(aba))then
              allocate (     aba(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              allocate (     agb(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              allocate (abracket(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              aba = 0. ; agb = 0. ; abracket = 0.
-          else
+          endif
+       else
+          if(.not.allocated(ba))then
              allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
              allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
              allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
              ba = 0. ; gb = 0. ; bracket = 0.
-          end if
-          alloc = .false.
+          endif
        end if
 
        cfly = aky(naky)/cfl*0.5
@@ -201,17 +201,12 @@ contains
             text_option('on', nonlinear_mode_on) /)
     character(20) :: nonlinear_mode
     namelist /nonlinear_terms_knobs/ nonlinear_mode, cfl, nl_order, &
-         C_par, C_perp, p_x, p_y, p_z, zip, nl_forbid_force_zero
+         zip, nl_forbid_force_zero
     integer :: ierr, in_file
 
     if (proc0) then
        nonlinear_mode = 'default'
        cfl = 0.1
-       C_par = 0.1
-       C_perp = 0.1
-       p_x = 6.0
-       p_y = 6.0
-       p_z = 6.0
        nl_order = 3
 
        in_file=input_unit_exist("nonlinear_terms_knobs",exist)
@@ -225,19 +220,11 @@ contains
 
     call broadcast (nonlinear_mode_switch)
     call broadcast (cfl)
-    call broadcast (C_par) 
-    call broadcast (C_perp) 
-    call broadcast (p_x)
-    call broadcast (p_y)
-    call broadcast (p_z)
     call broadcast (nl_forbid_force_zero)
     call broadcast (zip)
     call broadcast (nl_order)
 
-    if (nonlinear_mode_switch == nonlinear_mode_on)  then
-       algorithm = 1 
-       nonlin = .true.
-    end if
+    if (nonlinear_mode_switch == nonlinear_mode_on) nonlin = .true.
 
   end subroutine read_parameters
 
@@ -310,7 +297,7 @@ contains
              tmpAns=get_exp_source(ig,isgn,iglo,istep,order)
 
              !Skip small values
-             if(abs(tmpAns).lt.epsilon(0.0)) then
+             if(abs(tmpAns).lt.1.0e-10) then
                 nskip=nskip+1
                 cycle
              endif
@@ -324,7 +311,7 @@ contains
              !Update average error
              averr=averr+tmpErr/((g_lo%ulim_world+1)*2*(2*ntgrid+1))
 
-             ! if((tmpErr.gt.1.0).and.(tmpErr.gt.max_rel_err))then
+             ! if((tmpErr.gt.1.0)) then !.and.(tmpErr.gt.max_rel_err))then
              !    ik=ik_idx(g_lo,iglo)
              !    it=it_idx(g_lo,iglo)
              !    il=il_idx(g_lo,iglo)
@@ -349,7 +336,13 @@ contains
     !Note to get accurate average need to multiply by total number of grid points
     !(which we divide by in producing averr) and divide by total number of grid
     !points minus the number of skipped points.
-    averr=averr*(((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))/(((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))-nskip))
+    !If we've skipped all the points then set averr and max_rel_err to -1
+    if(nskip.lt.((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))) then
+       averr=averr*(((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))/(((g_lo%ulim_world+1)*2*(2*ntgrid+1.0))-nskip))
+    else
+       averr=-1
+       max_rel_err=-1
+    endif
 
     !##
     !Maximum error
@@ -409,7 +402,6 @@ contains
             call add_explicit (gexp, phi, apar, bpar, istep, bd)
 #endif
     case (nonlinear_mode_on)
-!       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
        if (istep /= 0) call add_explicit (gexp, phi, apar, bpar, istep, bd, nl)
     end select
   end subroutine add_explicit_terms
@@ -431,7 +423,6 @@ contains
 
     integer :: istep_last = 0
     integer :: iglo, ik, it
-    real :: zero
     real :: dt_cfl, maxerr
 
     if (initializing) then
@@ -447,15 +438,14 @@ contains
 !
 
     if (istep /= istep_last) then
-
-       zero = epsilon(0.0)
        call shift_exp(gexp,istep)
 
        ! if running nonlinearly, then compute the nonlinear term at grid points
-       ! and store it in g1
+       ! and store it in gexp(1,:,:,:)
        if (present(nl)) then
           call add_nl (gexp(1,:,:,:), phi, apar, bpar)
           if(reset) return !Return if resetting
+
           ! takes gexp(1,:,:,:) at grid points and returns 2*gexp(1,:,:,:) at cell centers
           call center (gexp(1,:,:,:))
        else
@@ -721,6 +711,9 @@ contains
 
        !If we have violated cfl then return immediately
        if(reset)return
+
+       !Note that g1 will not contain the Fourier space source
+       !term when we return here.
     endif
 
     !Transform NL source back to spectral space
@@ -877,7 +870,7 @@ contains
     if (allocated(aba)) deallocate (aba, agb, abracket)
     if (allocated(ba)) deallocate (ba, gb, bracket)
 
-    nonlin = .false. ; alloc = .true. ; zip = .false. ; accelerated = .false.
+    nonlin = .false. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
     call multistep%finish
   end subroutine finish_nonlinear_terms

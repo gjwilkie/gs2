@@ -217,7 +217,7 @@ contains
 
 subroutine check_dist_fn(report_unit)
   use kt_grids, only: grid_option, gridopt_box, gridopt_switch
-  use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_on
+  use nonlinear_terms, only: nonlin
   use species, only: spec, nspec, has_electron_species
   implicit none
   integer :: report_unit
@@ -349,7 +349,7 @@ subroutine check_dist_fn(report_unit)
           write (report_unit, *) 
        end if
           
-       if (mult_imp .and. nonlinear_mode_switch == nonlinear_mode_on) then
+       if (mult_imp .and. nonlin) then
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, fmt="('For nonlinear runs, all species must use the same values of fexpr and bakdif')")
@@ -370,7 +370,7 @@ subroutine check_dist_fn(report_unit)
           write (report_unit, *) 
        end if
 
-       if (def_parity .and. nonlinear_mode_switch == nonlinear_mode_on) then
+       if (def_parity .and. nonlin) then
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, fmt="('Choosing a definite parity for a nonlinear run has never been tested.')")
