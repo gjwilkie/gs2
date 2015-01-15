@@ -64,8 +64,8 @@ module gs2_transforms
 
   ! fft
 
-  type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
-  type (fft_type) :: xf3d_cr, xf3d_rc
+  type (fft_type), save :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
+  type (fft_type), save :: xf3d_cr, xf3d_rc
 
   logical :: xfft_initted = .false.
 
@@ -982,7 +982,7 @@ contains
     complex, allocatable :: aphi(:,:)
     real :: fac
     integer :: ik, it
-    type (fft_type) :: xf2d
+    type (fft_type), save :: xf2d
 
 #if FFT == _FFTW_
 
@@ -1036,7 +1036,7 @@ contains
     real, allocatable :: phix(:,:)
     real :: fac
     integer :: ik, it
-    type (fft_type) :: xf2d
+    type (fft_type), save :: xf2d
 
 #if FFT == _FFTW_
 
