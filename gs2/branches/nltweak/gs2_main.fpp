@@ -61,7 +61,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new, diagnostics_init_options_type
 #endif
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
-    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
+    use nonlinear_terms, only: nonlin
     use gs2_time, only: update_time, write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
     use init_g, only: tstart
@@ -356,7 +356,7 @@ endif
        ! Use simple gamma / k^2 estimates for transport in the 
        ! linear case. This is for testing Trinity
        if (trinity_linear_fluxes .and. &
-             nonlinear_mode_switch .eq. nonlinear_mode_none) then
+             .not.nonlin) then
          diff = diffusivity()
          do is = 1,nspec
            ! Q = n chi grad T = n (gamma / k^2) dT / dr
@@ -516,8 +516,7 @@ endif
     use collisions, only: vnmult, c_reset => reset_init
     use fields, only: init_fields, f_reset => reset_init
     use init_g, only: g_reset => reset_init
-    use nonlinear_terms, only: nl_reset => reset_init
-    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
+    use nonlinear_terms, only: nl_reset => reset_init, nonlin
     use gs2_diagnostics, only: gd_reset => reset_init
     use gs2_save, only: gs2_save_for_restart!, gs_reset => reset_init
     use species, only: reinit_species
@@ -539,7 +538,7 @@ endif
     ! doing nothing with gexb or mach for now, but in future will need to when
     ! using GS2 to evolve rotation profiles in TRINITY
 
-    if (trinity_linear_fluxes.and.nonlinear_mode_switch.eq.nonlinear_mode_none) &
+    if (trinity_linear_fluxes.and..not.nonlin) &
       call reset_linear_magnitude
     if (nensembles > 1) call scope (subprocs)
 

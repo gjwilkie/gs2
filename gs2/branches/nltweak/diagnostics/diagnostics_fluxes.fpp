@@ -74,7 +74,7 @@ contains
     use species, only: nspec, spec
     use fields_arrays, only: phinew, bparnew, aparnew, phi
     use run_parameters, only: fphi, fapar, fbpar
-    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
+    use nonlinear_terms, only: nonlin
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_config, only: diagnostics_type
     use diagnostics_dimensions, only: dim_string
@@ -89,7 +89,7 @@ contains
     gnostics%current_results%species_momentum_flux = 0.0
     gnostics%current_results%species_particle_flux = 0.0
 
-    if (nonlinear_mode_switch .eq. nonlinear_mode_none) &
+    if (.not.nonlin) &
          call write_diffusive_estimates(gnostics)
 
     call g_adjust (gnew, phinew, bparnew, fphi, fbpar)

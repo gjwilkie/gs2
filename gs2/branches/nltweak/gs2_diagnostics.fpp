@@ -212,7 +212,7 @@ contains
 
    subroutine check_gs2_diagnostics(report_unit)
      use file_utils, only: run_name
-     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_on
+     use nonlinear_terms, only: nonlin
      use dist_fn, only : def_parity, even 
      use kt_grids, only : gridopt_switch, gridopt_box
      use init_g, only : restart_file
@@ -376,7 +376,7 @@ contains
      if (save_for_restart) then
         write (report_unit, fmt="('save_for_restart = T:      Restart files written to ',a)") trim(restart_file)//'.(PE)'
      else
-        if (nonlinear_mode_switch == nonlinear_mode_on) then
+        if (nonlin) then
            write (report_unit, *) 
            write (report_unit, fmt="('################# WARNING #######################')")
            write (report_unit, fmt="('save_for_restart = F:              This run cannot be continued.')")
