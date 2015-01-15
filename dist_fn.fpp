@@ -3343,10 +3343,9 @@ endif
   subroutine allocate_arrays
     use kt_grids, only: naky,  box
     use theta_grid, only: ntgrid, shat
-    use dist_fn_arrays, only: g, gnew, gexp
+    use dist_fn_arrays, only: g, gnew
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
-    use nonlinear_terms, only: nonlin, nl_order
     use run_parameters, only: fapar
     implicit none
 !    logical :: alloc = .true.
@@ -3363,17 +3362,7 @@ endif
              allocate (source_coeffs(2,-ntgrid:ntgrid-1,2,g_lo%llim_proc:g_lo%ulim_alloc))
           endif
        endif
-#ifdef LOWFLOW
-       allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       gexp=0.
-#else
-       if (nonlin) then
-          allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          gexp = 0.
-       else
-          allocate (gexp(1,1,2,1))
-       end if
-#endif
+
        if (boundary_option_switch == boundary_option_linked) then
           allocate (g_h(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           g_h = 0.
@@ -8780,7 +8769,7 @@ endif
   subroutine finish_dist_fn
     use redistribute, only: delete_redist
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
-    use dist_fn_arrays, only: aj0, aj1, gexp
+    use dist_fn_arrays, only: aj0, aj1
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
 #ifdef LOWFLOW
     use lowflow, only: finish_lowflow_terms
@@ -8809,7 +8798,6 @@ endif
     if (allocated(g_adj)) deallocate (g_adj)
     if (allocated(g)) deallocate (g, gnew, g0)
     if (allocated(source_coeffs)) deallocate(source_coeffs)
-    if (allocated(gexp)) deallocate (gexp)
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
     if (allocated(theta0_shift)) deallocate (theta0_shift)

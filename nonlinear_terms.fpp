@@ -11,15 +11,19 @@ module nonlinear_terms
 
   public :: init_nonlinear_terms, finish_nonlinear_terms
   public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
-  public :: add_explicit_terms, nl_order, get_exp_source
+  public :: add_explicit_terms, get_exp_source
   public :: finish_init, reset_init, nonlin, accelerated
-  public :: nonlinear_terms_unit_test_time_add_nl, cfl
+  public :: nonlinear_terms_unit_test_time_add_nl
 
   private
 
   ! knobs
   integer :: nonlinear_mode_switch
   integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
+
+  !The source term history
+  complex, dimension (:,:,:,:), allocatable :: gexp
+  ! (explicit_order,-ntgrid:ntgrid,2, -g-layout-)
 
   real, save, dimension (:,:), allocatable :: ba, gb, bracket
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
@@ -118,7 +122,7 @@ contains
     use le_grids, only: init_le_grids, nlambda, negrid
     use species, only: init_species, nspec
     use gs2_layouts, only: init_dist_fn_layouts, yxf_lo, accelx_lo
-    use gs2_layouts, only: init_gs2_layouts
+    use gs2_layouts, only: init_gs2_layouts, g_lo
     use gs2_transforms, only: init_transforms
     use mp, only: proc0
     implicit none
@@ -157,8 +161,19 @@ contains
     call multistep%set_coeffs(6,[4277,-7923,9982,-7298,2877,-475]/1440.0)
     !if(proc0)call multistep%print
 
+#ifdef LOWFLOW
+    allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+#else
+    if (nonlin) then
+       allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    else
+       allocate (gexp(nl_order,1,2,1))
+    end if
+#endif
+    gexp = 0.
+
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
-    if (nonlinear_mode_switch /= nonlinear_mode_none) then
+    if (nonlin) then
        call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
 
        if (debug) write(6,*) "init_nonlinear_terms: allocations"
@@ -231,7 +246,6 @@ contains
   !>Calculate the explicit source term at given location
   !!Note, doesn't include 0.5*dt needed to actually advance
   function get_exp_source(ig,isgn,iglo,istep,orderIn)
-    use dist_fn_arrays, only: gexp
     implicit none
     complex :: get_exp_source
     integer, intent(in) :: ig, isgn, iglo, istep
@@ -362,9 +376,8 @@ contains
 
   !>Moves steps along one (discarding oldest)
   !!to create space to store current step
-  subroutine shift_exp(gexp,istep)
+  subroutine shift_exp(istep)
     implicit none
-    complex, dimension(:,:,:,:), intent(inout) :: gexp
     integer, intent(in) :: istep
     integer :: order, i
 
@@ -384,7 +397,6 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
-    use dist_fn_arrays, only: gexp
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     integer, intent (in) :: istep
@@ -399,30 +411,29 @@ contains
        call save_dt_cfl (dt_cfl)
 #ifdef LOWFLOW
        if (istep /=0) &
-            call add_explicit (gexp, phi, apar, bpar, istep, bd)
+            call add_explicit (phi, apar, bpar, istep, bd)
 #endif
     case (nonlinear_mode_on)
-       if (istep /= 0) call add_explicit (gexp, phi, apar, bpar, istep, bd, nl)
+       !Would we not be better off testing nonlin inside add_explicit, rather than 
+       !pass nl here?
+       if (istep /= 0) call add_explicit (phi, apar, bpar, istep, bd, nl)
     end select
   end subroutine add_explicit_terms
 
-
-  subroutine add_explicit (gexp, phi, apar, bpar, istep, bd,  nl)
+  subroutine add_explicit (phi, apar, bpar, istep, bd,  nl)
     use theta_grid, only: ntgrid
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx
     use dist_fn_arrays, only: g
     use gs2_time, only: save_dt_cfl
     use run_parameters, only: reset
     implicit none
-
-    complex, dimension (:,-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: gexp
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
     logical, intent (in), optional :: nl
 
     integer :: istep_last = 0
-    integer :: iglo, ik, it
+    integer :: iglo, ik
     real :: dt_cfl, maxerr
 
     if (initializing) then
@@ -438,7 +449,7 @@ contains
 !
 
     if (istep /= istep_last) then
-       call shift_exp(gexp,istep)
+       call shift_exp(istep)
 
        ! if running nonlinearly, then compute the nonlinear term at grid points
        ! and store it in gexp(1,:,:,:)
@@ -455,17 +466,15 @@ contains
 #ifdef LOWFLOW
        ! do something
 #endif
+       !Get error estimate, just for testing now.
        maxerr=max_exp_source_error(istep)
     end if
 
+    !If zip then zero nonlinear term and g for all ik/=1
     if (zip) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
-!          if (it == 3 .or. it == ntheta0-1) then
-!          if (it /= 1) then
           if (ik /= 1) then
-!          if (ik == 2 .and. it == 1) then
              g (:,:,iglo) = 0.
              gexp(1,:,:,iglo) = 0.
           end if
@@ -556,7 +565,7 @@ contains
   end subroutine add_explicit
 
   subroutine nonlinear_terms_unit_test_time_add_nl(g1, phi, apar, bpar)
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
+    use gs2_layouts, only: g_lo
     use theta_grid, only: ntgrid
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
@@ -595,7 +604,7 @@ contains
     end if
 
     if (fbpar > zero) call load_kx_bpar
-    if (fapar  > zero) call load_kx_apar
+    if (fapar > zero) call load_kx_apar
 
     !Transform to real space
     if (accelerated) then
@@ -654,7 +663,7 @@ contains
     end if
     
     if (fbpar > zero) call load_ky_bpar
-    if (fapar  > zero) call load_ky_apar
+    if (fapar > zero) call load_ky_apar
 
     !Transform to real space    
     if (accelerated) then
@@ -851,30 +860,25 @@ contains
   end subroutine add_nl
 
   subroutine reset_init
-    
     initialized = .false.
     initializing = .true.
     call multistep%finish
   end subroutine reset_init
 
   subroutine finish_init
-
     initializing = .false.
-
   end subroutine finish_init
 
   subroutine finish_nonlinear_terms
-
     implicit none
 
     if (allocated(aba)) deallocate (aba, agb, abracket)
     if (allocated(ba)) deallocate (ba, gb, bracket)
-
+    if (allocated(gexp)) deallocate (gexp)
     nonlin = .false. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
     call multistep%finish
   end subroutine finish_nonlinear_terms
-
 end module nonlinear_terms
 
 
