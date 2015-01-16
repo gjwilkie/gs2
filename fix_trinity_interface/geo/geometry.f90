@@ -2658,7 +2658,7 @@ end subroutine geofax
 !
 ! find this point:
 
-    write (*,*) 'th_bish', th_bish
+    !write (*,*) 'th_bish', th_bish
     is = nth-1
     do i=1,nth-1
        if(abs(th_bish(i+1)-th_bish(i)) > pi) then

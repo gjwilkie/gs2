@@ -179,7 +179,7 @@ EOF2
         use #@module_name, only: finish_#@level_name
         if (up()) then 
           call fields_pre_init
-          write (*,*) 'called fields_pre_init'
+          !write (*,*) 'called fields_pre_init'
           call init_#@level_name
         end if
         if (down()) call finish_#@level_name

@@ -312,6 +312,8 @@ contains
     !state%gs2_initialized = .true.
     state%init%level = init_level_list%basic
 
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
+
   end subroutine initialize_gs2
 
   subroutine initialize_equations(state)
@@ -329,6 +331,8 @@ contains
     type(gs2_program_state_type), intent(inout) :: state
        !call time_message(.false., time_init,' Initialization')
     !call init_parameter_scan
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
+
     call init_parameter_scan
 
     if (proc0) call time_message(.false., state%timers%init,' Initialization')
@@ -370,6 +374,8 @@ contains
     end if
     call allocate_outputs(state)
 
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
+
   end subroutine initialize_equations
 
   subroutine initialize_diagnostics(state)
@@ -381,6 +387,8 @@ contains
     use gs2_diagnostics_new, only: init_gs2_diagnostics_new
     use gs2_diagnostics_new, only: run_diagnostics
 #endif
+    use job_manage, only: time_message
+    use mp, only: proc0
     use parameter_scan, only: allocate_target_arrays
     use run_parameters, only: nstep
     use unit_tests, only: debug_message
@@ -390,6 +398,8 @@ contains
     ! Configuration for the new diagnostics module
     type(diagnostics_init_options_type) :: diagnostics_init_options
     real :: precision_test
+
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
 
 #ifdef NETCDF_PARALLEL
     diagnostics_init_options%parallel_io_capable = .true.
@@ -414,6 +424,8 @@ contains
     call init_gs2_diagnostics (state%list, nstep)
     call allocate_target_arrays(nwrite,write_nl_flux) ! must be after init_gs2_diagnostics
     call loop_diagnostics(0,state%exit)
+
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
 
   end subroutine initialize_diagnostics
 
@@ -440,6 +452,7 @@ contains
     integer :: istep, istatus
     integer, intent(in) :: nstep_run
     
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
     
     if (state%nensembles > 1) &
           call scope (subprocs)
@@ -452,7 +465,7 @@ contains
     ! timestep loop
     state%exit = .false.
 
-    if (proc0) write (*,*) 'istep_end', state%istep_end
+    !if (proc0) write (*,*) 'istep_end', state%istep_end
 
     ! We run for nstep_run iterations, starting from whatever istep we got
     ! to in previous calls to this function. Note that calling
@@ -531,6 +544,8 @@ contains
 
     if (proc0 .and. .not. state%is_external_job) call write_dt
     
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
+
     if (state%is_external_job) call print_times(state, state%timers)
 
     ilast_step = state%istep_end
@@ -543,9 +558,11 @@ contains
     use eigval, only: BasicSolve
 #endif 
     use job_manage, only: time_message
-    use mp, only: mp_abort
+    use mp, only: mp_abort, proc0
     type(gs2_program_state_type), intent(inout) :: state
 #ifdef WITH_EIG
+   if (proc0) call time_message(.false.,state%timers%total,' Total')
+
    !Start timer
    call time_message(.false.,time_eigval,' Eigensolver')
 
@@ -564,6 +581,7 @@ contains
 #else
    call mp_abort("Require slepc/petsc")
 #endif
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
 
   end subroutine run_eigensolver
 
@@ -574,6 +592,7 @@ contains
     use mp, only: scope, subprocs, allprocs
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
+
 
     if (state%nensembles > 1) call scope (subprocs)
     if (trinity_linear_fluxes .and. &
@@ -618,6 +637,8 @@ contains
     use parameter_scan, only: deallocate_target_arrays
     type(gs2_program_state_type), intent(inout) :: state
 
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
+
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
 
 #ifdef NEW_DIAG
@@ -630,6 +651,8 @@ contains
     state%istep_end = 1
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
   end subroutine finalize_diagnostics
 
   subroutine finalize_equations(state)
@@ -642,6 +665,7 @@ contains
     type(gs2_program_state_type), intent(inout) :: state
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
 
     call debug_message(state%verb, 'gs2_main::finalize_equations starting')
 
@@ -649,6 +673,7 @@ contains
     call finish_parameter_scan
     call init(state%init, init_level_list%basic)
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
 
   end subroutine finalize_equations
 
@@ -679,6 +704,8 @@ contains
         !& are all false. '
        !stop 1
      !end if
+
+    if (proc0) call time_message(.false.,state%timers%total,' Total')
 
     call finish_gs2_init
 
@@ -741,7 +768,7 @@ contains
     integer :: is
 
     time_interval = user_time-start_time
-      write (*,*) 'GETTING FLUXES'
+      !write (*,*) 'GETTING FLUXES'
 
     if (state%nensembles > 1) &
       call ensemble_average (state%nensembles, time_interval)
@@ -769,7 +796,7 @@ contains
      !end if
    end if
 
-   write (*,*) 'GETTING FLUXES TIME, DIFF', time_interval, diff
+   !write (*,*) 'GETTING FLUXES TIME, DIFF', time_interval, diff
 
    !if (size(state%outputs%pflux) > 1) then
       !state%outputs%pflux(1) = pflux_avg(ions)/time_interval
@@ -791,7 +818,7 @@ contains
       state%outputs%heat = heat_avg/time_interval
    !end if
    state%outputs%vflux = vflux_avg(1)/time_interval
-   write (*,*) 'OUTPUTS qflux', state%outputs%qflux
+   !write (*,*) 'OUTPUTS qflux', state%outputs%qflux
   end subroutine calculate_outputs
 
 
@@ -991,7 +1018,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (present(dvdrho)) dvdrho = old_iface_state%outputs%dvdrho
     if (present(grho)) grho = old_iface_state%outputs%grho
     if (present(pflux)) then
-      write (*,*) 'SETTING FLUXES'
+      !write (*,*) 'SETTING FLUXES'
       pflux = old_iface_state%outputs%pflux
       qflux = old_iface_state%outputs%qflux
       vflux = old_iface_state%outputs%vflux
@@ -1069,7 +1096,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (nspec.ne.2)  & 
       call mp_abort("gs2_main_unit_test_reset_gs2 only works with 2 species", .true.)
 
-    write (*,*) 'HEREEEE'
+    !write (*,*) 'HEREEEE'
 
     call reset_gs2(nspec, &
       ! Deliberately leave fac off the next 2 lines
@@ -1081,7 +1108,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
       g_exb, 0.0, &
       (/spec(1)%vnewk, spec(2)%vnewk/), &
       1)
-    write (*,*) 'HERAAAA'
+    !write (*,*) 'HERAAAA'
 
     gs2_main_unit_test_reset_gs2 = .true.
 
@@ -1247,7 +1274,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     integer, intent(in) :: ntspec
     call determine_species_order
     if (.not. allocated(gs2spec_from_trin)) allocate(gs2spec_from_trin(ntspec))
-    write (*,*) 'IONS', ions, 'ELECTRONS', electrons, 'IMPURITY', impurity
+    !write (*,*) 'IONS', ions, 'ELECTRONS', electrons, 'IMPURITY', impurity
     if (nspec==1) then
       gs2spec_from_trin(1) = ions
       ! ref temp is always ions (trin spec 1)

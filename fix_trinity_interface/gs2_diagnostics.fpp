@@ -437,14 +437,14 @@ contains
     if (initialized) return
     initialized = .true.
 
-    if (proc0) write (*,*) " WARNING: &
-        & THE OLD DIAGNOSTICS MODULE IS NOW DEPRECATED.&
-        & It is scheduled to be disabled by default on 1st Jan 2015 and removed&
-        & from the repository on 1st March 2015. Do not edit or extend this module&
-        & in any way apart from vital fixes. Any changes you make may not be &
-        & transferred to the new diagnostics module... please use the new diagnostics &
-        & module contained in the diagnostics folder instead. PLEASE AMEND YOUR &
-        & SCRIPTS TO USE THE NEW OUTPUT FILE ENDING IN .cdf"
+    !if (proc0) write (*,*) " WARNING: &
+        !& THE OLD DIAGNOSTICS MODULE IS NOW DEPRECATED.&
+        !& It is scheduled to be disabled by default on 1st Jan 2015 and removed&
+        !& from the repository on 1st March 2015. Do not edit or extend this module&
+        !& in any way apart from vital fixes. Any changes you make may not be &
+        !& transferred to the new diagnostics module... please use the new diagnostics &
+        !& module contained in the diagnostics folder instead. PLEASE AMEND YOUR &
+        !& SCRIPTS TO USE THE NEW OUTPUT FILE ENDING IN .cdf"
 
     call init_theta_grid
     call init_kt_grids
