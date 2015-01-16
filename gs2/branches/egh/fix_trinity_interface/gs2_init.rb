@@ -153,7 +153,7 @@ EOF2
 EOF2
         when 'set_initial_values'
           str = <<EOF2
-          if (up()) call set_initial_field_and_dist_fn_values
+          if (up()) call set_initial_field_and_dist_fn_values(current)
 EOF2
         when 'dist_fn_layouts'
           str = <<EOF2

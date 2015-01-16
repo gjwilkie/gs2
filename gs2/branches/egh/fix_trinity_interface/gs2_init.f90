@@ -32,7 +32,7 @@ module gs2_init
   use overrides, only: profiles_overrides_type
   !> A type for storing the current initialization
   !! status.
-  public :: init_level_type
+  public :: init_type
   !> A list of possible intialization levels.
   public :: init_level_list
   !> Bring gs2 to the target initialization
@@ -91,7 +91,7 @@ module gs2_init
   type(init_level_list_type) :: init_level_list
   
   !> A type for storing the init_level of gs2.
-  type init_level_type
+  type init_type
     !> The current init level
     integer :: level = 0
     !> Whether or not diagnostics have been initialized
@@ -99,22 +99,27 @@ module gs2_init
     type(miller_geometry_overrides_type) :: mgeo_ov
     type(profiles_overrides_type) :: prof_ov
 
+    !> If true, force loading initial values of fields
+    !! and dist_fn from the restart file(s).
+    logical :: force_restart = .false.
+
+
     !> A list of possible init levels
     !type(init_level_list_type) :: levels
-  end type init_level_type
+  end type init_type
 
   complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
   logical :: fields_and_dist_fn_saved = .false.
   logical :: in_memory = .false.  
 contains
   !> Initialize gs2 to the level of target_level.
-  !! The init_level_type current contains info
+  !! The init_type current contains info
   !! about the current initialization level. At the end
   !! of the subroutine, current%level is set to target_level
   subroutine init(current, target_level)
     use fields, only: init_fields
     implicit none
-    type(init_level_type), intent(inout) :: current
+    type(init_type), intent(inout) :: current
     integer, intent(in) :: target_level
     integer :: i
     !logical :: up, down
@@ -566,7 +571,7 @@ contains
 
       subroutine set_initial_values
         use unit_tests, only: debug_message
-          if (up()) call set_initial_field_and_dist_fn_values
+          if (up()) call set_initial_field_and_dist_fn_values(current)
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... set_initial_values   ')
@@ -724,7 +729,7 @@ contains
     fields_and_dist_fn_saved = .true.
 
   end subroutine save_fields_and_dist_fn
-  subroutine set_initial_field_and_dist_fn_values
+  subroutine set_initial_field_and_dist_fn_values(current)
     use dist_fn_arrays, only: g_restart_tmp
     use fields_arrays, only: phinew, aparnew, bparnew
     use fields, only: force_maxwell_reinit
@@ -733,13 +738,19 @@ contains
     use init_g, only: ginitopt_restart_memory
     use init_g, only: ginitopt_restart_many
     use run_parameters, only: fphi, fapar, fbpar
+    type (init_type), intent(in) :: current
     logical :: restarted
 
     write (*,*) 'set_init_field in_memory', in_memory, fields_and_dist_fn_saved
 
     if (.not. fields_and_dist_fn_saved) then 
       ! This is the usual initial setup 
-      call ginit (restarted)
+      if (current%force_restart) then 
+        !write (*,*) 'FORCING RESTART'
+        call ginit(restarted, ginitopt_restart_many)
+      else
+        call ginit (restarted)
+      end if
       if (.not. restarted .or. force_maxwell_reinit) then
         !Set the initial fields
         call set_init_fields

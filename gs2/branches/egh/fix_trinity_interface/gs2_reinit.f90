@@ -81,7 +81,7 @@ contains
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use dist_fn_arrays, only: gnew
     use gs2_time, only: code_dt_min
-    use gs2_init, only: save_fields_and_dist_fn, init_level_type, init
+    use gs2_init, only: save_fields_and_dist_fn, init_type, init
     use gs2_init, only: init_level_list
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -93,7 +93,7 @@ contains
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer, save :: nconsec=0
     integer, intent (in), optional :: job_id
-    type(init_level_type), intent(inout) :: current_init
+    type(init_type), intent(inout) :: current_init
 
 
     if (first) call init_reinit
