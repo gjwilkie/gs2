@@ -27,7 +27,7 @@ module init_g
        ginitopt_nl3r = 26, ginitopt_smallflat = 27, ginitopt_harris = 28, &
        ginitopt_recon3 = 29, ginitopt_ot = 30, &
        ginitopt_zonal_only = 31, ginitopt_single_parallel_mode = 32, &
-       ginitopt_all_modes_equal = 33
+       ginitopt_all_modes_equal = 33, ginitopt_nl8 = 34
 
   real :: width0, dphiinit, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -734,6 +734,12 @@ contains
        scale = 1.
     case (ginitopt_nl7)
        call ginit_nl7
+    case (ginitopt_nl8)
+       call ginit_nl8
+       call init_tstart (tstart, istatus)
+       call ginit_recon
+       tstart = t0
+       restarted = .true.
     case (ginitopt_xi)
        call ginit_xi
     case (ginitopt_xi2)
@@ -788,7 +794,7 @@ contains
     use text_options, only: text_option, get_option_value
     implicit none
 
-    type (text_option), dimension (32), parameter :: ginitopts = &
+    type (text_option), dimension (33), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('xi', ginitopt_xi), &
@@ -810,6 +816,7 @@ contains
             text_option('nl5', ginitopt_nl5), &
             text_option('nl6', ginitopt_nl6), &
             text_option('nl7', ginitopt_nl7), &
+            text_option('nl8', ginitopt_nl8), &
             text_option('alf', ginitopt_alf), &
             text_option('gs', ginitopt_gs), &
             text_option('kpar', ginitopt_kpar), &
@@ -2295,6 +2302,80 @@ contains
     gnew = g
 
   end subroutine ginit_nl7
+
+!> This option takes the restart, scales the modes defined by itt and ikk, and makes the rest noise
+  subroutine ginit_nl8
+    use mp, only: proc0
+    use species, only: spec, nspec
+    use gs2_save, only: gs2_restore
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use dist_fn_arrays, only: g, gnew
+    use le_grids, only: forbid, integrate_moment
+    use fields_arrays, only: phi, apar, bpar
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx
+    use file_utils, only: error_unit
+    use run_parameters, only: fphi, fapar, fbpar
+    use ran
+    use constants, only: zi
+    implicit none
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: phiz 
+    complex, dimension(2):: phasefac
+    integer :: iglo, istatus
+    integer :: ig, ik, it, is, il, ierr, isig, j
+    logical :: many = .true., zerothismode=.false.
+    complex:: phiz0
+    
+    call gs2_restore (g, scale, istatus, fphi, fapar, fbpar, many)
+    if (istatus /= 0) then
+       ierr = error_unit()
+       if (proc0) write(ierr,*) "Error reading file: ", trim(restart_file)
+       g = 0.
+    end if
+
+    phiz = 0.0
+    call integrate_moment(g,phiz)
+
+    do j = 1,2
+       phiz0 = sum( phiz(0,itt(j),ikk(j),:)*spec(:)%z)
+       if ( real(phiz0) .GT. 2.0*epsilon(0.0) ) then
+          phasefac(j) = 1.0 - zi* aimag(phiz0)/real(phiz0)
+       else
+          phasefac(j) = -zi
+       end if  
+       phasefac(j) = phasefac(j) / cabs(phasefac(j))
+    end do
+    
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       zerothismode = .true.
+       do j = 1,2
+          if ( (it .EQ. itt(j)) .AND. (ik .EQ. ikk(j)) ) zerothismode=.false.
+       end do
+
+       if (zerothismode) then  
+          g(:,1,iglo) = cmplx(ranf()-0.5,ranf()-0.5)*spec(is)%z*phiinit
+          g(:,2,iglo) = cmplx(ranf()-0.5,ranf()-0.5)*spec(is)%z*phiinit
+       else
+          do j =1,2
+            g(:,:,iglo) = g(:,:,iglo) * phasefac(j)
+          end do
+       end if
+
+    end do
+
+    ! Calculate fields based on restored g?
+    ! phi, phinew, apar, aparnew, bpar, bparnew
+
+    gnew = g
+
+  end subroutine ginit_nl8
+
 
   ! Orszag-Tang 2D vortex problem
   subroutine ginit_ot
