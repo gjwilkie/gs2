@@ -214,7 +214,7 @@ contains
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
-    if (state%init%level .ge. init_level_list%gs2) then
+    if (state%init%level .ge. init_level_list%basic) then
       write  (*,*) "ERROR: Called initialize_gs2 twice &
         without calling finalize_gs2"
       stop 1
@@ -310,7 +310,7 @@ contains
     call init_gs2_init
 
     !state%gs2_initialized = .true.
-    state%init%level = init_level_list%gs2
+    state%init%level = init_level_list%basic
 
   end subroutine initialize_gs2
 
@@ -647,7 +647,7 @@ contains
 
     call deallocate_outputs(state)
     call finish_parameter_scan
-    call init(state%init, init_level_list%gs2)
+    call init(state%init, init_level_list%basic)
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
 
   end subroutine finalize_equations
@@ -662,7 +662,7 @@ contains
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
-    if (state%init%level .ne. init_level_list%gs2) then
+    if (state%init%level .ne. init_level_list%basic) then
       write  (*,*) "ERROR: Called finalize_gs2 at the &
         & wrong init_level (perhaps you have called finalize_gs2 &
         & without calling initialize_gs2, or without calling &

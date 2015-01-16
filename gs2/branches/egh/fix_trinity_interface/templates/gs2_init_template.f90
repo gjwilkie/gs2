@@ -59,7 +59,7 @@ module gs2_init
   !> A type for labelling the different init
   !! levels available in gs2.
   type init_level_list_type
-    !> The init_level reaches gs2
+    !> The init_level reaches basic
     !! when initialize_gs2 has been called.
     ! TEMPLATE_GS2_INIT_LEVEL
     ! TEMPLATE_LEVEL_DECLARATIONS
@@ -136,6 +136,9 @@ contains
   end subroutine init_gs2_init
 
   subroutine finish_gs2_init
+    !if (fields_and_dist_fn_saved .and. in_memory) then
+      call deallocate_saved_arrays
+    !end if
   end subroutine finish_gs2_init
 
   subroutine save_fields_and_dist_fn
@@ -287,13 +290,17 @@ contains
       end if
       if(in_memory) then 
         !Deallocate tmp memory
-        if(allocated(g_restart_tmp)) deallocate(g_restart_tmp)
-        if(allocated(phi_tmp)) deallocate(phi_tmp)
-        if(allocated(apar_tmp)) deallocate(apar_tmp)
-        if(allocated(bpar_tmp)) deallocate(bpar_tmp)
+        call deallocate_saved_arrays
       end if
       fields_and_dist_fn_saved = .false.
     end if
   end subroutine set_initial_field_and_dist_fn_values
+  subroutine deallocate_saved_arrays 
+    use dist_fn_arrays, only: g_restart_tmp
+    if(allocated(g_restart_tmp)) deallocate(g_restart_tmp)
+    if(allocated(phi_tmp)) deallocate(phi_tmp)
+    if(allocated(apar_tmp)) deallocate(apar_tmp)
+    if(allocated(bpar_tmp)) deallocate(bpar_tmp)
+  end subroutine deallocate_saved_arrays
 end module gs2_init
 

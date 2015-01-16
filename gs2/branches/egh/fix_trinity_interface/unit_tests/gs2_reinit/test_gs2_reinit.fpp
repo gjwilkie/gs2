@@ -96,7 +96,7 @@ program test_gs2_reinit
     call init_fields
     call init(old_iface_state%init, init_level_list%collisions)
     call init(old_iface_state%init, init_level_list%full)
-    call init(old_iface_state%init, init_level_list%gs2)
+    call init(old_iface_state%init, init_level_list%basic)
     call init(old_iface_state%init, init_level_list%full)
     call initialize_diagnostics(old_iface_state)
     call process_test(.true., 'init down and up')
