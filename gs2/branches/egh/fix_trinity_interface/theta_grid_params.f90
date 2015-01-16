@@ -142,7 +142,7 @@ contains
   subroutine set_overrides(mgeo_ov)
     use overrides, only: miller_geometry_overrides_type
     type(miller_geometry_overrides_type), intent(in) :: mgeo_ov
-          write (*,*) 'Calling tgpso'
+          !write (*,*) 'Calling tgpso'
     if (mgeo_ov%override_rhoc) rhoc = mgeo_ov%rhoc
     if (mgeo_ov%override_qinp) qinp = mgeo_ov%qinp
     if (mgeo_ov%override_shat) shat = mgeo_ov%shat

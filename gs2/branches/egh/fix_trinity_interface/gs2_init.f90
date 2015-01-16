@@ -555,7 +555,7 @@ contains
         use fields, only: finish_fields
         if (up()) then 
           call fields_pre_init
-          write (*,*) 'called fields_pre_init'
+          !write (*,*) 'called fields_pre_init'
           call init_fields
         end if
         if (down()) call finish_fields
@@ -637,7 +637,7 @@ contains
     integer :: iostat
     integer :: istatus
 
-    write (*,*) 'save_fields_and_dist_fn in_memory', in_memory
+    !write (*,*) 'save_fields_and_dist_fn in_memory', in_memory
 
     if (fields_and_dist_fn_saved) then 
       call mp_abort("ERROR: In save_fields_and_dist_fn &
@@ -741,7 +741,7 @@ contains
     type (init_type), intent(in) :: current
     logical :: restarted
 
-    write (*,*) 'set_init_field in_memory', in_memory, fields_and_dist_fn_saved
+    !write (*,*) 'set_init_field in_memory', in_memory, fields_and_dist_fn_saved
 
     if (.not. fields_and_dist_fn_saved) then 
       ! This is the usual initial setup 
