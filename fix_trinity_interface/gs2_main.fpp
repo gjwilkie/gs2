@@ -18,7 +18,7 @@ end module old_interface_store
 !! include this module and call run_gs2.
 
 module gs2_main
-  use gs2_init, only: init_level_type, init_level_list
+  use gs2_init, only: init_type, init_level_list
   implicit none
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
 
@@ -94,7 +94,7 @@ module gs2_main
 
     !> A type for keeping track of the current
     !! initialization level of gs2
-    type(init_level_type) :: init
+    type(init_type) :: init
 
 
 
@@ -769,24 +769,29 @@ contains
      !end if
    end if
 
-   if (size(state%outputs%pflux) > 1) then
-      state%outputs%pflux(1) = pflux_avg(ions)/time_interval
-      state%outputs%qflux(1) = qflux_avg(ions)/time_interval
-      state%outputs%heat(1) = heat_avg(ions)/time_interval
-      state%outputs%pflux(2) = pflux_avg(electrons)/time_interval
-      state%outputs%qflux(2) = qflux_avg(electrons)/time_interval
-      state%outputs%heat(2) = heat_avg(electrons)/time_interval
-      if (size(state%outputs%pflux) > 2) then
-         state%outputs%pflux(3) = pflux_avg(impurity)/time_interval
-         state%outputs%qflux(3) = qflux_avg(impurity)/time_interval
-         state%outputs%heat(3) = heat_avg(impurity)/time_interval
-      end if
-   else
+   write (*,*) 'GETTING FLUXES TIME, DIFF', time_interval, diff
+
+   !if (size(state%outputs%pflux) > 1) then
+      !state%outputs%pflux(1) = pflux_avg(ions)/time_interval
+      !state%outputs%qflux(1) = qflux_avg(ions)/time_interval
+      !state%outputs%heat(1) = heat_avg(ions)/time_interval
+      !state%outputs%pflux(2) = pflux_avg(electrons)/time_interval
+      !state%outputs%qflux(2) = qflux_avg(electrons)/time_interval
+      !state%outputs%heat(2) = heat_avg(electrons)/time_interval
+      !if (size(state%outputs%pflux) > 2) then
+         !state%outputs%pflux(3) = pflux_avg(impurity)/time_interval
+         !state%outputs%qflux(3) = qflux_avg(impurity)/time_interval
+         !state%outputs%heat(3) = heat_avg(impurity)/time_interval
+      !end if
+   !else
+      ! We now rely on trinity to work out which species
+      ! is which
       state%outputs%pflux = pflux_avg/time_interval
       state%outputs%qflux = qflux_avg/time_interval
       state%outputs%heat = heat_avg/time_interval
-   end if
+   !end if
    state%outputs%vflux = vflux_avg(1)/time_interval
+   write (*,*) 'OUTPUTS qflux', state%outputs%qflux
   end subroutine calculate_outputs
 
 
@@ -1266,6 +1271,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
   subroutine reset_linear_magnitude
     use dist_fn_arrays, only: g, gnew
+    use fields, only: set_init_fields
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew,  bparnew
     use run_parameters, only: fphi, fapar, fbpar
     use init_g, only: ginit
@@ -1304,6 +1310,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
      g = 0.0; gnew = 0.0
 
      call ginit(dummy)
+     call set_init_fields
   end subroutine reset_linear_magnitude
 
   subroutine write_trinity_parameters
