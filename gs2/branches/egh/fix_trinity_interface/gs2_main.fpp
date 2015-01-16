@@ -26,7 +26,14 @@ module gs2_main
   public :: initialize_gs2, initialize_equations
   public :: initialize_diagnostics, evolve_equations, run_eigensolver
   public :: finalize_diagnostics, finalize_equations, finalize_gs2
+  public :: gs2_trin_init
   public :: calculate_outputs
+  public :: save_current
+  public :: reset_equations
+
+  public :: determine_gs2spec_from_trin
+  public :: gs2spec_from_trin
+  public :: densrefspec
 
   public :: prepare_miller_geometry_overrides
   public :: prepare_profiles_overrides
@@ -174,7 +181,7 @@ module gs2_main
   private
 
 
-  integer :: refspec
+  integer :: densrefspec
   integer, dimension(:), allocatable :: gs2spec_from_trin
 
 
@@ -355,6 +362,12 @@ contains
 
     call debug_message(state%verb, 'gs2_main::initialize_equations finished')
 
+    ! Since the number of species may have changed
+    ! since the last call to initialize_equations 
+    ! we reallocate outputs every time.
+    if (associated(state%outputs%pflux)) then
+      call deallocate_outputs(state)
+    end if
     call allocate_outputs(state)
 
   end subroutine initialize_equations
@@ -553,6 +566,47 @@ contains
 #endif
 
   end subroutine run_eigensolver
+
+  subroutine save_current(state)
+    use gs2_init, only: save_fields_and_dist_fn
+    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
+    use run_parameters, only: trinity_linear_fluxes
+    use mp, only: scope, subprocs, allprocs
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+
+    if (state%nensembles > 1) call scope (subprocs)
+    if (trinity_linear_fluxes .and. &
+       nonlinear_mode_switch .eq. nonlinear_mode_none) &
+        call reset_linear_magnitude
+    call save_fields_and_dist_fn
+    if (state%nensembles > 1) call scope (allprocs)
+  end subroutine save_current
+
+  subroutine reset_equations (state)
+
+    use gs2_diagnostics, only: gd_reset => reset_init
+    use dist_fn_arrays, only: gnew
+    use gs2_time, only: code_dt, save_dt
+    use mp, only: scope, subprocs, allprocs
+    use mp, only: mp_abort
+
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+
+
+    if (state%nensembles > 1) call scope (subprocs)
+    ! EGH is this line necessary?
+    gnew = 0.
+    call save_dt (code_dt)
+    ! This call to gs2_diagnostics::reset_init sets some time averages
+    ! and counters to zero... used mainly for trinity convergence checks.
+    call gd_reset
+
+    state%istep_end = 1
+    if (state%nensembles > 1) call scope (allprocs)
+
+  end subroutine reset_equations
 
   subroutine finalize_diagnostics(state)
     use gs2_diagnostics, only: finish_gs2_diagnostics
@@ -797,15 +851,20 @@ contains
   subroutine allocate_outputs(state)
     use species, only: nspec
     type(gs2_program_state_type), intent(inout) :: state
-    allocate(state%outputs%pflux(nspec))
-    allocate(state%outputs%qflux(nspec))
-    allocate(state%outputs%heat(nspec))
+    if (.not. associated(state%outputs%pflux)) then
+      allocate(state%outputs%pflux(nspec))
+      allocate(state%outputs%qflux(nspec))
+      allocate(state%outputs%heat(nspec))
+    end if
   end subroutine allocate_outputs
 
   subroutine deallocate_outputs(state)
     type(gs2_program_state_type), intent(inout) :: state
-    deallocate(state%outputs%pflux)
-    deallocate(state%outputs%qflux)
+    if (associated(state%outputs%pflux)) then
+      deallocate(state%outputs%pflux)
+      deallocate(state%outputs%qflux)
+      deallocate(state%outputs%heat)
+    end if
   end subroutine deallocate_outputs
 
 
@@ -1082,7 +1141,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     do is = 1,nspec
       isg = gs2spec_from_trin(is)
       old_iface_state%init%prof_ov%override_dens(isg) = .true.
-      old_iface_state%init%prof_ov%dens(isg) = dens(is)/dens(refspec)
+      old_iface_state%init%prof_ov%dens(isg) = dens(is)/dens(densrefspec)
 
       old_iface_state%init%prof_ov%override_temp(isg) = .true.
       old_iface_state%init%prof_ov%temp(isg) = temp(is)/temp(1)
@@ -1096,7 +1155,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
       old_iface_state%init%prof_ov%override_vnewk(isg) = .true.
       old_iface_state%init%prof_ov%vnewk(isg) = nu(is)
 
-      !call override(old_iface_state, odens, gs2spec_from_trin(is), dens(is)/dens(refspec))
+      !call override(old_iface_state, odens, gs2spec_from_trin(is), dens(is)/dens(densrefspec))
       !! Temp is always normalised to the main ions
       !call override(old_iface_state, otemp, gs2spec_from_trin(is), temp(is)/temp(1))
       !call override(old_iface_state, ofprim, gs2spec_from_trin(is), fprim(is))
@@ -1157,7 +1216,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
       do is = 1,ntspec_store
         isg = gs2spec_from_trin(is)
         old_iface_state%init%prof_ov%override_dens(isg) = .true.
-        old_iface_state%init%prof_ov%dens(isg) = dens_store(is)/dens_store(refspec)
+        old_iface_state%init%prof_ov%dens(isg) = dens_store(is)/dens_store(densrefspec)
 
         old_iface_state%init%prof_ov%override_temp(isg) = .true.
         old_iface_state%init%prof_ov%temp(isg) = temp_store(is)/temp_store(1)
@@ -1170,19 +1229,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
         old_iface_state%init%prof_ov%override_vnewk(isg) = .true.
         old_iface_state%init%prof_ov%vnewk(isg) = nu_store(is)
-      !do is = 1,ntspec_store
-       
-        !call override(old_iface_state, &
-          !odens, gs2spec_from_trin(is), dens_store(is)/dens_store(refspec))
-        !! Temp is always normalised to the main ions
-        !call override(old_iface_state, &
-          !otemp, gs2spec_from_trin(is), temp_store(is)/temp_store(1))
-        !call override(old_iface_state, &
-          !ofprim, gs2spec_from_trin(is), fprim_store(is))
-        !call override(old_iface_state, &
-          !otprim, gs2spec_from_trin(is), tprim_store(is))
-        !call override(old_iface_state, &
-          !ovnewk, gs2spec_from_trin(is), nu_store(is))
       end do
     end if
     override_profiles = .false.
@@ -1196,23 +1242,25 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     integer, intent(in) :: ntspec
     call determine_species_order
     if (.not. allocated(gs2spec_from_trin)) allocate(gs2spec_from_trin(ntspec))
+    write (*,*) 'IONS', ions, 'ELECTRONS', electrons, 'IMPURITY', impurity
     if (nspec==1) then
       gs2spec_from_trin(1) = ions
       ! ref temp is always ions (trin spec 1)
       ! For one species, reference dens is ions
-      refspec = ions
+      densrefspec = 1
     else if (nspec==2) then 
       gs2spec_from_trin(1) = ions
       gs2spec_from_trin(2) = electrons
       ! For two species or more, ref dens is electrons (trin spec 2)
-      refspec = electrons
+      densrefspec = 2
     else if (nspec==3) then
       gs2spec_from_trin(1) = ions
       gs2spec_from_trin(2) = electrons
       gs2spec_from_trin(3) = impurity
-      refspec = electrons
+      densrefspec = 2
     else
-      call mp_abort("Can't handle more than 3 species in reset_gs2", .true.)
+      call mp_abort("Can't handle more than 3 species in &
+       & determine_gs2spec_from_trin", .true.)
     end if
   end subroutine determine_gs2spec_from_trin
 
