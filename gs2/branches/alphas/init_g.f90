@@ -2309,7 +2309,7 @@ contains
     use species, only: spec, nspec
     use gs2_save, only: gs2_restore
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0
+    use kt_grids, only: naky, ntheta0, akx, aky
     use dist_fn_arrays, only: g, gnew
     use le_grids, only: forbid, integrate_moment
     use fields_arrays, only: phi, apar, bpar
@@ -2320,7 +2320,8 @@ contains
     use ran
     use constants, only: zi
     implicit none
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: phiz 
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phiz 
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: tot
     complex, dimension(2):: phasefac
     integer :: iglo, istatus
     integer :: ig, ik, it, is, il, ierr, isig, j
@@ -2335,18 +2336,24 @@ contains
     end if
 
     phiz = 0.0
-    call integrate_moment(g,phiz)
+    do is = 1,nspec
+       call integrate_moment(g,tot)
+       phiz = phiz + spec(is)%z * tot(:,:,:,is)
+    end do
 
     do j = 1,2
-       phiz0 = sum( phiz(0,itt(j),ikk(j),:)*spec(:)%z)
-       if ( real(phiz0) .GT. 2.0*epsilon(0.0) ) then
+       phiz0 = phiz(0,itt(j),ikk(j))
+       if ( abs(real(phiz0)) .GT. 2.0*epsilon(0.0) ) then
           phasefac(j) = 1.0 - zi* aimag(phiz0)/real(phiz0)
        else
           phasefac(j) = -zi
        end if  
        phasefac(j) = phasefac(j) / cabs(phasefac(j))
+!       write(*,*) j, itt(j), ikk(j), phasefac(j), phiz0
+!       write(*,*) j, itt(j), ikk(j), akx(itt(j)),aky(ikk(j))
     end do
     
+    phasefac(j) = 1.0
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
@@ -2363,7 +2370,7 @@ contains
           g(:,2,iglo) = cmplx(ranf()-0.5,ranf()-0.5)*spec(is)%z*phiinit
        else
           do j =1,2
-            g(:,:,iglo) = g(:,:,iglo) * phasefac(j)
+            g(:,:,iglo) = g(:,:,iglo) * phasefac(j) 
           end do
        end if
 
