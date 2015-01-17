@@ -737,7 +737,6 @@ contains
     case (ginitopt_nl8)
        call ginit_nl8
        call init_tstart (tstart, istatus)
-       call ginit_recon
        tstart = t0
        restarted = .true.
     case (ginitopt_xi)
@@ -2338,7 +2337,7 @@ contains
     phiz = 0.0
     do is = 1,nspec
        call integrate_moment(g,tot)
-       phiz = phiz + spec(is)%z * tot(:,:,:,is)
+       phiz = phiz + spec(is)%z * spec(is)%dens * tot(:,:,:,is)
     end do
 
     do j = 1,2
@@ -2366,8 +2365,10 @@ contains
        end do
 
        if (zerothismode) then  
-          g(:,1,iglo) = cmplx(ranf()-0.5,ranf()-0.5)*spec(is)%z*phiinit
-          g(:,2,iglo) = cmplx(ranf()-0.5,ranf()-0.5)*spec(is)%z*phiinit
+          do ig =-ntgrid, ntgrid
+          g(ig,1,iglo) = cmplx(ranf()-0.5,ranf()-0.5)*spec(is)%z*phiinit
+          g(ig,2,iglo) = cmplx(ranf()-0.5,ranf()-0.5)*spec(is)%z*phiinit
+          end do
        else
           do j =1,2
             g(:,:,iglo) = g(:,:,iglo) * phasefac(j) 
