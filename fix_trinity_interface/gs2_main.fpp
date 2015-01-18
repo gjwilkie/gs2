@@ -28,7 +28,6 @@ module gs2_main
   public :: finalize_diagnostics, finalize_equations, finalize_gs2
   public :: gs2_trin_init
   public :: calculate_outputs
-  public :: save_current
   public :: reset_equations
 
   public :: determine_gs2spec_from_trin
@@ -37,6 +36,9 @@ module gs2_main
 
   public :: prepare_miller_geometry_overrides
   public :: prepare_profiles_overrides
+  public :: prepare_initial_values_overrides
+  public :: set_initval_overrides_to_current_vals
+  public :: finalize_overrides
 
   public :: old_iface_state
   !> Unit tests
@@ -307,7 +309,7 @@ contains
     using_measure_scatter=.false.
 
     !> Initialize the gs2 initialization system
-    call init_gs2_init
+    call init_gs2_init(state%init)
 
     !state%gs2_initialized = .true.
     state%init%level = init_level_list%basic
@@ -448,9 +450,13 @@ contains
     use run_parameters, only: reset, fphi, fapar, fbpar, nstep
     use run_parameters, only: avail_cpu_time, margin_cpu_time
     use unit_tests, only: ilast_step
+    use gs2_init, only: init
     type(gs2_program_state_type), intent(inout) :: state
     integer :: istep, istatus
     integer, intent(in) :: nstep_run
+    logical :: temp_initval_override_store
+    
+    temp_initval_override_store = state%init%initval_ov%override
     
     if (proc0) call time_message(.false.,state%timers%total,' Total')
     
@@ -491,6 +497,9 @@ contains
           !If we've triggered a reset then actually reset
           if (reset) then
              ! if called within trinity, do not dump info to screen
+             call prepare_initial_values_overrides(state)
+             call set_initval_overrides_to_current_vals(state%init%initval_ov)
+             state%init%initval_ov%override = .true.
              if (state%is_external_job) then
                 call reset_time_step (state%init, istep, state%exit, state%external_job_id)
              else       
@@ -521,6 +530,9 @@ contains
 
           !If something has triggered a reset then reset here
           if (reset) then
+             call prepare_initial_values_overrides(state)
+             call set_initval_overrides_to_current_vals(state%init%initval_ov)
+             state%init%initval_ov%override = .true.
              ! if called within trinity, do not dump info to screen
              if (state%is_external_job) then
                 call reset_time_step (state%init, istep, state%exit, state%external_job_id)
@@ -549,6 +561,23 @@ contains
     if (state%is_external_job) call print_times(state, state%timers)
 
     ilast_step = state%istep_end
+
+    ! At the end evolve_equations, we guarantee
+    ! that if the initial value overrides have
+    ! been initialized then they are 
+    ! set to the current value (otherwise
+    ! this might vary depending on whether the 
+    ! timestep has been reset).
+    !
+    ! We also restore the value of the override
+    ! switch to what it was when this function was
+    ! called.
+    ! 
+    state%init%initval_ov%override = temp_initval_override_store
+    if (state%init%initval_ov%init) then
+      call set_initval_overrides_to_current_vals(state%init%initval_ov)
+    end if
+
 
   end subroutine evolve_equations
 
@@ -585,26 +614,23 @@ contains
 
   end subroutine run_eigensolver
 
-  subroutine save_current(state)
-    use gs2_init, only: save_fields_and_dist_fn
-    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
-    use run_parameters, only: trinity_linear_fluxes
-    use mp, only: scope, subprocs, allprocs
-    implicit none
-    type(gs2_program_state_type), intent(inout) :: state
+  !subroutine save_current(state)
+    !use gs2_init, only: save_fields_and_dist_fn
+    !use mp, only: scope, subprocs, allprocs
+    !implicit none
+    !type(gs2_program_state_type), intent(inout) :: state
 
 
-    if (state%nensembles > 1) call scope (subprocs)
-    if (trinity_linear_fluxes .and. &
-       nonlinear_mode_switch .eq. nonlinear_mode_none) &
-        call reset_linear_magnitude
-    call save_fields_and_dist_fn
-    if (state%nensembles > 1) call scope (allprocs)
-  end subroutine save_current
+    !if (state%nensembles > 1) call scope (subprocs)
+    !call save_fields_and_dist_fn
+    !if (state%nensembles > 1) call scope (allprocs)
+  !end subroutine save_current
 
   subroutine reset_equations (state)
 
     use gs2_diagnostics, only: gd_reset => reset_init
+    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
+    use run_parameters, only: trinity_linear_fluxes
     use dist_fn_arrays, only: gnew
     use gs2_time, only: code_dt, save_dt
     use mp, only: scope, subprocs, allprocs
@@ -615,12 +641,17 @@ contains
 
 
     if (state%nensembles > 1) call scope (subprocs)
+
     ! EGH is this line necessary?
     gnew = 0.
     call save_dt (code_dt)
     ! This call to gs2_diagnostics::reset_init sets some time averages
     ! and counters to zero... used mainly for trinity convergence checks.
     call gd_reset
+
+    if (trinity_linear_fluxes .and. &
+       nonlinear_mode_switch .eq. nonlinear_mode_none) &
+        call reset_linear_magnitude
 
     state%istep_end = 1
     if (state%nensembles > 1) call scope (allprocs)
@@ -707,7 +738,7 @@ contains
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
-    call finish_gs2_init
+    call finish_gs2_init(state%init)
 
     if (proc0) call finish_file_utils
 
@@ -750,6 +781,87 @@ contains
     call init_profiles_overrides(state%init%prof_ov, nspec)
   end subroutine prepare_profiles_overrides
 
+  subroutine prepare_initial_values_overrides(state)
+    use overrides, only: init_initial_values_overrides
+    use fields, only: force_maxwell_reinit
+    use gs2_init, only: in_memory
+    use gs2_init, only: init, init_level_list
+    use gs2_layouts, only: g_lo
+    use kt_grids, only: naky, ntheta0
+    use theta_grid, only: ntgrid
+    use species, only: nspec
+    implicit none
+    type(gs2_program_state_type), intent(inout) :: state
+    ! Initialize to the level below so that overrides are triggered
+    call init(state%init, init_level_list%override_initial_values-1)
+    call init_initial_values_overrides(state%init%initval_ov,&
+      ntgrid, ntheta0, naky, g_lo%llim_proc, g_lo%ulim_alloc, &
+      force_maxwell_reinit=force_maxwell_reinit, &
+      in_memory=in_memory)
+  end subroutine prepare_initial_values_overrides
+
+  subroutine set_initval_overrides_to_current_vals(initval_ov)
+    use dist_fn_arrays, only: gnew, g_restart_tmp
+    use gs2_save, only: gs2_save_for_restart
+    use mp, only: proc0, broadcast, mp_abort
+    use collisions, only: vnmult
+    use gs2_layouts, only: g_lo
+    use theta_grid, only: ntgrid
+    use file_utils, only: error_unit
+    use kt_grids, only: ntheta0, naky
+    use run_parameters, only: fphi, fapar, fbpar
+    use fields, only:  force_maxwell_reinit
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use gs2_time, only: user_time, user_dt
+    use overrides, only: initial_values_overrides_type
+    use antenna, only: dump_ant_amp
+    implicit none
+    type(initial_values_overrides_type), intent(inout) :: initval_ov
+    integer :: iostat
+    integer :: istatus
+
+    if (.not.initval_ov%init) &
+      call mp_abort("Trying to set initial value overrides &
+      & before they are initialized... have you called &
+      & prepare_initial_values_overrides ? ", .true.)
+
+    if(initval_ov%in_memory)then
+      initval_ov%g=gnew
+      if (.not. initval_ov%force_maxwell_reinit) then
+        if(fphi.gt.0) then
+          initval_ov%phi=phinew
+        end if
+        if(fapar.gt.0) then 
+          initval_ov%apar=aparnew
+        end if
+        if(fbpar.gt.0) then 
+          initval_ov%bpar=bparnew
+        end if
+      end if
+    else ! if(.not.in_memory)then
+      !Should really do this with in_memory=.true. as well but
+      !not sure that we really need to as we never read in the dumped data.
+      if (proc0) call dump_ant_amp
+
+      call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+    endif
+
+  end subroutine set_initval_overrides_to_current_vals
+
+  subroutine finalize_overrides(state)
+    use overrides, only: finish_profiles_overrides
+    use overrides, only: finish_miller_geometry_overrides
+    use overrides, only: finish_initial_values_overrides
+    type(gs2_program_state_type), intent(inout) :: state
+
+    if (state%init%mgeo_ov%init) call &
+      finish_miller_geometry_overrides(state%init%mgeo_ov)
+    if (state%init%prof_ov%init) call &
+      finish_profiles_overrides(state%init%prof_ov)
+    if (state%init%initval_ov%init) call &
+      finish_initial_values_overrides(state%init%initval_ov)
+  end subroutine finalize_overrides
+
   
   subroutine calculate_outputs(state)
     use gs2_diagnostics, only: start_time
@@ -768,7 +880,7 @@ contains
     integer :: is
 
     time_interval = user_time-start_time
-      !write (*,*) 'GETTING FLUXES'
+    !write (*,*) 'GETTING FLUXES', 'user_time', user_time, start_time, 'DIFF', time_interval
 
     if (state%nensembles > 1) &
       call ensemble_average (state%nensembles, time_interval)
@@ -792,11 +904,12 @@ contains
        pflux_avg(is) =  diff * spec(is)%dens**2.0 * spec(is)%fprim 
        heat_avg = 0.0
      end do
+     time_interval = 1.0
      !if (present(converged)) then
      !end if
    end if
 
-   !write (*,*) 'GETTING FLUXES TIME, DIFF', time_interval, diff
+   write (*,*) 'GETTING FLUXES TIME, DIFF', time_interval, diff
 
    !if (size(state%outputs%pflux) > 1) then
       !state%outputs%pflux(1) = pflux_avg(ions)/time_interval
@@ -818,7 +931,7 @@ contains
       state%outputs%heat = heat_avg/time_interval
    !end if
    state%outputs%vflux = vflux_avg(1)/time_interval
-   !write (*,*) 'OUTPUTS qflux', state%outputs%qflux
+   write (*,*) 'OUTPUTS qflux', state%outputs%qflux, state%external_job_id
   end subroutine calculate_outputs
 
 
@@ -948,7 +1061,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     logical, intent (in), optional :: trinity_reset
     logical, intent (out), optional :: converged
 
-    logical :: first_time = .true.
+    logical, save :: first_time = .true.
     logical :: debug
 
     !debug = (verbosity() .gt. 2)
@@ -1041,6 +1154,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call finalize_diagnostics(old_iface_state)
     call finalize_equations(old_iface_state)
     call finalize_gs2(old_iface_state)
+    call finalize_overrides(old_iface_state)
 
   end subroutine trin_finish_gs2
 ! > HJL
@@ -1117,7 +1231,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
   subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
 
     use dist_fn, only: dist_fn_g_exb => g_exb
-    use gs2_init, only: save_fields_and_dist_fn, init, init_level_list
+    use gs2_init, only: init, init_level_list
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use gs2_diagnostics, only: gd_reset => reset_init
     use gs2_save, only: gs2_save_for_restart!, gs_reset => reset_init
@@ -1136,6 +1250,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     integer :: is
     integer :: isg
+    logical :: temp_initval_override_store
 
     real :: dummy
 
@@ -1153,12 +1268,17 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     dummy = gexb
 
 
+    if (nensembles > 1) call scope (subprocs)
+
     if (trinity_linear_fluxes.and.nonlinear_mode_switch.eq.nonlinear_mode_none) &
       call reset_linear_magnitude
 
-    if (nensembles > 1) call scope (subprocs)
 
-    call save_fields_and_dist_fn
+    call prepare_initial_values_overrides(old_iface_state)
+    call set_initval_overrides_to_current_vals(old_iface_state%init%initval_ov)
+    temp_initval_override_store = old_iface_state%init%initval_ov%override 
+    old_iface_state%init%initval_ov%override = .true.
+
     ! EGH is this line necessary?
     gnew = 0.
     call save_dt (code_dt)
@@ -1206,7 +1326,9 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     call init(old_iface_state%init, init_level_list%full)
     old_iface_state%istep_end = 1
+    old_iface_state%init%initval_ov%override = temp_initval_override_store
     if (nensembles > 1) call scope (allprocs)
+
 
   end subroutine reset_gs2
 

@@ -800,6 +800,12 @@ contains
     end if
 # endif
        
+    ! EGH Why don't we just close the file every time? As things stand
+    ! if you reinitalise the timestep in a nonlinear run, but don't have
+    ! save_for_restart true in gs2_diagnostics, then the last call to
+    ! this function will leave the file open. This is highly non-intuitive
+    ! behaviour and causes nasty error messages when you run with parallel 
+    ! netcdf.
     if (exit) then
        i = nf90_close (ncid)
        if (i /= NF90_NOERR) &
