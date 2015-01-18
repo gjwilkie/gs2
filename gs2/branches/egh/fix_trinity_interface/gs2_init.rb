@@ -27,7 +27,7 @@ class GenerateInit
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 'le_grids',
         'dist_fn_layouts']],
     ['gs2_layouts' , []],
-    ['set_initial_values', ['fields', 'init_g']],
+    ['set_initial_values', ['fields', 'init_g', 'override_initial_values']],
     ['le_grids' ,
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid']],
     ['antenna' , ['species', 'run_parameters', 'override_profiles']],
@@ -54,6 +54,7 @@ class GenerateInit
     ['override_profiles' , ['species']],
     # Override the timestep set in run_parameters
     ['override_timestep' , ['run_parameters']],
+    ['override_initial_values', ['fields', 'init_g']],
   ]
                   
 
@@ -135,20 +136,20 @@ class GenerateInit
         use unit_tests, only: debug_message
 #{
         case @level_name
-        when 'full', 'override_timestep'
+        when 'full', 'override_timestep', 'override_initial_values'
           str = "\n"
         when /override_miller_geometry/
           str = <<EOF2
           use theta_grid_params, only: tgpso=>set_overrides
-          if (up() .and. current%mgeo_ov%set) call tgpso(current%mgeo_ov)
+          if (up() .and. current%mgeo_ov%init) call tgpso(current%mgeo_ov)
 
 EOF2
         when /override_profiles/
           str = <<EOF2
           use dist_fn, only: dfso=>set_overrides
           use species, only: sso=>set_overrides
-          if (up() .and. current%prof_ov%set) call dfso(current%prof_ov)
-          if (up() .and. current%prof_ov%set) call sso(current%prof_ov)
+          if (up() .and. current%prof_ov%init) call dfso(current%prof_ov)
+          if (up() .and. current%prof_ov%init) call sso(current%prof_ov)
 
 EOF2
         when 'set_initial_values'

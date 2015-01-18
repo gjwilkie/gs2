@@ -676,6 +676,7 @@ contains
     call broadcast (restart_eig_id)
     ! <RN
     call set_restart_file (restart_file)
+    call broadcast(constant_random_flag)
     
   end subroutine init_init_g
 
@@ -1200,6 +1201,7 @@ contains
     use dist_fn, only: pass_right, init_pass_ends
     use redistribute, only: fill, delete_redist
     use ran, only: ranf
+    use mp, only: proc0
     use constant_random, only: init_constant_random
     use constant_random, only: finish_constant_random
     use constant_random, only: constant_ranf=>ranf
@@ -1215,6 +1217,7 @@ contains
 ! extra factor of 4 to reduce the high k wiggles for now
        phit (:, it, 1) = (-1)**nn*exp(-8.*(real(nn)/ntheta0)**2)
     end do
+
     
     ! keep old (it, ik) loop order to get old results exactly: 
 
@@ -3528,13 +3531,15 @@ contains
     use dist_fn_arrays, only: g, gnew
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_save, only: gs2_restore
-    use mp, only: proc0
+    use mp, only: proc0, job
     use file_utils, only: error_unit
     use run_parameters, only: fphi, fapar, fbpar
     implicit none
     integer :: istatus, ierr
 
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
+
+    write (*,*) 'RESTARTING ON JOB', job
 
     if (istatus /= 0) then
        ierr = error_unit()

@@ -3,7 +3,9 @@
 
 module overrides
   type miller_geometry_overrides_type
-    logical :: set = .false.
+    !> DO NOT manually set the value of init.
+    !! Nasty things may happen.
+    logical :: init = .false.
     logical :: override_rhoc
     logical :: override_qinp
     logical :: override_shat
@@ -30,7 +32,9 @@ module overrides
 
 
   type profiles_overrides_type
-    logical :: set = .false.
+    !> DO NOT manually set the value of init.
+    !! Nasty things may happen.
+    logical :: init = .false.
     logical, dimension(:), pointer :: override_dens
     logical, dimension(:), pointer :: override_temp
     logical, dimension(:), pointer :: override_tprim
@@ -49,10 +53,28 @@ module overrides
 
 
 
+!> This one is too complicated to generate 
+!! automatically
+type initial_values_overrides_type
+  logical :: init = .false.
+  logical :: in_memory = .true.
+  logical :: override = .false.
+  !logical :: override_phi = .false.
+  !logical :: override_apar = .false.
+  !logical :: override_bpar = .false.
+  !logical :: override_g = .false.
+  logical :: force_maxwell_reinit = .true.
+  complex, dimension (:,:,:), pointer :: phi
+  complex, dimension (:,:,:), pointer :: apar
+  complex, dimension (:,:,:), pointer :: bpar
+  complex, dimension (:,:,:), pointer :: g
+end type initial_values_overrides_type
+
 contains
   subroutine init_miller_geometry_overrides(overrides)
     type(miller_geometry_overrides_type), intent(inout) :: overrides
-    overrides%set = .true.
+    if (overrides%init) return 
+    overrides%init = .true.
     overrides%override_rhoc = .false.
     overrides%override_qinp = .false.
     overrides%override_shat = .false.
@@ -69,7 +91,11 @@ contains
 
   subroutine finish_miller_geometry_overrides(overrides)
     type(miller_geometry_overrides_type), intent(inout) :: overrides
-    overrides%set = .false.
+    if (.not. overrides%init) then
+      write (*,*) "ERROR: Called finish_miller_geometry_overrides on an uninitialized object"
+      return
+    end if
+    overrides%init = .false.
     overrides%override_rhoc = .false.
     overrides%override_qinp = .false.
     overrides%override_shat = .false.
@@ -87,7 +113,8 @@ contains
   subroutine init_profiles_overrides(overrides, nspec)
     integer, intent(in) :: nspec
     type(profiles_overrides_type), intent(inout) :: overrides
-    overrides%set = .true.
+    if (overrides%init) return 
+    overrides%init = .true.
     allocate(overrides%override_dens(nspec), overrides%dens(nspec))
     overrides%override_dens = .false.
     allocate(overrides%override_temp(nspec), overrides%temp(nspec))
@@ -105,21 +132,89 @@ contains
 
   subroutine finish_profiles_overrides(overrides)
     type(profiles_overrides_type), intent(inout) :: overrides
-    overrides%set = .false.
-    deallocate(overrides%override_dens, overrides%dens)
+    if (.not. overrides%init) then
+      write (*,*) "ERROR: Called finish_profiles_overrides on an uninitialized object"
+      return
+    end if
+    overrides%init = .false.
     overrides%override_dens = .false.
-    deallocate(overrides%override_temp, overrides%temp)
+    deallocate(overrides%override_dens, overrides%dens)
     overrides%override_temp = .false.
-    deallocate(overrides%override_tprim, overrides%tprim)
+    deallocate(overrides%override_temp, overrides%temp)
     overrides%override_tprim = .false.
-    deallocate(overrides%override_fprim, overrides%fprim)
+    deallocate(overrides%override_tprim, overrides%tprim)
     overrides%override_fprim = .false.
-    deallocate(overrides%override_vnewk, overrides%vnewk)
+    deallocate(overrides%override_fprim, overrides%fprim)
     overrides%override_vnewk = .false.
+    deallocate(overrides%override_vnewk, overrides%vnewk)
     overrides%override_g_exb = .false.
     overrides%override_mach = .false.
   end subroutine finish_profiles_overrides
 
 
+
+!> Warning: You can't change the value of overrides%force_maxwell_reinit 
+!! or overrides%in_memory after calling this function
+subroutine init_initial_values_overrides(overrides, ntgrid, ntheta0, naky, g_llim, g_ulim, force_maxwell_reinit, in_memory)
+  use file_utils, only: error_unit
+  implicit none
+  type(initial_values_overrides_type), intent(inout) :: overrides
+  integer, intent(in) :: ntgrid, ntheta0, naky, g_llim, g_ulim
+  logical, intent(in) :: force_maxwell_reinit, in_memory
+  integer :: iostat
+  if (overrides%init) return
+  overrides%init = .true.
+  overrides%override = .false.
+  !overrides%override_phi = .false.
+  !overrides%override_apar = .false.
+  !overrides%override_bpar = .false.
+  !overrides%override_g = .false.
+  overrides%force_maxwell_reinit = force_maxwell_reinit
+  overrides%in_memory = in_memory
+
+  write (error_unit(), *) "INFO: changing force_maxwell_reinit or in_memory &
+    & after calling initial_values_overrides_type will almost certainly cause &
+    & segmentation faults."
+  if (overrides%in_memory) then 
+    allocate(overrides%g(-ntgrid:ntgrid,2,g_llim:g_ulim), stat=iostat)
+    if (overrides%force_maxwell_reinit) then 
+      if (iostat.eq.0) allocate(overrides%phi(-ntgrid:ntgrid,ntheta0,naky), stat=iostat)
+      if (iostat.eq.0) allocate(overrides%apar(-ntgrid:ntgrid,ntheta0,naky), stat=iostat)
+      if (iostat.eq.0) allocate(overrides%bpar(-ntgrid:ntgrid,ntheta0,naky), stat=iostat)
+    end if
+    if (iostat.ne.0) then
+      overrides%in_memory = .false.
+      write(error_unit(),*) "WARNING: could not allocate memory for initial_values_overrides. Only restart from file possible (manual setting of initial values not possible)"
+      if (associated(overrides%g)) deallocate(overrides%g)
+      if (associated(overrides%phi)) deallocate(overrides%phi)
+      if (associated(overrides%apar)) deallocate(overrides%apar)
+      if (associated(overrides%bpar)) deallocate(overrides%bpar)
+    end if
+  end if
+end subroutine init_initial_values_overrides
+
+subroutine finish_initial_values_overrides(overrides)
+  implicit none
+  type(initial_values_overrides_type), intent(inout) :: overrides
+  if (.not. overrides%init) then
+    write (*,*) "WARNING: Called finish_initial_values_overrides on an uninitialized object"
+    return 
+  end if
+  overrides%init = .false.
+  overrides%override = .false.
+  !overrides%override_phi = .false.
+  !overrides%override_apar = .false.
+  !overrides%override_bpar = .false.
+  !overrides%override_g = .false.
+  overrides%force_maxwell_reinit = .true.
+  if (overrides%in_memory) then 
+    deallocate(overrides%phi)
+    if (overrides%force_maxwell_reinit) then 
+      deallocate(overrides%apar)
+      deallocate(overrides%bpar)
+      deallocate(overrides%g)
+    end if
+  end if
+end subroutine finish_initial_values_overrides
 
 end module overrides

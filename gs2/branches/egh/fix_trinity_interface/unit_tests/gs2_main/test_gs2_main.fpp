@@ -37,8 +37,8 @@ program test_gs2_main
   call finalize_equations(state)
   call finalize_gs2(state)
 
-  !program gs2
-    !type(gs2_program_state_type) :: state
+  !!program gs2
+    !!type(gs2_program_state_type) :: state
     call initialize_gs2(state)
     call initialize_equations(state)
     call initialize_diagnostics(state)
@@ -47,7 +47,7 @@ program test_gs2_main
     !else
     call evolve_equations(state, state%nstep/2)
     call evolve_equations(state, state%nstep/2)
-    ! This call should do nothing and print a warning
+    !! This call should do nothing and print a warning
     call evolve_equations(state, state%nstep/2)
     call evolve_equations(state, state%nstep/2)
 
@@ -57,19 +57,25 @@ program test_gs2_main
     call finalize_diagnostics(state)
     call finalize_equations(state)
     call finalize_gs2(state)
-  !end program gs2
+  !!end program gs2
 
 
-    !call init_mp
+    !!call init_mp
 
-    !test_driver_flag = .true.
-    !functional_test_flag = .true.
+    !!test_driver_flag = .true.
+    !!functional_test_flag = .true.
 
 
 
+  call finalize_overrides(state)
   call close_module_test("gs2_main")
 
+  !call finish_gs2
+
+
   call finish_mp
+
+
 
 contains
   

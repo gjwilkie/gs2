@@ -81,7 +81,7 @@ contains
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use dist_fn_arrays, only: gnew
     use gs2_time, only: code_dt_min
-    use gs2_init, only: save_fields_and_dist_fn, init_type, init
+    use gs2_init, only: init_type, init
     use gs2_init, only: init_level_list
     use mp, only: proc0
     use file_utils, only: error_unit
@@ -128,7 +128,7 @@ contains
     reset_in=reset
     reset=.false.
 
-    call save_fields_and_dist_fn
+    !call save_fields_and_dist_fn
 
     gnew = 0.
 
