@@ -806,7 +806,8 @@ contains
     ! this function will leave the file open. This is highly non-intuitive
     ! behaviour and causes nasty error messages when you run with parallel 
     ! netcdf.
-    if (exit) then
+    !if (exit) then
+    if (.true.) then
        i = nf90_close (ncid)
        if (i /= NF90_NOERR) &
             call netcdf_error (istatus, message='nf90_close error')

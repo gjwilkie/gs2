@@ -284,6 +284,8 @@ contains
     use init_g, only: ginitopt_restart_memory
     use init_g, only: ginitopt_restart_many
     use run_parameters, only: fphi, fapar, fbpar
+    use mp, only: proc0
+    use unit_tests, only: job_id
     implicit none
     type (init_type), intent(in) :: current
     logical :: restarted

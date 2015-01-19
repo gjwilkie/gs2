@@ -1205,10 +1205,12 @@ contains
     use constant_random, only: init_constant_random
     use constant_random, only: finish_constant_random
     use constant_random, only: constant_ranf=>ranf
+    use unit_tests, only: job_id
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
     integer :: iglo, ig, ik, it, il, is, nn
+
 
     !CMR: need to document tracer phit parameter   ;-)
     phit = 0.
@@ -1353,6 +1355,7 @@ contains
        g(:,2,:) = g(:,1,:)
        gnew = g
     endif
+    iglo = (g_lo%ulim_proc - g_lo%llim_proc)/4 + g_lo%llim_proc
   end subroutine ginit_noise
 
   !> Initialize with a single parallel mode. Only makes sense in a linear 

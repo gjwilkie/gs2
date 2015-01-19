@@ -108,6 +108,7 @@ class GenerateInit
   
   def initialize(level)
     @level_name = level
+		@level_sub_name = level + '_subroutine'
     @module_name = case level
                    when 'dist_fn_layouts' 
                      'gs2_layouts' 
@@ -125,14 +126,14 @@ class GenerateInit
   end 
 
   def up
-    "if (up() .and. current%level .lt. init_level_list%#@level_name) call #@level_name"
+    "if (up() .and. current%level .lt. init_level_list%#@level_name) call #@level_sub_name"
   end  
   def down
-    "if (down () .and. current%level .le. init_level_list%#@level_name) call #@level_name"
+    "if (down () .and. current%level .le. init_level_list%#@level_name) call #@level_sub_name"
   end  
   def subroutine
     return <<EOF
-      subroutine #@level_name
+      subroutine #@level_sub_name
         use unit_tests, only: debug_message
 #{
         case @level_name
@@ -203,7 +204,7 @@ EOF2
           call debug_message(1, 'gs2_init::init left init level... #@level_name   ')
           current%level = #@level_number - 1
         end if
-      end subroutine #@level_name
+      end subroutine #@level_sub_name
 EOF
   end
 
