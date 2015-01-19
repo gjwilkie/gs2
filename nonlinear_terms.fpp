@@ -161,16 +161,18 @@ contains
     call multistep%set_coeffs(6,[4277,-7923,9982,-7298,2877,-475]/1440.0)
     !if(proc0)call multistep%print
 
+    if(.not.allocated(gexp))then
 #ifdef LOWFLOW
-    allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-#else
-    if (nonlin) then
        allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-    else
-       allocate (gexp(nl_order,1,2,1))
-    end if
+#else
+       if (nonlin) then
+          allocate (gexp(nl_order,-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       else
+          allocate (gexp(nl_order,1,2,1))
+       end if
 #endif
-    gexp = 0.
+       gexp = 0.
+    endif
 
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlin) then
@@ -467,7 +469,7 @@ contains
        ! do something
 #endif
        !Get error estimate, just for testing now.
-       maxerr=max_exp_source_error(istep)
+       !maxerr=max_exp_source_error(istep)
     end if
 
     !If zip then zero nonlinear term and g for all ik/=1
