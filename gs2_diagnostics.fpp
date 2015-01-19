@@ -1515,7 +1515,7 @@ contains
 
     exit = .false.
 
-    if (eqzip .or. .not. nonlin) then
+!    if (eqzip .or. .not. nonlin) then
 ! MR, 10/3/2009: avoid calling get_omegaavg in nonlinear calculations
        if (proc0) then
           if (debug) write(6,*) "loop_diagnostics: proc0 call get_omegaavg"
@@ -1523,7 +1523,7 @@ contains
           if (debug) write(6,*) "loop_diagnostics: proc0 done called get_omegaavg"
        endif
        call broadcast (exit)
-    endif
+!    endif
 
     if (write_hrate) call heating (istep, h, hk)
 
