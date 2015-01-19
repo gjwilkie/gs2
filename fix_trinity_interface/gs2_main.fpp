@@ -402,9 +402,12 @@ contains
     real :: precision_test
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
+    call debug_message(state%verb, &
+      'gs2_main::initialize_diagnostics calling init_gs2_diagnostics_new')
 
 #ifdef NETCDF_PARALLEL
     diagnostics_init_options%parallel_io_capable = .true.
+    diagnostics_init_options%parallel_io_capable = .false.
 #else
     diagnostics_init_options%parallel_io_capable = .false.
 #endif

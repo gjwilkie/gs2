@@ -178,6 +178,7 @@
 !INITIAL CONDITIONS  
 !==============================
 &init_g_knobs
+ constant_random_flag=.true.
  refac = 1.0 ! Used in rare cases.
  imfac = 1.0 ! Used in rare cases.
  den0 = 0.0 ! Parameters for setting up special initial conditions.

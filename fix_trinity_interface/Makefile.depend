@@ -101,6 +101,7 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -208,6 +209,7 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -344,6 +346,7 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -444,6 +447,7 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -741,30 +745,6 @@ dist_fn_arrays.o: \
 	 mp.o \
 	 species.o \
 	 theta_grid.o 
-dist_fn_back.o: \
-	 antenna.o \
-	 collisions.o \
-	 constants.o \
-	 dist_fn_arrays.o \
-	 file_utils.o \
-	 geometry.o \
-	 gs2_heating.o \
-	 gs2_layouts.o \
-	 gs2_time.o \
-	 gs2_transforms.o \
-	 hyper.o \
-	 kt_grids.o \
-	 le_derivatives.o \
-	 le_grids.o \
-	 mp.o \
-	 nonlinear_terms.o \
-	 prof.o \
-	 redistribute.o \
-	 run_parameters.o \
-	 species.o \
-	 spfunc.o \
-	 text_options.o \
-	 theta_grid.o 
 drive.o: \
 	 regression.o 
 dump_grids.o: \
@@ -991,7 +971,6 @@ gs2_init.o: \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_save.o \
-	 gs2_time.o \
 	 hyper.o \
 	 init_g.o \
 	 kt_grids.o \
@@ -1038,6 +1017,7 @@ gs2_main.o: \
 	 gs2_diagnostics.o \
 	 gs2_diagnostics_new.o \
 	 gs2_init.o \
+	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -1049,6 +1029,7 @@ gs2_main.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -1213,6 +1194,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1233,7 +1215,8 @@ nonlinear_terms.o: \
 	 theta_grid.o 
 om.o: \
 	 command_line.o 
-overrides.o: 
+overrides.o: \
+	 file_utils.o 
 parameter_scan.o: \
 	 dist_fn.o \
 	 file_utils.o \
@@ -1254,7 +1237,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -1281,7 +1265,6 @@ simpledataiof.o:
 sorting.o: 
 species.o: \
 	 file_utils.o \
-	 job_manage.o \
 	 mp.o \
 	 overrides.o \
 	 text_options.o 

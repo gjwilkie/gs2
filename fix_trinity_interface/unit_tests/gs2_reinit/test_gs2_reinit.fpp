@@ -69,10 +69,6 @@ program test_gs2_reinit
 
 
 
-    allocate(gbak(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-    allocate(phi_bak(-ntgrid:ntgrid,ntheta0,naky))
-    allocate(apar_bak(-ntgrid:ntgrid,ntheta0,naky))
-    allocate(bpar_bak(-ntgrid:ntgrid,ntheta0,naky))
 
       !variables = (/'lambda', 'phi'/), &
       !n_lines = (/'3', '30'/)
@@ -97,6 +93,11 @@ program test_gs2_reinit
    call initialize_gs2(old_iface_state)
    call initialize_equations(old_iface_state)
 
+    allocate(gbak(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate(phi_bak(-ntgrid:ntgrid,ntheta0,naky))
+    allocate(apar_bak(-ntgrid:ntgrid,ntheta0,naky))
+    allocate(bpar_bak(-ntgrid:ntgrid,ntheta0,naky))
+
     supercell_idx = min(iproc+2, size(fieldmat%kyb(2)%supercells))
     allocate(rowbloc( &
       size(fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data, 1), &
@@ -108,8 +109,8 @@ program test_gs2_reinit
     gbak = gnew
     rowbloc = fieldmat%kyb(2)%supercells(supercell_idx)%cells(1)%rb(1)%data
 
-    call init(old_iface_state%init, init_level_list%override_initial_values)
-    call init(old_iface_state%init, init_level_list%full)
+    !call init(old_iface_state%init, init_level_list%override_initial_values)
+    !call init(old_iface_state%init, init_level_list%full)
     !call finalize_equations(old_iface_state)
     !call initialize_equations(old_iface_state)
     call announce_test('Values of fields and dist fn after restarting')
