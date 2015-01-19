@@ -4281,14 +4281,14 @@ endif
 #ifdef LOWFLOW
           do ig = -ntgrid, ntgrid-1
              if (il < ittp(ig)) cycle
-             source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+             source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo)
           end do
 #else
 ! add in nonlinear terms 
           if (nonlin) then         
              do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
-                source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+                source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo)
              end do
           end if
 #endif
@@ -4390,13 +4390,13 @@ endif
 
 #ifdef LOWFLOW
       do ig = -ntgrid, ntgrid-1
-         source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+         source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo)
       end do
 #else
 ! add in nonlinear terms 
       if (nonlin) then         
          do ig = -ntgrid, ntgrid-1
-            source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+            source(ig) = source(ig) + 0.5*code_dt*get_exp_source(ig,isgn,iglo)
          end do
       end if
 #endif
@@ -4530,7 +4530,7 @@ endif
           if (nonlin) then         
              do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
-                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+                source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*get_exp_source(ig,isgn,iglo)
              end do
           end if
        end if
@@ -4576,7 +4576,7 @@ endif
 ! add in nonlinear terms 
       if (nonlin) then         
          do ig = -ntgrid, ntgrid-1
-            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*get_exp_source(ig,isgn,iglo,istep)
+            source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*get_exp_source(ig,isgn,iglo)
          end do
       end if
 
