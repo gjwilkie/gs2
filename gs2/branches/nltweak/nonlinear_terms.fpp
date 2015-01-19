@@ -21,6 +21,9 @@ module nonlinear_terms
   integer :: nonlinear_mode_switch
   integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
 
+  !Internal step counter, used to determine what order scheme to use
+  integer :: current_order
+
   !The source term history
   complex, dimension (:,:,:,:), allocatable :: gexp
   ! (explicit_order,-ntgrid:ntgrid,2, -g-layout-)
@@ -173,6 +176,9 @@ contains
 #endif
        gexp = 0.
     endif
+    
+    !Initialise internal step
+    current_order=0
 
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlin) then
@@ -247,10 +253,10 @@ contains
 
   !>Calculate the explicit source term at given location
   !!Note, doesn't include 0.5*dt needed to actually advance
-  function get_exp_source(ig,isgn,iglo,istep,orderIn)
+  function get_exp_source(ig,isgn,iglo,orderIn)
     implicit none
     complex :: get_exp_source
-    integer, intent(in) :: ig, isgn, iglo, istep
+    integer, intent(in) :: ig, isgn, iglo
     integer, intent(in), optional ::orderIn
     integer :: desiredOrder,order, i
 
@@ -258,14 +264,14 @@ contains
     get_exp_source=0.0
 
     !Exit early if no steps taken
-    if(istep.eq.0) return
+    if(current_order.eq.0) return
 
     !Set the target order
     desiredOrder=nl_order
     if(present(orderIn)) desiredOrder=orderIn
 
     !Set the order to use 
-    order=min(desiredOrder,istep)
+    order=min(desiredOrder,current_order)
 
     !Build up term
     do i=1,order
@@ -276,12 +282,11 @@ contains
   !>Estimate the maximum and average relative error in explicit
   !!source by finding max/avg difference between source with largest
   !!order and one order less.
-  function max_exp_source_error(istep)
+  function max_exp_source_error()
     use mp, only: max_allreduce, proc0, iproc, sum_allreduce
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use theta_grid, only: ntgrid
     implicit none
-    integer, intent(in) :: istep
     real :: max_exp_source_error
     real :: max_rel_err
     integer :: order, ig, iglo, isgn, ik, it, il, ie, is, nskip
@@ -291,10 +296,10 @@ contains
     max_exp_source_error=0.
 
     !Exit early if no steps taken
-    if(istep.eq.0) return
+    if(current_order.eq.0) return
 
     !Set the order to use 
-    order=min(nl_order,istep)
+    order=min(nl_order,current_order)
 
     !If order is 1 then can't estimate error
     if(order.le.1) return
@@ -310,7 +315,7 @@ contains
           do iglo=g_lo%llim_proc,g_lo%ulim_proc
 
              !Get "correct" answer
-             tmpAns=get_exp_source(ig,isgn,iglo,istep,order)
+             tmpAns=get_exp_source(ig,isgn,iglo,order)
 
              !Skip small values
              if(abs(tmpAns).lt.1.0e-10) then
@@ -319,7 +324,7 @@ contains
              endif
 
              !Get "estimate" answer
-             tmpEst=get_exp_source(ig,isgn,iglo,istep,order-1)
+             tmpEst=get_exp_source(ig,isgn,iglo,order-1)
 
              !Calculate relative error
              tmpErr=abs((tmpAns-tmpEst)/(tmpAns))
@@ -378,16 +383,18 @@ contains
 
   !>Moves steps along one (discarding oldest)
   !!to create space to store current step
-  subroutine shift_exp(istep)
+  subroutine shift_exp
     implicit none
-    integer, intent(in) :: istep
     integer :: order, i
 
-    !Exit early if no steps taken
-    if(istep.eq.0) return
+    !Increment current_order counter
+    current_order=current_order+1
+    
+    !Exit early if on first step (nothing to shift)
+    if(current_order.le.1) return
 
     !Set the order to use 
-    order=min(nl_order,istep)
+    order=min(nl_order,current_order)
 
     !Shift along terms
     do i=order,2,-1
@@ -451,7 +458,8 @@ contains
 !
 
     if (istep /= istep_last) then
-       call shift_exp(istep)
+       !Increase current_order and shift source along
+       call shift_exp
 
        ! if running nonlinearly, then compute the nonlinear term at grid points
        ! and store it in gexp(1,:,:,:)
@@ -469,7 +477,7 @@ contains
        ! do something
 #endif
        !Get error estimate, just for testing now.
-       !maxerr=max_exp_source_error(istep)
+       !maxerr=max_exp_source_error
     end if
 
     !If zip then zero nonlinear term and g for all ik/=1
