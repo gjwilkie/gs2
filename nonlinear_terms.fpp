@@ -174,8 +174,8 @@ contains
           allocate (gexp(nl_order,1,2,1))
        end if
 #endif
-       gexp = 0.
     endif
+    gexp = 0.
     
     !Initialise internal step
     current_order=0
@@ -387,8 +387,9 @@ contains
     implicit none
     integer :: order, i
 
-    !Increment current_order counter
-    current_order=current_order+1
+    !Increment current_order counter, but no larger than maximum
+    !requested order.
+    current_order=min(nl_order,current_order+1)
     
     !Exit early if on first step (nothing to shift)
     if(current_order.le.1) return
@@ -873,6 +874,7 @@ contains
     initialized = .false.
     initializing = .true.
     call multistep%finish
+    current_order=0
   end subroutine reset_init
 
   subroutine finish_init
@@ -888,6 +890,7 @@ contains
     nonlin = .false. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
     call multistep%finish
+    current_order=0
   end subroutine finish_nonlinear_terms
 end module nonlinear_terms
 
