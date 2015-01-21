@@ -61,7 +61,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new, diagnostics_init_options_type
 #endif
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use gs2_time, only: update_time, write_dt, init_tstart
     use gs2_time, only: user_time, user_dt
     use init_g, only: tstart
@@ -516,7 +516,8 @@ endif
     use collisions, only: vnmult, c_reset => reset_init
     use fields, only: init_fields, f_reset => reset_init
     use init_g, only: g_reset => reset_init
-    use nonlinear_terms, only: nl_reset => reset_init, nonlin
+    use nonlinear_terms, only: nl_reset => reset_init
+    use nonlinear_arrays, only: nonlin
     use gs2_diagnostics, only: gd_reset => reset_init
     use gs2_save, only: gs2_save_for_restart!, gs_reset => reset_init
     use species, only: reinit_species

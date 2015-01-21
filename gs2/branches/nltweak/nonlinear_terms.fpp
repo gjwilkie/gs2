@@ -5,14 +5,12 @@ module nonlinear_terms
 !
 ! missing factors of B_a/B(theta) in A_perp terms??
 !
-  use explicit_schemes, only: multistep_scheme
-
   implicit none
 
   public :: init_nonlinear_terms, finish_nonlinear_terms
   public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
-  public :: add_explicit_terms, get_exp_source
-  public :: finish_init, reset_init, nonlin, accelerated
+  public :: add_explicit_terms
+  public :: finish_init, reset_init, accelerated
   public :: nonlinear_terms_unit_test_time_add_nl
 
   private
@@ -20,13 +18,6 @@ module nonlinear_terms
   ! knobs
   integer :: nonlinear_mode_switch
   integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
-
-  !Internal step counter, used to determine what order scheme to use
-  integer :: current_order
-
-  !The source term history
-  complex, dimension (:,:,:,:), allocatable :: gexp
-  ! (explicit_order,-ntgrid:ntgrid,2, -g-layout-)
 
   real, save, dimension (:,:), allocatable :: ba, gb, bracket
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
@@ -37,7 +28,6 @@ module nonlinear_terms
 ! CFL coefficients
   real :: cfl, cflx, cfly
 
-  logical :: nonlin = .false.
   logical :: initialized = .false.
   logical :: initializing = .true.
   logical :: zip = .false. !If true disable explicit source for all but ik==1
@@ -46,11 +36,6 @@ module nonlinear_terms
 
   logical :: exist
 
-  !!Advance scheme
-  type(multistep_scheme) :: multistep !Currently only Adams-Bashforth supported
-  integer :: nl_order !Order of method to use
-  integer, parameter :: max_adams_order=6
-
 contains
   
   subroutine check_nonlinear_terms(report_unit,delt_adj)
@@ -58,6 +43,7 @@ contains
     use kt_grids, only: box
     use run_parameters, only: margin, code_delt_max, nstep, wstar_units
     use theta_grid, only: nperiod
+    use nonlinear_arrays, only: nonlin
     implicit none
     integer :: report_unit
     real :: delt_adj
@@ -104,6 +90,7 @@ contains
 
 
   subroutine wnml_nonlinear_terms(unit)
+    use nonlinear_arrays, only: nl_order
     implicit none
     integer :: unit
     if (.not. exist) return
@@ -128,6 +115,7 @@ contains
     use gs2_layouts, only: init_gs2_layouts, g_lo
     use gs2_transforms, only: init_transforms
     use mp, only: proc0
+    use nonlinear_arrays, only: gexp, nl_order, current_order, nonlin, init_multistep
     implicit none
     logical :: dum1, dum2
     logical, parameter :: debug=.false.
@@ -152,17 +140,7 @@ contains
     call read_parameters
 
     !Setup the multistep scheme
-    !Could have case select here to allow support for different schemes
-    call multistep%init(max_adams_order,'Adams-Bashforth')
-    !Note it is possible to calculate these coefficients for any arbritary order
-    !if we ever decide we want to support this.
-    call multistep%set_coeffs(1,[1]/1.0)
-    call multistep%set_coeffs(2,[3,-1]/2.0)
-    call multistep%set_coeffs(3,[23,-16,5]/12.0)
-    call multistep%set_coeffs(4,[55,-59,37,-9]/24.0)
-    call multistep%set_coeffs(5,[1901,-2774,2616,-1274,251]/720.0)
-    call multistep%set_coeffs(6,[4277,-7923,9982,-7298,2877,-475]/1440.0)
-    !if(proc0)call multistep%print
+    call init_multistep
 
     if(.not.allocated(gexp))then
 #ifdef LOWFLOW
@@ -216,6 +194,7 @@ contains
     use file_utils, only: input_unit_exist, error_unit
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
+    use nonlinear_arrays, only: nl_order, nonlin, store_history
     implicit none
     type (text_option), dimension (4), parameter :: nonlinearopts = &
          (/ text_option('default', nonlinear_mode_none), &
@@ -224,14 +203,14 @@ contains
             text_option('on', nonlinear_mode_on) /)
     character(20) :: nonlinear_mode
     namelist /nonlinear_terms_knobs/ nonlinear_mode, cfl, nl_order, &
-         zip, nl_forbid_force_zero
+         zip, nl_forbid_force_zero, store_history
     integer :: ierr, in_file
 
     if (proc0) then
        nonlinear_mode = 'default'
        cfl = 0.1
        nl_order = 3
-
+       store_history=.false.
        in_file=input_unit_exist("nonlinear_terms_knobs",exist)
        if(exist) read (unit=in_file,nml=nonlinear_terms_knobs)
 
@@ -246,38 +225,12 @@ contains
     call broadcast (nl_forbid_force_zero)
     call broadcast (zip)
     call broadcast (nl_order)
+    call broadcast(store_history)
 
-    if (nonlinear_mode_switch == nonlinear_mode_on) nonlin = .true.
+    nonlin = nonlinear_mode_switch == nonlinear_mode_on
 
   end subroutine read_parameters
 
-  !>Calculate the explicit source term at given location
-  !!Note, doesn't include 0.5*dt needed to actually advance
-  function get_exp_source(ig,isgn,iglo,orderIn)
-    implicit none
-    complex :: get_exp_source
-    integer, intent(in) :: ig, isgn, iglo
-    integer, intent(in), optional ::orderIn
-    integer :: desiredOrder,order, i
-
-    !Initialise return value
-    get_exp_source=0.0
-
-    !Exit early if no steps taken
-    if(current_order.eq.0) return
-
-    !Set the target order
-    desiredOrder=nl_order
-    if(present(orderIn)) desiredOrder=orderIn
-
-    !Set the order to use 
-    order=min(desiredOrder,current_order)
-
-    !Build up term
-    do i=1,order
-       get_exp_source=get_exp_source+multistep%get_coeff(order,i)*gexp(i,ig,isgn,iglo)
-    enddo    
-  end function get_exp_source
 
   !>Estimate the maximum and average relative error in explicit
   !!source by finding max/avg difference between source with largest
@@ -286,6 +239,7 @@ contains
     use mp, only: max_allreduce, proc0, iproc, sum_allreduce
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use theta_grid, only: ntgrid
+    use nonlinear_arrays, only: current_order, nl_order, get_exp_source
     implicit none
     real :: max_exp_source_error
     real :: max_rel_err
@@ -384,6 +338,7 @@ contains
   !>Moves steps along one (discarding oldest)
   !!to create space to store current step
   subroutine shift_exp
+    use nonlinear_arrays, only: current_order, nl_order, gexp
     implicit none
     integer :: order, i
 
@@ -436,6 +391,7 @@ contains
     use dist_fn_arrays, only: g
     use gs2_time, only: save_dt_cfl
     use run_parameters, only: reset
+    use nonlinear_arrays, only: gexp
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
@@ -595,6 +551,7 @@ contains
     use kt_grids, only: aky, akx
     use gs2_time, only: save_dt_cfl, check_time_step_too_large
     use constants, only: zi
+    use nonlinear_arrays, only: current_order, gexp
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
@@ -730,7 +687,9 @@ contains
        call check_time_step_too_large(reset)
 
        !If we have violated cfl then return immediately
-       if(reset)return
+       if(reset) then
+          return
+       endif
 
        !Note that g1 will not contain the Fourier space source
        !term when we return here.
@@ -871,9 +830,11 @@ contains
   end subroutine add_nl
 
   subroutine reset_init
+    use nonlinear_arrays, only: current_order, finish_multistep
+    implicit none
     initialized = .false.
     initializing = .true.
-    call multistep%finish
+    call finish_multistep
     current_order=0
   end subroutine reset_init
 
@@ -882,6 +843,7 @@ contains
   end subroutine finish_init
 
   subroutine finish_nonlinear_terms
+    use nonlinear_arrays, only: current_order, gexp, nonlin, finish_multistep
     implicit none
 
     if (allocated(aba)) deallocate (aba, agb, abracket)
@@ -889,7 +851,7 @@ contains
     if (allocated(gexp)) deallocate (gexp)
     nonlin = .false. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
-    call multistep%finish
+    call finish_multistep
     current_order=0
   end subroutine finish_nonlinear_terms
 end module nonlinear_terms

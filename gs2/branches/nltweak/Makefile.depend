@@ -102,6 +102,7 @@ dump_response_mod = \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
+	 nonlinear_arrays.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -209,6 +210,7 @@ ffttester_mod = \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
+	 nonlinear_arrays.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -262,6 +264,7 @@ generate_fftw_wisdom_mod = \
 	 leq.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 nonlinear_arrays.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -345,6 +348,7 @@ gs2_mod = \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
+	 nonlinear_arrays.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -443,6 +447,7 @@ ingen_mod = \
 	 mp.o \
 	 mt19937.o \
 	 netcdf_utils.o \
+	 nonlinear_arrays.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -613,7 +618,7 @@ diagnostics_fluxes.o: \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
-	 nonlinear_terms.o \
+	 nonlinear_arrays.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid.o \
@@ -723,6 +728,7 @@ dist_fn.o: \
 	 le_derivatives.o \
 	 le_grids.o \
 	 mp.o \
+	 nonlinear_arrays.o \
 	 nonlinear_terms.o \
 	 prof.o \
 	 redistribute.o \
@@ -904,7 +910,7 @@ gs2_diagnostics.o: \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
-	 nonlinear_terms.o \
+	 nonlinear_arrays.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 prof.o \
@@ -942,7 +948,7 @@ gs2_diagnostics_new.o: \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
-	 nonlinear_terms.o \
+	 nonlinear_arrays.o \
 	 run_parameters.o \
 	 simpledataio_write.o \
 	 simpledataiof.o \
@@ -964,7 +970,7 @@ gs2_io.o: \
 	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
-	 nonlinear_terms.o \
+	 nonlinear_arrays.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 species.o \
@@ -996,6 +1002,7 @@ gs2_main.o: \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
+	 nonlinear_arrays.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 redistribute.o \
@@ -1036,6 +1043,7 @@ gs2_save.o: \
 	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 nonlinear_arrays.o \
 	 parameter_scan_arrays.o \
 	 species.o \
 	 theta_grid.o 
@@ -1175,10 +1183,11 @@ netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
 	 mp.o 
+nonlinear_arrays.o: \
+	 explicit_schemes.o 
 nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
-	 explicit_schemes.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 gs2_time.o \
@@ -1186,6 +1195,7 @@ nonlinear_terms.o: \
 	 kt_grids.o \
 	 le_grids.o \
 	 mp.o \
+	 nonlinear_arrays.o \
 	 run_parameters.o \
 	 species.o \
 	 text_options.o \
