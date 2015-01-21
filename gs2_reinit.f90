@@ -53,6 +53,7 @@ contains
     use fields_arrays, only: phinew, aparnew, bparnew
     use gs2_time, only: user_time, code_dt_min
     use nonlinear_terms, only: nl_reset => reset_init
+    use nonlinear_arrays, only: gexp, current_order
     use mp, only: proc0
     use file_utils, only: error_unit
     use antenna, only: dump_ant_amp
@@ -174,6 +175,10 @@ contains
        endif
 
     endif
+
+    !Force a reset of nonlinear/explicit source term
+    gexp = 0.
+    current_order = 0 
 
     if(.not.in_memory)then
        !Should really do this with in_memory=.true. as well but

@@ -217,7 +217,7 @@ contains
 
 subroutine check_dist_fn(report_unit)
   use kt_grids, only: grid_option, gridopt_box, gridopt_switch
-  use nonlinear_terms, only: nonlin
+  use nonlinear_arrays, only: nonlin
   use species, only: spec, nspec, has_electron_species
   implicit none
   integer :: report_unit
@@ -4162,7 +4162,7 @@ endif
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits
     use gs2_time, only: code_dt
-    use nonlinear_terms, only: nonlin, get_exp_source
+    use nonlinear_arrays, only: nonlin, get_exp_source
     use hyper, only: D_res
     use constants, only: zi
     implicit none
@@ -4421,7 +4421,7 @@ endif
     use species, only: spec
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_time, only: code_dt
-    use nonlinear_terms, only: nonlin, get_exp_source
+    use nonlinear_arrays, only: nonlin, get_exp_source
     use constants, only: zi
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -6433,7 +6433,7 @@ endif
     use le_grids, only: integrate_moment
     use run_parameters, only: fphi
     use species, only: spec, nspec
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use hyper, only: hypervisc_filter
 
     implicit none
@@ -6839,7 +6839,7 @@ endif
     use theta_grid, only: jacob, delthet, ntgrid
     use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tite
     use gs2_time, only: code_dt
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use antenna, only: antenna_apar, a_ext_data
     use hyper, only: D_v, D_eta, nexp, hypervisc_filter
 

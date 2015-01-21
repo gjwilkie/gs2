@@ -343,7 +343,7 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
     use species, only: nspec
     use le_grids, only: negrid, nlambda, energy, al
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use netcdf, only: nf90_put_var
 # endif    
     implicit none

@@ -41,7 +41,7 @@ contains
     use diagnostics_ascii, only: init_diagnostics_ascii
     use diagnostics_antenna, only: init_diagnostics_antenna
     use diagnostics_nonlinear_convergence, only: init_nonlinear_convergence
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
@@ -229,7 +229,7 @@ contains
     use diagnostics_config, only: finish_diagnostics_config
     use diagnostics_antenna, only: finish_diagnostics_antenna
     use diagnostics_nonlinear_convergence, only: finish_nonlinear_convergence
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use dist_fn, only: write_fyx, write_f, write_poly, collision_error
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
@@ -329,7 +329,7 @@ contains
     use diagnostics_dimensions, only: dim_string
     use diagnostics_create_and_write, only: create_and_write_variable
     use collisions, only: vary_vnew
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use species, only: spec, has_electron_species
     use simpledataio, only: increment_start, syncfile, closefile, set_parallel, create_file
     use diagnostics_metadata, only: write_input_file
@@ -446,7 +446,7 @@ contains
     use diagnostics_final_routines,only: do_write_gs
     use diagnostics_final_routines,only: init_par_filter
     use diagnostics_final_routines,only: ntg_out
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use antenna, only: dump_ant_amp
     use mp, only: proc0
     use kt_grids, only: ntheta0, naky

@@ -56,14 +56,15 @@ module gs2_save
 
 # ifdef NETCDF
   real, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
+  real, allocatable, dimension(:,:,:,:) :: tmp_exp_r, tmp_exp_i
   real, allocatable, dimension(:) :: stmp  ! MR: tmp var for kx_shift
   real, allocatable, dimension(:) :: atmp
 !  integer, parameter :: kind_nf = kind (NF90_NOERR)
-  integer (kind_nf) :: ncid, thetaid, signid, gloid, kyid, kxid, nk_stir_dim
+  integer (kind_nf) :: ncid, thetaid, signid, gloid, kyid, kxid,nlid, nk_stir_dim
   integer (kind_nf) :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
   integer (kind_nf) :: kx_shift_id   ! MR: added to save kx_shift variable
-  integer (kind_nf) :: t0id, gr_id, gi_id, vnm1id, vnm2id, delt0id
-  integer (kind_nf) :: current_scan_parameter_value_id
+  integer (kind_nf) :: t0id, gr_id, gi_id, gexp_r_id, gexp_i_id, vnm1id, vnm2id, delt0id
+  integer (kind_nf) :: current_scan_parameter_value_id, cur_order_id
   integer (kind_nf) :: a_antr_id, b_antr_id, a_anti_id, b_anti_id
 !<DD> Added for saving distribution function
   INTEGER (KIND_NF) :: egridid,lgridid, vpa_id, vperp2_id
@@ -116,6 +117,8 @@ contains
     use dist_fn_arrays, only: vpa, vperp2
     !</DD> Added for saving distribution function
     use parameter_scan_arrays, only: current_scan_parameter_value
+    !<DD>The following are for saving the nonlinear/explicit source
+    use nonlinear_arrays, only: gexp, nl_order, nonlin, current_order, store_history
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
@@ -134,6 +137,7 @@ contains
     integer, dimension(3) :: start_pos, counts
     integer, parameter :: tmpunit = 348
 # endif
+    logical :: save_nonlin_source
     logical :: exit
     logical :: local_init !<DD> Added for saving distribution function
 
@@ -158,6 +162,9 @@ contains
     total_elements = g_lo%ulim_world+1
 
     if (n_elements <= 0) return
+
+    !Do we want to save the nonlinear source?
+    save_nonlin_source=nonlin.and.(.not.present(distfn)).and.store_history
 
     !<DD> Added for saving distribution function
     IF (PRESENT(distfn)) THEN
@@ -293,6 +300,15 @@ contains
              write(ierr,*) "nf90_def_dim akx error: ", nf90_strerror(istatus)
              goto 1
           end if
+
+          if(save_nonlin_source)then
+             istatus = nf90_def_dim (ncid, "nl_order", nl_order, nlid)
+             if (istatus /= NF90_NOERR) then
+                ierr = error_unit()
+                write(ierr,*) "nf90_def_dim nl_order error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+          endif
        end if
        
        !<DD> Added for saving distribution function
@@ -417,6 +433,8 @@ contains
        end if
        
        if (n_elements > 0) then
+          !Maybe we should use the 'ri' dimension approach as used in the 
+          !output files for consistency
           istatus = nf90_def_var (ncid, "gr", netcdf_real, &
                (/ thetaid, signid, gloid /), gr_id)
           if (istatus /= NF90_NOERR) then
@@ -432,7 +450,34 @@ contains
              write(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
              goto 1
           end if
-          
+
+          !Add the nonlinear source term
+          if(save_nonlin_source) then
+             istatus = nf90_def_var (ncid, "gexp_r", netcdf_real, &
+                  (/nlid, thetaid, signid, gloid /), gexp_r_id)
+             if (istatus /= NF90_NOERR) then
+                ierr = error_unit()
+                write(ierr,*) "nf90_def_var gexp_r error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+
+             istatus = nf90_def_var (ncid, "gexp_i", netcdf_real, &
+                  (/nlid, thetaid, signid, gloid /), gexp_i_id)
+             if (istatus /= NF90_NOERR) then
+                ierr = error_unit()
+                write(ierr,*) "nf90_def_var gexp_i error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+
+             !Also store the current order
+             istatus = nf90_def_var (ncid, "current_order", netcdf_real, cur_order_id)
+             if (istatus /= NF90_NOERR) then
+                ierr = error_unit()
+                write(ierr,*) "nf90_def_var current_order error: ", nf90_strerror(istatus)
+                goto 1
+             end if
+          endif
+
           if (fphi > epsilon(0.)) then
              istatus = nf90_def_var (ncid, "phi_r", netcdf_real, &
                   (/ thetaid, kxid, kyid /), phir_id)
@@ -711,7 +756,56 @@ contains
 # endif     
 
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gi_id)
-       
+
+
+       if(save_nonlin_source)then
+          if(.not.allocated(tmp_exp_r)) allocate(tmp_exp_r(nl_order,2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+
+          !Store real part of explicit source
+          tmp_exp_r = real(gexp)
+# ifdef NETCDF_PARALLEL
+          if(save_many) then
+# endif
+             istatus = nf90_put_var (ncid, gexp_r_id, tmp_exp_r)
+#ifdef NETCDF_PARALLEL
+          else
+             istatus = nf90_put_var (ncid, gexp_r_id, tmp_exp_r, start=start_pos, count=counts)
+          endif
+# endif     
+          
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gexp_r_id)
+
+
+          !Store imaginary part of explicit source
+          tmp_exp_r = aimag(gexp)
+# ifdef NETCDF_PARALLEL
+          if(save_many) then
+# endif
+             istatus = nf90_put_var (ncid, gexp_i_id, tmp_exp_r)
+#ifdef NETCDF_PARALLEL
+          else
+             istatus = nf90_put_var (ncid, gexp_i_id, tmp_exp_r, start=start_pos, count=counts)
+          endif
+# endif     
+          
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gexp_i_id)
+
+          if(allocated(tmp_exp_r))deallocate(tmp_exp_r)
+
+# ifdef NETCDF_PARALLEL                    
+          if(save_many .or. iproc == 0) then
+# endif
+
+             !Store current_order
+             istatus = nf90_put_var (ncid, cur_order_id, current_order)
+          
+             !Check store was successful
+             IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, cur_order_id)
+# ifdef NETCDF_PARALLEL
+          endif
+#endif
+       endif
+
        !<DD> Added for saving distribution function
        IF (PRESENT(distfn)) THEN
           !<DD 29-08-2010> Fill energy and lambda information
@@ -831,12 +925,14 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use file_utils, only: error_unit
+    use nonlinear_arrays, only: gexp, current_order, nl_order, nonlin, store_history
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
     character (20), INTENT (in), optional :: fileopt
+    logical :: restore_nonlin_source
 # ifdef NETCDF
 # ifdef NETCDF_PARALLEL
     integer, dimension(3) :: counts, start_pos
@@ -849,6 +945,9 @@ contains
     n_elements = g_lo%ulim_proc-g_lo%llim_proc+1
     if (n_elements <= 0) return
     
+    !Do we want to restore the nonlinear source?
+    restore_nonlin_source=nonlin.and.store_history
+
     if (.not.initialized) then
        initialized = .true.
        file_proc = trim(restart_file)
@@ -952,8 +1051,20 @@ contains
        
        istatus = nf90_inq_varid (ncid, "gi", gi_id)
        if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gi')
+       
+       if(restore_nonlin_source)then
+          istatus = nf90_inq_varid (ncid, "gexp_r", gexp_r_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gexp_r')
+
+          istatus = nf90_inq_varid (ncid, "gexp_i", gexp_i_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='gexp_i')
+
+          istatus = nf90_inq_varid (ncid, "current_order", cur_order_id)
+          if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='current_order')
+       endif
     end if
-    
+
+    !Restore dist. fn
     if (.not. allocated(tmpr)) &
          allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
     if (.not. allocated(tmpi)) &
@@ -987,6 +1098,49 @@ contains
     if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gi_id)
 
     g = cmplx(tmpr, tmpi)
+    deallocate(tmpr,tmpi)
+    
+    !Restore explicit source term
+    if(restore_nonlin_source) then
+       if (.not. allocated(tmp_exp_r)) &
+            allocate (tmp_exp_r(nl_order,2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       if (.not. allocated(tmp_exp_i)) &
+            allocate (tmp_exp_i(nl_order,2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
+
+       tmp_exp_r = 0.; tmp_exp_i = 0.
+# ifdef NETCDF_PARALLEL
+       if(read_many) then
+# endif
+          istatus = nf90_get_var (ncid, gexp_r_id, tmp_exp_r)
+#ifdef NETCDF_PARALLEL
+       else
+          start_pos = (/1,1,1,g_lo%llim_proc+1/)
+          counts = (/nl_order,2*ntgrid+1, 2, n_elements/)
+          istatus = nf90_get_var (ncid, gexp_r_id, tmp_exp_r, start=start_pos, count=counts)
+       end if
+# endif
+
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gexp_r_id)
+
+# ifdef NETCDF_PARALLEL
+       if(read_many) then
+# endif
+          istatus = nf90_get_var (ncid, gexp_i_id, tmp_exp_i)
+#ifdef NETCDF_PARALLEL
+       else
+          istatus = nf90_get_var (ncid, gexp_i_id, tmp_exp_i, start=start_pos, count=counts)
+       end if
+# endif
+
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, gexp_i_id)
+
+       gexp = cmplx(tmp_exp_r, tmp_exp_i)
+       if(allocated(tmp_exp_r)) deallocate(tmp_exp_r,tmp_exp_i)
+
+       istatus = nf90_get_var (ncid, cur_order_id, current_order)
+       if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, cur_order_id)
+    endif
+
 
     if (.not. allocated(ftmpr)) allocate (ftmpr(2*ntgrid+1,ntheta0,naky))
     if (.not. allocated(ftmpi)) allocate (ftmpi(2*ntgrid+1,ntheta0,naky))

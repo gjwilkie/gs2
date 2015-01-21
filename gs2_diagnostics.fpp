@@ -212,7 +212,7 @@ contains
 
    subroutine check_gs2_diagnostics(report_unit)
      use file_utils, only: run_name
-     use nonlinear_terms, only: nonlin
+     use nonlinear_arrays, only: nonlin
      use dist_fn, only : def_parity, even 
      use kt_grids, only : gridopt_switch, gridopt_box
      use init_g, only : restart_file
@@ -960,7 +960,7 @@ contains
     use gs2_time, only: user_time
     use gs2_io, only: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom,nc_exchange, nc_final_fields, nc_sync
     use le_grids, only: negrid
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use antenna, only: antenna_w
     use parameter_scan_arrays, only: scan_hflux => hflux_tot, scan_momflux => momflux_tot 
     use parameter_scan_arrays, only: scan_phi2_tot => phi2_tot, scan_nout => nout
@@ -1397,7 +1397,7 @@ contains
 
   subroutine do_get_omega(istep,debug,exit)
     use mp, only: proc0, broadcast
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use run_parameters, only: eqzip
     implicit none
     integer, intent(in) :: istep

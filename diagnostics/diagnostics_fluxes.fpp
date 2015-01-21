@@ -74,7 +74,7 @@ contains
     use species, only: nspec, spec
     use fields_arrays, only: phinew, bparnew, aparnew, phi
     use run_parameters, only: fphi, fapar, fbpar
-    use nonlinear_terms, only: nonlin
+    use nonlinear_arrays, only: nonlin
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_config, only: diagnostics_type
     use diagnostics_dimensions, only: dim_string
