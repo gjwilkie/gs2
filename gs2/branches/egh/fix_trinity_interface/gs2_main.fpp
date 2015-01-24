@@ -908,33 +908,12 @@ contains
        heat_avg = 0.0
      end do
      time_interval = 1.0
-     !if (present(converged)) then
-     !end if
    end if
 
-   write (*,*) 'GETTING FLUXES TIME, DIFF', time_interval, diff
-
-   !if (size(state%outputs%pflux) > 1) then
-      !state%outputs%pflux(1) = pflux_avg(ions)/time_interval
-      !state%outputs%qflux(1) = qflux_avg(ions)/time_interval
-      !state%outputs%heat(1) = heat_avg(ions)/time_interval
-      !state%outputs%pflux(2) = pflux_avg(electrons)/time_interval
-      !state%outputs%qflux(2) = qflux_avg(electrons)/time_interval
-      !state%outputs%heat(2) = heat_avg(electrons)/time_interval
-      !if (size(state%outputs%pflux) > 2) then
-         !state%outputs%pflux(3) = pflux_avg(impurity)/time_interval
-         !state%outputs%qflux(3) = qflux_avg(impurity)/time_interval
-         !state%outputs%heat(3) = heat_avg(impurity)/time_interval
-      !end if
-   !else
-      ! We now rely on trinity to work out which species
-      ! is which
-      state%outputs%pflux = pflux_avg/time_interval
-      state%outputs%qflux = qflux_avg/time_interval
-      state%outputs%heat = heat_avg/time_interval
-   !end if
+   state%outputs%pflux = pflux_avg/time_interval
+   state%outputs%qflux = qflux_avg/time_interval
+   state%outputs%heat = heat_avg/time_interval
    state%outputs%vflux = vflux_avg(1)/time_interval
-   write (*,*) 'OUTPUTS qflux', state%outputs%qflux, state%external_job_id
   end subroutine calculate_outputs
 
 

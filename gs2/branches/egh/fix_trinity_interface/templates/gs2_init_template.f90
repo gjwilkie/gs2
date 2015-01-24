@@ -306,6 +306,8 @@ contains
 
     if (current%initval_ov%force_maxwell_reinit)then
       call set_init_fields
+      !if (.not. proc0) write (*,*) 'field value jjjj kkkk', phinew(-5, 3, 2), job_id
+      !if (.not. proc0) write (*,*) 'field value sum jjjj kkkk', sum(real(conjg(phinew)*phinew)), job_id
     else
       write(error_unit(), *) "INFO: You have disabled &
         & force_maxwell_reinit which causes the fields to be &
