@@ -1355,7 +1355,15 @@ contains
        g(:,2,:) = g(:,1,:)
        gnew = g
     endif
-    iglo = (g_lo%ulim_proc - g_lo%llim_proc)/4 + g_lo%llim_proc
+
+    ! EGH Leave below until bug #36 is closed.
+    !iglo = (g_lo%ulim_proc - g_lo%llim_proc)/4 + g_lo%llim_proc
+    !if (.not. proc0) write (*,*) 'iglo jjj', iglo
+    !if (.not. proc0) write (*,*) 'it, ik jjj', it_idx(g_lo, iglo), ik_idx(g_lo, iglo)
+!
+    !if (.not. proc0) write (*,*) 'gvalue in init jjjj 2', g(-5,1,iglo), job_id
+    !if (.not. proc0) write (*,*) 'gnewvalue in init jjjj 2', gnew(-5,1,iglo), job_id
+    !if (.not. proc0) write (*,*) 'gnewvalue sum kkkk', sum(real(conjg(gnew)*gnew)), job_id
   end subroutine ginit_noise
 
   !> Initialize with a single parallel mode. Only makes sense in a linear 
@@ -3542,7 +3550,7 @@ contains
 
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
 
-    write (*,*) 'RESTARTING ON JOB', job
+    !write (*,*) 'RESTARTING ON JOB', job
 
     if (istatus /= 0) then
        ierr = error_unit()
