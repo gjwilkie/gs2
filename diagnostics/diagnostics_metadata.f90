@@ -1,7 +1,7 @@
 !> A module for for writing help, metadata and the input file 
 !! to the netcdf file. 
 !! 
-!! To extract the input file use the bash utility Aux/extract_input_file
+!! To extract the input file use the bash utility scripts/extract_input_file
 module diagnostics_metadata
   use diagnostics_config, only: diagnostics_type
   implicit none
@@ -12,7 +12,7 @@ contains
   subroutine write_metadata(gnostics)
     use simpledataio, only: add_metadata
     use simpledataio, only: add_standard_metadata
-    use runtime_tests, only: build_indentifier
+    use runtime_tests, only: build_identifier
     use runtime_tests, only: get_svn_rev
     use run_parameters, only: user_comments
     type(diagnostics_type), intent(in) :: gnostics
@@ -101,7 +101,7 @@ contains
     call add_metadata(gnostics%sfile, "input_file_extraction", &
       jline("")//&
       jline(" A bash utility for extracting the input file ")//&
-      jline(" from this file is included in the Aux ")//&
+      jline(" from this file is included in the scripts ")//&
       jline(" folder in the GS2 source. To invoke it:")//&
       jline(" $ ./extract_input_file <netcdf_file>")//&
       jline(""))
@@ -109,8 +109,8 @@ contains
       trim(user_comments))
     call add_metadata(gnostics%sfile, "svn_revision", &
       trim(get_svn_rev()))
-    call add_metadata(gnostics%sfile, "build_indentifier", &
-      trim(build_indentifier()))
+    call add_metadata(gnostics%sfile, "build_identifier", &
+      trim(build_identifier()))
 
     call add_standard_metadata(gnostics%sfile)
   end subroutine write_metadata
@@ -139,6 +139,13 @@ contains
     character(len=1000) :: line
     integer :: inputunit
     integer :: ios, i
+    !Note : The input file used here is not directly the input file passed to GS2
+    !as during init_input_unit (file_utils) the passed input file is processed to 
+    !a) Strip out any comments
+    !b) Deal with any included files.
+    !It is this processed file (written to .<run_name>.in) which is stored.
+    !We may wish to add the option to retain comments as these may be useful
+    !when revisting old files to remind the user why the file is setup as it is.
 
     ! Find out the size of the input file and read it in
     ! This is unnecessarily done twice, as this function 
@@ -162,7 +169,7 @@ contains
           inputfile_length = inputfile_length + 1
           inputfile_array(inputfile_length) = " "
           inputfile_length = inputfile_length + 1
-          inputfile_array(inputfile_length) = "\"
+          inputfile_array(inputfile_length) = "\" !" !These comment characters are for editors which think \ is escaping "
           inputfile_length = inputfile_length + 1
           inputfile_array(inputfile_length) = "n"
         !end if 

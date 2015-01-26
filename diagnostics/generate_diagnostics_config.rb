@@ -127,6 +127,7 @@ input_variables_for_diagnostics_config = [
   # we don't want it to conflict with the old
   # module, but eventually I think it should
   # default to true. EGH
+  ['integer', 'nsave', '1000'],
   ['logical', 'save_for_restart', '.false.'],
   ['logical', 'file_safety_check', '.true.'],
 
