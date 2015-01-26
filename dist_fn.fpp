@@ -3420,7 +3420,7 @@ endif
        call add_explicit_terms (phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
-       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew)
 
        !Add hyper terms (damping)
        call hyper_diff (gnew, phinew)
@@ -3433,7 +3433,7 @@ endif
        call add_explicit_terms (phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
-       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew)
        !Add hyper terms (damping)
        call hyper_diff (gnew, phinew)
     else if (istep.ne.istep_last) then
@@ -3443,7 +3443,7 @@ endif
        call add_explicit_terms (phi, apar, bpar, istep, bkdiff(1))
        if(reset) return !Return if resetting
        !Solve for gnew
-       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew)
        !Add hyper terms (damping)
        call hyper_diff (gnew, phinew)
     else if (istep.eq.istep_last) then
@@ -3455,7 +3455,7 @@ endif
        if(reset) return !Return if resetting
 
        !Solve for gnew
-       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+       call invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew)
        !Add hyper terms (damping)
        call hyper_diff (gnew, phinew)
        call vspace_derivatives (gnew, g, g0, phi, bpar, phinew, bparnew, modep, ctog=.false.)
@@ -4150,7 +4150,7 @@ endif
   !</DD>
 
   subroutine get_source_term &
-       (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
+       (phi, apar, bpar, phinew, aparnew, bparnew, &
         isgn, iglo,ik,it,il,ie,is, sourcefac, source)
 #ifdef LOWFLOW
     use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
@@ -4168,7 +4168,6 @@ endif
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
-    integer, intent (in) :: istep
     integer, intent (in) :: isgn, iglo, ik, it, il, ie, is
     complex, intent (in) :: sourcefac
     complex, dimension (-ntgrid:), intent (out) :: source
@@ -4409,7 +4408,7 @@ endif
   !and uses precalculated constant terms. Leads to more memory usage than 
   !original version but can be significantly faster (~50%)
   subroutine get_source_term_opt &
-       (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
+       (phi, apar, bpar, phinew, aparnew, bparnew, &
         iglo,ik,it,il,ie,is, sourcefac, source)
 #ifdef LOWFLOW
     use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
@@ -4426,7 +4425,6 @@ endif
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
-    integer, intent (in) :: istep
     integer, intent (in) :: iglo, ik, it, il, ie, is
     complex, intent (in) :: sourcefac
     complex, dimension (-ntgrid:,:), intent (out) :: source
@@ -4585,7 +4583,7 @@ endif
   end subroutine get_source_term_opt
 
   subroutine invert_rhs_1 &
-       (phi, apar, bpar, phinew, aparnew, bparnew, istep, &
+       (phi, apar, bpar, phinew, aparnew, bparnew, &
         iglo, sourcefac)
     use dist_fn_arrays, only: gnew, ittp, vperp2, aj1, aj0
     use run_parameters, only: eqzip, secondary, tertiary, harris
@@ -4600,7 +4598,6 @@ endif
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
-    integer, intent (in) :: istep
     integer, intent (in) :: iglo
     complex, intent (in) :: sourcefac
 
@@ -4636,11 +4633,11 @@ endif
 
     if(opt_source)then
        call get_source_term_opt (phi, apar, bpar, phinew, aparnew, bparnew, &
-            istep, iglo,ik,it,il,ie,is, sourcefac, source)
+            iglo,ik,it,il,ie,is, sourcefac, source)
     else
        do isgn = 1, 2
           call get_source_term (phi, apar, bpar, phinew, aparnew, bparnew, &
-               istep, isgn, iglo,ik,it,il,ie,is, sourcefac, source(:,isgn))
+               isgn, iglo,ik,it,il,ie,is, sourcefac, source(:,isgn))
        end do
     endif
 
@@ -4949,7 +4946,7 @@ endif
   end subroutine invert_rhs_1
 
   subroutine invert_rhs_linked &
-       (phi, apar, bpar, phinew, aparnew, bparnew, istep, sourcefac)
+       (phi, apar, bpar, phinew, aparnew, bparnew, sourcefac)
     use dist_fn_arrays, only: gnew
     use theta_grid, only: bmag, ntgrid
     use le_grids, only: energy, al, nlambda, ng2, anon
@@ -4963,7 +4960,6 @@ endif
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
-    integer, intent (in) :: istep
     complex, intent (in) :: sourcefac
 
     complex :: b0, fac, facd
@@ -4982,7 +4978,7 @@ endif
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
-            istep, iglo, sourcefac)
+            iglo, sourcefac)
     end do
 
     if (no_comm) then
@@ -5160,7 +5156,7 @@ endif
 
   end subroutine invert_rhs_linked
 
-  subroutine invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+  subroutine invert_rhs (phi, apar, bpar, phinew, aparnew, bparnew)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: code_time
@@ -5169,7 +5165,6 @@ endif
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
-    integer, intent (in) :: istep
 
     integer :: iglo
 
@@ -5193,11 +5188,11 @@ endif
     select case (boundary_option_switch)
     case (boundary_option_linked)
        call invert_rhs_linked &
-            (phi, apar, bpar, phinew, aparnew, bparnew, istep, sourcefac) 
+            (phi, apar, bpar, phinew, aparnew, bparnew, sourcefac) 
     case default
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
           call invert_rhs_1 (phi, apar, bpar, phinew, aparnew, bparnew, &
-               istep, iglo, sourcefac)
+               iglo, sourcefac)
        end do
     end select
 

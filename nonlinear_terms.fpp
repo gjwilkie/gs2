@@ -114,7 +114,6 @@ contains
     use gs2_layouts, only: init_dist_fn_layouts, yxf_lo, accelx_lo
     use gs2_layouts, only: init_gs2_layouts, g_lo
     use gs2_transforms, only: init_transforms
-    use mp, only: proc0
     use nonlinear_arrays, only: gexp, nl_order, current_order, nonlin, init_multistep
     implicit none
     logical :: dum1, dum2
@@ -236,14 +235,14 @@ contains
   !!source by finding max/avg difference between source with largest
   !!order and one order less.
   function max_exp_source_error()
-    use mp, only: max_allreduce, proc0, iproc, sum_allreduce
+    use mp, only: max_allreduce, proc0, sum_allreduce!, iproc
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, il_idx, ie_idx
     use theta_grid, only: ntgrid
     use nonlinear_arrays, only: current_order, nl_order, get_exp_source
     implicit none
     real :: max_exp_source_error
     real :: max_rel_err
-    integer :: order, ig, iglo, isgn, ik, it, il, ie, is, nskip
+    integer :: order, ig, iglo, isgn, nskip!, ik, it, il, ie, is
     complex :: tmpAns, tmpEst
     real :: tmpErr, averr
     !Set default value
@@ -360,7 +359,6 @@ contains
 
   subroutine add_explicit_terms (phi, apar, bpar, istep, bd)
     use theta_grid, only: ntgrid
-    use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
@@ -400,7 +398,7 @@ contains
 
     integer :: istep_last = 0
     integer :: iglo, ik
-    real :: dt_cfl, maxerr
+    real :: dt_cfl
 
     if (initializing) then
        if (present(nl)) then
@@ -551,7 +549,6 @@ contains
     use kt_grids, only: aky, akx
     use gs2_time, only: save_dt_cfl, check_time_step_too_large
     use constants, only: zi
-    use nonlinear_arrays, only: current_order, gexp
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
