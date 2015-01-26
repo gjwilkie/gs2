@@ -22,6 +22,7 @@ module normalisations
      logical :: initialised = .false.
 
      !The following is used to help automate loops over normalisations
+     integer :: nnorm
      character(len=6), dimension(:), allocatable, public :: names
 
      !The normalisations
@@ -177,7 +178,8 @@ contains
     class(norms_type), intent(in out) :: self
 
     !First setup allowed normalisations
-    if(.not.allocated(self%names)) allocate(self%names(8))
+    self%nnorm=8
+    if(.not.allocated(self%names)) allocate(self%names(self%nnorm))
     self%names(1)="aref"
     self%names(2)="zref"
     self%names(3)="nref"
