@@ -738,12 +738,13 @@ subroutine check_dist_fn(report_unit)
 !       if (skexist) read (unit=input_unit("source_knobs"), nml=source_knobs)
        if (skexist) read (unit=in_file, nml=source_knobs)
 
-       if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
 
        ierr = error_unit()
        call get_option_value &
             (boundary_option, boundaryopts, boundary_option_switch, &
             ierr, "boundary_option in dist_fn_knobs",.true.)
+
+       if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
 
        call get_option_value &
             (source_option, sourceopts, source_option_switch, &

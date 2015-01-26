@@ -2,16 +2,16 @@
 #include <time.h>
 #include "stdio.h"
 #include <stdlib.h>
-#include <netcdf.h>
 
-#ifdef PARALLEL 
-#include "netcdf_par.h"
-#endif
 #if HAVE_MPI
 #include "mpi.h"
 #else
 typedef int MPI_Comm;
 typedef int MPI_Fint;
+#endif
+#include <netcdf.h>
+#ifdef PARALLEL 
+#include "netcdf_par.h"
 #endif
 
 #define SDATIO_INT 0
