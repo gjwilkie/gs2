@@ -99,6 +99,7 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -204,8 +205,10 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -337,8 +340,10 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -433,8 +438,10 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -895,6 +902,7 @@ gs2_diagnostics.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 prof.o \
@@ -955,6 +963,7 @@ gs2_io.o: \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 species.o \
@@ -987,6 +996,7 @@ gs2_main.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 parameter_scan.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -1160,6 +1170,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1178,6 +1189,10 @@ nonlinear_terms.o: \
 	 species.o \
 	 text_options.o \
 	 theta_grid.o 
+normalisations.o: \
+	 file_utils.o \
+	 mp.o \
+	 runtime_tests.o 
 om.o: \
 	 command_line.o 
 parameter_scan.o: \
@@ -1200,7 +1215,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
