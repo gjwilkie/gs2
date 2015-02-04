@@ -1,6 +1,7 @@
 ! This module contains routines to read from CMR's GS2D equilibrium solver
 
 module gs2d
+  use runtime_tests, only: verbosity
   real, dimension(:), allocatable :: ps,amin_gs2d,q,f,p,pp
   real, dimension(:), allocatable :: rsep,zsep,rgrid,zgrid
   real, dimension(:,:), allocatable :: psi
@@ -87,6 +88,8 @@ module eeq
 
   integer :: nw, nh, nbbbs, ntime, ntstar
 
+  integer, public :: verbosity = 0
+
   real, allocatable, dimension (:) :: psi_bar, fp, qsf, pressure, beta, spsi_bar
   real, allocatable, dimension (:) :: dummy, efit_R, efit_Z, sefit_R, sefit_Z, efit_t
   real, allocatable, dimension (:,:) :: dum2, efit_psi, sefit_psi
@@ -106,7 +109,7 @@ module eeq
   logical :: init_beta = .true.
   logical :: init_psi = .true.
 
-  public :: efit_init, efitin, gradient, eqitem, bgradient
+  public :: efit_init, efitin, gradient, eqitem, bgradient, efit_finish
   public :: gs2din
 
   public :: invR
@@ -141,7 +144,10 @@ contains
 !     zhei       total height of domain
 !
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
-    use gs2d
+    use constants, only: pi, twopi
+    use gs2d, only: read_gs2d, psi, b0, f, ippsi, nr, nz, p, ps
+    use gs2d, only: psip, psmin, q, r0, rgrid, rmag, rsep, zgrid, zmag, zsep
+    use mp, only: mp_abort
     implicit none
 
     real :: p_0
@@ -150,14 +156,14 @@ contains
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
     
-    character*80 :: filename, eqfile
+    character(80) :: filename, eqfile
     
     integer :: i, j, init, initeq, big, nhb, nwb, ierr
     
     data init /1/
     save init
 
-    logical:: debug =.false.
+    logical, parameter :: debug =.false.
     
 ! Need to generalize initialization condition if equilibrium changes
 
@@ -181,8 +187,8 @@ if (debug) write(6,fmt='(T2,"psmin",T15,"psedge (Wb)",T27,"b0 (T)",T39,"ip(A)"/1
     rcentr=r0 ; rleft=minval(rgrid)
     R_mag=rmag ; Z_mag=zmag ; psi_0=psmin ; psi_a=psip ; bcentr=b0
 
-    psi_0 = psi_0/(8.0*atan(1.))
-    psi_a = psi_a/(8.0*atan(1.))
+    psi_0 = psi_0/twopi
+    psi_a = psi_a/twopi
 if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
 
 !
@@ -194,7 +200,7 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
     if (size(ps) /= nw) then
        write(6,*) 'gs2din: size(ps) (',size(ps),') /= nw (',nw,')'
        write(6,*) 'gs2din: => should fix the GS2D output file and try again'
-       stop
+       call mp_abort('gs2din: => should fix the GS2D output file and try again')
     endif
     spsi_bar=(ps-minval(ps))/(maxval(ps)-minval(ps))
 
@@ -211,7 +217,7 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
     call inter_cspl(nw, spsi_bar, f, nwb, psi_bar, fp)
     call inter_cspl(nw, spsi_bar, p, nwb, psi_bar, pressure)
 ! divide GS2D psi by 2pi to get poloidal flux in (Wb/rad)
-    sefit_psi=psi/(8.0*atan(1.0))
+    sefit_psi=psi/twopi
 
     allocate(zp(3*nw*nh), temp(nw+2*nh))
     allocate(zx1(nh), zxm(nh), zy1(nw), zyn(nw))
@@ -248,12 +254,12 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
 ! Allow for duplicated points near +- pi:
 
     if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + 4.*acos(0.)
+       thetab(1) = thetab(1) + twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
     if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
+       thetab(nbbbs) = thetab(nbbbs) - twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
@@ -312,7 +318,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
 ! MKS: beta = 2 mu_0 p / B**2
 
-    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
+    beta = 8. * pi * pressure * 1.e-7 / B_T0**2
     beta_0 = beta(1)
 
     pressure = pressure / p_0
@@ -344,6 +350,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 !     rleft      position of leftmost point of domain
 !     zhei       total height of domain
 !
+    use constants, only: pi, twopi
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
     implicit none
 
@@ -353,8 +360,8 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
     
-    character*80 :: filename, eqfile
-    character char*10
+    character(80) :: filename, eqfile
+    character(10) ::  char
     
     integer :: i, j, init, ndum, initeq, big, nhb, nwb, ierr
     
@@ -363,16 +370,20 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     
 ! Need to generalize initialization condition if equilibrium changes
 
+   if (verbosity>2) write (*,*) 'Starting efitin'
     if(initeq == 0) return
     init=0
     
     i=index(eqfile,' ')-1
     filename = eqfile(1:i)
+   if (verbosity>1) write (*,*) 'Opening file ', filename
     open(unit=5,file=filename,status='old',form='formatted')
     
 ! Read the data
 
    read(5,1000) char, char, char, char, char, i, nw, nh
+
+   if (verbosity>1) write (*,*) 'EFIT dimensions are: ', nw, nh
 !   write(*,1000) char, char, char, char, char, i, nw, nh
 
     nwb = nw * big
@@ -465,12 +476,12 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 ! Allow for duplicated points near +- pi:
 
     if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + 4.*acos(0.)
+       thetab(1) = thetab(1) + twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
     if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
+       thetab(nbbbs) = thetab(nbbbs) - twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
@@ -526,7 +537,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
 ! MKS: beta = 2 mu_0 p / B**2
 
-    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
+    beta = 8. * pi * pressure * 1.e-7 / B_T0**2
     beta_0 = beta(1)
 
     pressure = pressure / p_0
@@ -557,13 +568,14 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
   subroutine efit_init
 
-    real, dimension(nw, nh) :: eqth 
+    real, dimension(:, :), allocatable :: eqth 
     integer :: i, j
 !cmr nov04: adding following debug switch
-    logical :: debug=.false.
+    logical, parameter :: debug=.false.
 !cmr
 
-if (debug) write(6,*) "efit_init: do i"     
+    allocate(eqth(nw,nh))
+if (verbosity > 2) write(6,*) "efit_init: do i"     
     do i = 1, nw
        do j = 1,nh
           if(efit_Z(j) == Z_mag .and. efit_R(i) == R_mag) then
@@ -574,39 +586,47 @@ if (debug) write(6,*) "efit_init: do i"
        enddo
     enddo
 
+if (verbosity > 2) write(6,*) "efit_init: derm"     
     call derm(efit_psi, dpm)
+if (verbosity > 2) write(6,*) "efit_init: tderm"     
     call tderm(eqth, dtm)
+if (verbosity > 2) write(6,*) "efit_init: finished"     
+    deallocate(eqth)
     
   end subroutine efit_init
 
   subroutine tderm(f, dfm)
-
+    use constants, only: pi
     implicit none
     integer i, j
-    real f(:,:), dfm(:,:,:), pi
-
-    pi = 2.*acos(0.)
+    real f(:,:), dfm(:,:,:)
     
 ! EFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for EFIT output.    
 
+if (verbosity > 2) write(6,*) "efit: tderm: R boundary"     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))/efit_dR
     
     i=nw
     dfm(i,:,1) = 0.5*(3*f(i,:)-4*f(i-1,:)+f(i-2,:))/efit_dR
    
+if (verbosity > 2) write(6,*) "efit: tderm: Z boundary"     
     j=1
     dfm(:,j,2) = -0.5*(3*f(:,j)-4*f(:,j+1)+f(:,j+2))/efit_dZ
     
     j=nh      
     dfm(:,j,2) = 0.5*(3*f(:,j)-4*f(:,j-1)+f(:,j-2))/efit_dZ
     
+if (verbosity > 2) write(6,*) "efit: tderm: R derivative"     
     do i=2,nw-1
        dfm(i,:,1)=0.5*(f(i+1,:)-f(i-1,:))/efit_dR
     enddo
     
+if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"     
     do j=2,nh-1
+          if (verbosity > 4) write(6,*) "efit: tderm: Z derivative, j = ", j,&
+           "/", nh-1 
        do i = 1,nw
           if(f(i,j+1)-f(i,j-1) > pi) then
              dfm(i,j,2)=0.5*(f(i,j+1)-f(i,j-1)-2.*pi)/efit_dZ
@@ -615,6 +635,7 @@ if (debug) write(6,*) "efit_init: do i"
           endif
        enddo
     enddo
+    if (verbosity > 2) write(6,*) "efit: tderm: Z derivative done"     
     
   end subroutine tderm
 
@@ -653,7 +674,7 @@ if (debug) write(6,*) "efit_init: do i"
 
     use splines, only: inter_d_cspl
     integer nth, ntm
-    character*1 char
+    character(1) char
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
     real aa(1), daa(1), rp, rpt(1)
@@ -681,11 +702,13 @@ if (debug) write(6,*) "efit_init: do i"
     implicit none
     
     integer nth_used, ntm
-    character*1 char
+    character(1) char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
-    real, dimension(nw, nh, 2) ::  dbish
+    real, dimension(:, :, :), allocatable ::  dbish
     integer i
+
+    allocate(dbish(nw, nh, 2)) 
  
     dbish(:,:,1) = sqrt(dpm(:,:,1)**2 + dpm(:,:,2)**2)
     dbish(:,:,2) = 0.
@@ -719,11 +742,13 @@ if (debug) write(6,*) "efit_init: do i"
           grad(i,2)=grad(i,2)*daa(1) * 0.5*beta_0/psi_N
        enddo
     endif
+    deallocate(dbish)
 
   end subroutine bgradient
 
   subroutine eqitem(r, thetin, f, fstar)
-      
+    use mp, only: mp_abort
+    implicit none
     integer :: i, j, istar, jstar
     real, intent (in) :: r, thetin, f(:,:)
     real, intent (out) :: fstar
@@ -739,7 +764,7 @@ if (debug) write(6,*) "efit_init: do i"
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of R domain'
        write(*,*) r, thetin, efit_R(nw), r_pos
-       stop      
+       call mp_abort('No evaluation of eqitem allowed outside or on edge of R domain')
     endif
 
 ! ensure point is on Z mesh
@@ -748,7 +773,7 @@ if (debug) write(6,*) "efit_init: do i"
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of Z domain'
        write(*,*) r, thetin, efit_Z(1), efit_Z(nh), z_pos
-       stop
+       call mp_abort('No evaluation of eqitem allowed outside or on edge of Z domain')
     endif
     
     istar=0
@@ -849,7 +874,7 @@ if (debug) write(6,*) "efit_init: do i"
 
   function btori (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, btori
     type (spline), save :: spl
 
@@ -871,7 +896,7 @@ if (debug) write(6,*) "efit_init: do i"
 
   function dbtori (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dbtori
     type (spline), save :: spl
 
@@ -893,7 +918,7 @@ if (debug) write(6,*) "efit_init: do i"
 
   function qfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, qfun
     type (spline), save :: spl
 
@@ -917,7 +942,7 @@ if (debug) write(6,*) "efit_init: do i"
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -939,7 +964,7 @@ if (debug) write(6,*) "efit_init: do i"
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 
@@ -961,7 +986,7 @@ if (debug) write(6,*) "efit_init: do i"
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 
@@ -983,7 +1008,7 @@ if (debug) write(6,*) "efit_init: do i"
 
   function bound(theta) 
 
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: theta, bound
     type (spline), save :: spl
 
@@ -1012,9 +1037,26 @@ if (debug) write(6,*) "efit_init: do i"
 
   end subroutine alloc_module_arrays
 
-  subroutine a_minor(r, z, Z_mag, a)
+  subroutine dealloc_module_arrays
+    implicit none
+    if(allocated(psi_bar)) deallocate(psi_bar,fp,qsf,pressure,beta)
+    if(allocated(dummy)) deallocate(dummy,efit_R,efit_Z)
+    if(allocated(spsi_bar)) deallocate(spsi_bar,sefit_R,sefit_Z)
+    if(allocated(efit_psi)) deallocate(efit_psi,sefit_psi)
+    if(allocated(dpm)) deallocate(dpm,dtm)
+    if(allocated(dum2)) deallocate(dum2,dum3)
+    if(allocated(efit_t)) deallocate(efit_t)
+  end subroutine dealloc_module_arrays
 
-    use splines
+  subroutine efit_finish
+    implicit none
+    call dealloc_module_arrays
+  end subroutine efit_finish
+
+  subroutine a_minor(r, z, Z_mag, a)
+!    use mp, only: mp_abort
+    use splines, only: new_spline, splint, delete_spline, spline
+    implicit none
     real, dimension(:), intent (in) :: r, z
     real :: a, Z_mag, r1, r2
     integer, parameter :: nz = 5
@@ -1024,7 +1066,7 @@ if (debug) write(6,*) "efit_init: do i"
 !CMR, 28/10/08: add code to avoid duplicate points in 5 point spline 
 !               to determine r2 on inboard mid-plane
     integer :: k = 0 
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
     n = size(r)
 
     if (debug) write(6,*) "aminor:"
@@ -1034,7 +1076,7 @@ if (debug) write(6,*) "efit_init: do i"
     if(n < nz) then
        write(*,*) 'nbbbs < nz -- very strange.  Stopping.'
        write(*,*) 'Look in eeq.f90.'
-!       stop
+!      call mp_abort('nbbbs < nz -- very strange.  Stopping : Look in eeq.f90')
     endif
 
     j = 0

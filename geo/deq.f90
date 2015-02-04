@@ -28,7 +28,7 @@ module deq
   logical :: init_R = .true.
   logical :: init_Z = .true.
 
-  public :: dfit_init, dfitin, gradient, eqitem, bgradient
+  public :: dfit_init, dfitin, gradient, eqitem, bgradient, dfit_finish
 
   public :: invR
   public :: Rpos
@@ -46,7 +46,7 @@ module deq
 
 contains
   
-  subroutine dfitin(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq, big)
+  subroutine dfitin(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq)
 !
 !     This subroutine reads an DFIT output file containing 
 !     the axisymmetric magnetic field geometry on a rectangular 
@@ -62,6 +62,8 @@ contains
 !     rleft      position of leftmost point of domain
 !     zhei       total height of domain
 !
+    use mp, only: mp_abort
+    use constants, only: pi, twopi
     use splines, only: inter_cspl
     implicit none
 
@@ -71,9 +73,9 @@ contains
     real :: delta_R, delta_Z
 !    real :: fitp_surf2, ierr, rleft, zxy11, zxy1n, zxym1, zxymn
 !    real, dimension(:), allocatable :: temp, zp, zx1, zxm, zy1, zyn
-    character*80 :: filename, eqfile
+    character(80) :: filename, eqfile
     
-    integer :: i, j, init, initeq, big, nhb, nwb
+    integer :: i, j, init, initeq, nhb, nwb
     integer :: jmin, jmax
     
     data init /1/
@@ -213,12 +215,12 @@ contains
 ! Allow for duplicated points near +- pi:
 
     if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + 4.*acos(0.)
+       thetab(1) = thetab(1) + twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
     if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
+       thetab(nbbbs) = thetab(nbbbs) - twopi
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
@@ -229,7 +231,7 @@ contains
        if(thetab(i) == thetab(i+1)) then
           write(*,*) 'Duplicates near theta = 0 not allowed.'
           write(*,*) i, i+1, ' Stopping.'
-          stop
+          call mp_abort('Duplicates near theta = 0 not allowed.')
        endif
     enddo
     deallocate (rbbbs, zbbbs)
@@ -265,7 +267,7 @@ contains
 
 ! MKS: beta = 2 mu_0 p / B**2
 
-    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
+    beta = 8. * pi * pressure * 1.e-7 / B_T0**2
     beta_0 = beta(1)
 
     pressure = pressure / p_0
@@ -300,12 +302,10 @@ contains
   end subroutine dfit_init
 
   subroutine tderm(f, dfm)
-
+    use constants, only: pi
     implicit none
     integer i, j
-    real f(:,:), dfm(:,:,:), pi
-
-    pi = 2.*acos(0.)
+    real f(:,:), dfm(:,:,:)
     
 ! DFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for DFIT output.    
@@ -373,7 +373,7 @@ contains
 
     use splines, only: inter_d_cspl
     integer nth, ntm
-    character*1 char
+    character(1) char
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
     real aa(1), daa(1), rp, rpt(1)
@@ -401,7 +401,7 @@ contains
     implicit none
     
     integer nth_used, ntm
-    character*1 char
+    character(1) char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nw, nh, 2) ::  dbish
@@ -443,7 +443,8 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, thetin, f, fstar)
-      
+    use mp, only: mp_abort
+    implicit none
     integer :: i, j, istar, jstar
     real, intent (in) :: r, thetin, f(:,:)
     real, intent (out) :: fstar
@@ -459,7 +460,7 @@ contains
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of R domain'
        write(*,*) r, thetin, dfit_R(nw), r_pos
-       stop      
+       call mp_abort('No evaluation of eqitem allowed outside or on edge of R domain')
     endif
 
 ! ensure point is on Z mesh
@@ -468,7 +469,7 @@ contains
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of Z domain'
        write(*,*) r, thetin, dfit_Z(1), dfit_Z(nh), z_pos
-       stop
+       call mp_abort('No evaluation of eqitem allowed outside or on edge of Z domain')
     endif
     
     istar=0
@@ -569,7 +570,7 @@ contains
 
   function btori (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, btori
     type (spline), save :: spl
 
@@ -591,7 +592,7 @@ contains
 
   function dbtori (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dbtori
     type (spline), save :: spl
 
@@ -613,7 +614,7 @@ contains
 
   function qfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, qfun
     type (spline), save :: spl
 
@@ -637,7 +638,7 @@ contains
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -659,7 +660,7 @@ contains
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 
@@ -681,7 +682,7 @@ contains
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 
@@ -703,7 +704,7 @@ contains
 
   function rhofun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, rhofun
     type (spline), save :: spl
 
@@ -725,7 +726,7 @@ contains
 
   function bound(theta) 
 
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: theta, bound
     type (spline), save :: spl
 
@@ -749,6 +750,21 @@ contains
   allocate (dpm(nw, nh, 2), dtm(nw, nh, 2))
 
   end subroutine alloc_module_arrays
+
+  subroutine dealloc_module_arrays
+    implicit none
+    if(allocated(rho_mid)) deallocate(rho_mid,psi_mid)
+    if(allocated(psi_bar)) deallocate(psi_bar,fp,qsf,pressure,beta)
+    if(allocated(dummy)) deallocate(dummy,dfit_R,dfit_Z)
+    if(allocated(spsi_bar)) deallocate(spsi_bar,sdfit_R,sdfit_Z)
+    if(allocated(dfit_psi)) deallocate(dfit_psi)
+    if(allocated(dpm)) deallocate(dpm,dtm)
+  end subroutine dealloc_module_arrays
+
+  subroutine dfit_finish
+    implicit none
+    call dealloc_module_arrays
+  end subroutine dfit_finish
 
   subroutine sort(a, b, c, d)
 

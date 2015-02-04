@@ -22,7 +22,7 @@ module gs2_time
 !  real :: dt
 
   public :: user_dt, code_dt, update_time, code_dt_old
-  public :: user_time, code_time
+  public :: user_time, code_time, check_time_step_too_large
   public :: save_dt_min, save_dt, save_dt_cfl, write_dt
   public :: init_tstart, init_delt
   public :: code_dt_cfl, code_dt_min, user2code
@@ -49,6 +49,13 @@ contains
     code_dt = delt
 
   end subroutine init_delt
+
+  !Check if the current time step is too big
+  subroutine check_time_step_too_large(reset)
+    implicit none
+    logical, intent(inout) :: reset
+    reset=(code_dt>code_dt_cfl)
+  end subroutine check_time_step_too_large
 
   subroutine update_time
 ! MAB+CMR, 21/5/09: set code_dt_old to code_dt BEFORE any changes in timestep

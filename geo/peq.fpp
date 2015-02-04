@@ -42,7 +42,7 @@ module peq
   logical :: transp = .false.
 
 !  public :: B_psi 
-  public :: peq_init, eqin, teqin, gradient, eqitem, bgradient, Hahm_Burrell
+  public :: peq_init, eqin, teqin, gradient, eqitem, bgradient, Hahm_Burrell, peq_finish
 
   public :: invR,     initialize_invR
   public :: Rpos
@@ -61,7 +61,7 @@ contains
 
   subroutine eqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
-
+    use mp, only: mp_abort
     use constants, only: pi
 ! SHOULD MOVE AWAY FROM NETCDF MODULE AND USE INCLUDE LINE BELOW.
 !    use netcdf 
@@ -87,8 +87,8 @@ contains
     integer :: ncid, id, i, j
     integer :: nchar
 !    integer :: ncid, id, i, j, ifail, nchar
-!    character*31 :: fortrancrap
-!    character*80 :: filename, eqfile
+!    character(31) :: fortrancrap
+!    character(80) :: filename, eqfile
     character (len=80) :: filename
 !    integer, dimension(2) :: start, cnt
 
@@ -100,10 +100,6 @@ contains
 !    real*4, allocatable, dimension(:) :: workr, work
     real, allocatable, dimension(:) :: work
     real :: f_N, psi_N
-
-!    real pi   
-!    pi=2*acos(0.)
-
 !     read the data
 
 # ifdef NETCDF
@@ -338,14 +334,14 @@ contains
 
     nthg=nt
 # else
-    write(*,*) 'error: peq eqin is called without netcdf'; stop
+    call mp_abort('error: peq eqin is called without netcdf',.true.)
 # endif
 
   end subroutine eqin
 
   subroutine teqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
-
+    use mp, only: mp_abort
     use constants, only: pi
 !    use netcdf 
     implicit none
@@ -369,8 +365,8 @@ contains
     integer :: ncid, id, i, j
     integer :: nchar
 !    integer :: ncid, id, i, j, ifail, nchar
-!    character*31 :: fortrancrap
-!    character*80 :: filename, eqfile
+!    character(31) :: fortrancrap
+!    character(80) :: filename, eqfile
     character (len=80) :: filename
 !    integer, dimension(2) :: start, cnt
 
@@ -382,9 +378,6 @@ contains
 !    real*8, allocatable, dimension(:,:) :: work
     real, allocatable, dimension(:,:) :: work
     real :: f_N, psi_N
-!    real pi
-    
-!    pi = 2.*acos(0.)
 !     read the data
 
     if(initeq == 0) then
@@ -630,7 +623,7 @@ contains
 !       write (*,*) rho_b(i), pressure(i), qsf(i)
 !    end do
 # else
-    write(*,*) 'error: peq teqin is called without netcdf'; stop
+    call mp_abort('error: peq teqin is called without netcdf',.true.)
 # endif
 
   end subroutine teqin
@@ -658,13 +651,25 @@ contains
 
   end subroutine alloc_arrays
 
+  subroutine dealloc_arrays
+    implicit none
+    if(allocated(rho_d)) deallocate(rho_d,eqpsi,psi_bar,fp,beta,pressure,rc,diam,qsf,rho_b)
+    if(allocated(R_psi)) deallocate(R_psi,Z_psi)
+    if(allocated(drm)) deallocate(drm,dzm,dbtm,dpm,dtm)
+    if(allocated(dpcart)) deallocate(dpcart,dtcart,dbtcart)
+    if(allocated(dpbish)) deallocate(dpbish,dtbish,dbtbish)
+  end subroutine dealloc_arrays
+
+  subroutine peq_finish
+    implicit none
+    call dealloc_arrays
+  end subroutine peq_finish
+
   subroutine peq_init
 
     use constants, only: pi
     implicit none
     real, dimension(nr,nt) :: eqpsi1, eqth, eqbtor
-
-!    real pi
     integer i, j
    
     do j=1,nt
@@ -674,7 +679,6 @@ contains
        enddo
     enddo
     
-!    pi=2*acos(0.)
     if (transp) then
        do j=1,nt
           eqth(:,j) = (j-1)*2.*pi/float(nt-1)-pi
@@ -737,16 +741,12 @@ contains
   end subroutine peq_init
 
   subroutine derm(f, dfm, char)
-
     use constants, only: pi
     implicit none
     integer i, j
-    character*1 :: char
-!    real f(:,:), dfm(:,:,:), pi
+    character(1) :: char
     real :: f(:,:), dfm(:,:,:)
 
-!    pi = 2*acos(0.)
-    
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
     
@@ -823,12 +823,12 @@ contains
   end subroutine derm
 
   subroutine gradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
+    use mp, only: mp_abort
     use splines, only: inter_d_cspl
     implicit none
     
     integer nth_used, ntm
-    character*1 char
+    character(1) char
     real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) :: dcart
@@ -838,7 +838,7 @@ contains
     select case(char)
     case('B') 
 !       dcart = dbcart
-       write(*,*) 'error: bishop = 1 not allowed with peq.'; stop
+       call mp_abort('error: bishop = 1 not allowed with peq.',.true.)
     case('D')  ! diagnostic 
        dcart = dbtcart
     case('P') 
@@ -886,12 +886,12 @@ contains
   end subroutine gradient
 
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
+    use mp, only: mp_abort
     use splines, only: inter_d_cspl
     implicit none
     
     integer :: nth_used, ntm
-    character*1 :: char
+    character(1) :: char
     real :: rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
     real :: aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) ::  dbish
@@ -900,7 +900,7 @@ contains
     select case(char)
     case('B') 
 !       dbish = dbbish
-       write(*,*) 'error: bishop = 1 not allowed with peq. (2)'; stop
+       call mp_abort('error: bishop = 1 not allowed with peq. (2)',.true.)
     case('D')  ! diagnostic
        dbish = dbtbish
     case('P') 
@@ -937,24 +937,22 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, theta_in, f, fstar, char)
- 
+    use mp, only: mp_abort
     use constants, only: pi
+    implicit none
     integer :: i, j, istar, jstar
-    character*1 :: char
+    character(1) :: char
     real :: r, thet, fstar, sign, tp, tps, theta_in
-!    real :: st, dt, sr, dr, pi
     real :: st, dt, sr, dr
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
-    
-!    pi = 2.*acos(0.)
 
 ! check for axis evaluation
       
     if(r == eqpsi(1)) then
        write(*,*) 'no evaluation at axis allowed in eqitem'
        write(*,*) r, theta_in, eqpsi(1)
-       stop
+       call mp_abort('no evaluation at axis allowed in eqitem')
     endif
     
 ! allow psi(r) to be a decreasing function
@@ -965,7 +963,7 @@ contains
     if(r < sign*eqpsi(1)) then
        write(*,*) 'r < Psi_0 in eqitem'
        write(*,*) r,sign,eqpsi(1)
-       stop
+       call mp_abort('r < Psi_0 in eqitem')
     endif
       
 ! find r on psi mesh
@@ -976,7 +974,7 @@ contains
        write(*,*) 'No evaluation of eqitem allowed on or outside surface'
        write(*,*) '(Could this be relaxed a bit?)'
        write(*,*) r, theta_in, eqpsi(nr), sign
-       stop      
+       call mp_abort('No evaluation of eqitem allowed on or outside surface')
     endif
     
     istar=0
@@ -994,7 +992,7 @@ contains
     if(istar == 1) then
        write(*,*) 'Too close to axis in eqitem'
        write(*,*) r, theta_in, eqpsi(1), eqpsi(2)
-       stop
+       call mp_abort('Too close to axis in eqitem')
     endif
   
 ! Now do theta direction
@@ -1202,9 +1200,9 @@ contains
 
   end function initialize_psi
 
-  function psi (r, theta)
+  function psi (r)
    
-    real, intent (in) :: r, theta
+    real, intent (in) :: r
     real :: psi
 
     psi = r
@@ -1212,14 +1210,11 @@ contains
   end function psi
 
   function mod2pi (theta)
-
     use constants, only: pi
+    implicit none
     real, intent(in) :: theta
-!    real :: pi, th, mod2pi
     real :: th, mod2pi
     logical :: out
-    
-!    pi=2.*acos(0.)
     
     if(theta <= pi .and. theta >= -pi) then
        mod2pi = theta
@@ -1249,7 +1244,7 @@ contains
 
   function diameter (rp)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, diameter
     type (spline), save :: spl
 
@@ -1275,7 +1270,7 @@ contains
 
   function rcenter (rp)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, rcenter
     type (spline), save :: spl
 
@@ -1301,7 +1296,7 @@ contains
 
   function dbtori (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dbtori
     type (spline), save :: spl
 
@@ -1324,7 +1319,7 @@ contains
 
   function btori (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, btori
     type (spline), save :: spl
 
@@ -1347,7 +1342,7 @@ contains
 
   function qfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, qfun
     type (spline), save :: spl
 
@@ -1370,7 +1365,7 @@ contains
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -1395,7 +1390,7 @@ contains
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 !
@@ -1422,7 +1417,7 @@ contains
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 
@@ -1439,8 +1434,6 @@ contains
   end function betafun
 
   subroutine Hahm_Burrell(irho, a) 
-
-    use splines
 
     real, intent(in) :: a
     integer :: i, irho
@@ -1475,7 +1468,7 @@ contains
 
        gamma(i) = 0.01*gradpsi**2*(d2p(i)/pres(i)-a*(dp(i)/pres(i))**2) &
             /mag_B*(2.*pres(i)/beta_0)**((1-a)/2.) &
-	    *(-pres(i)/(dp(i)/drhodpsiq))            
+            *(-pres(i)/(dp(i)/drhodpsiq))            
     enddo
     
     do i=3,nr-2

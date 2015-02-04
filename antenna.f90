@@ -64,7 +64,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('A Langevin antenna is included, with characteristics:')")
           write (report_unit, *) 
-          write (report_unit, fmt="('Frequency:  (',e10.4,', ',e10.4,')')") w_antenna
+          write (report_unit, fmt="('Frequency:  (',e11.4,', ',e11.4,')')") w_antenna
           write (report_unit, fmt="('Number of independent k values: ',i3)") nk_stir
           if (write_antenna) then
              write (report_unit, *) 
@@ -95,10 +95,10 @@ contains
        write (unit, fmt="(' &',a)") "driver"
        write (unit, fmt="(' ant_off = ',L1)") ant_off
        write (unit, fmt="(' write_antenna = ',L1)") write_antenna
-       write (unit, fmt="(' amplitude = ',e16.10)") amplitude
-       write (unit, fmt="(' w_antenna = (',e16.10,', ',e16.10,')')") w_antenna
-       write (unit, fmt="(' w_dot = ',e16.10)") w_dot
-       write (unit, fmt="(' t0 = ',e16.10)") t0
+       write (unit, fmt="(' amplitude = ',e17.10)") amplitude
+       write (unit, fmt="(' w_antenna = (',e17.10,', ',e17.10,')')") w_antenna
+       write (unit, fmt="(' w_dot = ',e17.10)") w_dot
+       write (unit, fmt="(' t0 = ',e17.10)") t0
        write (unit, fmt="(' nk_stir = ',i3)") nk_stir
        write (unit, fmt="(' /')")
 
@@ -109,8 +109,8 @@ contains
            write(unit, fmt="(' kx = ',i2,' ky = ',i2,' kz = ',i2)") &
                 kx_stir(i), ky_stir(i), kz_stir(i)
            write(unit, fmt="(' travel = ',L1)") trav(i)
-           write(unit, fmt="(' a = (',e19.13,',',e19.13,')')") a_ant(i)
-           write(unit, fmt="(' b = (',e19.13,',',e19.13,') /')") b_ant(i)
+           write(unit, fmt="(' a = (',e20.13,',',e20.13,')')") a_ant(i)
+           write(unit, fmt="(' b = (',e20.13,',',e20.13,') /')") b_ant(i)
         end do
   end subroutine wnml_antenna
 
@@ -154,7 +154,8 @@ contains
   end subroutine init_antenna
 !=============================================================================    
   subroutine read_parameters 
-    use file_utils
+    use file_utils, only: input_unit_exist, get_indexed_namelist_unit, get_unused_unit
+    use file_utils, only: open_output_file, input_unit
     use mp, only: proc0, broadcast
     use antenna_data, only: init_antenna_data
     use gs2_save, only: init_ant_amp
@@ -178,7 +179,7 @@ contains
        if (.not. exist) then
           no_driver = .true.
        else
-	  if (ant_off) no_driver = .true.
+          if (ant_off) no_driver = .true.
 
           read (unit=input_unit("driver"), nml=driver)
           
@@ -202,7 +203,7 @@ contains
              call get_indexed_namelist_unit (in_file, "stir", i)
              kx=1
              ky=1
-             kz=1
+              kz=1
              a = -1.
              b = -1.
              travel = .true.
@@ -213,7 +214,7 @@ contains
              kz_stir(i) = kz
              trav(i) = travel
 ! If a, b are not specified in the input file:
-	     if (a == -1.0 .and. b == -1.0) then
+             if (a == -1.0 .and. b == -1.0) then
 ! And if a, b are not specified in the restart file 
 ! (else use values from restart file by default)
                 if (ierr /= 0) then                   
@@ -263,7 +264,7 @@ contains
   end subroutine read_parameters
 !=============================================================================
   subroutine finish_antenna
-
+    use file_utils, only: close_output_file
     use antenna_data, only: finish_antenna_data
 
     implicit none
@@ -272,35 +273,32 @@ contains
     if (allocated(w_stir)) deallocate (w_stir)
     if (allocated(kx_stir)) deallocate (kx_stir, ky_stir, kz_stir, trav)
     if (allocated(apar_new)) deallocate (apar_new, apar_old)
+    call close_output_file(out_unit)
     initialized = .false.
 
   end subroutine finish_antenna
 !=============================================================================
   subroutine antenna_amplitudes (apar)
 
-    use mp
-!    use gs2_time, only: user_dt, user_time
+    use mp, only: broadcast, proc0
     use gs2_time, only: code_dt, code_time
     use kt_grids, only: naky, ntheta0, reality
     use theta_grid, only: theta, ntgrid, gradpar
-    use ran
-    use constants
+    use ran, only: ranf
+    use constants, only: zi
 
     complex, dimension (-ntgrid:,:,:), intent(out) :: apar
     complex :: force_a, force_b
     real :: dt, sigma, time
     integer :: i, it, ik
-!    logical, save :: first = .true.
 
     apar=0.
 
     if (no_driver) return
 
-!    if (first) then
     if (.not. allocated(apar_new)) then
        allocate (apar_new(-ntgrid:ntgrid,ntheta0,naky)) ; apar_new = 0.
        allocate (apar_old(-ntgrid:ntgrid,ntheta0,naky)) 
-!       first = .false.
     end if
 
     apar_old = apar_new
@@ -366,9 +364,9 @@ contains
 
        if (write_antenna) then
          if (proc0) write(out_unit, fmt='(8(1x,e13.6),1x,i2)') &
-	 & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
-         &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
-         &     real(b_ant(i)), aimag(b_ant(i)), real(wtmp), i
+              & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
+              &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
+              &     real(b_ant(i)), aimag(b_ant(i)), real(wtmp), i
        end if
     end do
 
@@ -467,9 +465,9 @@ contains
        time = user_time
        do i=1,nk_stir
          if (proc0) write(out_unit, fmt='(7(1x,e13.6),1x,i2)') &
-	 & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
-         &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
-         &     real(b_ant(i)), aimag(b_ant(i)),i
+              & time, real((a_ant(i)+b_ant(i))/sqrt(2.)), &
+              &     aimag((a_ant(i)+b_ant(i))/sqrt(2.)),real(a_ant(i)), aimag(a_ant(i)), &
+              &     real(b_ant(i)), aimag(b_ant(i)),i
   
        end do
     end if

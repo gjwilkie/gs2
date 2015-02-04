@@ -1,10 +1,23 @@
+!> This module implements the same implicit algorithm as fields_implicit.
+!! However, it is an almost complete rewrite of the implementation 
+!! which can give large gains in the speed of calculating the response 
+!! matrix, as well as significant gains to the advance steps
 module fields_local
   use mp, only: comm_type
   implicit none
   private
 
+  !> Module level routines
   public :: init_fields_local, init_allfields_local, finish_fields_local
-  public :: advance_local, reset_fields_local
+  public :: advance_local, reset_fields_local, dump_response_to_file_local
+  public :: fields_local_functional, read_response_from_file_local, minNrow
+  public :: do_smart_update, field_local_allreduce, field_local_allreduce_sub
+
+  !> Unit tests
+  public :: fields_local_unit_test_init_fields_matrixlocal
+
+  !> User set parameters
+  public :: dump_response, read_response
 
   !//////////////////////////////
   !// CUSTOM TYPES
@@ -75,6 +88,7 @@ module fields_local
      integer :: nextend !Length of the extended domain
      integer :: nrow, ncol !The number of rows and columns. Equal to nextend*nfield
      integer :: it_left !It index of leftmost cell
+     integer :: head_iproc !The proc id (in sc_sub_all) of the head proc
      logical :: is_local !Does this supercell have any data on this proc?
      logical :: is_empty !Have we got any data for this supercell on this proc?
      logical :: is_all_local !Is all of this supercells data on this proc?
@@ -189,6 +203,10 @@ module fields_local
      procedure :: write_debug_data => fm_write_debug_data
      procedure :: set_is_local => fm_set_is_local
      procedure :: count_subcom => fm_count_subcom
+     procedure :: getfieldeq_nogath => fm_getfieldeq_nogath
+     procedure :: getfieldeq1_nogath => fm_getfieldeq1_nogath
+     procedure :: update_fields => fm_update_fields
+     procedure :: update_fields_newstep => fm_update_fields_newstep
   end type fieldmat_type
 
   !>This is the type which controls/organises the parallel
@@ -203,6 +221,8 @@ module fields_local
      integer, dimension(:,:), allocatable :: navail_per_cell !How many rows could we be responsible for in each cell
      integer :: nresp_tot, navail_tot !Total number of rows available/potentially available
      logical :: force_local_invert=.false. !If true then we force local inversion
+     !the local fields. This may impact diagnostics/parallel writing as it means only the processors g_lo local section
+     !of the fields are evolved on this processor.
      !NOTE: If we're doing force local invert really when we populate the supercell we should store all of the 
      !data locally so we don't need to fetch it later.
      logical :: has_to_gather=.true. !If true we have to gather when calling getfieldeq, determined by decomp routine
@@ -242,10 +262,16 @@ module fields_local
   !//////////////////////////////
   integer :: lun=6 !File unit for printing
   integer :: dlun=6 !File unit for debug printing
-  integer :: MinNrow=256 !Smallest row block size used when working out which rows to have.
-  logical :: debug=.true. !Do we do debug stuff?
+  integer :: MinNrow !Smallest row block size used when working out which rows to have. 
+  !Tuning this can improve advance/init time (usually one at the expense of other)
+  logical :: do_smart_update=.false. !If true and x/y distributed then use a "smart" update which only updates
+  logical,parameter :: debug=.false. !Do we do debug stuff?
   logical :: initialised=.false. !Have we initialised yet?
   logical :: reinit=.false. !Are we reinitialising?
+  logical :: dump_response=.false. !Do we dump the response matrix?
+  logical :: read_response=.false. !Do we read the response matrix from dump?
+  logical :: field_local_allreduce = .false. !If true use an allreduce to gather field else use reduce+broadcast
+  logical :: field_local_allreduce_sub = .false. !If true and field_local_allreduce true then do two sub comm all reduces rather than 1
   integer :: nfield !How many fields
   integer :: nfq !How many field equations (always equal to nfield)
   type(pc_type),save :: pc !This is the parallel control object
@@ -445,11 +471,18 @@ contains
     class(cell_type), intent(inout) :: self
     
     !Set our locality. Note here we assume all rb have same size
-    self%is_empty=self%rb(1)%nrow.eq.0
+    if(size(self%rb).gt.0)then
+       self%is_empty=self%rb(1)%nrow.eq.0
+       self%is_all_local=self%rb(1)%nrow.eq.self%nrow
+    else
+       self%is_empty=.true.
+       self%is_all_local=.false.
+    endif
+
     !/Also ignore the ky=kx=0 mode
     self%is_empty=(self%is_empty.or.(abs(aky(self%ik_ind)).lt.epsilon(0.0).and.abs(akx(self%it_ind)).lt.epsilon(0.0)))
     self%is_local=pc%is_local(self%it_ind,self%ik_ind).eq.1
-    self%is_all_local=self%rb(1)%nrow.eq.self%nrow
+
   end subroutine c_set_locality
 
   !>Test if a given row belongs to the current cell
@@ -460,7 +493,11 @@ contains
     logical :: c_has_row
     !NOTE: Here we assume all row blocks in the cell have the same
     !row limits
-    c_has_row=(irow.ge.self%rb(1)%row_llim.and.irow.le.self%rb(1)%row_ulim)
+    if(size(self%rb).gt.0)then
+       c_has_row=(irow.ge.self%rb(1)%row_llim.and.irow.le.self%rb(1)%row_ulim)
+    else
+       c_has_row=.false.
+    endif
   end function c_has_row
 
 !------------------------------------------------------------------------
@@ -548,6 +585,9 @@ contains
     !than allreduce_sub as we're going to broadcast the result later anyway.
     !if(self%sc_sub_pd%nproc.gt.0) call sum_allreduce_sub(self%tmp_sum,self%sc_sub_pd%id)
     if(.not.(self%is_empty.or.self%is_all_local)) call sum_reduce_sub(self%tmp_sum,0,self%sc_sub_pd)
+    
+    !<DD> At this point the head of the supercell has the field update stored in self%tmp_sum
+    !all other procs have partial/no data
 
     !This can be used to populate the empty procs, but is not needed at the moment as we broadcast
     !the result at the end of getfield_local currently, which turns out to be a lot faster (>~factor 2).
@@ -1051,6 +1091,7 @@ contains
     use mp, only: mp_abort
     implicit none
     class(supercell_type), intent(inout) :: self
+    self%is_empty=.true. !Until implemented make everything be treated as empty.
     call mp_abort("ERROR: Invert with mpi not yet implemented.")
   end subroutine sc_invert_mpi
 
@@ -1274,6 +1315,11 @@ contains
        !informing the empty procs of the result
        head_notfull=(min(1,self%sc_sub_pd%nproc-1).eq.self%sc_sub_pd%iproc)
     endif
+
+    !Store the head_iproc
+    self%head_iproc=0
+    if(self%is_head) self%head_iproc=self%sc_sub_all%iproc
+    call sum_allreduce_sub(self%head_iproc,self%sc_sub_all%id)
 
     !/Now make a subcommunicator involving all empty procs and
     !head pd proc
@@ -1591,7 +1637,7 @@ contains
   !>Initialise the field objects
   subroutine fm_init(self)
     use kt_grids, only: naky, ntheta0
-    use dist_fn, only: itright
+    use dist_fn, only: itright, get_leftmost_it
     use run_parameters, only: fphi, fapar, fbpar
     use theta_grid, only: ntgrid
     implicit none
@@ -1975,7 +2021,9 @@ contains
     if(pc%has_to_gather)then
        call getfieldeq(phinew,aparnew,bparnew,fq,fqa,fqp)
     else
-       call getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
+!       call getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
+!<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
+       call self%getfieldeq_nogath(phinew,aparnew,bparnew,fq,fqa,fqp)
     endif
 
     !Now we need to store the field equations in the appropriate places
@@ -2070,11 +2118,14 @@ contains
        if(.not.self%kyb(ik)%is_local) cycle
        do is=1,self%kyb(ik)%nsupercell
           if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
-          if(self%kyb(ik)%supercells(is)%is_empty)then
+          self%kyb(ik)%supercells(is)%tmp_sum=0.0
+!If we wanted to do non-blocking comms then we could pre post receives here
+!for empty procs (i.e. ones not involved in field computation)
+!          if(self%kyb(ik)%supercells(is)%is_empty)then
 !             call self%kyb(ik)%supercells(is)%gfu_post_recv
-          else
-             self%kyb(ik)%supercells(is)%tmp_sum=0.0
-          endif
+!          else
+!             !Do nothing
+!          endif
        enddo
     enddo
 
@@ -2088,7 +2139,9 @@ contains
     if(pc%has_to_gather)then
        call getfieldeq(phi,apar,bpar,fq,fqa,fqp)
     else
-       call getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
+!       call getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
+!<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
+       call self%getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
     endif
 
     !Now get the field update for each ik
@@ -2333,28 +2386,67 @@ contains
   end subroutine fm_make_subcom_2
 
   !>Gather all the fields to proc0/all for diagnostics etc.
-  subroutine fm_gather_fields(self,ph,ap,bp,to_all_in)
+  subroutine fm_gather_fields(self,ph,ap,bp,to_all_in,do_allreduce_in)
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use mp, only: broadcast, sum_reduce_sub!, sum_allreduce_sub
+    use mp, only: broadcast, sum_reduce_sub, sum_allreduce, sum_allreduce_sub
+    use mp, only: rank_comm, comm_type, proc0
     use run_parameters, only: fphi, fapar, fbpar
+    use gs2_layouts, only: g_lo, intspec_sub
     implicit none
     class(fieldmat_type), intent(inout) :: self
     complex, dimension(:,:,:), intent(inout) :: ph,ap,bp
-    logical, optional, intent(in) :: to_all_in
-    logical :: to_all
-    complex, dimension(:,:,:,:), allocatable :: tmp
+    logical, optional, intent(in) :: to_all_in, do_allreduce_in
+    logical :: to_all, do_allreduce
+    complex, dimension(:,:,:,:), allocatable :: tmp, tmp_tmp
     integer :: ifl, ik, is, ic, it, iex, bnd, ig
+    logical :: use_sub
+    type(comm_type), save :: les_comm
+    logical, save :: first=.true.
+    logical, save :: sub_has_proc0=.false.
 
     !Set the to_all flag
     to_all=.false.
     if(present(to_all_in)) to_all=to_all_in
 
+    !Set the do_allreduce flag
+    do_allreduce=.false.
+    if(present(do_allreduce_in)) do_allreduce=do_allreduce_in
+    
+    !Shouldn't do to_all if do_allreduce
+    if(do_allreduce) to_all=.false.
+
+    !Work out if we want to use sub communicators in reduction and
+    !if we are allowed to.
+    use_sub=(.not.(g_lo%x_local.and.g_lo%y_local)).and.do_allreduce.and.field_local_allreduce_sub.and.intspec_sub
+
+    !If using sub-communicators set up object and work out which procs
+    !have proc0 as a member
+    if(use_sub.and.first)then
+       !Setup type
+       les_comm%id=g_lo%lesblock_comm
+       call rank_comm(les_comm%id,les_comm%iproc)
+       !Decide who has proc0
+       ig=0
+       if(proc0) ig=1
+       call sum_allreduce_sub(ig,les_comm%id)
+       if(ig.ne.0) sub_has_proc0=.true.
+    endif
+    first=.false.
+
     !Allocate the tmp array if we're part of the head subcom
     !or if we're sending to all
-    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all) then
+    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all.or.do_allreduce) then
+       if(use_sub)then
+          !Use a smaller array so we ignore zero entries, really would like to reuse some of the
+          !integrate species code to do reduction and gather but have extra dimension due to fields
+          allocate(tmp_tmp(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,nfield))
+       else
+          allocate(tmp_tmp(-ntgrid:ntgrid,ntheta0,naky,nfield))
+       endif
        allocate(tmp(-ntgrid:ntgrid,ntheta0,naky,nfield))
-       tmp=0
+       tmp_tmp=0
+       if(use_sub) tmp=0 !Only need to zero if tmp_tmp is not same size as tmp
     endif
 
     !Now loop over supercells, and store sections
@@ -2373,7 +2465,7 @@ contains
                    if(ic.ne.self%kyb(ik)%supercells(is)%ncell) bnd=1
                    do ig=-ntgrid,ntgrid-bnd
                       iex=iex+1
-                      tmp(ig,it,ik,ifl)=self%kyb(ik)%supercells(is)%tmp_sum(iex)
+                      tmp_tmp(ig,it,ik,ifl)=self%kyb(ik)%supercells(is)%tmp_sum(iex)
                    enddo
                 enddo
              enddo
@@ -2381,8 +2473,8 @@ contains
              !/Now fix boundary points
              if(self%kyb(ik)%supercells(is)%ncell.gt.1) then
                 do ic=1,self%kyb(ik)%supercells(is)%ncell-1
-                   tmp(ntgrid,self%kyb(ik)%supercells(is)%cells(ic)%it_ind,ik,:)=&
-                        tmp(-ntgrid,self%kyb(ik)%supercells(is)%cells(ic+1)%it_ind,ik,:)
+                   tmp_tmp(ntgrid,self%kyb(ik)%supercells(is)%cells(ic)%it_ind,ik,:)=&
+                        tmp_tmp(-ntgrid,self%kyb(ik)%supercells(is)%cells(ic+1)%it_ind,ik,:)
                 enddo
              endif
           enddo
@@ -2392,16 +2484,72 @@ contains
        !Really we should be able to do some form of gather here
        !as every proc knows how long the supercell is and where to put it
 !       call sum_allreduce_sub(tmp,self%fm_sub_headsc_p0%id)
-       call sum_reduce_sub(tmp,0,self%fm_sub_headsc_p0)
+       if(.not.do_allreduce)call sum_reduce_sub(tmp_tmp,0,self%fm_sub_headsc_p0)
     endif
+
+    !Should really be able to do this on the xyblock sub communicator
+    !but proc0 needs to know full result for diagnostics so would need
+    !some way to tell proc0 about the other parts of the field (or
+    !update diagnostics to work in parallel). We have the lesblock comm
+    !which should help with this, but we'd need to work out which procs
+    !are in the same comm as proc0. 
+    if(do_allreduce) then
+       if(use_sub) then
+          !This reduction (and copy) ensures that every proc knows the field
+          !in its local x-y cells. It could be implemented as an allgatherv which
+          !would be slightly more efficient but is more complicated and may involve 
+          !more local operations which outweigh the benefits. 
+          call sum_allreduce_sub(tmp_tmp,g_lo%xyblock_comm)
+       else
+          call sum_allreduce(tmp_tmp)
+       endif
+    endif
+
+    !Now copy tmp_tmp into tmp if we have it
+    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all.or.do_allreduce) then
+       if(use_sub)then
+          tmp(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,:)=tmp_tmp
+          
+          !Here we reduce to proc0 of the lesblock comm (which should include the
+          !global proc0). Should only really need to call this on procs which
+          !have proc0 in their subcomm but no way to determine this currently
+          !NOTE: We don't need to know the result of this reduction until we
+          !reach the diagnostics. With non-blocking communications we may be able
+          !to do this required communication in the background whilst we proceed
+          !with the second call to timeadv. There is a slight complication in that
+          !we're communicating the change in the fields so we have to remember to 
+          !increment the field before diagnostics are called.
+          if(sub_has_proc0) call sum_reduce_sub(tmp,0,les_comm) 
+       else
+          tmp=tmp_tmp !It would be nice to avoid this copy if possible
+       endif
+    endif
+
+    !////////////////////////
+    !// Distribute and unpack
+    !////////////////////////
+    !Note: Currently use a broadcast from proc0 to distribute data to all procs
+    !May be more efficient to use a scatter type approach so we send the minimum
+    !amount of data. This may end up being slower as we don't take advantage of
+    !optimised broadcast which improves bandwidth (branching), as we're doing 1 to many.
+    !Might expect a broadcast from the supercell head on sc_sub_all to be most
+    !efficient, but it doesn't appear to be better than global broadcast.
+    !As the supercell head has knowledge of the result quite early on in the
+    !field update algorithm a non-blocking broadcast (MPI-3) on sc_sub_all
+    !may be useful and would allow the following broadcasts to be replaced
+    !with wait variants plus unpacking.
+    !Note: By doing the broadcast at supercell level we would end up sending
+    !more data than required (if x is parallel) but to do it at cell level 
+    !would require a subcommunicator for each cell, which can easily exceed
+    !the maximum number allowed.
 
     !Fetch to all procs
     if(to_all)then
        call broadcast(tmp)
     endif
-    
+
     !Finally, unpack tmp and deallocate arrays
-    if(self%fm_sub_all%proc0.or.to_all)then
+    if(self%fm_sub_all%proc0.or.to_all.or.do_allreduce)then
        ifl=0
        if(fphi.gt.epsilon(0.0)) then
           ifl=ifl+1
@@ -2417,9 +2565,8 @@ contains
        endif
     endif
 
-    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all) then
-       deallocate(tmp)
-    endif
+    if(allocated(tmp)) deallocate(tmp)
+    if(allocated(tmp_tmp)) deallocate(tmp_tmp)
 
     !/Fill the empties by broadcasting from proc0 if we
     !didn't do it with the earlier broadcast. Note that here we
@@ -2427,7 +2574,7 @@ contains
     !However with to_all we have the additional cost of unpacking data.
     !It is possible that for some values of nfield to_all is faster than
     !.not.to_all, this is also likely to depend on the machine
-    if(.not.to_all) then
+    if(.not.(to_all.or.do_allreduce)) then
        if(fphi.gt.0) call broadcast(ph)
        if(fapar.gt.0) call broadcast(ap)
        if(fbpar.gt.0) call broadcast(bp)
@@ -2445,6 +2592,89 @@ contains
 !     enddo
 
   end subroutine fm_gather_fields
+
+  !>Update the fields using calculated update
+  subroutine fm_update_fields(self,phi,apar,bpar)
+    use fields_arrays, only: orig_phi=>phi, orig_apar=>apar, orig_bpar=>bpar
+    use run_parameters, only: fphi, fapar, fbpar
+    use kt_grids, only: kwork_filter
+    use mp, only: proc0
+    implicit none
+    class(fieldmat_type), intent(in) ::  self
+    complex,dimension(:,:,:),intent(inout) :: phi,apar,bpar
+    integer :: ik,it,is,ic
+
+    !If we're proc0 then we need to do full array (for diagnostics)
+    if(proc0) then
+       if(fphi>epsilon(0.0)) phi=phi+orig_phi
+       if(fapar>epsilon(0.0)) apar=apar+orig_apar
+       if(fbpar>epsilon(0.0)) bpar=bpar+orig_bpar
+       return
+    endif
+
+    !Now loop over cells and calculate field equation as required
+    do ik=1,self%naky
+       !Skip not local cells
+       if(.not.self%kyb(ik)%is_local) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+             if(.not.self%kyb(ik)%supercells(is)%cells(ic)%is_local) cycle
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             if(kwork_filter(it,ik)) cycle
+
+             !Increment fields
+             if(fphi>epsilon(0.0)) phi(:,it,ik)=phi(:,it,ik)+orig_phi(:,it,ik)
+             if(fapar>epsilon(0.0)) apar(:,it,ik)=apar(:,it,ik)+orig_apar(:,it,ik)
+             if(fbpar>epsilon(0.0)) bpar(:,it,ik)=bpar(:,it,ik)+orig_bpar(:,it,ik)
+          enddo
+       enddo
+    enddo
+
+  end subroutine fm_update_fields
+
+  !>Update the fields using the new fields
+  subroutine fm_update_fields_newstep(self)
+    use fields_arrays, only: phi,apar,bpar,phinew,aparnew,bparnew
+    use run_parameters, only: fphi, fapar, fbpar
+    use kt_grids, only: kwork_filter
+    use mp, only: proc0
+    implicit none
+    class(fieldmat_type), intent(in) ::  self
+    integer :: ik,it,is,ic
+
+    !If we're proc0 then we need to do full array (for diagnostics)
+    if(proc0) then
+       if(fphi>epsilon(0.0)) phi=phinew
+       if(fapar>epsilon(0.0)) apar=aparnew
+       if(fbpar>epsilon(0.0)) bpar=bparnew
+       return
+    endif
+
+    !Now loop over cells and calculate field equation as required
+    do ik=1,self%naky
+       !Skip not local cells
+       if(.not.self%kyb(ik)%is_local) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+             if(.not.self%kyb(ik)%supercells(is)%cells(ic)%is_local) cycle
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             if(kwork_filter(it,ik)) cycle
+
+             !Increment fields 
+             if(fphi>epsilon(0.0)) phi(:,it,ik)=phinew(:,it,ik)
+             if(fapar>epsilon(0.0)) apar(:,it,ik)=aparnew(:,it,ik)
+             if(fbpar>epsilon(0.0)) bpar(:,it,ik)=bparnew(:,it,ik)
+         enddo
+       enddo
+    enddo
+
+  end subroutine fm_update_fields_newstep
 
   !>Write some debug data to file
   subroutine fm_write_debug_data(self)
@@ -2500,18 +2730,20 @@ contains
        do is=1,self%kyb(ik)%nsupercell
           write(unit,'("    * is : ",I0)') is
 !          if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
-          write(unit,'("           ","is_head      - ",L)') self%kyb(ik)%supercells(is)%is_head
-          write(unit,'("           ","is_empty     - ",L)') self%kyb(ik)%supercells(is)%is_empty
-          write(unit,'("           ","is_local     - ",L)') self%kyb(ik)%supercells(is)%is_local
-          write(unit,'("           ","is_all_local - ",L)') self%kyb(ik)%supercells(is)%is_all_local
+          write(unit,'("           ","is_head      - ",L1)') self%kyb(ik)%supercells(is)%is_head
+          write(unit,'("           ","is_empty     - ",L1)') self%kyb(ik)%supercells(is)%is_empty
+          write(unit,'("           ","is_local     - ",L1)') self%kyb(ik)%supercells(is)%is_local
+          write(unit,'("           ","is_all_local - ",L1)') self%kyb(ik)%supercells(is)%is_all_local
           write(unit,'()')
           write(unit,'("        ",4(" ",A8," "))') "ic", "rllim", "rulim", "nrow"
           write(unit,'("        ",4(" ",9("-")))')
           do ic=1,self%kyb(ik)%supercells(is)%ncell
-             write(unit,'("        ",4(I9," "))') ic,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_llim,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_ulim,&
-                  self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             if(size(self%kyb(ik)%supercells(is)%cells(ic)%rb).gt.0)then
+                write(unit,'("        ",4(I9," "))') ic,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_llim,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%row_ulim,&
+                     self%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             endif
           enddo
           write(unit,'("        ",4(" ",9("-")))')
        enddo
@@ -2578,6 +2810,106 @@ contains
     !Now close output file
     call close_output_file(unit)
   end subroutine fm_write_debug_data
+
+  subroutine fm_getfieldeq_nogath (self,phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
+    use theta_grid, only: ntgrid
+    use dist_fn, only: getan_nogath
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+    complex, dimension (:,:,:), allocatable :: antot, antota, antotp
+
+    allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+
+    call getan_nogath (antot, antota, antotp)
+    call self%getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
+         fieldeq, fieldeqa, fieldeqp)
+
+    deallocate (antot, antota, antotp)
+  end subroutine fm_getfieldeq_nogath
+
+  subroutine fm_getfieldeq1_nogath (self,phi, apar, bpar, antot, antota, antotp, &
+       fieldeq, fieldeqa, fieldeqp)
+    use theta_grid, only: ntgrid, bmag, delthet, jacob
+    use kt_grids, only: naky, ntheta0, aky, kperp2, kwork_filter
+    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: beta, tite
+    use species, only: spec, has_electron_species
+    use dist_fn, only: gamtot,gamtot1, gamtot2, gamtot3, fl_avg, gridfac1, apfac, awgt
+    use dist_fn, only: adiabatic_option_switch, adiabatic_option_fieldlineavg
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
+    complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
+
+    integer :: ik, it, is, ic
+
+    if (.not. allocated(fl_avg)) allocate (fl_avg(ntheta0, naky))
+    if (.not. has_electron_species(spec)) fl_avg = 0.
+
+    if (.not. has_electron_species(spec)) then
+       if (adiabatic_option_switch == adiabatic_option_fieldlineavg) then
+          if (.not. allocated(awgt)) then
+             allocate (awgt(ntheta0, naky))
+             awgt = 0.
+             do ik = 1, naky
+                if (aky(ik) > epsilon(0.0)) cycle
+                do it = 1, ntheta0
+                   if(kwork_filter(it,ik)) cycle
+                   awgt(it,ik) = 1.0/sum(delthet*jacob*gamtot3(:,it,ik))
+                end do
+             end do
+          endif
+           
+          do ik = 1, naky
+             do it = 1, ntheta0
+                if(kwork_filter(it,ik)) cycle
+                fl_avg(it,ik) = tite*sum(delthet*jacob*antot(:,it,ik)/gamtot(:,it,ik))*awgt(it,ik)
+             end do
+          end do
+       end if
+    end if
+
+    !Now loop over cells and calculate field equation as required
+    do ik=1,self%naky
+       !Skip empty cells, note this is slightly different to skipping
+       !.not.is_local. Skipping empty is probably faster but may be more dangerous
+       if(self%kyb(ik)%is_empty) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(self%kyb(ik)%supercells(is)%is_empty) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+             if(self%kyb(ik)%supercells(is)%cells(ic)%is_empty) cycle
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             if(kwork_filter(it,ik)) cycle
+
+             !Now fill in data
+             if(fphi>epsilon(0.0)) then
+                fieldeq(:,it,ik)=antot(:,it,ik)-gamtot(:,it,ik)*gridfac1(:,it,ik)*phi(:,it,ik)
+                if(fbpar.gt.epsilon(0.0)) fieldeq(:,it,ik)=fieldeq(:,it,ik)+bpar(:,it,ik)*gamtot1(:,it,ik)
+                if(.not.has_electron_species(spec)) fieldeq(:,it,ik)= fieldeq(:,it,ik)+fl_avg(it,ik)
+             endif
+
+             if(fapar>epsilon(0.0)) then
+                fieldeqa(:,it,ik)=antota(:,it,ik)-kperp2(:,it,ik)*gridfac1(:,it,ik)*apar(:,it,ik)
+             endif
+
+             if(fbpar>epsilon(0.0))then
+                fieldeqp(:,it,ik)=bpar(:,it,ik)*gridfac1(:,it,ik)+&
+                     (antotp(:,it,ik)+bpar(:,it,ik)*gamtot2(:,it,ik)+&
+                     0.5*phi(:,it,ik)*gamtot1(:,it,ik))*beta*apfac/bmag(:)**2
+             endif
+          enddo
+       enddo
+    enddo
+  end subroutine fm_getfieldeq1_nogath
+
 !------------------------------------------------------------------------ 
 
 !================
@@ -2998,7 +3330,11 @@ contains
              if(fieldmat%kyb(ik)%supercells(is)%is_local) call free_comm(tmp)
 
              !Record the number of responsible rows, note we assume all rb have same size
-             self%nresp_per_cell(it,ik)=fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             if(size(fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb).gt.0)then
+                self%nresp_per_cell(it,ik)=fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             else
+                self%nresp_per_cell(it,ik)=0
+             endif
           enddo
        enddo
     enddo
@@ -3010,60 +3346,53 @@ contains
 !// MODULE LEVEL ROUTINES
 !//////////////////////////////
 
-  !>Helper function for finding the leftmost it of supercell
-  function get_leftmost_it(it,ik)
-    USE dist_fn, ONLY: itleft, boundary_option_switch, boundary_option_linked
-    implicit none
-    integer, intent(in) :: ik, it
-    integer :: get_leftmost_it
-    integer :: it_cur
-    !If not linked then no connections so only one cell in supercell
-    if (boundary_option_switch.eq.boundary_option_linked) then
-       it_cur=it
-       do while(itleft(ik,it_cur).ge.0.and.itleft(ik,it_cur).ne.it_cur)
-          !Keep updating it_cur with left connected it until there are no
-          !connections to left
-          it_cur=itleft(ik,it_cur)
-       enddo
-    else
-       it_cur=it
-    endif
-    get_leftmost_it=it_cur
-  end function get_leftmost_it
-
   !>Routine to initialise
   subroutine init_fields_local
     use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
-    use gs2_layouts, only: init_gs2_layouts
-    use mp, only: proc0
+    use gs2_layouts, only: init_gs2_layouts, g_lo
+    use mp, only: proc0, mp_abort
+    use file_utils, only: error_unit
     implicit none
-    logical:: debug=.false.
 
     !Early exit if possible
     if (initialised) return
 
-    !Make sure only proc0 does the printing
-    debug=debug.and.proc0
+    !Exit if local fields not supported (e.g. compiled with pgi)
+    if(.not.fields_local_functional()) call mp_abort("field_option='local' not supported with this build")
 
     !Make sure any dependencies are already initialised and
     !initialise the field matrix object.
-    if (debug) write(6,*) "init_fields_local: gs2_layouts"
+    if (debug.and.proc0) write(6,*) "init_fields_local: gs2_layouts"
     call init_gs2_layouts
-    if (debug) write(6,*) "init_fields_local: theta_grid"
+    if (debug.and.proc0) write(6,*) "init_fields_local: theta_grid"
     call init_theta_grid
-    if (debug) write(6,*) "init_fields_local: kt_grids"
+    if (debug.and.proc0) write(6,*) "init_fields_local: kt_grids"
     call init_kt_grids
-    if (debug) write(6,*) "init_fields_local: init_fields_matrixlocal"
+    if (debug.and.proc0) write(6,*) "init_fields_local: init_fields_matrixlocal"
     call init_fields_matrixlocal
-    if (debug) write(6,*) "init_fields_local: antenna"
+    if (debug.and.proc0) write(6,*) "init_fields_local: antenna"
     call init_antenna
+
+    !Print a warning message if x_lo isn't local
+    if((.not.(g_lo%x_local.and.g_lo%y_local)).and.field_local_allreduce_sub) then
+       if(proc0)write(error_unit(),'("Warning : In this run not all procs will hold the full field data (only proc0)")')
+    endif
 
     !Set the initialised state
     initialised = .true.
     reinit = .false.
   end subroutine init_fields_local
+
+  function fields_local_unit_test_init_fields_matrixlocal()
+    logical :: fields_local_unit_test_init_fields_matrixlocal
+
+    call init_fields_local
+
+    fields_local_unit_test_init_fields_matrixlocal = .true.
+
+  end function fields_local_unit_test_init_fields_matrixlocal
 
   !>Routine use to initialise field matrix data
   subroutine init_fields_matrixlocal
@@ -3178,32 +3507,57 @@ contains
 !!!!!!!!!!
 
     !Now fill the fieldmat with data
-    !if(debug)call barrier
-    if(proc0.and.debug)then
-       write(dlun,'("Populating.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%populate
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
+    if(read_response)then
+       if(proc0.and.debug)then
+          write(dlun,'("Populating from dump.")')
+          call cpu_time(ts)
+       endif
+       call read_response_from_file_local
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
+    else       
+       !if(debug)call barrier
+       if(proc0.and.debug)then
+          write(dlun,'("Populating.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%populate
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
+
+       !Now prepare the response matrices
+       !Note: Currently prepare just means invert
+       !but at some point we may wish to LU decompose
+       !or other approaches etc.
+       !if(debug)call barrier
+       if(proc0.and.debug) then
+          write(dlun,'("Preparing.")')
+          call cpu_time(ts)
+       endif
+       call fieldmat%prepare
+       !if(debug)call barrier
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
     endif
 
-    !Now prepare the response matrices
-    !Note: Currently prepare just means invert
-    !but at some point we may wish to LU decompose
-    !or other approaches etc.
-    !if(debug)call barrier
-    if(proc0.and.debug) then
-       write(dlun,'("Preparing.")')
-       call cpu_time(ts)
-    endif
-    call fieldmat%prepare
-    !if(debug)call barrier
-    if(proc0.and.debug) then 
-       call cpu_time(te)
-       write(dlun,'("--Done in ",F12.4," units")') te-ts
+    !Dump response to file
+    if(dump_response)then
+       if(proc0.and.debug)then
+          write(dlun,'("Dumping to file.")')
+          call cpu_time(ts)
+       endif
+       call dump_response_to_file_local
+       if(proc0.and.debug) then 
+          call cpu_time(te)
+          write(dlun,'("--Done in ",F12.4," units")') te-ts
+       endif
     endif
 
     !Now write debug data
@@ -3227,19 +3581,21 @@ contains
   end subroutine finish_fields_local
 
   !>Calculate the update to the fields
-  subroutine getfield_local(phi,apar,bpar,do_gather_in)
+  subroutine getfield_local(phi,apar,bpar,do_gather_in,do_update_in)
     use fields_arrays, only: time_field
     use mp, only: proc0 !, barrier
     use job_manage, only: time_message
     implicit none
     complex, dimension(:,:,:), intent(out) :: phi,apar,bpar !Note, these are actually phinew,... in typical usage
-    logical, optional, intent(in) :: do_gather_in
-    logical :: do_gather
+    logical, optional, intent(in) :: do_gather_in, do_update_in
+    logical :: do_gather, do_update
 
     !Set gather flag, this currently always needs to be true for
     !correct operation.
     do_gather=.false.
     if(present(do_gather_in)) do_gather=do_gather_in
+    do_update=.false.
+    if(present(do_update_in)) do_update=do_update_in
 
     !For timing
     !if(debug)call barrier !!/These barriers influence the reported time
@@ -3252,7 +3608,11 @@ contains
     !NOTE: We currently calculate omega at every time step so we
     !actually need to gather everytime, which is a pain!
     !We also fill in the empties here.
-    if(do_gather) call fieldmat%gather_fields(phi,apar,bpar)!,to_all_in=.true.)
+    if(do_gather) call fieldmat%gather_fields(phi,apar,bpar,&
+         to_all_in=.false.,do_allreduce_in=field_local_allreduce)
+
+    !This routine updates *new fields using gathered update
+    if(do_update) call fieldmat%update_fields(phi,apar,bpar)
 
     !For timing
     !Barrier usage ensures that proc0 measures the longest time taken on
@@ -3264,50 +3624,72 @@ contains
   !>Initialise the fields from the initial g, just uses the
   !fields_implicit routine
   subroutine init_allfields_local
+    use mp, only: proc0
     use fields_implicit, only: init_allfields_implicit
     implicit none
+    !EGH Note that this will fail if someone has set
+    ! the parameter new_field_init in init_g to .false.
+    ! Add a warning/check?
     call init_allfields_implicit
   end subroutine init_allfields_local
 
   !>This routine advances the solution by one full time step
   subroutine advance_local(istep, remove_zonal_flows_switch)
-    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, fapar, fbpar, reset
     use fields_implicit, only: remove_zonal_flows
     use fields_arrays, only: phi, apar, bpar, phinew
     use fields_arrays, only: aparnew, bparnew, apar_ext
     use dist_fn, only: timeadv, exb_shear, g_exb, g_exbfac
     use dist_fn_arrays, only: g, gnew
     use antenna, only: antenna_amplitudes, no_driver
+    use gs2_layouts, only: g_lo
     implicit none
     integer, intent(in) :: istep
     logical, intent(in) :: remove_zonal_flows_switch
     integer :: diagnostics = 1
+    logical, parameter :: do_gather=.true.
+    logical :: do_update
+    !do_gather=.true. => fields are collected from all procs and distributed to everyone (required)
+    !do_update=.true. => "Smart" update routines are used which only update the local parts of the
+    !field arrays. This could help when xy are strongly parallelised but is likely to be slower
+    !when all local, hence we should turn it off if xy all local.
+    do_update=do_smart_update
+    if(g_lo%x_local.and.g_lo%y_local) do_update=.false.
 
     !GGH NOTE: apar_ext is initialized in this call
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
 
     !Apply flow shear if active
-    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew)
+    if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew,istep,field_local_allreduce_sub)
 
     !Update g and fields
     g=gnew
-    if(fphi.gt.0) phi=phinew
-    if(fapar.gt.0) apar=aparnew
-    if(fbpar.gt.0) bpar=bparnew
+    if(do_update)then !Here we tie the "smart" update to do_update
+       call fieldmat%update_fields_newstep
+    else
+       if(fphi.gt.0) phi=phinew
+       if(fapar.gt.0) apar=aparnew
+       if(fbpar.gt.0) bpar=bparnew
+    endif
 
     !Find gnew given fields at time step midpoint
     call timeadv (phi, apar, bpar, phinew, &
          aparnew, bparnew, istep)
+    if(reset) return !Return is resetting
 
     !Add in antenna driving if present
     !<DD>TAGGED: Should we only this is fapar>0 as well?
     if(.not.no_driver) aparnew=aparnew+apar_ext
 
     !Calculate the fields at the next time point
-    call getfield_local(phinew,aparnew,bparnew,.true.)
-    if(fphi.gt.0) phinew=phinew+phi
-    if(fapar.gt.0) aparnew=aparnew+apar
-    if(fbpar.gt.0) bparnew=bparnew+bpar
+    call getfield_local(phinew,aparnew,bparnew,do_gather,do_update)
+
+    !If we do the update in getfield_local don't do it here
+    if(.not.do_update)then
+       if(fphi.gt.0) phinew=phinew+phi
+       if(fapar.gt.0) aparnew=aparnew+apar
+       if(fbpar.gt.0) bparnew=bparnew+bpar
+    endif
 
     !Remove zonal component if requested
     if(remove_zonal_flows_switch) call remove_zonal_flows
@@ -3317,5 +3699,126 @@ contains
          aparnew, bparnew, istep, diagnostics) 
 
   end subroutine advance_local
+
+  !> Routine to dump the current response matrix data
+  !! to file. One file per connected domain. Each written
+  !! by the head of the supercell.
+  subroutine dump_response_to_file_local(suffix)
+    use gs2_save, only: gs2_save_response
+    use fields_arrays, only: response_file
+    implicit none
+    character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
+    character(len=64) :: suffix_local, suffix_default='.response'
+    character(len=256) :: file_name
+    complex, dimension(:,:), allocatable :: tmp_arr
+    integer :: ik, is
+
+    !Set file suffix
+    suffix_local=suffix_default
+    if(present(suffix)) suffix_local=suffix
+
+    !First we have to pull data so that head of each supercell has full data
+    !Currently we are lazy and just ensure all procs in supercell has full data
+    do ik=1,fieldmat%naky
+       !If ik isn't local than cycle
+       if(.not.fieldmat%kyb(ik)%is_local) cycle
+
+       !Loop over supercells
+       do is=1,fieldmat%kyb(ik)%nsupercell
+          !If is isn't local than cycle
+          if(.not.fieldmat%kyb(ik)%supercells(is)%is_local) cycle
+
+          !Now allocate array
+          allocate(tmp_arr(fieldmat%kyb(ik)%supercells(is)%nrow,fieldmat%kyb(ik)%supercells(is)%ncol))
+
+          !First have to pull all row level data
+          call fieldmat%kyb(ik)%supercells(is)%pull_rows_to_arr(tmp_arr)
+          
+          !Now save if on head proc
+          if(fieldmat%kyb(ik)%supercells(is)%is_head)then
+             !Really we should do this with netcdf but for now we will
+             !simply dump a binary file.
+
+             !First make file name
+             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(response_file),ik,is,trim(suffix_local)
+             call gs2_save_response(tmp_arr,file_name)
+          endif
+
+          !Deallocate
+          deallocate(tmp_arr)
+       enddo
+    enddo
+
+  end subroutine dump_response_to_file_local
+
+  !> Routine to read the current response matrix data
+  !! from file dump. One file per connected domain. Each written
+  !! by the head of the supercell.
+  !! NOTE: Have to have setup communicators etc.
+  subroutine read_response_from_file_local(suffix)
+    use gs2_save, only: gs2_restore_response
+    use mp, only: sum_allreduce_sub
+    use fields_arrays, only: response_file
+    implicit none
+    character(len=*), optional, intent(in) :: suffix !If passed then use as part of file suffix
+    character(len=64) :: suffix_local, suffix_default='.response'
+    character(len=256) :: file_name
+    complex, dimension(:,:), allocatable :: tmp_arr
+    integer :: ik, is
+
+    !Set file suffix
+    suffix_local=suffix_default
+    if(present(suffix)) suffix_local=suffix
+
+    !First we have to pull data so that head of each supercell has full data
+    !Currently we are lazy and just ensure all procs in supercell has full data
+    do ik=1,fieldmat%naky
+       !If ik isn't local than cycle
+       if(.not.fieldmat%kyb(ik)%is_local) cycle
+
+       !Loop over supercells
+       do is=1,fieldmat%kyb(ik)%nsupercell
+          !If is isn't local than cycle
+          if(.not.fieldmat%kyb(ik)%supercells(is)%is_local) cycle
+
+          !Now allocate array
+          allocate(tmp_arr(fieldmat%kyb(ik)%supercells(is)%nrow,fieldmat%kyb(ik)%supercells(is)%ncol))
+          tmp_arr=0.
+
+          !Now if on head proc read
+          if(fieldmat%kyb(ik)%supercells(is)%is_head)then
+             !Really we should do this with netcdf but for now we will
+             !simply dump a binary file.
+
+             !First make file name
+             write(file_name,'(A,"_ik_",I0,"_is_",I0,A)') trim(response_file),ik,is,trim(suffix_local)
+             call gs2_restore_response(tmp_arr,file_name)
+          endif
+
+          !Now we need to broadcast the data to everyone with supercell.
+          !NOTE: Really we would want a supercell bound method which will do
+          !this so that this module level routine is insensitive to communicators etc.
+          !Furthermore we are lazy and use a sum_allreduce_sub to send data to everyone
+          call sum_allreduce_sub(tmp_arr,fieldmat%kyb(ik)%supercells(is)%sc_sub_all%id)
+
+          !Now push array to local storage
+          call fieldmat%kyb(ik)%supercells(is)%push_arr_to_rows(tmp_arr)
+
+          !Deallocate
+          deallocate(tmp_arr)
+       enddo
+    enddo
+
+  end subroutine read_response_from_file_local
+
+  !> Returns true if GS2 was built in such a way
+  !! as to allow this module to work.
+  !! Currently does not work with PGI compilers. 
+  !! See online discussions.
+  function fields_local_functional()
+    use runtime_tests, only: compiler_pgi
+    logical :: fields_local_functional
+    fields_local_functional = (.not. compiler_pgi())
+  end function fields_local_functional
 
 end module fields_local

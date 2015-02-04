@@ -11,7 +11,7 @@ module theta_grid_gridgen
   integer :: npadd
   real :: alknob, epsknob, bpknob, extrknob, tension
   real :: thetamax, deltaw, widthw
-  logical :: exist, initialized
+  logical :: exist, initialized=.false.
 
 contains
   subroutine wnml_theta_grid_gridgen(unit)
@@ -21,14 +21,14 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "theta_grid_gridgen_knobs"
        write (unit, fmt="(' npadd =    ',i4)") npadd
-       write (unit, fmt="(' alknob =   ',e16.10)") alknob
-       write (unit, fmt="(' epsknob =  ',e16.10)") epsknob
-       write (unit, fmt="(' bpknob =   ',e16.10)") bpknob
-       write (unit, fmt="(' extrknob = ',e16.10)") extrknob
-       write (unit, fmt="(' tension =  ',e16.10)") tension
-       write (unit, fmt="(' thetamax = ',e16.10)") thetamax
-       write (unit, fmt="(' deltaw =   ',e16.10)") deltaw
-       write (unit, fmt="(' widthw =   ',e16.10)") widthw
+       write (unit, fmt="(' alknob =   ',e17.10)") alknob
+       write (unit, fmt="(' epsknob =  ',e17.10)") epsknob
+       write (unit, fmt="(' bpknob =   ',e17.10)") bpknob
+       write (unit, fmt="(' extrknob = ',e17.10)") extrknob
+       write (unit, fmt="(' tension =  ',e17.10)") tension
+       write (unit, fmt="(' thetamax = ',e17.10)") thetamax
+       write (unit, fmt="(' deltaw =   ',e17.10)") deltaw
+       write (unit, fmt="(' widthw =   ',e17.10)") widthw
        write (unit, fmt="(' /')")
   end subroutine wnml_theta_grid_gridgen
 
@@ -70,10 +70,10 @@ contains
   subroutine gridgen_get_grids (nperiod, ntheta, ntgrid, nbset, &
        theta, bset, bmag, gradpar, gbdrift, gbdrift0, cvdrift, &
        cvdrift0, cdrift, cdrift0, gbdrift_th, cvdrift_th, &
-       gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
+       gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, jacob, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
-    use gridgen4mod
-    use constants
+    use gridgen4mod, only: gridgen4_2
+    use constants, only: pi
     implicit none
     integer, intent (in) :: nperiod
     integer, intent (in out) :: ntheta, ntgrid, nbset
@@ -82,13 +82,13 @@ contains
     real, dimension (-ntgrid:ntgrid), intent (in out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
     integer :: ntheta_old, ntgrid_old, nbset_old
     real, dimension (-ntgrid:ntgrid) :: thetasave
     real, dimension (ntheta+1) :: thetaold, thetanew
     real, dimension (ntheta+1) :: bmagold, bmagnew
     integer :: i
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
 if (debug) write(6,*) 'gridgen_get_grids'
 
 
@@ -111,6 +111,9 @@ if (debug) write(6,*) 'gridgen_get_grids: call gridgen4_2'
        write(*,*) 'ntheta_new = ',ntheta
        write(*,*) 'Stopping this run would be wise.'
        write(*,*) 'Try again with ntheta = ',ntheta_old + 2
+       if(ntheta_old<ntheta)then
+          write(*,*) 'ntheta_old<ntheta but code assumes ntheta<ntheta_old => Should definitely abort.'
+       endif
     end if
 
     ! interpolate to new grid
@@ -132,6 +135,14 @@ if (debug) write(6,*) 'gridgen_get_grids: call gridgen4_2'
     end do
 
 if (debug) write(6,*) 'gridgen_get_grids: call regrid'
+!<DD>NOTE: Regrid assumes nnew<nold but doesn't check it. Do we need to?
+!          This only packs the new (splined) data into the old array, it
+!          doesn't actually resize the array. This resizing currently takes
+!          place during finish_init call (look for eik_save). Would be safer
+!          if we could make regrid actually reallocate/resize the array.
+!<DD>NOTE: We only resize the arrays internal to theta_grid. This is what should be used
+!          by the rest of the code, but anywhere where the geometry arrays are used directly
+!          could lead to an error if these arrays are resized as we don't resize the geometry arrays.
     call regrid (ntgrid_old, thetasave, gradpar, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gbdrift, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gbdrift0, ntgrid, theta)
@@ -148,6 +159,7 @@ if (debug) write(6,*) 'gridgen_get_grids: call regrid'
     call regrid (ntgrid_old, thetasave, gds24, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, gds24_noq, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, grho, ntgrid, theta)
+    call regrid (ntgrid_old, thetasave, jacob, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, Rplot, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, Zplot, ntgrid, theta)
     call regrid (ntgrid_old, thetasave, aplot, ntgrid, theta)
@@ -159,8 +171,9 @@ if (debug) write(6,*) 'gridgen_get_grids: call regrid'
 if (debug) write(6,*) 'gridgen_get_grids: end'
   end subroutine gridgen_get_grids
 
+  !<DD>NOTE: This routine assumes nnew<nold
   subroutine regrid (nold, x, y, nnew, xnew)
-    use splines
+    use splines, only: new_spline, splint, delete_spline, spline
     implicit none
     integer, intent (in) :: nold
     real, dimension (-nold:nold), intent (in) :: x
@@ -358,8 +371,8 @@ contains
      if (.not. exist) return
      write (unit, *)
      write (unit, fmt="(' &',a)") "theta_grid_salpha_knobs"
-     write (unit, fmt="(' alpmhdfac = ',e16.10)") alpmhdfac
-     write (unit, fmt="(' alpha1 =    ',e16.10)") alpha1
+     write (unit, fmt="(' alpmhdfac = ',e17.10)") alpmhdfac
+     write (unit, fmt="(' alpha1 =    ',e17.10)") alpha1
      
      select case (model_switch)
         
@@ -445,7 +458,7 @@ contains
     ierr = error_unit()
     call get_option_value &
          (model_option, modelopts, model_switch, &
-         ierr, "model_option in theta_grid_salpha_knobs")
+         ierr, "model_option in theta_grid_salpha_knobs",.true.)
 
     if (alpmhdfac > epsilon(0.0)) then
        shift = - alpmhd*alpmhdfac
@@ -468,11 +481,12 @@ contains
   subroutine salpha_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, &
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
        gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-       Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
+       jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
        qval, shape, gb_to_cv, Bpol)
-    use constants
+    use constants, only: pi
     use theta_grid_params, only: eps, epsl, shat_param => shat, pk
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
+    use file_utils, only: error_unit
     implicit none
     integer, intent (in) :: nperiod
     integer, intent (in out) :: ntheta, ntgrid, nbset
@@ -481,7 +495,7 @@ contains
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     character (8), intent(out) :: shape
     logical, intent (in) :: gb_to_cv
@@ -572,15 +586,18 @@ contains
 !    Simply need to look into the shift dependence of gds2
 !
        if (model_switch == model_nocurve) then
+!CMR, 4/6/2014: 
+! commented out gbdrift=0 as looked wrong, surely really want cvdrift=0
 !dja fix for no curvature
-          gbdrift = 0.0
+!          gbdrift = 0.0  
 !dja end
+!CMRend
           gds2 = 1.0 + (shat*theta)**2
           gds21 = -shat*shat*theta
           shape = 'slab    '
           gbdrift = cvdrift*(1.-shift)
           gbdrift0 = cvdrift0
-    
+          cvdrift=0 !CMR, 4/6/2014: surely this is what was intended?
        else
           gds2 = 1.0 + (shat*theta-shift*sin(theta))**2
 ! probably should be:
@@ -603,12 +620,20 @@ contains
     ! BD: What are gds23 and gds24?  Who put this here?
     ! MB: gds23 and gds24 are geometrical factors appearing at next order in gk eqn
     ! MB: NEED TO INCLUDE SHIFT IN BELOW EXPRESSIONS
-    gds23 = -0.5*epsl*shat*theta*(1.+2.*eps*cos(theta))/eps
-    gds24_noq = 0.5*epsl*(1.+eps*cos(theta))/eps
+    !<DD> The following few lines will cause an issue in the (semi-)valid case where eps=0.0 so adding a guard
+    !     here. These terms are used in lowflow calculations
+    if(eps>epsilon(0.0))then
+       gds23 = -0.5*epsl*shat*theta*(1.+2.*eps*cos(theta))/eps
+       gds24_noq = 0.5*epsl*(1.+eps*cos(theta))/eps
+       ! MB: NEED TO INCLUDE SHIFT BELOW
+       cvdrift_th = -0.25*(cos(theta))*epsl**2/eps
+    else
+       write(error_unit(),'("Warning : Some lowflow related geometrical terms are forced to zero in cases with eps=0.")')
+       gds23 = 0.
+       gds24_noq = 0.
+       cvdrift_th = 0.
+    endif
     gds24 = shat*gds24_noq
-
-    ! MB: NEED TO INCLUDE SHIFT BELOW
-    cvdrift_th = -0.25*(cos(theta))*epsl**2/eps
     gbdrift_th = cvdrift_th
 
     if (model_switch /= model_alpha1) then
@@ -619,7 +644,7 @@ contains
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-            Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
+            jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
     end if
   end subroutine salpha_get_grids
 
@@ -1009,14 +1034,19 @@ contains
   subroutine init_theta_grid_eik
     use geometry, only: init_theta, nperiod_geo => nperiod
     use geometry, only: eikcoefs, itor, delrho, rhoc
-    use geometry, only: gen_eq, ppl_eq, transp_eq
+    use geometry, only: gen_eq, ppl_eq, transp_eq, chs_eq
+    use geometry, only: debug_geo => debug, verb
     use theta_grid_params, only: init_theta_grid_params, ntheta, nperiod
-    use mp, only: proc0
+    use runtime_tests, only: verbosity
     implicit none
     real :: rhoc_save
 !    logical, save :: initialized = .false.
 !CMR nov04: adding following debug switch
-    logical :: debug=.false.
+    logical :: debug=.true.
+
+    debug = (verbosity() > 2)
+    debug_geo = debug
+    verb = verbosity()
 !CMR
 
     if (initialized) return
@@ -1033,7 +1063,7 @@ if (debug) write(6,*) "init_theta_grid_eik: call read_parameters, ntheta=",nthet
 !CMR replace call init_theta(ntheta) with following condition 
 !    to avoid inappropriate calls to init_theta (as in geo/et.f90)
     if(.not. gen_eq .and. .not. ppl_eq .and. &
-       .not. transp_eq ) then 
+       .not. transp_eq .and. .not. chs_eq) then 
        if (debug) write(6,*) "init_theta_grid_eik: call init_theta, ntheta=",ntheta
        call init_theta (ntheta)
     endif
@@ -1050,8 +1080,10 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
   end subroutine init_theta_grid_eik
 
   subroutine finish_theta_grid_eik
+    use geometry, only: finish_geometry
 
     initialized = .false.
+    call finish_geometry
 
   end subroutine finish_theta_grid_eik
 
@@ -1069,7 +1101,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
   subroutine eik_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, bmag,&
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, &
-            grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi,&
+            grho, jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi,&
             kxfac, qval, gb_to_cv, Bpol)
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     use geometry, only: kxfac_out => kxfac
@@ -1108,11 +1140,11 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
     integer :: ig
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
 if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
     do ig=-ntgrid,ntgrid
        theta(ig)     = theta_out(ig)
@@ -1162,7 +1194,7 @@ if (debug) write(6,*) 'eik_get_grids: call gridgen_get_grids'
          theta, bset, bmag, &
          gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, &
-         grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
+         grho, jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol)
     shat = s_hat_new
     drhodpsi = drhodpsin
     kxfac = kxfac_out
@@ -1191,6 +1223,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use geometry, only: shift, qinp, akappa, akappri, tri, tripri, asym, asympri
     use geometry, only: delrho, rmin, rmax
     use geometry, only: isym, in_nt, writelots
+    use geometry, only: chs_eq
     use theta_grid_params, only: nperiod_in => nperiod
     use theta_grid_params, only: rhoc_in => rhoc
     use theta_grid_params, only: rmaj_in => rmaj, r_geo_in => r_geo
@@ -1208,7 +1241,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
          ppl_eq, gen_eq, efit_eq, eqfile, dfit_eq, &
          equal_arc, bishop, local_eq, idfit_eq, gs2d_eq, transp_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
-         delrho, rmin, rmax, isym, writelots
+         delrho, rmin, rmax, isym, writelots,chs_eq
 
     nperiod = nperiod_in  
     rhoc = rhoc_in
@@ -1239,6 +1272,14 @@ if (debug) write(6,*) 'eik_get_grids: end'
     in_nt = .false.
     writelots = .false.
     local_eq = .true.
+    chs_eq = .false.
+    ppl_eq = .false.
+    gen_eq = .false.
+    efit_eq = .false.
+    dfit_eq = .false.
+    gs2d_eq = .false.
+    transp_eq = .false.
+    idfit_eq = .false.
 
     in_file = input_unit_exist("theta_grid_eik_knobs", exist)
     if (exist) read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
@@ -1396,6 +1437,17 @@ contains
     integer :: unit
     character(200) :: line
     integer :: i
+    logical :: first=.true.
+    !<DD> Should jacob also be provided by this routine?
+
+    !<DD> NOTE: Not currently settin Bpol here. This is used in flux calculations.
+    !If not set then results will be funny. Add a warning message and set to zero
+    !for now.
+    if(first)then
+       write(*,'("WARNING: When using file_get_grids, Bpol does not have a correct definition --> Currently just setting to zero, may impact some diagnostics")')
+       Bpol=0.
+       first=.false.
+    endif
 
     shat = shat_input
     drhodpsi = drhodpsi_input
@@ -1500,6 +1552,7 @@ module theta_grid
   public :: ntheta, ntgrid, nperiod, nbset
   public :: Rplot, Zplot, aplot, Rprime, Zprime, aprime, Bpol
   public :: shape, gb_to_cv
+  public :: initialized
 
   private
 
@@ -1513,6 +1566,7 @@ module theta_grid
   real, dimension (:), allocatable :: Rplot, Zplot, aplot, Bpol
   real, dimension (:), allocatable :: Rprime, Zprime, aprime
   real :: bmin, bmax, eps, shat, drhodpsi, kxfac, qval
+  real :: cvdriftknob, gbdriftknob
   integer :: ntheta, ntgrid, nperiod, nbset
   logical :: gb_to_cv
 
@@ -1591,7 +1645,7 @@ contains
     use mp, only: proc0
     implicit none
 !    logical, save :: initialized = .false.
-    logical :: debug=.false.
+    logical, parameter :: debug=.false.
     if (initialized) return
     initialized = .true.
 
@@ -1611,12 +1665,40 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
   end subroutine init_theta_grid
 
+  !function theta_grid_unit_test_init_theta_grid(eqoption, eqfle, bish)
+    !use mp, only: proc0
+    !integer, intent(in) :: eqoption, bish
+    !logical :: theta_grid_unit_test_init_theta_grid
+    !character(*), intent(in) :: eqfle
+    !if (proc0) then
+!if (debug) write(6,*) "init_theta_grid: call read_parameters"
+       !call read_parameters
+       !eqopt_switch = eqoption
+       !bishop = bish
+       !eqfile = eqfle
+!if (debug) write(6,*) "init_theta_grid: call get_sizes"
+       !call get_sizes
+!if (debug) write(6,*) "init_theta_grid: call allocate_arrays"
+       !call allocate_arrays
+!if (debug) write(6,*) "init_theta_grid: call get_grids"
+       !call get_grids
+!if (debug) write(6,*) "init_theta_grid: call finish_init"
+       !call finish_init
+    !end if
+    !call broadcast_results
+
+    !theta_grid_unit_test_init_theta_grid = .true.
+
+  !end function
+
+
   subroutine finish_theta_grid
 
     use theta_grid_gridgen, only: finish_theta_grid_gridgen
     use theta_grid_salpha, only: finish_theta_grid_salpha
     use theta_grid_eik, only: finish_theta_grid_eik
     use theta_grid_file, only: finish_theta_grid_file
+    use theta_grid_params, only: finish_theta_grid_params
 
     initialized = .false.
     
@@ -1624,6 +1706,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call finish_theta_grid_salpha
     call finish_theta_grid_eik
     call finish_theta_grid_file
+    call finish_theta_grid_params
     call deallocate_arrays
 
   end subroutine finish_theta_grid
@@ -1634,6 +1717,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     use geometry, only: rhoc
     implicit none
 
+    !Scalars
     call broadcast (bmin)
     call broadcast (bmax)
     call broadcast (eps)
@@ -1644,13 +1728,18 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (ntgrid)
     call broadcast (nperiod)
     call broadcast (nbset)
+    call broadcast (shat)
+    call broadcast (drhodpsi)
+    call broadcast (gb_to_cv)
 
+    !Arrays
     if (.not. proc0) then
        call allocate_arrays
        allocate (theta2(-ntgrid:ntgrid))
        allocate (delthet(-ntgrid:ntgrid))
        allocate (delthet2(-ntgrid:ntgrid))
     end if
+
     call broadcast (theta)
     call broadcast (theta2)
     call broadcast (delthet)
@@ -1675,7 +1764,6 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (gds24)
     call broadcast (gds24_noq)
     call broadcast (grho)
-    call broadcast (shat)
     call broadcast (jacob)
     call broadcast (Rplot)
     call broadcast (Zplot)
@@ -1684,13 +1772,11 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (Zprime)
     call broadcast (aprime)
     call broadcast (Bpol)
-    call broadcast (drhodpsi)
-    call broadcast (gb_to_cv)
   end subroutine broadcast_results
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
-    use text_options
+    use text_options, only: text_option, get_option_value
     implicit none
     type (text_option), dimension (5), parameter :: eqopts = &
          (/ text_option('default', eqopt_eik), &
@@ -1702,10 +1788,13 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     ! 'default' 'eik': call eikcoefs for parameterized equilibrium
     ! 's-alpha': s-alpha
     ! 'grid.out' 'file': read grid from grid.out file generated by rungridgen
-    namelist /theta_grid_knobs/ equilibrium_option, gb_to_cv
+    namelist /theta_grid_knobs/ equilibrium_option, gb_to_cv, cvdriftknob, &
+                                                              gbdriftknob
     integer :: ierr, in_file
 
     gb_to_cv = .false.
+    gbdriftknob=1.0
+    cvdriftknob=1.0
     equilibrium_option = 'default'
     in_file = input_unit_exist("theta_grid_knobs", exist)
 !    if (exist) read (unit=input_unit("theta_grid_knobs"), nml=theta_grid_knobs)
@@ -1714,7 +1803,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     ierr = error_unit()
     call get_option_value &
          (equilibrium_option, eqopts, eqopt_switch, &
-         ierr, "equilibrium_option in theta_grid_knobs")
+         ierr, "equilibrium_option in theta_grid_knobs",.true.)
   end subroutine read_parameters
 
   subroutine allocate_arrays
@@ -1752,40 +1841,39 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
   subroutine deallocate_arrays
     implicit none
-    deallocate (theta)
-    deallocate (bset)
-    deallocate (bmag)
-    deallocate (gradpar)
-    deallocate (itor_over_B)
-    deallocate (IoB)
-    deallocate (gbdrift)
-    deallocate (gbdrift0)
-    deallocate (cvdrift)
-    deallocate (cvdrift0)
-    deallocate (cdrift)
-    deallocate (cdrift0)
-    deallocate (gbdrift_th)
-    deallocate (cvdrift_th)
-    deallocate (gds2)
-    deallocate (gds21)
-    deallocate (gds22)
-    deallocate (gds23)
-    deallocate (gds24)
-    deallocate (gds24_noq)
-    deallocate (grho)
-    deallocate (jacob)
-    deallocate (Rplot)
-    deallocate (Rprime)
-    deallocate (Zplot)
-    deallocate (Zprime)
-    deallocate (aplot)
-    deallocate (aprime)
-    deallocate (Bpol)
+    if(allocated(theta)) deallocate (theta)
+    if(allocated(bset)) deallocate (bset)
+    if(allocated(bmag)) deallocate (bmag)
+    if(allocated(gradpar)) deallocate (gradpar)
+    if(allocated(itor_over_B)) deallocate (itor_over_B)
+    if(allocated(IoB)) deallocate (IoB)
+    if(allocated(gbdrift)) deallocate (gbdrift)
+    if(allocated(gbdrift0)) deallocate (gbdrift0)
+    if(allocated(cvdrift)) deallocate (cvdrift)
+    if(allocated(cvdrift0)) deallocate (cvdrift0)
+    if(allocated(cdrift)) deallocate (cdrift)
+    if(allocated(cdrift0)) deallocate (cdrift0)
+    if(allocated(gbdrift_th)) deallocate (gbdrift_th)
+    if(allocated(cvdrift_th)) deallocate (cvdrift_th)
+    if(allocated(gds2)) deallocate (gds2)
+    if(allocated(gds21)) deallocate (gds21)
+    if(allocated(gds22)) deallocate (gds22)
+    if(allocated(gds23)) deallocate (gds23)
+    if(allocated(gds24)) deallocate (gds24)
+    if(allocated(gds24_noq)) deallocate (gds24_noq)
+    if(allocated(grho)) deallocate (grho)
+    if(allocated(jacob)) deallocate (jacob)
+    if(allocated(Rplot)) deallocate (Rplot)
+    if(allocated(Rprime)) deallocate (Rprime)
+    if(allocated(Zplot)) deallocate (Zplot)
+    if(allocated(Zprime)) deallocate (Zprime)
+    if(allocated(aplot)) deallocate (aplot)
+    if(allocated(aprime)) deallocate (aprime)
+    if(allocated(Bpol)) deallocate (Bpol)
 
-    deallocate (theta2)
-    deallocate (delthet)
-    deallocate (delthet2)
-
+    if(allocated(theta2)) deallocate (theta2)
+    if(allocated(delthet)) deallocate (delthet)
+    if(allocated(delthet2)) deallocate (delthet2)
 
   end subroutine deallocate_arrays
 
@@ -1865,6 +1953,9 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
        eik_save = grho(-ntgrid:ntgrid); deallocate (grho)
        allocate (grho(-ntgrid:ntgrid)); grho = eik_save
 
+       eik_save = jacob(-ntgrid:ntgrid); deallocate (jacob)
+       allocate (jacob(-ntgrid:ntgrid)); jacob = eik_save
+
        eik_save = Rplot(-ntgrid:ntgrid); deallocate (Rplot)
        allocate (Rplot(-ntgrid:ntgrid)); Rplot = eik_save
 
@@ -1873,6 +1964,15 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
        eik_save = aplot(-ntgrid:ntgrid); deallocate (aplot)
        allocate (aplot(-ntgrid:ntgrid)); aplot = eik_save
+
+       eik_save = Rprime(-ntgrid:ntgrid); deallocate (Rprime)
+       allocate (Rprime(-ntgrid:ntgrid)); Rprime = eik_save
+
+       eik_save = Zprime(-ntgrid:ntgrid); deallocate (Zprime)
+       allocate (Zprime(-ntgrid:ntgrid)); Zprime = eik_save
+
+       eik_save = aprime(-ntgrid:ntgrid); deallocate (aprime)
+       allocate (aprime(-ntgrid:ntgrid)); aprime = eik_save
 
        eik_save = Bpol(-ntgrid:ntgrid); deallocate (Bpol)
        allocate (Bpol(-ntgrid:ntgrid)); Bpol = eik_save
@@ -1905,7 +2005,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     use theta_grid_file, only: ntheta_file=>ntheta, nperiod_file=>nperiod
     use theta_grid_file, only: nbset_file=>nbset
     implicit none
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
 if (debug) write(6,*) 'get_sizes: eqopt_switch=',eqopt_switch
     select case (eqopt_switch)
     case (eqopt_eik)
@@ -1938,7 +2038,7 @@ if (debug) write(6,*) 'get_sizes: done'
     use theta_grid_params, only: eps, btor_slab
     use geometry, only: rhoc
     implicit none
-    logical:: debug=.false.
+    logical, parameter :: debug=.false.
     select case (eqopt_switch)
     case (eqopt_eik)
 if (debug) write(6,*) 'get_grids: call eik_get_grids'
@@ -1946,7 +2046,7 @@ if (debug) write(6,*) 'get_grids: call eik_get_grids'
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-            Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
+            jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
             shat, drhodpsi, kxfac, qval, gb_to_cv, Bpol)
        shape = 'torus   '
     case (eqopt_salpha)
@@ -1955,7 +2055,7 @@ if (debug) write(6,*) 'get_grids: call salpha_get_grids'
             theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-            Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
+            jacob, Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
             shat, drhodpsi, kxfac, qval, shape, gb_to_cv, Bpol)
     case (eqopt_file)
 if (debug) write(6,*) 'get_grids: call file_get_grids'
@@ -1968,12 +2068,18 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
     end select
     kxfac = abs(kxfac)
     qval = abs(qval)
+!CMR, 4/6/2014
+!   knobs to independently control magnetic gradB and curvature drifts
+    gbdrift=gbdriftknob*gbdrift
+    gbdrift0=gbdriftknob*gbdrift0
+    cvdrift=cvdriftknob*cvdrift
+    cvdrift0=cvdriftknob*cvdrift0
 
     itor_over_B=0.
 !CMR, 2/2/2011: 
 ! If using slab geometry, set itor_over_B = btor_slab from "theta_grid_params": 
 ! cleaner equivalent alternative to using btor_slab in "dist_fn_knobs", and 
-! sets geometric paramater itor_over_B in one place for ALL geometries.
+! sets geometric parameter itor_over_B in one place for ALL geometries.
 !
     if (eqopt_switch .eq. eqopt_salpha .and. eps .eq. 0. ) then
        itor_over_B = btor_slab
@@ -1986,9 +2092,9 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
 ! itor_over_B = (q/rho) * Rmaj*Btor/(a*B)
        IoB = sqrt(Rplot**2 - (grho/(bmag*drhodpsi))**2)
     ! RN> 2011/1/25: fix here avoids dividing by rhoc if rhoc=0
-    ! CMR, 2/2/2011: itor_over_B=0 if rhoc=0
-    !                this dropping parallel sheared flow source term in GKE
-    !                itor_over_B=0 is safer than itor_over_B=NaN!
+    ! CMR, 2/2/2011: set itor_over_B=0 if rhoc=0
+    !                Dropping parallel sheared flow source term in GKE
+    !                using itor_over_B=0 is safer than itor_over_B=NaN!
        if (rhoc /= 0.) itor_over_B = qval / rhoc * IoB
      endif
   end subroutine get_grids
