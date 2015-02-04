@@ -1,10 +1,10 @@
 program eiktest
-
+  use constants, only: pi
   use geometry
   implicit none
 
   integer :: i, nth, ntgrid, ntheta
-  real :: pi, broot
+  real :: broot
   real :: q, qq, qplus, qmnus
   real :: bb, bm, bp, profile_fac
   real :: rk, rkm, rkp, rkpri
@@ -28,8 +28,6 @@ program eiktest
        diffscheme,nbeta,beta_p1,beta_p2,alpha_input,big, &
        beta_prime_times, beta_prime_over, fast, profile_fac, &
        tstar, shotnum, gs2d_eq, transp_eq, Xanthopoulos
-
-  pi=2.*acos(0.)
      
 ! set defaults
 
@@ -246,6 +244,9 @@ program eiktest
      write(11,*) 'tri= ',rt
      write(11,*) 'tripri= ',rtpri
      write(11,*) 'surface area= ',surfarea,' avgrmid**2'
+     write(11, *) 'diameter/a = ', diameter(rpofrho(rhoc))
+     write(11, *) 'diameter(rhoc=1.0)/a/2.0 = ', diameter(rpofrho(1.0))/2.0, ' ...  should be 1'
+     write(11, *) 'r/a = ', diameter(rpofrho(rhoc))/diameter(rpofrho(1.0))
   end if
 
 !      write(*,*) 'mag(Bp) at rho= ',rhoc

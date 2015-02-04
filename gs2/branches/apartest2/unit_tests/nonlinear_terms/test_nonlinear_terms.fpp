@@ -4,7 +4,7 @@
 !! function and fields with specific functions and sees if the poisson bracket
 !! is correctly calculated.
 !!
-!! This is free software released under GPLv3
+!! This is free software released under the MIT license
 !!   Written by: Edmund Highcock (edmundhighcock@users.sourceforge.net)
 !!               Colin Roach (colin.m.roach@ccfe.ac.uk)
 
@@ -13,6 +13,7 @@ program test_nonlinear_terms
   use mp, only: init_mp, finish_mp, proc0, broadcast
   use file_utils, only: init_file_utils, run_name
   use species, only: init_species, nspec, spec
+  use dist_fn, only: init_dist_fn, finish_dist_fn
   use constants, only: pi
   use kt_grids, only: naky, ntheta0, init_kt_grids
   use theta_grid, only: ntgrid, init_theta_grid
@@ -53,14 +54,16 @@ program test_nonlinear_terms
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
 
+  
 
 
   call announce_module_test('nonlinear_terms')
 
-  call init_nonlinear_terms
+
+  call init_dist_fn
 
   allocate(g1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
-  allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+  !allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
   allocate(phi(-ntgrid:ntgrid,ntheta0,naky))
   allocate(apar(-ntgrid:ntgrid,ntheta0,naky))
   allocate(bpar(-ntgrid:ntgrid,ntheta0,naky))
@@ -73,7 +76,7 @@ program test_nonlinear_terms
   call process_test(test_ffts(),'fast fourier transforms in nonlinear term')
 
 
-  call finish_nonlinear_terms
+  call finish_dist_fn
 
   call close_module_test('nonlinear_terms')
 
@@ -163,9 +166,7 @@ function ffttest (jx,jy,debug)
 
 
   printlots=.false. 
-! Following line was causing seg faults, but the problem has disappeared 
-! (don't know why, but possibly due to fixing a memory leak?)
-  if (present(debug) .and. debug) printlots=.true.
+  if (present(debug)) printlots=debug
 
 !CMR, 5-D FFTs
   g=0

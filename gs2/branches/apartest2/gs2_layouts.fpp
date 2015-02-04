@@ -15,6 +15,7 @@ module gs2_layouts
   implicit none
   private
 
+  public :: factors
   public :: pe_layout, layout, local_field_solve
   public :: is_kx_local
   
@@ -31,6 +32,7 @@ module gs2_layouts
 ! HJL>
   public :: finish_layouts
 ! <HJL
+  public :: finish_fields_layouts, finish_jfields_layouts
 
   public :: init_fields_layouts
   public :: f_lo, f_layout_type
@@ -76,6 +78,8 @@ module gs2_layouts
   public :: intmom_sub !Do we use sub-communicators in velocity space?
   public :: intspec_sub !Do we use sub-communicators in integrate_species?
 
+  public :: fft_use_wisdom, fft_wisdom_file, fft_measure_plan
+
 
   logical :: initialized_x_transform = .false.
   logical :: initialized_y_transform = .false.
@@ -96,6 +100,8 @@ module gs2_layouts
   logical :: local_field_solve, accel_lxyes, lambda_local, unbalanced_xxf, unbalanced_yxf
   real :: max_unbalanced_xxf, max_unbalanced_yxf
   character (len=5) :: layout
+  character (len=1000) :: fft_wisdom_file
+  logical :: fft_use_wisdom, fft_measure_plan
   logical :: exist
 
 ! TT>
@@ -402,13 +408,15 @@ contains
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
-    use redistribute, only: opt_redist_nbk
+    use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
+    use mp, only: mp_abort
     implicit none
     integer :: in_file
     namelist /layouts_knobs/ layout, local_field_solve, unbalanced_xxf, &
          max_unbalanced_xxf, unbalanced_yxf, max_unbalanced_yxf, &
          opt_local_copy, opt_redist_nbk, opt_redist_init, intmom_sub, &
-         intspec_sub
+         intspec_sub, opt_redist_persist, opt_redist_persist_overlap, fft_measure_plan, &
+         fft_use_wisdom, fft_wisdom_file
 
     local_field_solve = .false.
     unbalanced_xxf = .false.
@@ -418,7 +426,14 @@ contains
     max_unbalanced_yxf = 0.0
     layout = 'lxyes'
     opt_redist_nbk = .false. !<DD>True=>Use nonblocking redistributes
+    opt_redist_persist = .false. !<DD>True=>Use persistent communications in redistributes
+    opt_redist_persist_overlap = .false. !<DD>True=>Start comms before doing local copy
     opt_redist_init= .false. !<DD>True=>Use optimised routines to init redist objects
+    fft_measure_plan = .true. !<DD>False=>use heuristics rather than measure in fft plan create
+    fft_wisdom_file = 'default'  ! Location of fftw wisdom... if left as default, this is set to 
+        ! run_name//'.fftw_wisdom', unless overriden by the environment variable
+        ! GK_FFTW3_WISDOM. If set to anything other default, overrides  GK_FFTW3_WISDOM
+    fft_use_wisdom = .true. ! Try to load and save wisdom about fftw plans to fft_wisdom_file
     intmom_sub=.false.
     intspec_sub=.false.
     in_file=input_unit_exist("layouts_knobs", exist)
@@ -427,7 +442,7 @@ contains
     .and. layout.ne.'lxyes' .and. layout.ne.'lyxes' .and. layout.ne.'xyles') &
     then
        write(6,*) "gs2_layouts: read_parameters finds illegal layout=",layout," =>stop"
-       stop
+       call mp_abort("gs2_layouts: read_parameters finds illegal layout=")
     endif
 
 ! max_unbalanced_xxf and max_unbalanced_yxf have a maximum range of 0.0 - 1.0
@@ -448,17 +463,41 @@ contains
        write(*,*) 'max_unbalanced_yxf too small, setting to 0.0'
     end if
 
-
-
+    !Disable settings if dependent settings not set
+    opt_redist_persist=opt_redist_persist.and.opt_redist_nbk
+    opt_redist_persist_overlap=opt_redist_persist_overlap.and.opt_redist_persist
+    call get_wisdom_file(fft_wisdom_file)
   end subroutine read_parameters
     
+
+  !> Set the fft_wisdom_file based on the value set in the namelist (if any)
+  !! and the value in the GK_FFTW3_WISDOM environment variable
+  subroutine get_wisdom_file(wisdom_file)
+    use file_utils, only: run_name
+    character(len=*), intent(inout) :: wisdom_file
+    character(len=1000) :: env_wisdom_file
+    call get_environment_variable("GK_FFTW3_WISDOM", env_wisdom_file)
+    !read (env_wisdom_file,'(I10)') verbosity
+
+    if (wisdom_file .eq. 'default') then
+      if (trim(env_wisdom_file) .eq. '') then
+        wisdom_file = trim(run_name)//'.fftw_wisdom'
+      else
+        wisdom_file = env_wisdom_file
+      end if
+    end if
+    !write (*,*) 'wisdom_file', wisdom_file
+  end subroutine get_wisdom_file
+
   subroutine broadcast_results
     use mp, only: broadcast
-    use redistribute, only: opt_redist_nbk
+    use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
     implicit none
 
     call broadcast (opt_redist_init)
     call broadcast (opt_redist_nbk)
+    call broadcast (opt_redist_persist)
+    call broadcast (opt_redist_persist_overlap)
     call broadcast (intmom_sub)
     call broadcast (intspec_sub)
     call broadcast (layout)
@@ -468,7 +507,9 @@ contains
     call broadcast (max_unbalanced_xxf)
     call broadcast (max_unbalanced_yxf)
     call broadcast (opt_local_copy)
-
+    call broadcast (fft_measure_plan)
+    call broadcast (fft_use_wisdom)
+    call broadcast (fft_wisdom_file)
   end subroutine broadcast_results
 
   subroutine check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
@@ -640,7 +681,7 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine init_dist_fn_layouts &
-       (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+       (naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
     use mp, only: split, mp_comm, nproc_comm, rank_comm
     use mp, only: sum_allreduce_sub
@@ -648,7 +689,7 @@ contains
     use file_utils, only: error_unit
 ! <TT
     implicit none
-    integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
+    integer, intent (in) :: naky, ntheta0, nlambda, negrid, nspec
 !<DD>
     integer :: iglo,ik,it,il,ie,is,col,mycol
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
@@ -1068,18 +1109,18 @@ contains
     !Now use the dimension splitting to work out if the various subcommunicators are
     !allowed.
     if(.not.(dim_divides(g_lo%is_ord).and.dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
-       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       if(intmom_sub.and.proc0) write(error_unit(),'("Disabling intmom_sub -- is,it,ik split nicely ? ",3(L1," "))') dim_divides(g_lo%is_ord),dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intmom_sub=.false.
     endif
     if(.not.(dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
-       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- it,ik split nicely ? ",2(L1," "))') dim_divides(g_lo%it_ord),dim_divides(g_lo%ik_ord)
        intspec_sub=.false.
     endif
     !Note that because we currently need to gather amongst LES blocks at the end of
     !integrate_species we need to make sure that LES blocks are also sensible
     !This could be removed if we don't want to gather in integrate_species
     if(.not.(dim_divides(g_lo%il_ord).and.dim_divides(g_lo%ie_ord).and.dim_divides(g_lo%is_ord))) then
-       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- il,ie,is split nicely ? ",3(L," "))') dim_divides(g_lo%il_ord),dim_divides(g_lo%ie_ord),dim_divides(g_lo%is_ord)
+       if(intspec_sub.and.proc0) write(error_unit(),'("Disabling intspec_sub -- il,ie,is split nicely ? ",3(L1," "))') dim_divides(g_lo%il_ord),dim_divides(g_lo%ie_ord),dim_divides(g_lo%is_ord)
        intspec_sub=.false.
     endif
 
@@ -1268,11 +1309,11 @@ contains
 
   end subroutine init_dist_fn_layouts
 
-  subroutine is_kx_local(negrid, nspec, nlambda, naky, ntheta0, kx_local)  
+  subroutine is_kx_local(negrid, nspec, nlambda, naky, kx_local)  
 
     use mp, only: nproc
     implicit none
-    integer, intent (in) :: negrid, nspec, nlambda, naky, ntheta0
+    integer, intent (in) :: negrid, nspec, nlambda, naky
     logical, intent (out) :: kx_local
     integer, dimension(:,:), allocatable :: facs
     integer :: nsfacs, nefacs, nyfacs, nlfacs
@@ -1933,27 +1974,31 @@ contains
 
   end subroutine init_fields_layouts
 
-! HJL < Finish routine so that gs2 can be restarted with a different
-! number of processors by trinity
-  subroutine finish_layouts
+  subroutine finish_fields_layouts
+    implicit none
 
     integer :: i,f_size
 
-    f_size = size(f_lo)
-    do i=1,f_size
-       deallocate (f_lo(i)%ik)
-       deallocate (f_lo(i)%it)
-    enddo
+    if(allocated(f_lo))then
+       f_size = size(f_lo)
+       do i=1,f_size
+          if(associated(f_lo(i)%ik)) deallocate (f_lo(i)%ik)
+          if(associated(f_lo(i)%it)) deallocate (f_lo(i)%it)
+       enddo
+       deallocate(f_lo)    
+    endif
+    initialized_fields_layouts = .false.
+  end subroutine finish_fields_layouts
 
-    if(allocated(f_lo)) deallocate(f_lo)    
-    if(allocated(ij)) deallocate(ij)    
-    if(allocated(mj)) deallocate(mj)    
-    if(allocated(dj)) deallocate(dj)    
+! HJL < Finish routine so that gs2 can be restarted with a different
+! number of processors by trinity
+  subroutine finish_layouts
+    implicit none
+    call finish_fields_layouts
+    call finish_jfields_layouts
 
     initialized_layouts = .false.
     initialized_dist_fn_layouts = .false.
-    initialized_fields_layouts = .false.
-    initialized_jfields_layouts = .false.
     initialized_le_layouts = .false.
     initialized_energy_layouts = .false.
     initialized_lambda_layouts = .false.
@@ -2116,6 +2161,14 @@ contains
     ij = 1  ; mj = 1;  dj = 0
     
   end subroutine init_jfields_layouts
+
+  subroutine finish_jfields_layouts
+    implicit none
+    if(allocated(ij)) deallocate(ij)
+    if(allocated(mj)) deallocate(mj)
+    if(allocated(dj)) deallocate(dj)
+    initialized_jfields_layouts = .false.
+  end subroutine finish_jfields_layouts
 
   function ik_idx_jf (lo, i)
     implicit none
@@ -2850,7 +2903,7 @@ contains
 
   subroutine init_lambda_layouts &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, ng2)
-    use mp, only: iproc, nproc, proc0
+    use mp, only: iproc, nproc
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -3558,9 +3611,7 @@ contains
        ! naky*(2*ntgrid+1)*nsign*nlambda*negrid*nspec
        ! Note: We precalculate 2*ntgrid+1 as ntgridtotal.
        if (unbalanced_xxf) then
-
-       	  call calculate_unbalanced_x(nproc, iproc, unbalanced_amount)		
-          
+          call calculate_unbalanced_x(nproc, iproc, unbalanced_amount)
        end if
 
        ! If we are not using the unbalanced code, either because the
@@ -3577,8 +3628,8 @@ contains
 
        else
              
-          if(proc0) then	
-             write(*, fmt="('Using unbalanced decomposition for xxf. '&
+          if(proc0) then
+             write(*, fmt="('Using unbalanced decomposition for xxf. ',&
               & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
@@ -3770,7 +3821,7 @@ contains
                       ! decomposed.  In this instance we are at the lowest level of the decomposition so there is nothing left to decompose
                       ! so the remaining data space is 1.  For other levels of the decomposition this 1 is replaced by the part
                       ! of the data space that has not been split up yet.
-                      call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                      call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                            1, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%block_multiple, xxf_lo%llim_proc, xxf_lo%ulim_proc, &
                            xxf_lo%ulim_alloc)
                       
@@ -3783,7 +3834,7 @@ contains
                       call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, xxf_lo%num_small, xxf_lo%num_large, level_proc_num)     
                       ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                       ! naky for this level of the decomposition.
-                      call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                      call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                            xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%block_multiple,  xxf_lo%llim_proc, xxf_lo%ulim_proc, &
                            xxf_lo%ulim_alloc)
                       
@@ -3798,7 +3849,7 @@ contains
                    call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, xxf_lo%num_small, xxf_lo%num_large, level_proc_num)                         
                    ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                    ! naky,ntgridtotal for this level of the decomposition.
-                   call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                   call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                         xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%block_multiple, &
                         xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
                    
@@ -3814,7 +3865,7 @@ contains
                 call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, xxf_lo%num_small, xxf_lo%num_large, level_proc_num)
                 ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                 ! naky,ntgridtotal,nsign for this level of the decomposition.
-                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                      xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, xxf_lo%block_multiple, &
                      xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
                 
@@ -3832,13 +3883,13 @@ contains
              case('yxels')
                 ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                 ! naky,ntgridtotal,nsign,negrid for this layout and level of the decomposition.
-                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                      xxf_lo%negrid*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, &
                      xxf_lo%block_multiple, xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
              case default
                 ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
                 ! naky,ntgridtotal,nsign,nlambda for these layouts and this level of the decomposition.
-                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                      xxf_lo%nlambda*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, xxf_lo%large_block_size, &
                      xxf_lo%block_multiple, xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
              end select
@@ -3854,7 +3905,7 @@ contains
           call calculate_unbalanced_decomposition(k, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, xxf_lo%num_small, xxf_lo%num_large, level_proc_num)
           ! Calculate the block sizes using the factor of the decomposition that has not yet been split up, namely
           ! naky,ntgridtotal,nsign,nlambda,negrid for this level of the decomposition.
-          call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, nproc, &
+          call calculate_block_size(iproc, xxf_lo%num_small, xxf_lo%num_large, xxf_lo%small_block_balance_factor, xxf_lo%large_block_balance_factor, &
                xxf_lo%negrid*xxf_lo%nlambda*xxf_lo%nsign*xxf_lo%ntgridtotal*xxf_lo%naky, xxf_lo%blocksize, xxf_lo%small_block_size, &
                xxf_lo%large_block_size, xxf_lo%block_multiple, xxf_lo%llim_proc, xxf_lo%ulim_proc, xxf_lo%ulim_alloc)
           
@@ -4000,7 +4051,7 @@ contains
   end subroutine calculate_unbalanced_decomposition
 
 
-  subroutine calculate_block_size(iproc, numsmall, numlarge, smalldecomp, largedecomp, nproc, sizeblock, blocksize, smallblocksize, largeblocksize, block_multiple, llim, ulim, ulim_alloc)
+  subroutine calculate_block_size(iproc, numsmall, numlarge, smalldecomp, largedecomp, sizeblock, blocksize, smallblocksize, largeblocksize, block_multiple, llim, ulim, ulim_alloc)
   !====================================================================
   ! AJ, November 2011: New code from DCSE project
   ! This subroutine (calculate_block_size) is used in the code
@@ -4027,9 +4078,6 @@ contains
   ! decomposition (calculated in subroutine
   ! calculate_unbalanced_decomposition where it is referred to as i.
   !
-  ! Input nproc is the total number of MPI processes that this program
-  ! is using.
-  !
   ! Input sizeblock is the factor that needs to be split over the
   ! cores/processors we have (i.e. everything that has not yet been
   ! decomposed).
@@ -4055,7 +4103,7 @@ contains
   !====================================================================
     implicit none
 
-    integer, intent(in) :: iproc, numsmall, numlarge, smalldecomp, largedecomp, nproc, sizeblock
+    integer, intent(in) :: iproc, numsmall, numlarge, smalldecomp, largedecomp, sizeblock
     integer, intent(out) :: blocksize, smallblocksize, largeblocksize, block_multiple, llim, ulim, ulim_alloc
     integer :: modproc, procfactors
 
@@ -4102,7 +4150,7 @@ contains
     llim = ((iproc / procfactors) * block_multiple)
     if(modproc .ne. 0) then
        if(modproc .lt. numsmall) then
-!AJ	  llim = llim + smallblocksize * (modproc - 1)
+!AJ       llim = llim + smallblocksize * (modproc - 1)
           llim = llim + smallblocksize * (modproc)
        else
           llim = llim + (smallblocksize * numsmall) + (largeblocksize  * (modproc - numsmall))
@@ -4302,7 +4350,7 @@ contains
           offset_block_number = block_offset * j
           !AJ tempi represents where this index is inside the group of blocks
           !AJ this i point sits.
-	  tempi = i - (block_offset * lo%block_multiple)
+          tempi = i - (block_offset * lo%block_multiple)
           !AJ Work through each block in the group of blocks and see if this i 
           !AJ is within that block.  If it is set the proc_id_xxf as this block 
           !AJ owner.          
@@ -4313,31 +4361,31 @@ contains
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%small_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-	        if(tempi .lt. lo%small_block_size) then
+                if(tempi .lt. lo%small_block_size) then
                    !AJ (k -1) is the number of blocks that we have already considered 
                    !AJ within this group of blocks we have selected. 
-	           proc_id_xxf =  offset_block_number + (k - 1)
-		   exit 
-	        else
+                   proc_id_xxf =  offset_block_number + (k - 1)
+                   exit 
+                else
                    !AJ If the index is not in this block then reduce tempi by a small
                    !AJ block size and move on to the next block.
-	           tempi = tempi - lo%small_block_size
-	        end if
-	     else
+                   tempi = tempi - lo%small_block_size
+                end if
+             else
                 !AJ TODO: The if-else construct used below could potentially be rationalised 
                 !AJ TODO: to a more efficient formula where:
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%large_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-	        if(tempi .lt. lo%large_block_size) then
-	           proc_id_xxf = offset_block_number + (k - 1)
-		   exit 
-	        else
+                if(tempi .lt. lo%large_block_size) then
+                   proc_id_xxf = offset_block_number + (k - 1)
+                   exit 
+                else
                    !AJ If the index is not in this block then reduce tempi by a large
                    !AJ block size and move on to the next block.
-	           tempi = tempi - lo%large_block_size
-	        end if
-	     end if
+                   tempi = tempi - lo%large_block_size
+                end if
+             end if
           end do
        else
           !AJ This code is called if the unbalanced decomposition is not being used.
@@ -4566,8 +4614,8 @@ contains
        
        else
              
-          if(proc0) then	
-             write(*, fmt="('Using unbalanced decomposition for yxf. '&
+          if(proc0) then
+             write(*, fmt="('Using unbalanced decomposition for yxf. ',&
              & 'Unbalanced fraction',F6.2)") unbalanced_amount
           end if
 
@@ -4665,7 +4713,7 @@ contains
                    if(i .ne. 0) then
                       
                       call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)
-                      call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                      call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                            1, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
                       
                    end if
@@ -4675,7 +4723,7 @@ contains
                    if(i .ne. 0) then
                       
                       call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)     
-                      call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                      call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                            yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
                       
                    end if
@@ -4687,7 +4735,7 @@ contains
                 if(i .ne. 0) then
                    
                    call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)                         
-                   call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                   call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                         yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%block_multiple, &
                         yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
                    
@@ -4701,7 +4749,7 @@ contains
              if(i .ne. 0) then
                 
                 call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)
-                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                      yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, yxf_lo%block_multiple, &
                      yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
                 
@@ -4717,11 +4765,11 @@ contains
              
              select case(layout)
              case('yxels')
-                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                      yxf_lo%negrid*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, &
                      yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
              case default
-                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+                call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                      yxf_lo%nlambda*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, yxf_lo%large_block_size, &
                      yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
              end select
@@ -4735,7 +4783,7 @@ contains
        if(i .ne. 0) then
           
           call calculate_unbalanced_decomposition(k, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, yxf_lo%num_small, yxf_lo%num_large, level_proc_num)
-          call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, nproc, &
+          call calculate_block_size(iproc, yxf_lo%num_small, yxf_lo%num_large, yxf_lo%small_block_balance_factor, yxf_lo%large_block_balance_factor, &
                yxf_lo%negrid*yxf_lo%nlambda*yxf_lo%nsign*yxf_lo%ntgridtotal*yxf_lo%nx, yxf_lo%blocksize, yxf_lo%small_block_size, &
                yxf_lo%large_block_size, yxf_lo%block_multiple, yxf_lo%llim_proc, yxf_lo%ulim_proc, yxf_lo%ulim_alloc)
           
@@ -4895,9 +4943,9 @@ contains
           !AJ offset_block_number is the number of blocks up to the start of the 
           !AJ group of blocks we are considering.
           offset_block_number = block_offset * j
-	  !AJ tempi represents where this index is inside the group of blocks
+          !AJ tempi represents where this index is inside the group of blocks
           !AJ this i point sits.
-	  tempi = i - (block_offset * lo%block_multiple)
+          tempi = i - (block_offset * lo%block_multiple)
           !AJ Work through each block in the group of blocks and see if this i 
           !AJ is within that block.  If it is set the proc_id_xxf as this block 
           !AJ owner.          
@@ -4908,31 +4956,31 @@ contains
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%small_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-	        if(tempi .lt. lo%small_block_size) then
+                if(tempi .lt. lo%small_block_size) then
                    !AJ (k -1) is the number of blocks that we have already considered 
                    !AJ within this group of blocks we have selected. 
-	           proc_id_yxf = offset_block_number + (k - 1)
-		   exit 
-	        else
+                   proc_id_yxf = offset_block_number + (k - 1)
+                   exit 
+                else
                    !AJ If the index is not in this block then reduce tempi by a small
                    !AJ block size and move on to the next block.
-	           tempi = tempi - lo%small_block_size
-	        end if
-	     else
+                   tempi = tempi - lo%small_block_size
+                end if
+             else
                 !AJ TODO: The if-else construct used below could potentially be rationalised 
                 !AJ TODO: to a more efficient formula where:
                 !AJ TODO: proc_id_xxf = offset_block_number + tempi/lo%large_block_size
                 !AJ TODO: Although a method for selecting if tempi is in the small or large 
                 !AJ TODO: blocks would have to be provided.
-	        if(tempi .lt. lo%large_block_size) then
-	           proc_id_yxf = (block_offset * j) + (k - 1)
-		   exit 
-	        else
+                if(tempi .lt. lo%large_block_size) then
+                   proc_id_yxf = (block_offset * j) + (k - 1)
+                   exit 
+                else
                    !AJ If the index is not in this block then reduce tempi by a large
                    !AJ block size and move on to the next block.
-	           tempi = tempi - lo%large_block_size
-	        end if
-	     end if
+                   tempi = tempi - lo%large_block_size
+                end if
+             end if
           end do
        else
           proc_id_yxf = i/lo%blocksize
@@ -5364,16 +5412,21 @@ contains
   end subroutine pe_layout
 
   subroutine factors (n, j, div)
+    !CMR, 3/10/13:
+    !    Find all the factors of n and return in div(j)
     integer, intent (in) :: n
     integer, intent (out) :: j
     integer, dimension (:), intent (out) :: div
     integer :: i, imax
 
+    ! find: i = lowest factor of n
+    ! and therefore imax=n/1 is the HIGHEST factor of n
     do i=2,n
        if (mod(n,i)==0) exit
     end do
     imax = n/i
     j=1
+    ! loop over all possible factors of n, and return in div(j)
     do i=1,imax
        if (mod(n,i)==0) then
           div(j) = i

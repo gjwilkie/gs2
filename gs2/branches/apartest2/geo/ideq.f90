@@ -30,7 +30,7 @@ module ideq
   logical :: init_diameter = .true.
 
   public :: B_psi
-  public :: dfit_init, idfitin, gradient, eqitem, bgradient
+  public :: dfit_init, idfitin, gradient, eqitem, bgradient, dfit_finish
 
   public :: invR
   public :: Rpos
@@ -48,8 +48,8 @@ module ideq
 contains
   
   subroutine idfitin(eqfile, theta, psi_0_out, psi_a_out, rmaj, B_T, amin, initeq)
-
-    use splines
+    use constants, only: twopi
+    use splines, only: new_periodic_spline, delete_periodic_spline, periodic_splint, periodic_spline
     implicit none
 
     type :: grid_type
@@ -72,20 +72,20 @@ contains
 
     type (eq_type) :: d
 
-    character*80, intent (in) :: eqfile
+    character(80), intent (in) :: eqfile
     real, dimension(:), intent (in) :: theta
     real, intent (out) :: rmaj, amin, psi_a_out, psi_0_out, B_T
     integer, intent (in) :: initeq
 
     real :: xdum
-    real :: I_ring, twopi
+    real :: I_ring
     real :: dpsidr, dpsidz
     
     integer :: i, j, init
     integer :: idum, jj, nthg
     integer :: jmax
     
-    character*80 :: filename
+    character(80) :: filename
     character (200) :: line
     
     data init /1/
@@ -97,7 +97,6 @@ contains
     init=0
 
     nt = size(theta)
-    twopi = 8.*atan(1.)
     i=index(eqfile,' ')-1
     filename = eqfile(1:i)
     open(unit=5,file=filename,status='old',form='formatted')
@@ -221,25 +220,38 @@ contains
   subroutine alloc_arrays(nr, nt)
 
     integer :: nr, nt
-	
-	if(.not.allocated(rho_d)) then
-    allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), qsf(nr), beta(nr), pressure(nr), &
-         rc(nr), diam(nr))
-    allocate(R_psi(nr, nt), Z_psi(nr, nt), B_psi(nr, nt))
-    allocate(drm(nr, nt, 2), dzm(nr, nt, 2), dbm(nr, nt, 2), dbtm(nr, nt, 2), &
-         dpm(nr, nt, 2), dtm(nr, nt, 2))
-    allocate(dpcart(nr, nt, 2), dbcart(nr, nt, 2), dtcart(nr, nt, 2), dbtcart(nr, nt, 2))
-    allocate(dpbish(nr, nt, 2), dbbish(nr, nt, 2), dtbish(nr, nt, 2), dbtbish(nr, nt, 2))
-	endif
+
+    if(.not.allocated(rho_d)) then
+       allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), qsf(nr), beta(nr), pressure(nr), &
+            rc(nr), diam(nr))
+       allocate(R_psi(nr, nt), Z_psi(nr, nt), B_psi(nr, nt))
+       allocate(drm(nr, nt, 2), dzm(nr, nt, 2), dbm(nr, nt, 2), dbtm(nr, nt, 2), &
+            dpm(nr, nt, 2), dtm(nr, nt, 2))
+       allocate(dpcart(nr, nt, 2), dbcart(nr, nt, 2), dtcart(nr, nt, 2), dbtcart(nr, nt, 2))
+       allocate(dpbish(nr, nt, 2), dbbish(nr, nt, 2), dtbish(nr, nt, 2), dbtbish(nr, nt, 2))
+    endif
   end subroutine alloc_arrays
 
-  subroutine dfit_init
+  subroutine dealloc_arrays
+    implicit none
+    if(allocated(rho_d)) deallocate(rho_d,eqpsi,psi_bar,fp,qsf,beta,pressure,rc,diam)
+    if(allocated(R_psi)) deallocate(R_psi,Z_psi,B_psi)
+    if(allocated(drm)) deallocate(drm,dzm,dbm,dbtm,dpm,dtm)
+    if(allocated(dpcart)) deallocate(dpcart,dbcart,dtcart,dbtcart)
+    if(allocated(dpbish)) deallocate(dpbish,dbbish,dtbish,dbtbish)
+  end subroutine dealloc_arrays
 
+  subroutine dfit_finish
+    implicit none
+    call dealloc_arrays
+  end subroutine dfit_finish
+
+  subroutine dfit_init
+    use constants, only: pi
+    implicit none
     real, dimension(nr, nt) :: eqpsi1, eqth 
     integer :: i, j
-    real pi
 
-    pi=2*acos(0.)
     do j=1,nt
        do i=1,nr
           eqpsi1(i,j) = eqpsi(i)
@@ -292,13 +304,11 @@ contains
   end subroutine dfit_init
 
   subroutine derm(f, dfm, char)
-
+    use constants, only: pi
     implicit none
     integer i, j
-    character*1 :: char
-    real f(:,:), dfm(:,:,:), pi
-    
-    pi = 2.*acos(0.)
+    character(1) :: char
+    real f(:,:), dfm(:,:,:)
     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -346,7 +356,7 @@ contains
     implicit none
 
     integer, intent (in) :: nth_used, ntm
-    character*1, intent (in) :: char
+    character(1), intent (in) :: char
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
     real, dimension (nr, nt, 2) :: dcart
@@ -406,7 +416,7 @@ contains
     implicit none
     
     integer, intent (in) :: nth_used, ntm
-    character*1, intent (in) :: char
+    character(1), intent (in) :: char
     real, dimension (-ntm:), intent (in)  ::  rgrid, theta
     real, dimension (-ntm:,:), intent (out) :: grad
     real, dimension (1) :: aa, daa, rpt
@@ -453,22 +463,21 @@ contains
   end subroutine bgradient
 
   subroutine eqitem(r, theta_in, f, fstar, char)
-      
+    use constants, only: pi
+    use mp, only: mp_abort
     integer :: i, j, istar, jstar
-    character*1 :: char
+    character(1) :: char
     real :: r, thet, fstar, sign, tp, tps, theta_in
-    real :: st, dt, sr, dr, pi, rt
+    real :: st, dt, sr, dr, rt
     real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
     
-    pi = 2.*acos(0.)
-
 ! check for axis evaluation
       
     if(r == eqpsi(1)) then
        write(*,*) 'no evaluation at axis allowed in eqitem'
        write(*,*) r, theta_in, eqpsi(1)
-       stop
+       call mp_abort('no evaluation at axis allowed in eqitem')
     endif
     
 ! allow psi(r) to be a decreasing function
@@ -479,23 +488,23 @@ contains
     if(r < sign*eqpsi(1)) then
        write(*,*) 'r < Psi_0 in eqitem'
        write(*,*) r,sign,eqpsi(1)
-       stop
+       call mp_abort('r < Psi_0 in eqitem')
     endif
       
 ! find r on psi mesh
 
 ! disallow evaluations outside the plasma surface for now
 
-	if(r == eqpsi(nr)) then
-		rt = 0.9999999999*r
-	if(rt > eqpsi(nr)) rt = 1.0000000001*r
-	r = rt
-	endif
+    if(r == eqpsi(nr)) then
+       rt = 0.9999999999*r
+       if(rt > eqpsi(nr)) rt = 1.0000000001*r
+       r = rt
+    endif
 
     if(r >= eqpsi(nr)) then
        write(*,*) 'No evaluation of eqitem allowed outside surface'
        write(*,*) r, theta_in, eqpsi(nr), sign
-       stop      
+       call mp_abort('No evaluation of eqitem allowed outside surface')
     endif
     
     istar=0
@@ -513,7 +522,7 @@ contains
     if(istar == 1) then
 !       write(*,*) 'Too close to axis in eqitem'
 !       write(*,*) r, theta_in, eqpsi(1), eqpsi(2)
-!       stop
+!       call mp_abort('Too close to axis in eqitem')
     endif
   
 ! Now do theta direction
@@ -674,9 +683,9 @@ contains
 
   end function initialize_psi
 
-  function psi (r, theta)
+  function psi (r)
    
-    real, intent (in) :: r, theta
+    real, intent (in) :: r
     real :: psi
 
     psi = r
@@ -684,12 +693,10 @@ contains
   end function psi
 
   function mod2pi (theta)
-    
+    use constants, only: pi
     real, intent(in) :: theta
-    real :: pi, th, mod2pi
+    real :: th, mod2pi
     logical :: out
-    
-    pi=2.*acos(0.)
     
     if(theta <= pi .and. theta >= -pi) then
        mod2pi = theta
@@ -723,7 +730,7 @@ contains
 ! normalized minor radius, measured inside the ring, in the plane of 
 ! the ring, starting at the ring and going inward.  
 
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, diameter
     type (spline), save :: spl
 
@@ -749,7 +756,7 @@ contains
 
   function rcenter (rp)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: rp, rcenter
     type (spline), save :: spl
 
@@ -773,9 +780,9 @@ contains
 
   end function initialize_dbtori
 
-  function dbtori (pbar)
+  function dbtori ()
   
-    real :: pbar, dbtori
+    real :: dbtori
 
     dbtori = 0.
 
@@ -791,9 +798,9 @@ contains
 
   end function initialize_btori
 
-  function btori (pbar)
+  function btori ()
   
-    real :: pbar, btori
+    real :: btori
 
     btori = 0.
 
@@ -809,9 +816,9 @@ contains
 
   end function initialize_q
 
-  function qfun (pbar)
+  function qfun ()
   
-    real :: pbar, qfun
+    real :: qfun
 
     qfun = 0.
 
@@ -829,7 +836,7 @@ contains
 
   function pfun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, pfun
     type (spline), save :: spl
 
@@ -854,7 +861,7 @@ contains
 
   function dpfun (pbar)
   
-    use splines
+    use splines, only: new_spline, dsplint, spline
     real :: pbar, dpfun
     type (spline), save :: spl
 !
@@ -881,7 +888,7 @@ contains
 
   function betafun (pbar)
   
-    use splines
+    use splines, only: new_spline, splint, spline
     real :: pbar, betafun
     type (spline), save :: spl
 

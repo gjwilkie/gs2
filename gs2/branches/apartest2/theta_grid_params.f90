@@ -2,7 +2,9 @@ module theta_grid_params
   implicit none
 
   public :: init_theta_grid_params, init_trin_geo
+  public :: finish_theta_grid_params
   public :: wnml_theta_grid_params
+  public :: write_trinity_parameters
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
@@ -14,6 +16,7 @@ module theta_grid_params
   private
 
   logical :: trin_flag = .false.
+  logical :: initialized = .false.
   real :: rhoc_trin, qval_trin, shat_trin, rgeo_trin, rmaj_trin, shift_trin
   real :: kappa_trin, kappri_trin, tri_trin, tripri_trin, betaprim_trin
   real :: kp = -1.
@@ -23,7 +26,7 @@ contains
 
   subroutine init_theta_grid_params
     implicit none
-    logical, save :: initialized = .false.
+!    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -32,6 +35,14 @@ contains
          shat_trin, rgeo_trin, rmaj_trin, kappa_trin, kappri_trin, tri_trin, tripri_trin, &
          shift_trin, betaprim_trin)
   end subroutine init_theta_grid_params
+
+  subroutine finish_theta_grid_params
+    implicit none
+    
+    initialized = .false.
+
+  end subroutine finish_theta_grid_params
+
 
   subroutine read_parameters
     use file_utils, only: input_unit, input_unit_exist
@@ -119,6 +130,23 @@ contains
     betaprim = betaprim_in
 
   end subroutine reinit_theta_grid_params
+
+  subroutine write_trinity_parameters(trinpars_unit)
+      integer, intent(in) :: trinpars_unit
+      write (trinpars_unit, "(A22)") '&theta_grid_parameters'
+      write (trinpars_unit, *) ' rhoc = ', rhoc
+      write (trinpars_unit, *) ' qinp = ', qinp
+      write (trinpars_unit, *) ' shat = ', shat
+      write (trinpars_unit, *) ' rmaj = ', rmaj
+      write (trinpars_unit, *) ' r_geo = ', r_geo
+      write (trinpars_unit, *) ' akappa = ', akappa
+      write (trinpars_unit, *) ' akappri = ', akappri
+      write (trinpars_unit, *) ' tri = ', tri
+      write (trinpars_unit, *) ' tripri = ', tripri
+      write (trinpars_unit, *) ' shift = ', shift
+      write (trinpars_unit, *) ' betaprim = ', betaprim
+      write (trinpars_unit, "(A1)") '/'
+  end subroutine write_trinity_parameters
 
   subroutine init_trin_geo (rhoc_in, qval_in, shat_in, rgeo_in, rmaj_in, &
        kappa_in, kappri_in, tri_in, tripri_in, shift_in, betaprim_in)

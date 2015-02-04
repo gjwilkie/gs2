@@ -6,20 +6,27 @@ module run_parameters
 
   public :: init_run_parameters, finish_run_parameters
   public :: check_run_parameters, wnml_run_parameters
+  public :: write_trinity_parameters
 
 
-  public :: beta, zeff, tite
+  public :: beta, zeff, tite, reset, immediate_reset
   public :: fphi, fapar, fbpar
 !  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits
   public :: nstep, wstar_units, eqzip, margin
-  public :: secondary, tertiary, harris, fixpar_secondary
+  public :: secondary, tertiary, harris
   public :: ieqzip
   public :: k0
   public :: vnm_init
   public :: avail_cpu_time, margin_cpu_time
 !  public :: include_lowflow, rhostar, neo_test
   public :: rhostar, neo_test
+  public :: do_eigsolve
+  !> If true and nonlinear_mode is "off", return
+  !! simple diffusive estimates of fluxes to trinity
+  public :: trinity_linear_fluxes
+
+  public :: user_comments
 
   private
 
@@ -30,9 +37,10 @@ module run_parameters
   real, dimension (2) :: vnm_init
   real :: avail_cpu_time, margin_cpu_time
   integer :: nstep
+  logical :: reset=.false.
+  logical :: immediate_reset
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
-  integer :: fixpar_secondary
   real :: k0
   integer, public :: delt_option_switch
   integer, public, parameter :: delt_option_hand = 1, delt_option_auto = 2
@@ -41,6 +49,10 @@ module run_parameters
   real :: rhostar
 !  logical :: include_lowflow, neo_test
   logical :: neo_test
+
+  logical :: trinity_linear_fluxes, do_eigsolve
+
+  character(len=100000) :: user_comments
 
   integer, allocatable :: ieqzip(:,:)
   integer :: eqzip_option_switch
@@ -58,7 +70,7 @@ contains
     if (fphi /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('fphi in the knobs namelist = ',e10.4)") fphi
+       write (report_unit, fmt="('fphi in the knobs namelist = ',e11.4)") fphi
        write (report_unit, fmt="('fphi is a scale factor of all instances of Phi (the electrostatic potential).')")
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -74,7 +86,7 @@ contains
     if (fapar /= 0. .and. fapar /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('fapar in the knobs namelist = ',e10.4)") fapar
+       write (report_unit, fmt="('fapar in the knobs namelist = ',e11.4)") fapar
        write (report_unit, fmt="('fapar is a scale factor of all instances of A_parallel (the parallel vector potential).')")
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -90,7 +102,7 @@ contains
     if (fbpar /= 0. .and. fbpar /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
-       write (report_unit, fmt="('fbpar in the knobs namelist = ',e10.4)") fbpar
+       write (report_unit, fmt="('fbpar in the knobs namelist = ',e11.4)") fbpar
        write (report_unit, fmt="('fbpar is a scale factor of all instances of B_parallel &
            & (the perturbed parallel magnetic field).')")
        write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
@@ -108,8 +120,15 @@ contains
        write (report_unit, *) 
        if (secondary) write (report_unit, fmt="('Mode with kx = 0, ky = ky_min fixed in time')")
        if (tertiary)  write (report_unit, fmt="('Mode with ky = 0, kx = kx_min fixed in time')")
-       if (fixpar_secondary.gt.0)  write (report_unit, fmt="('Mode with ky = ',I0,' fixed in time')") fixpar_secondary
     end if
+
+    write (report_unit, *) 
+    if(immediate_reset)then
+       write (report_unit, fmt="('The time step will be reset immediately after cfl violation detected.')") 
+    else
+       write (report_unit, fmt="('The time step will be reset just before the next time step after cfl violation detected.')") 
+    endif
+    write (report_unit, *) 
   end subroutine check_run_parameters
 
   subroutine wnml_run_parameters(unit,electrons,collisions)
@@ -119,9 +138,9 @@ contains
      if (rpexist) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "parameters"
-       write (unit, fmt="(' beta = ',e16.10)") beta       ! if zero, fapar, fbpar should be zero
-       if (collisions) write (unit, fmt="(' zeff = ',e16.10)") zeff
-       if (.not. electrons)  write (unit, fmt="(' tite = ',e16.10)") tite
+       write (unit, fmt="(' beta = ',e17.10)") beta       ! if zero, fapar, fbpar should be zero
+       if (collisions) write (unit, fmt="(' zeff = ',e17.10)") zeff
+       if (.not. electrons)  write (unit, fmt="(' tite = ',e17.10)") tite
 !CMR, 10/2/2011: zip not in this namelist, so removing it!
 !       if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
@@ -132,22 +151,22 @@ contains
        write (unit, fmt="(' fphi   = ',f6.3)") fphi
        write (unit, fmt="(' fapar  = ',f6.3)") fapar
        write (unit, fmt="(' fbpar = ',f6.3)") fbpar
-       write (unit, fmt="(' delt = ',e16.10)") delt
+       write (unit, fmt="(' delt = ',e17.10)") delt
        write (unit, fmt="(' nstep = ',i8)") nstep
        write (unit, fmt="(' wstar_units = ',L1)") wstar_units
        if (eqzip) then
           write (unit, fmt="(' eqzip = ',L1)") eqzip
           write (unit, fmt="(' secondary = ',L1)") secondary
           write (unit, fmt="(' tertiary = ',L1)") tertiary
-          write (unit, fmt="(' fixpar_secondary = ',i8)") fixpar_secondary
        end if
-       write (unit, fmt="(' margin = ',e16.10)") margin
+       write (unit, fmt="(' margin = ',e17.10)") margin
        select case (delt_option_switch)
        case (delt_option_auto)
           write (unit, fmt="(' delt_option = ',a)") '"check_restart"'
        case (delt_option_hand)
           ! nothing
        end select
+       write (unit, fmt="(' immediate_reset = ',L1)") immediate_reset
        write (unit, fmt="(' /')")
      endif
   end subroutine wnml_run_parameters
@@ -168,9 +187,9 @@ contains
     call init_delt (delt)
     call user2code (user_delt_max, code_delt_max)
 
-    allocate (wunits(naky))
-    allocate (woutunits(naky))
-    allocate (tunits(naky))
+    if(.not. allocated(wunits)) allocate (wunits(naky))
+    if(.not. allocated(woutunits)) allocate (woutunits(naky))
+    if(.not. allocated(tunits)) allocate (tunits(naky))
 
 ! omega_* normalization of time: 
     call adjust_time_norm
@@ -213,11 +232,12 @@ contains
     real, dimension (2) :: vnm_saved
 
     real :: teti  ! for back-compatibility
-    namelist /parameters/ beta, zeff, tite, teti, k0, rhostar
+    namelist /parameters/ beta, zeff, tite, teti, k0, rhostar, user_comments
     namelist /knobs/ fphi, fapar, fbpar, delt, nstep, wstar_units, eqzip, &
-         delt_option, margin, secondary, tertiary, fixpar_secondary, faperp, harris, &
+         delt_option, margin, secondary, tertiary, faperp, harris, &
 !         avail_cpu_time, eqzip_option, include_lowflow, neo_test
-         avail_cpu_time, margin_cpu_time, eqzip_option, neo_test
+         avail_cpu_time, margin_cpu_time, eqzip_option, neo_test, &
+         trinity_linear_fluxes, do_eigsolve, immediate_reset
 
     if (proc0) then
        fbpar = -1.0
@@ -234,14 +254,17 @@ contains
        eqzip = .false.
        secondary = .true.
        tertiary = .false.
-       fixpar_secondary=-1
        harris = .false.
        k0 = 1.
        delt_option = 'default'
        margin = 0.05
        avail_cpu_time = 1.e10
        margin_cpu_time = 300.
-
+       trinity_linear_fluxes = .false.
+       do_eigsolve = .false.
+       immediate_reset = .true.
+       user_comments = ''
+       
        in_file = input_unit_exist("parameters", rpexist)
 !       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)
        if (rpexist) read (unit=in_file,nml=parameters)
@@ -277,23 +300,16 @@ contains
              write (ierr, *) 'because you have chosen harris = TRUE'
              tertiary = .false.
           end if
-          if(fixpar_secondary.gt.0 .and. (secondary.or.tertiary.or.harris))then
-             ierr=error_unit()
-             write (ierr, *) 'Forcing secondary, tertiary and harris to false as fixpar_secondary>0'
-             secondary=.false.
-             tertiary=.false.
-             harris=.false.
-          end if
        endif
 
        ierr = error_unit()
        call get_option_value &
             (delt_option, deltopts, delt_option_switch, ierr, &
-            "delt_option in knobs")
+            "delt_option in knobs",.true.)
 
        call get_option_value ( &
             eqzip_option, eqzipopts, eqzip_option_switch, error_unit(), &
-            "eqzip_option in knobs")
+            "eqzip_option in knobs",.true.)
 
 !!$       ! eqzip_option replaces eqzip, secondary, tertiary, harris
 !!$       if (eqzip .and. eqzip_option_switch == eqzip_option_none) then
@@ -328,7 +344,6 @@ contains
     call broadcast (wstar_units)
     call broadcast (eqzip)
     call broadcast (secondary)
-    call broadcast (fixpar_secondary)
     call broadcast (tertiary)
     call broadcast (harris)
     call broadcast (margin)
@@ -339,7 +354,10 @@ contains
 !    call broadcast (include_lowflow)
     call broadcast (rhostar)
     call broadcast (neo_test)
-    
+    call broadcast (trinity_linear_fluxes)
+    call broadcast (do_eigsolve)
+    call broadcast (immediate_reset)
+
     user_delt_max = delt
 
     delt_saved = delt
@@ -352,6 +370,14 @@ contains
     endif
 
   end subroutine read_parameters
+  
+  subroutine write_trinity_parameters(trinpars_unit)
+    integer, intent(in) :: trinpars_unit
+    write(trinpars_unit, "(A15)") '&run_parameters'
+    write (trinpars_unit, *) ' beta = ', beta
+    write (trinpars_unit, "(A1)") '/'
+
+  end subroutine write_trinity_parameters
 
   subroutine adjust_time_norm
     use file_utils, only: error_unit
@@ -400,6 +426,7 @@ contains
     implicit none
 
     if (allocated(wunits)) deallocate (wunits, woutunits, tunits)
+    if (allocated(ieqzip)) deallocate (ieqzip)
 
     initialized = .false.
 

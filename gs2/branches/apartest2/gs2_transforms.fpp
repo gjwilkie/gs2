@@ -5,6 +5,29 @@
 
 # include "define.inc"
 
+
+! The function calls for single and double precision fftw3 are different.
+! Here we save ourself the bother of writing them out twice by defining
+! a macro that correctly sets the beginning of the function
+
+#ifdef ANSI_CPP
+
+#ifdef SINGLE_PRECISION
+#define FFTW_PREFIX(fn) sfftw##fn
+#else
+#define FFTW_PREFIX(fn) dfftw##fn
+#endif
+
+#else
+
+#ifdef SINGLE_PRECISION
+#define FFTW_PREFIX(fn) sfftw/**/fn
+#else
+#define FFTW_PREFIX(fn) dfftw/**/fn
+#endif
+
+#endif
+
 module gs2_transforms
 
   use redistribute, only: redist_type
@@ -19,19 +42,15 @@ module gs2_transforms
 
   private
 
-  logical :: initialized, initialized_x, initialized_y_fft
-  logical :: initialized_x_redist, initialized_y_redist, initialized_3d
+  logical :: initialized=.false., initialized_x=.false., initialized_y_fft=.false.
+  logical :: initialized_x_redist=.false., initialized_y_redist=.false., initialized_3d=.false.
 
   interface transform_x
      module procedure transform_x5d
-!     module procedure transform_x3d
-!     module procedure transform_x1d
   end interface
 
   interface transform_y
      module procedure transform_y5d
-!     module procedure transform_y3d
-!     module procedure transform_y1d
   end interface
 
   interface transform2
@@ -44,14 +63,10 @@ module gs2_transforms
 
   interface inverse_x
      module procedure inverse_x5d
-!     module procedure inverse_x3d
-!     module procedure inverse_x1d
   end interface
 
   interface inverse_y
      module procedure inverse_y5d
-!     module procedure inverse_y3d
-!     module procedure inverse_y1d
   end interface
 
   interface inverse2
@@ -67,8 +82,8 @@ module gs2_transforms
 
   ! fft
 
-  type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
-  type (fft_type) :: xf3d_cr, xf3d_rc
+  type (fft_type), save :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
+  type (fft_type), save :: xf3d_cr, xf3d_rc
 
   logical :: xfft_initted = .false.
 
@@ -87,15 +102,18 @@ contains
 
   subroutine init_transforms &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
-    use mp, only: nproc
+    use mp, only: nproc, proc0
     use gs2_layouts, only: init_gs2_layouts, opt_redist_init
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: init_x_transform_layouts
+    use gs2_layouts, only: fft_wisdom_file, fft_use_wisdom, fft_measure_plan
+    use fft_work, only: load_wisdom, save_wisdom, measure_plan
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
     logical, intent (out) :: accelerated
+    logical, parameter :: debug = .false.
 
     character (1) :: char
 ! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
@@ -105,16 +123,22 @@ contains
     if (initialized) return
     initialized = .true.
 
+    measure_plan = fft_measure_plan
+    if (fft_use_wisdom) call load_wisdom(trim(fft_wisdom_file))
+    
+    if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
     call init_gs2_layouts
 
     call pe_layout (char)
 
     if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then  
        accel = .true.
+       if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
        call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     else
        !Recommended for p+log(p)>log(N) where p is number of processors and N is total number of mesh points
        !Could automate selection, though above condition is only fairly rough
+       if (debug) write (*,*) 'init_transforms: init_y_redist'
        if (opt_redist_init) then
           call init_y_redist_local (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
        else
@@ -123,12 +147,18 @@ contains
     end if
 
 ! need these for movies
+     if (debug) write (*,*) 'init_transforms: init_y_transform_layouts'
     call init_y_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
+     if (debug) write (*,*) 'init_transforms: init_x_transform_layouts'
     call init_x_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
 
+    if (debug) write (*,*) 'init_transforms: init_y_fft'
     call init_y_fft (ntgrid)
 
+    if (debug) write (*,*) 'init_transforms: done'
     accelerated = accel
+    
+    if (proc0.and.fft_use_wisdom) call save_wisdom(trim(fft_wisdom_file))
 
   end subroutine init_transforms
 
@@ -254,12 +284,12 @@ contains
 # elif FFT == _FFTW3_
           ! number of ffts to be calculated
           !JH 7th December 2011
-	  !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
-	  !JH because there are situations where xxf_lo%llim_proc is greater 
-	  !JH than xxf_lo%ulim_proc and that would create a negative number 
-	  !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
-	  !JH to be xxf_lo%llim_proc in this situation, and that will give 
-	  !JH 1 FFT to be calculated which the code can correctly undertake.
+          !JH xxf_lo%ulim_alloc is used here rather than xxf_lo%lulim_proc
+          !JH because there are situations where xxf_lo%llim_proc is greater 
+          !JH than xxf_lo%ulim_proc and that would create a negative number 
+          !JH of FFTs to be calculated.  However, xxf_lo%ulim_alloc is set
+          !JH to be xxf_lo%llim_proc in this situation, and that will give 
+          !JH 1 FFT to be calculated which the code can correctly undertake.
           nb_ffts = xxf_lo%ulim_alloc - xxf_lo%llim_proc + 1
           
           call init_ccfftw (xf_fft,  1, xxf_lo%nx, nb_ffts, xxf)
@@ -393,7 +423,7 @@ contains
 
     call set_redist_character_type(g2x, 'g2x')
     call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
-       nlambda, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
+       nlambda, negrid, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
          from_low, from_high, from_list)
 
@@ -606,7 +636,7 @@ contains
 
     call set_redist_character_type(g2x, 'g2x')
     call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
-       nlambda, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
+       nlambda, negrid, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
 
     !Create g2x redistribute object
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
@@ -962,7 +992,7 @@ contains
     call fftw_f77 (xf_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
     deallocate (aux)
 # elif FFT == _FFTW3_
-    call dfftw_execute(xf_fft%plan)
+    call FFTW_PREFIX(_execute)(xf_fft%plan)
 # endif
 
     call prof_leaving ("transform_x5d", "gs2_transforms")
@@ -997,7 +1027,7 @@ contains
     call fftw_f77 (xb_fft%plan, i, xxf, 1, xxf_lo%nx, aux, 0, 0)
     deallocate (aux)
 # elif FFT == _FFTW3_
-    call dfftw_execute(xb_fft%plan)
+    call FFTW_PREFIX(_execute)(xb_fft%plan)
 # endif
 
     call scatter (g2x, xxf, g)
@@ -1013,7 +1043,9 @@ contains
     complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: xxf
 # ifdef FFT
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
+# if FFT == _FFTW_
     integer :: i
+# endif
 # else
     real, dimension (:,yxf_lo%llim_proc:) :: yxf
 # endif
@@ -1037,7 +1069,7 @@ contains
     call rfftwnd_f77_complex_to_real (yf_fft%plan, i, fft, 1, yxf_lo%ny/2+1, yxf, 1, yxf_lo%ny)
 # elif FFT == _FFTW3_
 
-    call dfftw_execute_dft_c2r (yf_fft%plan, fft, yxf)
+    call FFTW_PREFIX(_execute_dft_c2r) (yf_fft%plan, fft, yxf)
 # endif
 
     call prof_leaving ("transform_y5d", "gs2_transforms")
@@ -1068,7 +1100,7 @@ contains
     i = yxf_lo%ulim_alloc - yxf_lo%llim_proc + 1
     call rfftwnd_f77_real_to_complex (yb_fft%plan, i, yxf, 1, yxf_lo%ny, fft, 1, yxf_lo%ny/2+1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_r2c (yb_fft%plan, yxf, fft)
+    call FFTW_PREFIX(_execute_dft_r2c) (yb_fft%plan, yxf, fft)
 # endif
 
     call scatter (x2y, fft, xxf)
@@ -1212,7 +1244,7 @@ contains
             axf(:,:,ia(idx):), i, 1)
 # elif FFT == _FFTW3_
        ! remember FFTW3 for c2r destroys the contents of ag
-       call dfftw_execute_dft_c2r (yf_fft%plan, ag(:, :, k:), &
+       call FFTW_PREFIX(_execute_dft_c2r) (yf_fft%plan, ag(:, :, k:), &
             axf(:, :, ia(idx):))
 # endif
        idx = idx + 1
@@ -1241,7 +1273,7 @@ contains
        call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k:), i, 1, &
             ag(:,:,iak(idx):), i, 1)
 # elif FFT == _FFTW3_
-       call dfftw_execute_dft_r2c(yb_fft%plan, axf(:, :, k:), &
+       call FFTW_PREFIX(_execute_dft_r2c)(yb_fft%plan, axf(:, :, k:), &
             ag(:, :, iak(idx):))
 # endif
        idx = idx + 1
@@ -1366,7 +1398,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
+    call FFTW_PREFIX(_execute_dft_c2r) (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -1411,7 +1443,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf3d_rc%plan, i, phix, i, 1, aphi, i, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_r2c (xf3d_rc%plan, phix, aphi)
+    call FFTW_PREFIX(_execute_dft_r2c) (xf3d_rc%plan, phix, aphi)
 # endif
 
 ! dealias and scale
@@ -1455,6 +1487,9 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
+    !May be inefficient to create and destroy this fft plan
+    !on every call to the routine. We may want to move this
+    !variable to module level and check its created flag.
 #if FFT == _FFTW_
 
     call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx)
@@ -1485,14 +1520,16 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf2d%plan, 1, aphi, 1, 1, phix, 1, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_c2r (xf2d%plan, aphi, phix)
+    call FFTW_PREFIX(_execute_dft_c2r) (xf2d%plan, aphi, phix)
 # endif
 
     phixf(:,:)=transpose(phix(:,:))
 
     deallocate (aphi, phix)
 !RN> this statement causes error for lahey with DEBUG. I don't know why
-!    call delete_fft(xf2d)
+!<DD>Reinstating after discussion with RN, if this causes anyone an issue
+!    then we can guard this line with some directives.   
+    call delete_fft(xf2d)
   end subroutine transform2_2d
 
 
@@ -1509,6 +1546,9 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
+    !May be inefficient to create and destroy this fft plan
+    !on every call to the routine. We may want to move this
+    !variable to module level and check its created flag.
 #if FFT == _FFTW_
 
     call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx)
@@ -1529,7 +1569,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_real_to_complex (xf2d%plan, 1, phix, 1, 1, aphi, 1, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_r2c (xf2d%plan, phix, aphi)
+    call FFTW_PREFIX(_execute_dft_r2c) (xf2d%plan, phix, aphi)
 # endif
 
 ! scale, dealias and transpose
@@ -1543,7 +1583,9 @@ contains
 
     deallocate (aphi, phix)
 !RN> this statement causes error for lahey with DEBUG. I don't know why
-!    call delete_fft(xf2d)
+!<DD>Reinstating after discussion with RN, if this causes anyone an issue
+!    then we can guard this line with some directives.   
+    call delete_fft(xf2d)
   end subroutine inverse2_2d
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1592,7 +1634,7 @@ contains
 # if FFT == _FFTW_
     call rfftwnd_f77_complex_to_real (xf3d_cr%plan, i, aphi, i, 1, phix, i, 1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft_c2r (xf3d_cr%plan, aphi, phix)
+    call FFTW_PREFIX(_execute_dft_c2r) (xf3d_cr%plan, aphi, phix)
 # endif
 
     do it=1,nnx
@@ -1609,11 +1651,11 @@ contains
   
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_zf (ntgrid, nperiod, howmany)
+  subroutine init_zf (ntgrid, howmany)
 
     use fft_work, only: init_z
     implicit none
-    integer, intent (in) :: ntgrid, nperiod, howmany
+    integer, intent (in) :: ntgrid, howmany
     logical :: done = .false.
 
     if (done) return
@@ -1625,16 +1667,17 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
-  subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
-
+  subroutine kz_spectrum (an, an2)
+# if FFT == _FFTW_
+    use kt_grids, only: naky, ntheta0
+# endif
     complex, dimension (:,:,:), intent(in)  :: an
     complex, dimension (:,:,:), intent(out) :: an2
-    integer, intent (in) :: ntheta0, naky, ntgrid
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
 # elif FFT == _FFTW3_
-    call dfftw_execute_dft(zf_fft%plan, an, an2)
+    call FFTW_PREFIX(_execute_dft)(zf_fft%plan, an, an2)
 # endif
     an2 = conjg(an2)*an2
 
@@ -1644,8 +1687,7 @@ contains
 
   subroutine finish_transforms
     use redistribute, only : delete_redist
-
-!    integer :: ip
+    use fft_work, only: delete_fft, finish_fft_work
 
     if(allocated(xxf)) deallocate(xxf)
     if(allocated(ia)) deallocate(ia)
@@ -1658,11 +1700,17 @@ contains
 
     if(allocated(fft)) deallocate(fft) 
 
-!    do ip = 0, nprocs-1
-!       if(nnfrom(ip)>0) then
-!          if(allocated(from_list(ip)%first)) deallocate(from_list(ip)%first)
-!       endo
+    !Destroy fftw plans
+    !Note delete_fft is safe to call on plans that have not been created
+    call delete_fft(yf_fft)
+    call delete_fft(yb_fft)
+    call delete_fft(xf_fft)
+    call delete_fft(xb_fft)
+    call delete_fft(zf_fft)
+    call delete_fft(xf3d_cr)
+    call delete_fft(xf3d_rc)
 
+    !Reset init state flags
     initialized = .false.
     initialized_x = .false.
     initialized_y_fft = .false.
@@ -1670,12 +1718,9 @@ contains
     initialized_y_redist = .false.
     initialized_3d = .false.
     xfft_initted = .false.
-
-
+    
+    !Tidy up fft internals (FFTW3 only)
+    call finish_fft_work
   end subroutine finish_transforms
-
 ! > HJL
-
-
-
 end module gs2_transforms

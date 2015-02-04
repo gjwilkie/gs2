@@ -1,29 +1,39 @@
 
 
-#$(info "gs2_mod is $(gs2_mod)")
 
-# This command adds '../../' to all the gs2 modules and gets rid of gs2.o
-TEST_MODS=$(shell echo '$(gs2_mod)' | sed -e "s/gs2.o//" |  sed -e "s/\(\S\+\)/..\/..\/\1/g"  )
-#|  sed -e "s/\(Ldiag\)/..\/..\/\1/g"
-TEST_MODS+= ../../unit_tests.o ../../functional_tests.o
+# Specify any required modules that are not in libgs2.a
+TEST_MODS= ../../functional_tests.o 
 
-# All subfolders unless otherwise specified
-TESTS ?= $(wildcard */.) 
+# Run the tests in all subfolders unless otherwise specified
+# by setting the variable TESTS
+ifdef TESTS
+TESTS_TMP = $(filter $(wildcard */.),$(patsubst %,%/.,$(TESTS)))
+else
+TESTS_TMP = $(wildcard */.)
+endif
+
+ifdef EXCLUDE_TESTS
+TESTS_ACTUAL = $(filter-out $(patsubst %,%/.,$(EXCLUDE_TESTS)),$(TESTS_TMP))
+else
+TESTS_ACTUAL = $(TESTS_TMP)
+endif
+
+
 
 
 export
      
-.PHONY: all $(TESTS) clean
+.PHONY: all $(TESTS_ACTUAL) clean
 
-all: $(TESTS)
+all: $(TESTS_ACTUAL)
 
 
-clean: 
-	for d in $(TESTS); \
+clean upload: 
+	for d in $(TESTS_ACTUAL); \
 	do \
-		$(MAKE) clean -C $$d; \
+		$(MAKE) $@ -C $$d; \
 	done
 
 
-$(TESTS): 
+$(TESTS_ACTUAL): 
 	$(MAKE) all -C $@

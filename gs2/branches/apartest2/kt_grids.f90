@@ -43,8 +43,8 @@ contains
    integer:: unit
      write (unit, *)
      write (unit, fmt="(' &',a)") "kt_grids_single_parameters"
-     write (unit, fmt="(' aky = ',e16.10)") aky
-     write (unit, fmt="(' theta0 = ',e16.10)") theta0
+     write (unit, fmt="(' aky = ',e17.10)") aky
+     write (unit, fmt="(' theta0 = ',e17.10)") theta0
      write (unit, fmt="(' /')")
   end subroutine wnml_kt_grids_single
 
@@ -75,7 +75,7 @@ contains
 
        write (report_unit, *) 
        write (report_unit, fmt="('A single k_perp will be evolved, with: ')")
-       if (n0 .gt.0) write (report_unit, fmt="('ky set using toroidal mode number, n0=',i8/T24,'rhostar_single='1pe12.4)") n0, rhostar_single
+       if (n0 .gt.0) write (report_unit, fmt="('ky set using toroidal mode number, n0=',i8/T24,'rhostar_single=',1pe12.4)") n0, rhostar_single
        write (report_unit, *) 
        write (report_unit, fmt="('ky rho = ',f10.4)") aky
        write (report_unit, fmt="('theta_0 = ',f10.4)") theta0
@@ -106,8 +106,15 @@ module kt_grids_range
   integer :: naky, ntheta0, nn0, n0_min, n0_max
   real :: aky_min, aky_max, theta0_min, theta0_max
   real :: akx_min, akx_max, rhostar_range
+  character(20) :: kyspacing_option
+  integer :: kyspacingopt_switch
+  !Note if we ever want to offer different spacing for theta0 we could
+  !reuse these flags (rename to spacingopt_...).
+  integer, parameter :: kyspacingopt_linear=1, kyspacingopt_exp=2 
+
   namelist /kt_grids_range_parameters/ naky, ntheta0, nn0, n0_min, n0_max, &
-       aky_min, aky_max, theta0_min, theta0_max, akx_min, akx_max, rhostar_range
+       aky_min, aky_max, theta0_min, theta0_max, akx_min, akx_max, rhostar_range,&
+       kyspacing_option
 
 contains
 
@@ -116,11 +123,16 @@ contains
 ! New namelist variables nn0, n0_min, n0_max, rhostar_range to set ky grid 
 !                                             using toroidal mode numbers.
 ! Toroidal modenumbers are used if n0_min> 0 prescribed in input file. 
-    use file_utils, only: input_unit, input_unit_exist
+    use file_utils, only: input_unit, input_unit_exist, error_unit
+    use text_options, only: text_option, get_option_value
     use theta_grid, only: drhodpsi
     implicit none
-    integer :: in_file
+    integer :: in_file,ierr
     logical :: exist
+    type (text_option), dimension(3), parameter :: kyspacingopts = &
+         (/ text_option('default', kyspacingopt_linear), &
+            text_option('linear', kyspacingopt_linear), &
+            text_option('exponential', kyspacingopt_exp) /)
 
     naky = 1          ;  ntheta0 = 1  
     aky_min = 0.0     ;  aky_max = 0.0
@@ -129,9 +141,25 @@ contains
     nn0 = 1           ;  ntheta0 = 1  
     n0_min = 0        ;  n0_max = 0
     rhostar_range=1.0e-4
-
+    kyspacing_option='default'
+  
     in_file = input_unit_exist ("kt_grids_range_parameters", exist)
     if (exist) read (in_file, nml=kt_grids_range_parameters)
+
+    ierr = error_unit()
+    call get_option_value(kyspacing_option, kyspacingopts, kyspacingopt_switch,&
+         ierr, "kyspacing_option in kt_grids_range_parameters",.true.)
+
+    !Override kyspacing_option in certain cases
+    select case (kyspacingopt_switch)
+    case (kyspacingopt_exp)
+       if(aky_min.le.0) then
+          write(ierr,'("Cannot use kyspacing_option=",A," with aky_min<=0.0 --> setting to",A)') &
+               "'exponential'","'linear'"
+          kyspacingopt_switch=kyspacingopt_linear
+       endif
+    end select
+
     if (n0_min .gt. 0) then
 !CMR if n0_min>0 then override aky inputs and use nn0, n0_min, n0_max to determine aky range
        aky_min=n0_min*drhodpsi*rhostar_range
@@ -152,17 +180,23 @@ contains
      write (unit, *)
      write (unit, fmt="(' &',a)") "kt_grids_range_parameters"
      write (unit, fmt="(' naky = ',i3)") naky
-     write (unit, fmt="(' aky_min = ',e16.10)") aky_min
-     write (unit, fmt="(' aky_max = ',e16.10)") aky_max
+     write (unit, fmt="(' aky_min = ',e17.10)") aky_min
+     write (unit, fmt="(' aky_max = ',e17.10)") aky_max
      write (unit, fmt="(' nn0 = ',i3)") nn0
      write (unit, fmt="(' n0_min = ',i10)") n0_min
      write (unit, fmt="(' n0_max = ',i10)") n0_max
-     write (unit, fmt="(' rhostar_range = ',e16.10)") rhostar_range
+     write (unit, fmt="(' rhostar_range = ',e17.10)") rhostar_range
      write (unit, fmt="(' ntheta0 = ',i3)") ntheta0
-     write (unit, fmt="(' theta0_min = ',e16.10)") theta0_min
-     write (unit, fmt="(' theta0_max = ',e16.10)") theta0_max
-     write (unit, fmt="(' akx_min = ',e16.10)") akx_min
-     write (unit, fmt="(' akx_max = ',e16.10)") akx_max
+     write (unit, fmt="(' theta0_min = ',e17.10)") theta0_min
+     write (unit, fmt="(' theta0_max = ',e17.10)") theta0_max
+     write (unit, fmt="(' akx_min = ',e17.10)") akx_min
+     write (unit, fmt="(' akx_max = ',e17.10)") akx_max
+     select case(kyspacingopt_switch)
+     case (kyspacingopt_linear)
+        write (unit, fmt="(' kyspacing_option = ',A)") "linear"
+     case (kyspacingopt_exp)
+        write (unit, fmt="(' kyspacing_option = ',A)") "exponential"
+     end select
      write (unit, fmt="(' /')")
   end subroutine wnml_kt_grids_range
 
@@ -171,13 +205,12 @@ contains
     integer, intent (out) :: naky_x, ntheta0_x, nx, ny
     naky_x = naky  ;  ntheta0_x = ntheta0
     nx = 0         ;  ny = 0
-
   end subroutine range_get_sizes
 
 ! BD: Could add some logic here to set theta0 if akx is given?  When do we need what?
-
   subroutine range_get_grids (aky, theta0, akx)
     use theta_grid, only: shat
+    use mp, only: mp_abort
     implicit none
     real, dimension (:), intent (out) :: akx, aky
     real, dimension (:,:), intent (out) :: theta0
@@ -186,16 +219,26 @@ contains
     integer :: i, j
 
     if ( size(aky) /= naky) then
-       write(6,*) 'range_get_grids: size(aky) /= naky'       ;  stop
+       call mp_abort('range_get_grids: size(aky) /= naky',.true.)
     endif
 
     if ( size(akx) /= ntheta0) then
-       write(6,*) 'range_get_grids: size(akx) /= ntheta0'    ;  stop
+       call mp_abort('range_get_grids: size(akx) /= ntheta0',.true.)
     endif
 
     dky = 0.0
-    if (naky > 1) dky = (aky_max - aky_min)/real(naky - 1)
-    aky = (/ (aky_min + dky*real(i), i = 0,naky-1) /)
+    if (naky > 1)then 
+       select case (kyspacingopt_switch)
+       case (kyspacingopt_linear)
+          dky = (aky_max - aky_min)/real(naky - 1)
+          aky = (/ (aky_min + dky*real(i), i = 0,naky-1) /)
+       case (kyspacingopt_exp)
+          dky = (log(aky_max) - log(aky_min))/real(naky - 1)
+          aky = (/ (exp(log(aky_min) + dky*real(i)), i = 0,naky-1) /)
+       end select
+    else
+       aky = (/ (aky_min, i = 0,naky-1) /)
+    endif
  
 ! set default theta0 to 0
     theta0=0.0
@@ -211,17 +254,27 @@ contains
           theta0(:,j) &
                = (/ (theta0_min + dtheta0*real(i), i=0,ntheta0-1) /)
        end do
-       akx = theta0(:,1) * shat * aky(1)
-
+       
+       !<DD>Adding support for ky=0, kx/=0
+       if(aky(1)==0)then
+          if(naky>1)then
+             akx = theta0(:,2) * shat * aky(2)
+          else
+             dkx = 0.0
+             if (ntheta0 > 1) dkx = (akx_max - akx_min)/real(ntheta0 - 1)
+             akx = (/ (akx_min + dkx*real(i), i = 0,ntheta0-1) /)
+          end if
+       else
+          !This is the original behaviour
+          akx = theta0(:,1) * shat * aky(1)
+       endif
     else
 
 !CMR, 22/9/2010:  ie here assume boundary_option .eq. 'periodic'
 !new code for periodic finite kx ballooning space runs with shat=0
-
        dkx = 0.0
        if (ntheta0 > 1) dkx = (akx_max - akx_min)/real(ntheta0 - 1)
        akx = (/ (akx_min + dkx*real(i), i = 0,ntheta0-1) /)
-
     endif
 
   end subroutine range_get_grids
@@ -230,40 +283,47 @@ contains
     use constants, only: twopi
     use theta_grid, only: shat
     implicit none
-    real :: dky, dtheta0, dkx
+    real :: dtheta0
     integer :: report_unit, i, j
+    real, dimension(:), allocatable:: aky, akx
+    real, dimension(:,:), allocatable:: theta0
 
-       write (report_unit, *) 
-       write (report_unit, fmt="('A range of k_perps will be evolved.')")
-       if (n0_min .gt.0) write (report_unit, fmt="('ky set using toroidal mode numbers with n0_min=',i8/T34,'rhostar_range=',1pe12.4)") n0_min,rhostar_range
-       write (report_unit, *) 
-       write (report_unit, fmt="('There are ',i3,' values of ky rho and ',i3,' values of theta_0/kx rho:')") naky, ntheta0
-       write (report_unit, *) 
-          
-       dky = 0.0        ;  if (naky > 1) dky = (aky_max - aky_min)/real(naky - 1)
-       dkx = 0.0        ;  if (ntheta0 > 1) dkx = (akx_max - akx_min)/real(ntheta0 - 1)
-       dtheta0 = 0.0    ;  if (ntheta0 > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0 - 1)
+    write (report_unit, *) 
+    write (report_unit, fmt="('A range of k_perps will be evolved.')")
+    if (n0_min .gt.0) write (report_unit, fmt="('ky set using toroidal mode numbers with n0_min=',i8/T34,'rhostar_range=',1pe12.4)") n0_min,rhostar_range
+    write (report_unit, *) 
+    write (report_unit, fmt="('There are ',i3,' values of ky rho and ',i3,' values of theta_0/kx rho:')") naky, ntheta0
+    write (report_unit, *) 
 
-       do j = 0, naky-1
-          do i = 0, ntheta0-1
-             write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4,' kx rho = ',e10.4)") &
-                  aky_min + dky*real(j), theta0_min + dtheta0*real(i), akx_min + dkx*real(i)
-          end do
+    !<DD>Calculate the kt grids
+    allocate(aky(naky),theta0(ntheta0,naky),akx(ntheta0))
+    call range_get_grids(aky, theta0, akx)
+
+    !Report grid values
+    do j = 1, naky
+       do i = 1, ntheta0
+          write (report_unit, fmt="('ky rho = ',e11.4,' theta0 = ',e11.4,' kx rho = ',e11.4)") &
+               aky(j),theta0(i,j),akx(i)
        end do
+    end do
+    deallocate(aky,theta0,akx)
 
 ! CMR, add some !!!error checking!!! for ballooning space runs for shat /= 0 
 ! using flow shear: check that the constraints on theta0 grid are satisfied!
 
-       if (shat /= 0) then
-         if (abs(mod(twopi-theta0_max+theta0_min,twopi)-dtheta0) > 1.0e-3*dtheta0) then
-             write (report_unit, *) 
-             write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is an ERROR that will corrupt results.')")
-             write (report_unit, fmt="('check_kt_grids_range: inappropriate theta0 grid')")
-             write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e10.4,' must be set equal to dtheta = ',e10.4)") twopi-theta0_max+theta0_min, dtheta0
-         endif
+    if (shat /= 0) then
+       !It would be nice to only write this information if g_exb*gexbfac/=0 but currently
+       !dependencies prevent this.
+       dtheta0 = 0.0    ;  if (ntheta0 > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0 - 1)
+       if (abs(mod(twopi-theta0_max+theta0_min,twopi)-dtheta0) > 1.0e-3*dtheta0) then
+          write (report_unit, *) 
+          write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is an ERROR that will corrupt results.')")
+          write (report_unit, fmt="('check_kt_grids_range: inappropriate theta0 grid')")
+          write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e11.4,' must be set equal to dtheta = ',e11.4)") twopi-theta0_max+theta0_min, dtheta0
        endif
+    endif
 
-   end subroutine check_kt_grids_range
+  end subroutine check_kt_grids_range
 
 end module kt_grids_range
 
@@ -373,7 +433,7 @@ contains
     write (report_unit, fmt="('A set of ',i3,' k_perps will be evolved.')") max(naky,ntheta0)
     write (report_unit, *) 
     do i=1, max(naky,ntheta0)
-       write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4)") aky(i), theta0(i)
+       write (report_unit, fmt="('ky rho = ',e11.4,' theta0 = ',e11.4)") aky(i), theta0(i)
     end do
   end subroutine check_kt_grids_specified
 
@@ -403,14 +463,15 @@ contains
 ! If n0 and rhostar_box defined, set ky(1) using toroidal mode number.
 
     use theta_grid, only: init_theta_grid, shat, drhodpsi
-    use file_utils, only: input_unit, input_unit_exist
-    use constants
+    use file_utils, only: input_unit, input_unit_exist, error_unit
+    use constants, only: pi
+    use mp, only: mp_abort, proc0
     implicit none
     integer :: naky, ntheta0, nx, ny, nkpolar
     integer :: in_file
     logical :: exist
     namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, n0, jtwist, &
-	y0, rtwist, x0, nkpolar, rhostar_box
+         y0, rtwist, x0, nkpolar, rhostar_box
 
     call init_theta_grid
 
@@ -425,6 +486,9 @@ contains
     in_file = input_unit_exist("kt_grids_box_parameters", exist)
     if (exist) read (in_file, nml=kt_grids_box_parameters)
 
+    if (ny==0 .and. naky==0) call mp_abort("ERROR: ny==0 .and. naky==0", .true.) 
+    if (nx==0 .and. ntheta0==0) call mp_abort("ERROR: nx==0 .and. ntheta0==0", .true.) 
+
     if (rhostar_box .gt. 0.0 .and. n0 .gt. 0) y0=1.0/(n0*rhostar_box*drhodpsi)
 
     if (y0 < 0) y0 = -1./y0
@@ -434,6 +498,30 @@ contains
     if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
     if (rtwist == 0.) rtwist = real(jtwist)
     if (nkpolar == 0) nkpolar = int(real(naky-1.)*sqrt(2.))
+
+    ! Now we make sure that we set ny and nx for given 
+    ! choices of naky and ntheta0. If e.g. both ny and naky
+    ! are set and they are not consistent with each other
+    ! raise an error.
+
+    if (ny == 0) then 
+      if (proc0) write (error_unit(), *) "INFO: ny set from naky"
+      ny = (naky - 1)*  3 + 1
+    else if (naky /= (ny-1)/3 + 1) then
+      if (proc0) write (error_unit(), *) "ERROR: naky and ny both set and inconsistent... set one or the other"
+      call mp_abort("")
+    end if
+    if (nx == 0) then 
+      if (proc0) write (error_unit(), *) "INFO: nx set from ntheta0"
+      if (mod(ntheta0, 2) /= 1) then
+        call mp_abort("ERROR: ntheta0 must be an odd number in box mode", .true.)
+      end if
+      nx = ((ntheta0 - 1) /  2) * 3 + 1
+    else if (ntheta0 /= 2*((nx-1)/3) + 1) then
+      if (proc0) write (error_unit(), *) "ERROR: ntheta0 and nx both set and inconsistent... set one or the other"
+      call mp_abort("")
+    end if
+
     
     nkpolar_private = nkpolar
     naky_private = naky
@@ -450,9 +538,9 @@ contains
      write (unit, fmt="(' &',a)") "kt_grids_box_parameters"
      write (unit, fmt="(' nx = ',i4)") nx_private
      write (unit, fmt="(' ny = ',i4)") ny_private
-     write (unit, fmt="(' Ly = ',e16.10)") ly
+     write (unit, fmt="(' Ly = ',e17.10)") ly
      if (rtwist /= 0.) then
-        write (unit, fmt="(' rtwist = ',e16.10)") rtwist
+        write (unit, fmt="(' rtwist = ',e17.10)") rtwist
      else
         write (unit, fmt="(' jtwist = ',i4)") jtwist
      end if
@@ -471,7 +559,7 @@ contains
 
   subroutine box_get_grids (aky, theta0, akx, ikx, iky)
     use theta_grid, only: shat
-    use constants
+    use constants, only: pi
     implicit none
     real, dimension (:), intent (out) :: akx, aky
     real, dimension (:,:), intent (out) :: theta0
@@ -622,10 +710,11 @@ module kt_grids
   public :: ikx, iky, jtwist_out
   public :: gridopt_switch, grid_option
   public :: gridopt_single, gridopt_range, gridopt_specified, gridopt_box
-  public :: kwork_filter
+  public :: kwork_filter, kperp2
   private
 
   logical, dimension(:,:), allocatable :: kwork_filter
+  real, dimension (:,:,:), allocatable :: kperp2
   real, dimension (:,:), allocatable :: theta0
   real, dimension (:), allocatable :: aky, akx
   integer, dimension(:), allocatable :: ikx, iky
@@ -641,6 +730,7 @@ module kt_grids
   logical :: reality = .false.
   logical :: box = .false.
   logical :: initialized = .false.
+  logical :: kp2init=.false.
   logical :: nml_exist
 
 contains
@@ -649,8 +739,6 @@ contains
     use theta_grid, only: init_theta_grid
     use mp, only: proc0, broadcast
     implicit none
-
-    integer :: ik
 
     if (initialized) return
     initialized = .true.
@@ -671,6 +759,7 @@ contains
     call broadcast (ntheta0)
     call broadcast (ny)
     call broadcast (nx)
+    call broadcast (gridopt_switch)
     call allocate_arrays
 
     if (proc0) call get_grids
@@ -678,11 +767,10 @@ contains
     call broadcast (aky)
     call broadcast (akx)
     call broadcast (jtwist_out)
-    do ik = 1, naky
-       call broadcast (theta0(:,ik))
-    end do
+    call broadcast (theta0)
     allocate(kwork_filter(ntheta0,naky))
     kwork_filter=.false.
+    call init_kperp2
   end subroutine init_kt_grids
 
   subroutine read_parameters
@@ -704,7 +792,7 @@ contains
 
     ierr = error_unit()
     call get_option_value (grid_option, gridopts, gridopt_switch, &
-         ierr, "grid_option in kt_grids_knobs")
+         ierr, "grid_option in kt_grids_knobs",.true.)
 
   end subroutine read_parameters
 
@@ -793,13 +881,39 @@ contains
     end select
   end subroutine get_grids
 
+  subroutine init_kperp2
+    use theta_grid, only: ntgrid, gds2, gds21, gds22, shat
+    implicit none
+    integer :: ik, it
+
+    if (kp2init) return
+    kp2init = .true.
+
+    allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
+    do ik = 1, naky
+       if (aky(ik) == 0.0) then
+         do it = 1, ntheta0
+             kperp2(:,it,ik) = akx(it)*akx(it)*gds22/(shat*shat)
+          end do
+       else
+          do it = 1, ntheta0
+             kperp2(:,it,ik) = aky(ik)*aky(ik) &
+                  *(gds2 + 2.0*theta0(it,ik)*gds21 &
+                  + theta0(it,ik)*theta0(it,ik)*gds22)
+          end do
+       end if
+    end do
+  end subroutine init_kperp2
+
   subroutine finish_kt_grids
 
     implicit none
 
     if (allocated(aky)) deallocate (akx, aky, theta0, ikx, iky)
     if (allocated(kwork_filter)) deallocate(kwork_filter)
+    if (allocated(kperp2)) deallocate(kperp2)
     reality = .false. ; box = .false.
+    kp2init = .false.
     initialized = .false.
 
   end subroutine finish_kt_grids

@@ -12,7 +12,7 @@ module gs2_save
   use netcdf, only: nf90_var_par_access, NF90_COLLECTIVE
   use netcdf, only: nf90_put_att, NF90_GLOBAL, nf90_get_att
 # endif
-  use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR
+  use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR, NF90_UNLIMITED
   use netcdf, only: nf90_create, nf90_open, nf90_sync, nf90_close
   use netcdf, only: nf90_def_dim, nf90_def_var, nf90_enddef
   use netcdf, only: nf90_put_var, nf90_get_var, nf90_strerror
@@ -28,10 +28,11 @@ module gs2_save
   implicit none
 
   public :: gs2_restore, gs2_save_for_restart, finish_save
-  public :: read_many, save_many
+  public :: read_many, save_many, gs2_save_response, gs2_restore_response
   public :: restore_current_scan_parameter_value
   public :: init_save, init_dt, init_tstart, init_ant_amp
-  public :: init_vnm
+  public :: init_vnm, restart_writable, EigNetcdfID
+  public :: init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
 !# ifdef NETCDF
 !  public :: netcdf_real, kind_nf, get_netcdf_code_precision, netcdf_error
 !# endif
@@ -39,6 +40,14 @@ module gs2_save
   interface gs2_restore
      module procedure gs2_restore_many!, gs2_restore_one
   end interface
+
+  !A custom type to look after the netcdf ids for the eigenvalue file
+  type EigNetcdfID
+     integer :: ncid, conv_dim_id, theta_dim_id, ri_dim_id
+     integer :: omega_var_id, theta_var_id, phi_var_id
+     integer :: apar_var_id, bpar_var_id, conv_var_id
+     integer :: nconv_count
+  end type EigNetcdfID
 
   logical :: read_many, save_many ! Read and write single or multiple restart files
   
@@ -292,14 +301,14 @@ contains
 
           !Define negrid dimension (number of energy grid points)
           istatus = nf90_def_dim (ncid, "negrid", negrid, egridid)
-	
+
           !Check dimension created successfully
           IF (istatus /= NF90_NOERR) THEN
              ierr = error_unit()
              WRITE(ierr,*) "nf90_def_dim negrid error: ", nf90_strerror(istatus)
              GOTO 1
           END IF
-	
+
           !Define nlambda dimension (number of pitch angles)
           istatus = nf90_def_dim (ncid, "nlambda", nlambda, lgridid)
           
@@ -705,35 +714,35 @@ contains
        
        !<DD> Added for saving distribution function
        IF (PRESENT(distfn)) THEN
-        	!<DD 29-08-2010> Fill energy and lambda information
-
-	        !Store variable energy
-	        istatus = nf90_put_var (ncid, energy_id, energy)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, energy_id)
-	
-	        !Store variable lambda
-	        istatus = nf90_put_var (ncid, lambda_id, al)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, lambda_id)
-	        !</DD>
-	
-	        !<DD 02-09-2010> Fill velocity variables
-	
-	        !Store variable vpa
-	        istatus = nf90_put_var (ncid, vpa_id, vpa)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vpa_id)
-	
-	        !Store variable vperp2
-	        istatus = nf90_put_var (ncid, vperp2_id, vperp2)
-	
-	        !Check store was successful
-	        IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vperp2_id)
-	        !</DD>
+          !<DD 29-08-2010> Fill energy and lambda information
+          
+          !Store variable energy
+          istatus = nf90_put_var (ncid, energy_id, energy)
+          
+          !Check store was successful
+          IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, energy_id)
+          
+          !Store variable lambda
+          istatus = nf90_put_var (ncid, lambda_id, al)
+          
+          !Check store was successful
+          IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, lambda_id)
+          !</DD>
+          
+          !<DD 02-09-2010> Fill velocity variables
+          
+          !Store variable vpa
+          istatus = nf90_put_var (ncid, vpa_id, vpa)
+          
+          !Check store was successful
+          IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vpa_id)
+          
+          !Store variable vperp2
+          istatus = nf90_put_var (ncid, vperp2_id, vperp2)
+          
+          !Check store was successful
+          IF (istatus /= NF90_NOERR) CALL netcdf_error (istatus, ncid, vperp2_id)
+          !</DD>
        END IF
        !</DD> Added for saving distribution function
 
@@ -810,7 +819,7 @@ contains
 
   end subroutine gs2_save_for_restart
 
-  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar)
+  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, fileopt)
 !MR, 2007: restore kx_shift array if already allocated
 # ifdef NETCDF
     use mp, only: iproc
@@ -827,6 +836,7 @@ contains
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
+    character (20), INTENT (in), optional :: fileopt
 # ifdef NETCDF
 # ifdef NETCDF_PARALLEL
     integer, dimension(3) :: counts, start_pos
@@ -842,6 +852,10 @@ contains
     if (.not.initialized) then
        initialized = .true.
        file_proc = trim(restart_file)
+
+       IF (PRESENT(fileopt)) THEN
+          file_proc=trim(file_proc)//trim(fileopt)
+       END IF
 
 # ifdef NETCDF_PARALLEL
        if(read_many) then
@@ -1047,6 +1061,360 @@ contains
 
   end subroutine gs2_restore_many
 
+  !>This routine writes a passed square complex array to a file
+  !with passed name
+  subroutine gs2_save_response(resp,fname)
+    use file_utils, only: error_unit
+#ifdef NETCDF
+    use gs2_time, only: code_dt
+    use convert, only: c2r
+#else
+    use file_utils, only: get_unused_unit
+#endif
+    implicit none
+    complex,dimension(:,:), intent(in) :: resp
+    character(len=*), intent(in) :: fname
+    integer :: sz
+#ifdef NETCDF
+    integer :: ierr, ax1id,ax2id,riid, respid,dtid, ncid
+    real, dimension(:,:,:), allocatable :: ri_resp
+#else
+    integer :: unit
+#endif
+    !Currently only support serial writing, but could be by any proc
+    !so we have to make sure only one proc calls this routine
+
+    !Verify we have a square array
+    sz=size(resp(:,1))
+    if(sz.ne.size(resp(1,:))) then
+       write(error_unit(),'("Error: gs2_save_response expects a square array input.")')
+       return
+    endif
+
+#ifdef NETCDF
+    !Get precision
+    if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
+    
+    !/Make file
+    ierr=nf90_create(fname,NF90_CLOBBER,ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+    !/Define dimensions
+    ierr=nf90_def_dim(ncid,"ri",2,riid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="ri")
+    ierr=nf90_def_dim(ncid,"ax1",sz,ax1id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="ax1")
+    ierr=nf90_def_dim(ncid,"ax2",sz,ax2id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="ax2")
+
+    !/Define variables
+    ierr=nf90_def_var(ncid,"response",netcdf_real,(/riid,ax1id,ax2id/),respid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="response")
+    ierr=nf90_def_var(ncid,"dt",netcdf_real,dtid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="dt")
+
+    !End definitions
+    ierr=nf90_enddef(ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+    !Now we can place our data in the file
+    ierr=nf90_put_var(ncid,dtid,code_dt)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="dt")
+
+    !/Convert complex to ri and write
+    allocate(ri_resp(2,sz,sz))
+    call c2r(resp,ri_resp)
+    ierr=nf90_put_var(ncid,respid,ri_resp)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="response")
+    deallocate(ri_resp)
+
+    !/Now close the file
+    ierr=nf90_close(ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+#else
+!Fall back on binary output if no NETCDF
+    !Get a free unit
+    call get_unused_unit(unit)
+    
+    !Open file and write
+    open(unit=unit,file=fname,form="unformatted")
+    write(unit) resp
+    close(unit)
+#endif
+  end subroutine gs2_save_response
+
+  !>This routine reads a square complex array from a file
+  !with passed name
+  subroutine gs2_restore_response(resp,fname)
+    use file_utils, only: error_unit
+#ifdef NETCDF
+    use convert, only: r2c
+#else
+    use file_utils, only: get_unused_unit
+#endif
+    implicit none
+    complex,dimension(:,:), intent(out) :: resp
+    character(len=*), intent(in) :: fname
+    integer :: sz
+#ifdef NETCDF
+    integer :: ierr, respid,ncid
+    real, dimension(:,:,:), allocatable :: ri_resp
+#else
+    integer :: unit
+#endif
+    !Currently only support serial reading, but could be by any proc
+    !so we have to make sure only one proc calls this routine
+
+    !Verify we have a square array
+    sz=size(resp(:,1))
+    if(sz.ne.size(resp(1,:))) then
+       write(error_unit(),'("Error: gs2_restore_response expects a square array output.")')
+       return
+    endif
+
+#ifdef NETCDF
+
+    !/Open file
+    ierr=nf90_open(fname,NF90_NOWRITE,ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+    !/Get variable id
+    ierr=nf90_inq_varid(ncid,"response",respid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="response")
+
+    !/Read and convert ri to complex
+    allocate(ri_resp(2,sz,sz))
+    ierr=nf90_get_var(ncid,respid,ri_resp)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="response")
+    call r2c(resp,ri_resp)
+    deallocate(ri_resp)
+
+    !/Now close the file
+    ierr=nf90_close(ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+#else
+!Fall back on binary output if no NETCDF
+    !Get a free unit
+    call get_unused_unit(unit)
+    
+    !Open file and write
+    open(unit=unit,file=fname,form="unformatted")
+    read(unit) resp
+    close(unit)
+#endif
+  end subroutine gs2_restore_response
+
+  !>Initialises a file for saving output of eigensolver to netcdf
+  subroutine init_eigenfunc_file(fname,fphi,fapar,fbpar,IDs)
+    use file_utils, only: error_unit
+    use theta_grid, only: ntgrid, theta
+    implicit none
+    character(len=*), intent(in) :: fname
+    type(EigNetcdfID), intent(inout) :: IDs
+    real, intent(in) :: fphi, fapar, fbpar
+#ifdef NETCDF
+    integer :: ierr
+#endif
+
+    !Set nconv counter to 0
+    IDs%nconv_count=0
+
+#ifdef NETCDF
+    !Get precision
+    if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
+    
+    !/Make file
+    ierr=nf90_create(fname,NF90_CLOBBER,IDs%ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+    !/Define dimensions
+    ierr=nf90_def_dim(IDs%ncid,"ri",2,IDs%ri_dim_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="ri")
+    ierr=nf90_def_dim(IDs%ncid,"theta",2*ntgrid+1,IDs%theta_dim_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="theta")
+    ierr=nf90_def_dim(IDs%ncid,"nconv",NF90_UNLIMITED,IDs%conv_dim_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="nconv")
+
+    !/Define variables
+    !Dimensions
+    ierr=nf90_def_var(IDs%ncid,"theta",netcdf_real,IDs%theta_dim_id,IDs%theta_var_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="theta")
+    ierr=nf90_def_var(IDs%ncid,"conv",netcdf_real,IDs%conv_dim_id,IDs%conv_var_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="conv_id")
+    !Fields
+    if(fphi.gt.epsilon(0.0))then
+       ierr=nf90_def_var(IDs%ncid,"phi",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
+            & IDs%conv_dim_id/),IDs%phi_var_id)
+       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="phi")
+    endif
+    if(fapar.gt.epsilon(0.0))then
+       ierr=nf90_def_var(IDs%ncid,"apar",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
+            & IDs%conv_dim_id/),IDs%apar_var_id)
+       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="apar")
+    endif
+    if(fbpar.gt.epsilon(0.0))then
+       ierr=nf90_def_var(IDs%ncid,"bpar",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
+            & IDs%conv_dim_id/),IDs%bpar_var_id)
+       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="bpar")
+    endif
+    !Omega
+    ierr=nf90_def_var(IDs%ncid,"omega",netcdf_real,(/IDs%ri_dim_id,IDs%conv_dim_id/),IDs%omega_var_id)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="omega")
+    
+    !End definitions
+    ierr=nf90_enddef(IDs%ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
+
+    !Now we can place some data in the file
+    ierr=nf90_put_var(IDs%ncid,IDs%theta_var_id,theta)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="theta")
+
+#endif
+  end subroutine init_eigenfunc_file
+
+  !>Add an eigenpairs data to file
+  subroutine add_eigenpair_to_file(eval,fphi,fapar,fbpar,IDs,my_conv)
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use convert, only: c2r
+    use theta_grid, only: ntgrid
+    complex, intent(in) :: eval !Note just use fields to get eigenvectors
+    real, intent(in), optional :: my_conv
+    type(EigNetcdfID), intent(inout) :: IDs
+    real, intent(in) :: fphi, fapar, fbpar
+#ifdef NETCDF
+    real, dimension(2) :: ri_omega
+    real, dimension(:,:), allocatable :: ri_field
+    integer, dimension(3) :: start_field, count_field
+    integer, dimension(2) :: start_omega
+    integer :: ierr
+    real :: local_conv
+#endif
+
+    !First increment counter
+    IDs%nconv_count=IDs%nconv_count+1
+
+#ifdef NETCDF
+    !Now we make start values
+    start_field(1)=1 ; start_field(2)=1 ; start_field(3)=IDs%nconv_count
+    count_field(1)=2 ; count_field(2)=2*ntgrid+1 ; count_field(3)=1
+    start_omega(1)=1 ; start_omega(2)=IDs%nconv_count
+
+    !Set the conv value
+    if(present(my_conv))then
+       local_conv=my_conv
+    else
+       local_conv=IDs%nconv_count*1.0
+    endif
+
+    !Now we can write data
+    !/Conv
+    ierr=nf90_put_var(IDs%ncid,IDs%conv_var_id,local_conv, start=(/IDs%nconv_count/))!,count=(/1/))
+    if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%conv_var_id)
+
+    !/Omega
+    ri_omega(1)=real(eval)
+    ri_omega(2)=aimag(eval)
+    ierr=nf90_put_var(IDs%ncid,IDs%omega_var_id,ri_omega, start=start_omega,count=(/2,1/))
+    if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%omega_var_id)
+
+    !/Fields
+    allocate(ri_field(2,2*ntgrid+1))
+    if(fphi.gt.epsilon(0.0))then
+       call c2r(phinew(:,1,1),ri_field)
+       ierr=nf90_put_var(IDs%ncid,IDs%phi_var_id,ri_field, start=start_field,count=count_field)
+       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%phi_var_id)
+    endif
+    if(fapar.gt.epsilon(0.0))then
+       call c2r(aparnew(:,1,1),ri_field)
+       ierr=nf90_put_var(IDs%ncid,IDs%apar_var_id,ri_field, start=start_field,count=count_field)
+       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%apar_var_id)
+    endif
+    if(fbpar.gt.epsilon(0.0))then
+       call c2r(bparnew(:,1,1),ri_field)
+       ierr=nf90_put_var(IDs%ncid,IDs%bpar_var_id,ri_field, start=start_field,count=count_field)
+       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%bpar_var_id)
+    endif
+    deallocate(ri_field)       
+#endif
+  end subroutine add_eigenpair_to_file
+
+  !>Close the eigenfunction file
+  subroutine finish_eigenfunc_file(IDs)
+    implicit none
+    type(EigNetcdfID), intent(inout) :: IDs
+#ifdef NETCDF
+    integer :: ierr
+
+    !/Now close the file
+    ierr=nf90_close(IDs%ncid)
+    if(ierr/=NF90_NOERR) call netcdf_error(ierr)
+#endif
+  end subroutine finish_eigenfunc_file
+
+  !>This function checks to see if we can create a file with name
+  !<restart_file>//<SomeSuffix> if not then our restarts are not
+  !going to be possible and we return false. Can also be used to check
+  !that we can read from the restart file (which assumes it exists).
+  function restart_writable(read_only,my_file)
+    use mp, only: proc0, broadcast
+    use file_utils, only: get_unused_unit
+    implicit none
+    character(16) :: SuffixTmp='.ThisIsATestFile'
+    character(9) :: FileMode
+    character(len=*),intent(in),optional::my_file
+    character(300) :: local_file
+    logical, intent(in), optional :: read_only
+    logical :: restart_writable, writable
+    integer :: unit,ierr
+
+    !Check that restart_file will be writable now
+    writable=.false.
+    ierr=-200
+    local_file=trim(restart_file)
+    if(present(my_file)) local_file=trim(my_file)
+
+    !On proc0 try to open tmp file for writing
+    if(proc0)then
+       !Get a unit
+       call get_unused_unit(unit)
+
+       !Set the default file mode to readwrite
+       FileMode='readwrite'
+
+       !Set filemode to READ if read_only=T
+       if(present(read_only))then
+          if(read_only) FileMode='read'
+       endif
+
+       !If checking readonly then we need to make sure we try to read from
+       !an existing file
+       if(trim(FileMode).eq.'read')then
+          open(unit=unit,File=trim(local_file),&
+               iostat=ierr,Action=FileMode)
+       !If we want to test write capability then do it with an unusual
+       !file name to prevent clobber
+       else
+          open(unit=unit,File=trim(local_file)//trim(SuffixTmp),&
+               iostat=ierr,Action=FileMode)
+       endif
+
+       !If open was successful then we can close the file and delete it
+       if(ierr.eq.0)then
+          if(trim(FileMode).eq.'read')then
+             close(unit=unit)
+          else
+             close(unit=unit,status='delete')
+          endif
+       endif
+    endif
+
+    !Now make sure everyone knows the answer
+    call broadcast(ierr)
+    if(ierr.eq.0)writable=.true.
+    restart_writable=writable
+  end function restart_writable
 
   subroutine init_save (file)
     character(300), intent (in) :: file
@@ -1056,7 +1424,7 @@ contains
   end subroutine init_save
 
   subroutine finish_save
-    
+#ifdef NETCDF    
     if (allocated(tmpr)) deallocate(tmpr)
     if (allocated(tmpi)) deallocate(tmpi)
     if (allocated(ftmpr)) deallocate(ftmpr)
@@ -1066,7 +1434,7 @@ contains
     
     initialized = .false.
     initialized_dfn = .false.
-
+#endif
   end subroutine finish_save
 
   subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
