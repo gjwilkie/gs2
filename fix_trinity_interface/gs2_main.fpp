@@ -452,7 +452,7 @@ contains
     use parameter_scan, only: update_scan_parameter_value
     use run_parameters, only: reset, fphi, fapar, fbpar, nstep
     use run_parameters, only: avail_cpu_time, margin_cpu_time
-    use unit_tests, only: ilast_step
+    use unit_tests, only: ilast_step, debug_message
     use gs2_init, only: init
     type(gs2_program_state_type), intent(inout) :: state
     integer :: istep, istatus
@@ -581,6 +581,8 @@ contains
       call set_initval_overrides_to_current_vals(state%init%initval_ov)
     end if
 
+    call debug_message(state%verb, 'gs2_main::evolve_equations finished')
+
 
   end subroutine evolve_equations
 
@@ -638,12 +640,15 @@ contains
     use gs2_time, only: code_dt, save_dt
     use mp, only: scope, subprocs, allprocs
     use mp, only: mp_abort
+    use unit_tests, only: debug_message
 
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
 
     if (state%nensembles > 1) call scope (subprocs)
+
+    call debug_message(state%verb, 'gs2_main::reset_equations starting')
 
     ! EGH is this line necessary?
     gnew = 0.
@@ -657,7 +662,14 @@ contains
         call reset_linear_magnitude
 
     state%istep_end = 1
+
+    call debug_message(state%verb, 'gs2_main::reset_equations finished')
+
+    !write (*,*) 'nensembles = ', state%nensembles
+
     if (state%nensembles > 1) call scope (allprocs)
+
+    !write (*,*) 'here at the close....'
 
   end subroutine reset_equations
 
@@ -669,11 +681,14 @@ contains
     use job_manage, only: time_message
     use mp, only: proc0
     use parameter_scan, only: deallocate_target_arrays
+    use unit_tests, only: debug_message
     type(gs2_program_state_type), intent(inout) :: state
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+
+    call debug_message(state%verb, 'gs2_main::finalize_diagnostics starting')
 
 #ifdef NEW_DIAG
     call finish_gs2_diagnostics_new 
