@@ -65,7 +65,7 @@ module gs2_init
   !! You must have initialized the initval_ov
   !! object using init_initial_values_overrides before calling
   !! this function.
-  public :: set_initial_values_overrides_to_current_values
+  !public :: set_initial_values_overrides_to_current_values
 
   public :: in_memory
 
