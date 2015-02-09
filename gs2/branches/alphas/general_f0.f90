@@ -45,16 +45,9 @@ module general_f0
   real, dimension (:,:), allocatable :: f0_values
 
   !> Grid of generalised temperature 
-  !! = -1/T^*_sN d(F_s/d energy_s)_N
-  !! = - T_r/T^*_s d(F_s/d energy_s) T*_s/F_s  
-  !! (where T*_s is just temperature for Maxwellian species)
-  !!  as function of energy and species.
-  !! For Maxwellian species this grid is just equal to T_r/T_s
-  !! For alphas, T^*_s = E_alpha, the injection energy
-  !! and this grid is calculated in this module
 
-  public :: generalised_temperature
-  real, dimension (:,:), allocatable :: generalised_temperature
+  public :: df0dE
+  real, dimension (:,:), allocatable :: df0dE
 
   ! These arrays below replace the species quantites of the same name
 
@@ -122,7 +115,8 @@ module general_f0
                         alpha_f0_split = 4, &
                         alpha_f0_equivmaxw = 5, &
                         alpha_f0_external =6, &
-                        alpha_f0_kappa = 7
+                        alpha_f0_kappa = 7, &
+                        alpha_f0_flat = 8
 
   integer, parameter :: beam_f0_maxwellian = 1, &
                         beam_f0_analytic = 2, &
@@ -223,14 +217,15 @@ contains
     use text_options, only: text_option, get_option_value
     use mp, only: proc0, broadcast
     implicit none
-    type (text_option), dimension (7), parameter :: alpha_f0_opts = &
+    type (text_option), dimension (8), parameter :: alpha_f0_opts = &
          (/ text_option('maxwellian', alpha_f0_maxwellian), &
             text_option('analytic', alpha_f0_analytic), &
             text_option('semianalytic', alpha_f0_semianalytic), &
             text_option('split', alpha_f0_split), &
             text_option('equivmaxw', alpha_f0_equivmaxw), &
             text_option('external', alpha_f0_external) ,&
-            text_option('kappa', alpha_f0_kappa) /)
+            text_option('kappa', alpha_f0_kappa) ,&
+            text_option('flat', alpha_f0_flat) /)
     character(20) :: alpha_f0
     type (text_option), dimension (3), parameter :: beam_f0_opts = &
          (/ text_option('maxwellian', beam_f0_maxwellian), &
@@ -318,6 +313,8 @@ contains
           call eval_f0_analytic(is,v,f0,dummy,dummy) 
         case (alpha_f0_kappa)
           call eval_f0_kappa(is,v,f0,dummy,dummy) 
+        case (alpha_f0_flat)
+          call eval_f0_flat(is,v,f0,dummy,dummy) 
         case (alpha_f0_semianalytic)
           write(*,*) "ERROR: eval_f0 cannot yet handle semianalytic option."
           call mp_abort('')
@@ -377,9 +374,9 @@ contains
         case (alpha_f0_analytic)
           call check_electromagnetic
           call calculate_f0_arrays_analytic(is)
-        case (alpha_f0_kappa)
+        case (alpha_f0_flat)
           call check_electromagnetic
-          call calculate_f0_arrays_kappa(is)
+          call calculate_f0_arrays_flat(is)
         case (alpha_f0_semianalytic)
           call check_electromagnetic
           call calculate_f0_arrays_semianalytic(is)
@@ -445,15 +442,15 @@ contains
     tr = tr .and. agrees_with(f0_values(:,3), rslts(:,3,1), err)
     call process_check(tr, 'alpha f0')
 
-    call announce_check('ion gentemp')
-    tr = tr .and. agrees_with(generalised_temperature(:,1), rslts(:,1,2), err)
-    call process_check(tr,' ion gentemp')
-    call announce_check('electron gentemp')
-    tr = tr .and. agrees_with(generalised_temperature(:,2), rslts(:,2,2), err)
-    call process_check(tr,' electron gentemp')
-    call announce_check('alpha gentemp')
-    tr = tr .and. agrees_with(generalised_temperature(:,3), rslts(:,3,2), err)
-    call process_check(tr,' alpha gentemp')
+    call announce_check('ion df0dE')
+    tr = tr .and. agrees_with(df0dE(:,1), rslts(:,1,2), err)
+    call process_check(tr,' ion df0dE')
+    call announce_check('electron df0dE')
+    tr = tr .and. agrees_with(df0dE(:,2), rslts(:,2,2), err)
+    call process_check(tr,' electron df0dE')
+    call announce_check('alpha df0dE')
+    tr = tr .and. agrees_with(df0dE(:,3), rslts(:,3,2), err)
+    call process_check(tr,' alpha df0dE')
 
     !write (*,*) 'f0prim(:,3),', f0prim(:,3)
     call announce_check('ion f0prim')
@@ -480,7 +477,7 @@ contains
     allocate(weights(negrid,nspec))
     allocate(weights_maxwell(negrid))
     allocate(f0_values(negrid,nspec))
-    allocate(generalised_temperature(negrid,nspec))
+    allocate(df0dE(negrid,nspec))
     allocate(stm(negrid,nspec))
     allocate(zstm(negrid,nspec))
     allocate(zogtemp(negrid,nspec))
@@ -500,7 +497,7 @@ contains
     call broadcast(weights)
     call broadcast(weights_maxwell)
     call broadcast(f0_values)
-    call broadcast(generalised_temperature)
+    call broadcast(df0dE)
     call broadcast(stm)
     call broadcast(zstm)
     call broadcast(zogtemp)
@@ -527,12 +524,11 @@ contains
     !weights(:,is) = weights_maxwell(:) * f0_values(:,is)
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
     do ie = 1,negrid
-       generalised_temperature(:,is) = spec(is)%temp
+       df0dE(:,is) = -1.0/spec(is)%temp
        if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), & 
-                                   generalised_temperature(ie,is)
+                                   df0dE(ie,is)
     end do
-    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    zogtemp(:,is) = -spec(is)%z *df0dE(:,is) 
     
     f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
   end subroutine calculate_f0_arrays_maxwellian
@@ -659,7 +655,7 @@ contains
     call calculate_arrays(parameters,&
                           egrid, &
                           f0_values, &
-                          generalised_temperature, &
+                          df0dE, &
                           f0prim)
     spec(is)%source = parameters%source
     !write (*,*) 'f0prim', ',is', f0prim(:,is), is
@@ -667,13 +663,12 @@ contains
     !write (*,*) 'f0_values(:,3),', f0_values(:,3)
     !weights(:,is) =  weights_maxwell(:)*scal * f0_values(:,is)
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
-    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    zogtemp(:,is) = -df0dE(:,is)*spec(is)%z 
 
     if (proc0) write(*,*) "source = ", parameters%source
     if (proc0) write(*,*) "ash_fraction = ", parameters%ash_fraction
 !    do ie = 1,negrid
-!       if (proc0) write(*,*) sqrt(egrid(ie,is)), f0_values(ie,is), generalised_temperature(ie,is)
+!       if (proc0) write(*,*) sqrt(egrid(ie,is)), f0_values(ie,is), df0dE(ie,is)
 !    end do
     
   end subroutine calculate_f0_arrays_semianalytic
@@ -799,7 +794,7 @@ contains
     call calculate_arrays(parameters,&
                           egrid, &
                           f0_values, &
-                          generalised_temperature, &
+                          df0dE, &
                           f0prim)
     spec(is)%source = parameters%source
     !write (*,*) 'f0prim', ',is', f0prim(:,is), is
@@ -807,8 +802,7 @@ contains
     !write (*,*) 'f0_values(:,3),', f0_values(:,3)
     !weights(:,is) =  weights_maxwell(:)*scal * f0_values(:,is)
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
-    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    zogtemp(:,is) = -df0dE(:,is)*spec(is)%z 
     
   end subroutine calculate_f0_arrays_split
 
@@ -847,7 +841,7 @@ contains
     implicit none
     integer, intent(in) :: is
     integer:: f0in_unit = 21, num_cols, ie, ierr, numdat, il, it
-    real:: df0dE, test, moment0, moment2
+    real:: test, moment0, moment2, df0dEtemp
     real:: pick_spec(nspec)
     real, dimension(:), allocatable:: f0_values_dat, df0dE_dat, egrid_dat, &
                                       f0_values_dat_log, df0dE_dat_log, yp, temp
@@ -892,13 +886,12 @@ contains
           f0_values(ie,is) = exp(f0_values(ie,is))
 
           ! Calculate d/dE lnF0 to get generalised temperature
-          df0dE = fitp_curvd(egrid(ie,is),numdat,egrid_dat, &
-                             f0_values_dat_log,yp,1.0)
-          generalised_temperature(ie,is) = - spec(is)%temp/df0dE
+          df0dE(ie,is) = -fitp_curvd(egrid(ie,is),numdat,egrid_dat, &
+                             f0_values_dat_log,yp,1.0) / spec(is)%temp
 
           ! Diagnostic output
           if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
-                                   generalised_temperature(ie,is)
+                                   df0dE(ie,is)
        end do
 
     else if (num_cols .EQ. 3) then
@@ -937,17 +930,15 @@ contains
 
        do ie = 1,negrid
           ! Interpolate to get f0 at grid points
-          df0dE            = fitp_curv2(egrid(ie,is),numdat,egrid_dat, &
+          df0dEtemp            = fitp_curv2(egrid(ie,is),numdat,egrid_dat, &
                              df0dE_dat_log,yp,1.0)
  
           ! Recover df0/dE from its logarithm (maintaining whatever sign it had before)
-          df0dE = sign(1.0,df0dE_dat(ie))* exp(df0dE)
-
-          generalised_temperature(ie,is) = -spec(is)%temp*f0_values(ie,is)/df0dE
+          df0dE(ie,is) = -sign(1.0,df0dE_dat(ie))* exp(df0dEtemp) / (f0_values(ie,is)*spec(is)%temp)
 
           ! Diagnostic output
           if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
-                                   generalised_temperature(ie,is)
+                                   df0dE(ie,is)
 
        end do
     else
@@ -986,8 +977,7 @@ contains
        spec(is)%dens = moment0
     end if
 
-    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    zogtemp(:,is) = - df0dE(:,is) * spec(is)%z 
     
     f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
 
@@ -1022,7 +1012,7 @@ contains
     use species, only: ion_species, electron_species, alpha_species
     implicit none
     integer,intent(in):: is
-    real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B
+    real:: A, Ti, Ealpha, vstar, v, df0dv, B
     integer:: ie, i, electron_spec
 
 !    if (vcrit .LE. 0.0) then
@@ -1032,11 +1022,10 @@ contains
 
     do ie = 1,negrid 
        v = sqrt(egrid(ie,is))
-       call eval_f0_analytic(is,v,f0_values(ie,is),generalised_temperature(ie,is),f0prim(ie,is))
+       call eval_f0_analytic(is,v,f0_values(ie,is),df0dE(ie,is),f0prim(ie,is))
     end do
 
-    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    zogtemp(:,is) = -df0dE(:,is)*spec(is)%z 
 
     if (simple_gradient) f0prim(:,is) = - spec(is)%fprim 
 
@@ -1044,7 +1033,7 @@ contains
 
   end subroutine calculate_f0_arrays_analytic
 
-  subroutine eval_f0_analytic(is,v,f0,gentemp,f0prim)
+  subroutine eval_f0_analytic(is,v,f0,df0dE_local,f0prim)
     use species, only: ion_species, electron_species, alpha_species, spec, nspec, ZI_fac, vte, ni_prim
     use constants, only: pi
     use mp, only: mp_abort, proc0
@@ -1052,8 +1041,8 @@ contains
     implicit none
     integer,intent(in):: is
     real,intent(in):: v
-    real,intent(inout):: f0,gentemp, f0prim
-    real:: A, Ti, Ealpha, vstar, df0dv, df0dE, vta, vti, Zi,ni,ne, ne_prim,Ti_prim,Te_prim
+    real,intent(inout):: f0,df0dE_local, f0prim
+    real:: A, Ti, Ealpha, vstar, df0dv, vta, vti, Zi,ni,ne, ne_prim,Ti_prim,Te_prim
     integer:: ie, i, electron_spec
 
     electron_spec = -1
@@ -1089,14 +1078,12 @@ contains
     if (v .LE. 1.0) then
        f0 = A/(vcrit**3 + v**3)
        df0dv = -A*3.0*v**2/(vcrit**3 + v**3)**2
-       df0dE = (0.5/v)*df0dv
-       gentemp = -spec(is)%temp*f0/df0dE
+       df0dE_local = (0.5/v)*df0dv/(f0*spec(is)%temp)
        f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + v**3)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + 1.5*Te_prim)
      
     else
        f0 = exp(-Ealpha*(v**2-1.0)/Ti) * A / (vcrit**3 + 1.0)
-       df0dE = -Ealpha*f0/Ti
-       gentemp = -spec(is)%temp*f0/df0dE
+       df0dE_local = -Ealpha/(Ti*spec(is)%temp)
        f0prim = -spec(is)%fprim - (-(vcrit**3/(vcrit**3 + 1.0)) + (1.0/( log(1.0 + vcrit**(-3)) * (1.0 + vcrit**(3)))))*(ni_prim - ne_prim + 1.5*Te_prim)
        f0prim = f0prim - (Ealpha/Ti)*(v**2-1.0)*Ti_prim
     end if
@@ -1127,13 +1114,12 @@ contains
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
 
     do ie = 1,negrid
-       generalised_temperature(:,is) = spec(is)%temp
+       df0dE(:,is) = -1.0/spec(is)%temp
        if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), & 
-                                   generalised_temperature(ie,is)
+                                   df0dE(ie,is)
     end do
 
-    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    zogtemp(:,is) = -df0dE(:,is)*spec(is)%z 
  
     f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
 
@@ -1149,15 +1135,15 @@ contains
 
   end subroutine calculate_f0_arrays_equivmaxw
 
-  subroutine eval_f0_kappa(is,v,f0,gentemp,f0prim)
+  subroutine eval_f0_kappa(is,v,f0,df0dE_local,f0prim)
     use species, only: ion_species, electron_species, alpha_species, spec, nspec
     use constants, only: pi
     use mp, only: mp_abort, proc0
     implicit none
     integer,intent(in):: is
     real,intent(in):: v
-    real,intent(inout):: f0,gentemp, f0prim
-    real:: gammakmh,gammak,A,df0dv,df0dE
+    real,intent(inout):: f0,df0dE_local, f0prim
+    real:: gammakmh,gammak,A,df0dv
    
     gammakmh = exp(lgamma(kappa-0.5))  
     gammak = exp(lgamma(kappa))
@@ -1169,12 +1155,29 @@ contains
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
  
     df0dv = - 2.0*v*A*(kappa+1.0)/( kappa* (1.0 + v**2/kappa))
-    df0dE = (0.5/v)*df0dv
-    gentemp = -spec(is)%temp*f0/df0dE
+    df0dE_local = -(0.5/v)*df0dv/(f0*spec(is)%temp)
  
     f0prim = 0.0
      
   end subroutine eval_f0_kappa
+
+  subroutine eval_f0_flat(is,v,f0,df0dE_local,f0prim)
+    use species, only: ion_species, electron_species, alpha_species, spec, nspec
+    use constants, only: pi
+    use mp, only: mp_abort, proc0
+    implicit none
+    integer,intent(in):: is
+    real,intent(in):: v
+    real,intent(inout):: f0,df0dE_local, f0prim
+
+    f0 = 1.0
+
+    df0dE_local = 0.0
+ 
+    f0prim = - spec(is)%fprim
+     
+  end subroutine eval_f0_flat
+
 
   subroutine calculate_f0_arrays_kappa(is)
     use constants, only: pi
@@ -1182,21 +1185,42 @@ contains
     use mp, only: mp_abort, proc0
     implicit none
     integer,intent(in):: is
-    real:: A, Ti, Ealpha, vstar, v, df0dv, df0dE, B
+    real:: A, Ti, Ealpha, vstar, v, df0dv, B
     integer:: ie, i, electron_spec
 
 
     do ie = 1,negrid 
        v = sqrt(egrid(ie,is))
-       call eval_f0_kappa(is,v,f0_values(ie,is),generalised_temperature(ie,is),f0prim(ie,is))
+       call eval_f0_kappa(is,v,f0_values(ie,is),df0dE(ie,is),f0prim(ie,is))
     end do
 
-    gtempoz(:,is) = generalised_temperature(:,is) / spec(is)%z
-    zogtemp(:,is) = spec(is)%z / generalised_temperature(:,is)
+    zogtemp(:,is) = -df0dE(:,is)*spec(is)%z 
 
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
 
   end subroutine calculate_f0_arrays_kappa
+
+  subroutine calculate_f0_arrays_flat(is)
+    use constants, only: pi
+    use species, only: spec, nspec
+    use mp, only: mp_abort, proc0
+    implicit none
+    integer,intent(in):: is
+    real:: A, Ti, Ealpha, vstar, v, df0dv, B
+    integer:: ie, i, electron_spec
+
+
+    do ie = 1,negrid 
+       v = sqrt(egrid(ie,is))
+       call eval_f0_flat(is,v,f0_values(ie,is),df0dE(ie,is),f0prim(ie,is))
+    end do
+
+    zogtemp(:,is) = -df0dE(:,is)*spec(is)%z 
+
+    if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
+
+  end subroutine calculate_f0_arrays_flat
+
 
 
   function lgamma(x)
