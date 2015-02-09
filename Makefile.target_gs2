@@ -1,15 +1,9 @@
-gs2_all: modules gs2 ingen rungridgen
+gs2_all: modules gs2 
 
 gs2: $(gs2_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 gs2.x: $(gs2_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-ingen: $(ingen_mod)
-	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
-
-rungridgen: $(rungridgen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 regress: $(drive_mod)
@@ -73,6 +67,6 @@ libgs2.a: $(filter-out gs2.o, $(gs2_mod))
 
 distclean:
 	-rm -f gs2 gs2.x
-	-rm -f ingen rungridgen regress
+	-rm -f regress
 	-rm -f ball eiktest
 	-rm -f ffttester

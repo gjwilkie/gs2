@@ -831,7 +831,7 @@ subroutine check_dist_fn(report_unit)
 
   subroutine init_wdrift
     use species, only: nspec, spec
-    use general_f0, only: generalised_temperature
+    use general_f0, only: df0dE
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use le_grids, only: negrid, ng2, nlambda, al, jend, forbid
@@ -956,9 +956,9 @@ subroutine check_dist_fn(report_unit)
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        wdriftgen(:,:,iglo) = &
-               wdrift(:,:,iglo)*spec(is)%temp/generalised_temperature(ie,is)
+               -wdrift(:,:,iglo)*spec(is)%temp*df0dE(ie,is)
        wdriftttpgen(:,it,ik,ie,is,:) = &
-        wdriftttp(:,it,ik,ie,is,:)*spec(is)%temp/generalised_temperature(ie,is)
+        -wdriftttp(:,it,ik,ie,is,:)*spec(is)%temp*df0dE(ie,is)
     end do
 !    alloc = .false.
 !CMR
@@ -1037,7 +1037,7 @@ subroutine check_dist_fn(report_unit)
   end function wcoriolis_func
 
   subroutine init_vpar
-    use general_f0, only: zogtemp, generalised_temperature
+    use general_f0, only: zogtemp, df0dE
     use dist_fn_arrays, only: vpa, vpar, vpargen, vpac,vpacgen, vperp2
     use species, only: spec
     use theta_grid, only: ntgrid, delthet, bmag, gradpar
@@ -1102,8 +1102,7 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        ie = ie_idx(g_lo,iglo)
        
-       vpacgen(:,:,iglo) = vpac(:,:,iglo)*spec(is)%temp/ &
-          generalised_temperature(ie,is)
+       vpacgen(:,:,iglo) = -vpac(:,:,iglo)*spec(is)%temp *df0dE(ie,is)
 
        vpar(-ntgrid:ntgrid-1,1,iglo) = &
             spec(is)%zstm*tunits(ik)*code_dt &
@@ -3195,7 +3194,7 @@ subroutine check_dist_fn(report_unit)
 #else
          source(ig) = anon(ie)*(-2.0*vpargen(ig,isgn,iglo)*phi_m &
                ! Note line below still needs to be changed for alphas
-              -spec(is)%zstm*vpac(ig,isgn,iglo) &
+              -spec(is)%zstm*vpacgen(ig,isgn,iglo) &
               *((aj0(ig+1,iglo) + aj0(ig,iglo))*0.5*apar_m  &
               + D_res(it,ik)*apar_p) &
               -zi*wdriftgen(ig,isgn,iglo)*phi_p) &
@@ -3269,7 +3268,7 @@ subroutine check_dist_fn(report_unit)
     use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fapar, fbpar, fphi, ieqzip
     use species, only: spec
-    use general_f0, only: generalised_temperature
+    use general_f0, only: df0dE
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
@@ -3324,8 +3323,8 @@ subroutine check_dist_fn(report_unit)
           if (l_links(ik,it) .eq. 0) then
              adjleft = anon(ie)*2.0*vperp2(-ntgrid,iglo)*aj1(-ntgrid,iglo) &
                   *bparnew(-ntgrid,it,ik)*fbpar &
-                  + spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
-                  /generalised_temperature(ie,is)*fphi
+                  - spec(is)%z*anon(ie)*phinew(-ntgrid,it,ik)*aj0(-ntgrid,iglo) &
+                  *df0dE(ie,is)*fphi
              gnew(-ntgrid,1,iglo) = gnew(-ntgrid,1,iglo) - adjleft
           end if
           !This ensures that we only apply the new boundary condition to the rightmost
@@ -3333,8 +3332,8 @@ subroutine check_dist_fn(report_unit)
           if (r_links(ik,it) .eq. 0) then
              adjright = anon(ie)*2.0*vperp2(ntgrid,iglo)*aj1(ntgrid,iglo) &
                   *bparnew(ntgrid,it,ik)*fbpar &
-                  + spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
-                  /generalised_temperature(ie,is)*fphi
+                  - spec(is)%z*anon(ie)*phinew(ntgrid,it,ik)*aj0(ntgrid,iglo) &
+                  *df0dE(ie,is)*fphi
              gnew(ntgrid,2,iglo) = gnew(ntgrid,2,iglo) - adjright
          end if
        endif
@@ -4041,7 +4040,7 @@ subroutine check_dist_fn(report_unit)
   
   ! moment at not guiding center coordinate
   subroutine getmoms_notgc (dens, upar, tpar, tper, ntot, jpar)
-    use general_f0, only: zogtemp, generalised_temperature
+    use general_f0, only: zogtemp, df0dE
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
     use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx
     use species, only: nspec, spec
@@ -4079,9 +4078,9 @@ subroutine check_dist_fn(report_unit)
           end do
           do isgn = 1, 2
              g0(:,isgn,iglo) = g0(:,isgn,iglo) &
-                  & + 2.*vperp2(:,iglo)*aj1(:,iglo)*aj0(:,iglo) &
+                  & - 2.*vperp2(:,iglo)*aj1(:,iglo)*aj0(:,iglo) &
                   & * bparnew(:,it,ik) * spec(is)%temp &
-                  & / generalised_temperature(ie,is)
+                  & * df0dE(ie,is)
           end do
        end do
        call integrate_moment (g0, ntot, 1)
@@ -4167,7 +4166,7 @@ subroutine check_dist_fn(report_unit)
     use le_grids, only: anon, integrate_species
     use gs2_layouts, only: g_lo, ie_idx, is_idx
     use run_parameters, only: tite
-    use general_f0, only: generalised_temperature
+    use general_f0, only: df0dE
     implicit none
     integer :: iglo, isgn
     integer :: ik, it, ie, is
@@ -4209,8 +4208,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = (1.0 - aj0(:,iglo)**2)*anon(ie)/ &
-             generalised_temperature(ie,is)
+          g0(:,isgn,iglo) = -(1.0 - aj0(:,iglo)**2)*df0dE(ie,is)
        end do
     end do
     wgt = spec%z*spec%z*spec%dens
@@ -4221,9 +4219,8 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj0(:,iglo)*aj1(:,iglo) &
-               *2.0*vperp2(:,iglo)*anon(ie) / & 
-               generalised_temperature(ie,is)
+          g0(:,isgn,iglo) = -aj0(:,iglo)*aj1(:,iglo) &
+               *2.0*vperp2(:,iglo)*df0dE(ie,is)
        end do
     end do
     wgt = spec%z*spec%dens
@@ -4234,8 +4231,7 @@ subroutine check_dist_fn(report_unit)
        ie = ie_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        do isgn = 1, 2
-          g0(:,isgn,iglo) = aj1(:,iglo)**2*2.0*vperp2(:,iglo)**2*anon(ie)/ &
-             generalised_temperature(ie,is)
+          g0(:,isgn,iglo) = -aj1(:,iglo)**2*2.0*vperp2(:,iglo)**2*df0dE(ie,is)
        end do
     end do
     wgt = spec%temp*spec%dens

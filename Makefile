@@ -89,7 +89,7 @@ USE_NETCDF ?= on
 # uses parallel netcdf library
 USE_PARALLEL_NETCDF ?=
 # uses hdf5 library (bin)
-USE_HDF5 ?= 
+USE_HDF5 ?=
 # Use function pointer in layouts_indices.c (bin)
 # see also README
 USE_C_INDEX ?= 
