@@ -409,7 +409,8 @@ contains
           end if
        end if
        
-       if (alphas_exist .AND. spec(alpha_index)%equivmaxw_opt .GT. 0) then
+       if (alphas_exist) then 
+          if ( spec(alpha_index)%equivmaxw_opt .GT. 0) then
 
           ! Species *becomes* Maxwellian here. So what to normalize by: v_alpha or v_t,eff?
           ! Need to make sure setvgrid does the right thing (i.e. recognizes Maxwellian nature)
@@ -449,6 +450,7 @@ contains
           write(*,*) "  temp = ", spec(is)%temp
           write(*,*) "  tprim = ", spec(is)%tprim
 
+          end if
        end if
 
     end if

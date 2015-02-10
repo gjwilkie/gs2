@@ -102,13 +102,6 @@ module general_f0
   
   logical :: print_egrid
 
-  !> Flag that controls whether or not an externally-supplied f0 
-  !! is rescaled to fit the given species parameters.
-  !! f0_rescale = T -- F0 is rescaled to fit spec(is)%dens
-  !!            = F -- F0 is taken literally, spec(is)%dens is changed                     
-  !! This option does not rescale according to spec(is)%temp!
-  logical :: rescale_f0
-
   integer, parameter :: alpha_f0_maxwellian = 1, &
                         alpha_f0_analytic = 2, &
                         alpha_f0_semianalytic = 3, &
@@ -235,7 +228,6 @@ contains
     namelist /general_f0_parameters/ &
             alpha_f0, &
             beam_f0, &
-            rescale_f0,&
             main_ion_species,&
             energy_min,&
             print_egrid,&
@@ -815,136 +807,102 @@ contains
 
 !> This subroutine calculates f0 on the grid from an external
 !! input file. The grid on the input file can differ from that 
-!! of gs2. A cubic-spline is used to interpolate between the two.
+!! of gs2, and should be well over-resolved. Linear interpolation is used.
 !! This is a logarithmic interpolation on the splines to ensure positive-
 !! definiteness of F0. The user can either specify df0/dE or it 
 !! can be estimated internally.
+!> Input file is formatted thusly:
+!! mode (= 1 or 2)
+!! numdat
+!! col1 col2 col3 col4
+!! col1 col2 col3 col4
+!! ...
+!! col1 = energy / spec(is)%temp
+!! col2 = f0 * vts^3 / dens
+!! col3 = Tref * (d/dE) ln(f0) [if present]
+!! col4 = (d/drho) ln(f0)
+!> NB: f0 will be rescaled so that when integrating with the trapezoid rule with
+!! this dataset, it would integrate to unity. Also, spec(is)%fprim and spec(is)%tprim
+!! are _ignored_ for 'external' species.
+
   subroutine calculate_f0_arrays_external(is)
-    !
-    ! The egrid is already given by get_legendre_grids. The input values
-    ! are cubic-spline interpolated to the energy grid of gs2.
-    !
-    ! The input file can take two forms, as controlled by the
-    ! control paramter num_cols, the first integer 
-    ! read from the file
-    !  - Single-Column Mode: Only F0(E) is given. To calculate
-    !      generalized temperature, a cubic spline is used to 
-    !      interpolate and the slope is taken from that.
-    !  - Two-Column Mode: First column is F0(E), the second is
-    !      dF0/dE.
-    ! 
     use mp, only: broadcast
     use constants, only: pi
     use species, only: spec, nspec
     use file_utils, only: run_name
-    use splines, only: fitp_curvd, fitp_curv1, fitp_curv2
     implicit none
     integer, intent(in) :: is
-    integer:: f0in_unit = 21, num_cols, ie, ierr, numdat, il, it
-    real:: test, moment0, moment2, df0dEtemp
-    real:: pick_spec(nspec)
-    real, dimension(:), allocatable:: f0_values_dat, df0dE_dat, egrid_dat, &
-                                      f0_values_dat_log, df0dE_dat_log, yp, temp
+    integer:: f0in_unit = 21, mode, ie, ierr, numdat, il, it, idat
+    real:: moment0, moment2
+    real, dimension(:), allocatable:: f0_values_dat, df0dE_dat, egrid_dat, f0prim_dat
     
     ! Open file and read column option
     open(unit=f0in_unit,file=trim(run_name)//'.f0in',status='old',action='read')
-    read(f0in_unit,*) num_cols
+    read(f0in_unit,*) mode
     read(f0in_unit,*) numdat
 
     allocate(f0_values_dat(numdat))
     allocate(df0dE_dat(numdat))
     allocate(egrid_dat(numdat))
-    allocate(f0_values_dat_log(numdat))
-    allocate(df0dE_dat_log(numdat))
-    allocate(yp(numdat))
-    allocate(temp(numdat))
+    allocate(f0prim_dat(numdat))
 
-    if (num_cols .EQ. 2) then
+    !> mode=1 is df0/dE being calculated directly from the f0 values here
+    if (mode .EQ. 1) then
        ! Read f0 values
        do ie = 1,numdat
-          read(f0in_unit,*) egrid_dat(ie), f0_values_dat(ie)
-          ! Interpolate the *logarithm* of f0 to ensure positive-definiteness
-          f0_values_dat_log(ie) = log(f0_values_dat(ie))
+          read(f0in_unit,*) egrid_dat(ie), f0_values_dat(ie), f0prim_dat(ie)
        end do
        close(f0in_unit)
 
-       ! Perform cubic spline to get F0 and its slope at grid points
-
-       ! Generate spline parameters
-       call fitp_curv1(numdat,egrid_dat,f0_values_dat_log,0.0,0.0,3,yp,temp,1.0,ierr)
-       if (ierr .NE. 0) then
-          write(*,*) "fitp_curv1 returned error code ", ierr
-          stop 1
-       end if
-
        do ie = 1,negrid
+          idat = find_index(egrid(ie,is),egrid_dat(:))
+          df0dE(ie,is) = (f0_values_dat(idat+1)-f0_values_dat(idat)) / (egrid_dat(idat+1) - egrid_dat(idat) )
+
           ! Interpolate to get f0 at grid points
-          f0_values(ie,is) = fitp_curv2(egrid(ie,is),numdat,egrid_dat, &
-                             f0_values_dat_log,yp,1.0)
+          f0_values(ie,is) = f0_values_dat(idat) + (egrid(ie,is)-egrid_dat(idat)) * df0dE(ie,is)
 
-          ! Recover F0 from its logarithm
-          f0_values(ie,is) = exp(f0_values(ie,is))
+          df0dE(ie,is) = df0dE(ie,is) / (spec(is)%temp*f0_values(ie,is))
 
-          ! Calculate d/dE lnF0 to get generalised temperature
-          df0dE(ie,is) = -fitp_curvd(egrid(ie,is),numdat,egrid_dat, &
-                             f0_values_dat_log,yp,1.0) / spec(is)%temp
+          f0prim(ie,is) = f0prim_dat(idat) + (egrid(ie,is)-egrid_dat(idat)) * &
+              (f0prim_dat(idat+1)-f0prim_dat(idat)) / (egrid_dat(idat+1) - egrid_dat(idat) )
 
           ! Diagnostic output
-          if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
+          if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE(ie,is), & 
                                    df0dE(ie,is)
        end do
 
-    else if (num_cols .EQ. 3) then
-       ! Read both f0 and df0/dE
+    else if (mode .EQ. 2) then
+       ! Read f0 values
        do ie = 1,numdat
-          read(f0in_unit,*) egrid_dat(ie), f0_values_dat(ie), df0dE_dat(ie)
-          f0_values_dat_log(ie) = log(f0_values_dat(ie))
-          df0dE_dat_log(ie) = log(abs(df0dE_dat(ie)))
+          read(f0in_unit,*) egrid_dat(ie), f0_values_dat(ie), df0dE_dat(ie), f0prim_dat(ie)
        end do
        close(f0in_unit)
 
-       ! Generate spline parameters for f0
-       call fitp_curv1(numdat,egrid_dat,f0_values_dat_log,0.0,0.0,3,yp,temp,1.0,ierr)
-
-       if (ierr .NE. 0) then
-          write(*,*) "fitp_curv1 returned error code ", ierr
-          stop 1
-       end if
-
        do ie = 1,negrid
+          idat = find_index(egrid(ie,is),egrid_dat(:))
 
-          ! Interpolate to get F0 at grid points
-          f0_values(ie,is) = fitp_curv2(egrid(ie,is),numdat,egrid_dat, &
-                             f0_values_dat_log,yp,1.0)
-       end do
-
-       ! Recover F0 from its logarithm
-       f0_values = exp(f0_values)
-
-       ! Generate spline parameters for df0/dE
-       call fitp_curv1(numdat,egrid_dat,df0dE_dat_log,0.0,0.0,3,yp,temp,1.0,ierr)
-       if (ierr .NE. 0) then
-          write(*,*) "fitp_curv1 returned error code ", ierr
-          stop 1
-       end if
-
-       do ie = 1,negrid
           ! Interpolate to get f0 at grid points
-          df0dEtemp            = fitp_curv2(egrid(ie,is),numdat,egrid_dat, &
-                             df0dE_dat_log,yp,1.0)
- 
-          ! Recover df0/dE from its logarithm (maintaining whatever sign it had before)
-          df0dE(ie,is) = -sign(1.0,df0dE_dat(ie))* exp(df0dEtemp) / (f0_values(ie,is)*spec(is)%temp)
+          f0_values(ie,is) = f0_values_dat(idat) + (egrid(ie,is)-egrid_dat(idat)) * &
+               (f0_values_dat(idat+1)-f0_values_dat(idat)) / (egrid_dat(idat+1) - egrid_dat(idat) )
+
+          df0dE(ie,is) = df0dE_dat(idat) + (egrid(ie,is)-egrid_dat(idat)) * &
+               (df0dE_dat(idat+1)-df0dE_dat(idat)) / (egrid_dat(idat+1) - egrid_dat(idat) )
+
+          df0dE(ie,is) = df0dE(ie,is) / (spec(is)%temp)
+
+          f0prim(ie,is) = f0prim_dat(idat) + (egrid(ie,is)-egrid_dat(idat)) * &
+              (f0prim_dat(idat+1)-f0prim_dat(idat)) / (egrid_dat(idat+1) - egrid_dat(idat) )
 
           ! Diagnostic output
-          if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE, & 
+          if (print_egrid) write(*,*) ie, egrid(ie,is), f0_values(ie,is), df0dE(ie,is), & 
                                    df0dE(ie,is)
-
        end do
+
+
     else
-       write(*,*) "ERROR. First line in f0 input file should be num_cols: " 
-       write(*,*) " num_cols = 1 if only f0 is to be input, "
-       write(*,*) " num_cols=2 if f0 and df0/dE are input."
+       write(*,*) "ERROR. First line in f0 input file should be mode: " 
+       write(*,*) " mode=1 if only f0 and f0prim is to be input, "
+       write(*,*) " mode=2 if f0, df0/dE, and f0prim are input."
        stop 1
     end if
 
@@ -953,37 +911,48 @@ contains
     ! but le_grids is not defined yet
 
     moment0 = 0.0
-    do ie = 1,negrid-1
-       moment0  = moment0 + 0.5*(egrid(ie+1,is)-egrid(ie,is)) * &
-                           ( sqrt(egrid(ie,is))*f0_values(ie,is) + &
-                             sqrt(egrid(ie+1,is))*f0_values(ie+1,is) )
+    do ie = 1,numdat-1
+       moment0  = moment0 + 0.25*(egrid_dat(ie+1)-egrid_dat(ie)) * &
+                           ( sqrt(egrid_dat(ie))*f0_values_dat(ie) + &
+                             sqrt(egrid_dat(ie+1))*f0_values_dat(ie+1) )
     end do
-!    do ie = 1,numdat-1
-!       moment0  = moment0 + 0.5*(egrid_dat(ie+1)-egrid_dat(ie)) * &
-!                           ( sqrt(egrid_dat(ie))*f0_values_dat(ie) + &
-!                             sqrt(egrid_dat(ie+1))*f0_values_dat(ie+1) )
-!    end do
     moment0 = moment0*4.0*pi
 
-    ! Input parameter rescale_f0 determines the priority between the input species
-    ! density or the input F0.
-    if (rescale_f0) then
-       write(*,*) "rescale_f0 = T: Rescaling magnitude of F0 to agree with input dens"
-       write(*,*) "rescale factor is ", spec(is)%dens / moment0
-       f0_values = f0_values * spec(is)%dens / moment0
-    else
-       write(*,*) "rescale_f0 = F: Overriding species dens to agree with input F0"
-       write(*,*) "New dens = ", moment0
-       spec(is)%dens = moment0
-    end if
+    f0_values(:,is) = f0_values(:,is) / moment0
 
     zogtemp(:,is) = - df0dE(:,is) * spec(is)%z 
     
-    f0prim(:,is) = -( spec(is)%fprim + (egrid(:,is) - 1.5)*spec(is)%tprim)
-
     if (.NOT. genquad_flag) weights(:,is) = weights(:,is) * f0_values(:,is)
 
-    deallocate(egrid_dat,f0_values_dat,df0dE_dat,f0_values_dat_log,df0dE_dat_log,yp,temp)
+    deallocate(egrid_dat,f0_values_dat,df0dE_dat,f0prim_dat)
+
+  contains
+ 
+  integer function find_index(x,array)
+    implicit none
+    real,intent(in):: x
+    real,dimension(:),intent(in):: array
+    integer:: i, temp
+    logical:: found 
+
+    found = .false.
+    temp = -1
+    do i = 1,size(array)
+       if ( (x .LT. array(i)) .AND. .NOT.(found)) then       
+          found = .true.
+          temp = i -1
+       end if
+    end do
+
+    if (temp .EQ. -1) then
+       write(*,*) "ERROR: Something went horribly wrong in interpolating f0 from file."
+       stop
+    end if
+
+    find_index=temp
+    return
+
+  end function find_index
 
   end subroutine calculate_f0_arrays_external
 
