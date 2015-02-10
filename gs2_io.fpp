@@ -33,6 +33,7 @@ module gs2_io
   integer (kind_nf) :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim, ncoord_dim, ncoordt_dim
   integer (kind_nf) :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim, vpa_dim
   integer (kind_nf) :: nttotext_dim, time_big_dim
+  integer (kind_nf) :: aref_id, zref_id, nref_id, tref_id, lref_id, vref_id, bref_id, rhoref_id
 
   integer, dimension (6) :: lp_dim, mom_t_dim
   integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim, err_dim
@@ -236,6 +237,7 @@ contains
 
        !Write constant data
        call nc_grids
+       call nc_norms
        call nc_species
        call nc_geo
 
@@ -388,6 +390,36 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nmesh_id)
 # endif
   end subroutine nc_grids
+
+  subroutine nc_norms
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+    use normalisations, only: norms
+# endif    
+    implicit none
+# ifdef NETCDF
+    integer :: status
+
+    !>Store the normalisations
+    status = nf90_put_var (ncid, aref_id, norms%get_value("aref"))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, aref_id)
+    status = nf90_put_var (ncid, zref_id, norms%get_value("zref"))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, zref_id)
+    status = nf90_put_var (ncid, nref_id, norms%get_value("nref"))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, nref_id)
+    status = nf90_put_var (ncid, tref_id, norms%get_value("tref"))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, tref_id)
+    status = nf90_put_var (ncid, lref_id, norms%get_value("lref"))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, lref_id)
+    status = nf90_put_var (ncid, vref_id, norms%get_value("vref"))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, vref_id)
+    status = nf90_put_var (ncid, bref_id, norms%get_value("bref"))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, bref_id)
+    status = nf90_put_var (ncid, rhoref_id, norms%get_value("rhoref"))
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, rhoref_id)
+
+# endif
+  end subroutine nc_norms
 
   !Put the grid data into the movie file
   subroutine nc_grids_mymovie
@@ -784,6 +816,26 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='nenergy')
     status = nf90_def_var (ncid, 'nlambda', NF90_INT, nlambda_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='nlambda')
+
+    !################################################
+    !# NOW DO NORMALISATIONS
+    !>Could use norms%check_if_set to decide what we want to write here
+    status = nf90_def_var (ncid, 'aref', netcdf_real, aref_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='aref')
+    status = nf90_def_var (ncid, 'zref', netcdf_real, zref_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='zref')
+    status = nf90_def_var (ncid, 'nref', netcdf_real, nref_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='nref')
+    status = nf90_def_var (ncid, 'tref', netcdf_real, tref_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tref')
+    status = nf90_def_var (ncid, 'lref', netcdf_real, lref_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='lref')
+    status = nf90_def_var (ncid, 'vref', netcdf_real, vref_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='vref')
+    status = nf90_def_var (ncid, 'bref', netcdf_real, bref_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='bref')
+    status = nf90_def_var (ncid, 'rhoref', netcdf_real, rhoref_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='rhoref')
 
     !################################################
     !# NOW DO SPECIES DATA
