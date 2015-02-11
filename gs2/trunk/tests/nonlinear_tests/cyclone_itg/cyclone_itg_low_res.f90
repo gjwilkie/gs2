@@ -7,6 +7,7 @@ module checks_mod
   contains
     function checks()
       use gs2_time, only: code_dt_cfl
+      use unit_tests, only: agrees_with
       implicit none
       logical :: checks
       !Check if the cfl condition matches expected value with 3%

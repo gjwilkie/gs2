@@ -2,9 +2,26 @@ module geometry
 
   implicit none
 
-  public
+  private
 
-  private :: bgrad, root, fluxavg
+  public :: beta_a_fun, eikcoefs, geofax, iofrho, pbarofrho
+  public :: qfun, rpofrho, rcenter, init_theta, nth_get, f_trap  !procedures
+  public :: psi, cvdrift, theta, dvdrhon, surfarea
+  public :: rhoc, nperiod, eqfile, irho, iflux, local_eq, gen_eq
+  public :: ppl_eq, transp_eq, chs_eq, efit_eq, equal_arc, bishop
+  public :: advanced_parameters_type, advanced_parameters
+  public :: delrho, rmin, rmax, isym, in_nt, writelots, itor
+  public :: r_geo, akappa, akappri, tri, tripri
+  public :: shift, qinp, asym, asympri, constant_coefficients
+  public :: miller_parameters_type, miller_parameters
+  public :: s_hat_input, constant_coefficients_type, verb
+  public :: grho, bmag, gradpar, cvdrift0, coefficients_type
+  public :: gbdrift, gbdrift0, cdrift, cdrift0, gbdrift_th
+  public :: jacob, Rplot, Zplot, aplot, Rprime, Zprime, aprime, Uk1, Uk2, Bpol
+  public :: cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq
+  public :: qsf, rmaj, shat, kxfac, aminor, finish_geometry, drhodpsin
+  public :: p_prime_input, invLp_input, beta_prime_input, alpha_input, dp_mult
+  public :: gs2d_eq, idfit_eq, dfit_eq, s_hat_new, beta_prime_new, debug
 
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
@@ -20,8 +37,8 @@ module geometry
   real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho, asym, asympri
   real :: delrho, rmin, rmax, qsf, aminor
   
-  real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input, &
-       alpha_input, dp_mult
+  real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input
+  real :: alpha_input, dp_mult
 
   integer :: nperiod
   integer :: itor, iflux, irho
@@ -29,7 +46,7 @@ module geometry
   real :: tstar
    
   real :: dp_new, di_new
-  real, private :: psi_0, psi_a
+  real :: psi_0, psi_a
   real :: B_T0, avgrmid, dvdrhon, surfarea, grho1n, grho2n, drhodpsin
   real :: grhoavg  ! needed for Trinity -- MAB
 
@@ -51,27 +68,13 @@ module geometry
 
   integer :: bishop
 
-  public :: beta_a_fun, eikcoefs, geofax, iofrho, pbarofrho, &
-       qfun, rpofrho, rcenter, init_theta, nth_get, f_trap  !procedures
+  integer :: ntgrid, nth, ntheta
 
-  integer, private :: ntgrid, nth, ntheta
-
-  integer :: verb = 2 ! Verbosity of print statements
+  integer :: verb = 2 ! Verbosity of print statements | Should we use runtime_tests:verbosity?
   logical :: debug = .true.
-  !logical, parameter :: debug = .false.
 
-  character(800) :: eqfile
+  character(len=800) :: eqfile
 
-  !common /advanced_parameters/ equal_arc,&
-                              !bishop,&
-                              !dp_mult,&
-                              !delrho,&
-                              !rmin,&
-                              !rmax,&
-                              !isym,&
-                              !in_nt,&
-                              !writelots,&
-                              !itor
   type advanced_parameters_type  
     logical :: equal_arc
     real :: dp_mult
@@ -104,35 +107,6 @@ module geometry
   !> These are functions of theta that are output by the 
   !! geometry module
   type coefficients_type
-
-         !grho   
-         !bmag       
-         !gradpar    
-         !cvdrift    
-         !cvdrift0   
-         !gbdrift    
-         !gbdrift0   
-         !cdrift    
-         !cdrift0    
-         !gbdrift_th 
-         !cvdrift_th 
-         !gds2       
-         !gds21      
-         !gds22      
-         !gds23      
-         !gds24      
-         !gds24_noq  
-         !jacob      
-         !Rplot      
-         !Zplot      
-         !aplot      
-         !Rprime     
-         !Zprime     
-         !aprime     
-         !Uk1        
-         !Uk2        
-         !Bpol       
-
     real :: grho   
     real :: bmag       
     real :: gradpar    
@@ -160,7 +134,6 @@ module geometry
     real :: Uk1        
     real :: Uk2        
     real :: Bpol       
-
   end type coefficients_type
 
   !> These are coefficients that are constant
@@ -174,7 +147,6 @@ module geometry
   end type constant_coefficients_type
 
   type(coefficients_type) :: output_coefficients
-
   type(constant_coefficients_type) :: constant_coefficients
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -287,28 +259,17 @@ module geometry
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    
 contains
-
   subroutine eikcoefs (ntheta_returned)
-    
     use  geq, only: eqin, geq_init
-    
     ! CHEASE EQUILIBRIUM  EGH
     use  ceq, only: ceqin, ceq_init 
-    
     use  peq, only: peqin => eqin, teqin, peq_init
     use  eeq, only: efitin, efit_init, gs2din, eeq_verbosity => verbosity
-!cmr    use  eeq, only: efitin, eeq_init => efit_init, gs2din
     use  deq, only: dfitin, deq_init => dfit_init
     use ideq, only: idfitin, ideq_init => dfit_init
     use  leq, only: leqin, dpdrhofun
-
     use constants, only: pi
     implicit none
-!cmr nov04: adding following debug switch
-    !logical, parameter :: debug=.false.
-! EGH gave debug switch module scope Apr12
-    !logical, parameter :: debug=.true.
-!cmr
     integer, optional, intent (out) :: ntheta_returned
 
 ! Local variables:
@@ -1097,111 +1058,111 @@ if (debug) write(6,*) "eikcoefs: end gradients"
 !    end if
 
 
-contains
+  contains
 
-  subroutine alloc_local_arrays(n)
+    subroutine alloc_local_arrays(n)
+      
+      integer, intent(in) :: n
 
-    integer n
+      allocate(smodel (-n:n), &
+           dsdrp      (-n:n), &
+           grho2      (-n:n), &
+           grho1      (-n:n), &
+           seik       (-n:n), &
+           seik1      (-n:n), &
+           seik2      (-n:n), &
+           dsdthet    (-n:n), &
+           dsdthet1   (-n:n), &
+           dsdthet2   (-n:n), &
+           gdsdum1    (-n:n), &
+           gdsdum2    (-n:n), &
+           gdsdum3    (-n:n), &
+           gdsdum4    (-n:n), &  ! MAB
+           gdsdum5    (-n:n), &  ! MAB
+           th_bish    (-n:n), &
+           Rpol       (-n:n), &
+           ltheta     (-n:n), &
+           rgrid      (-n:n), &
+           rgrid1     (-n:n), &
+           rgrid2     (-n:n), &
+           Bpolmag    (-n:n), &
+           Bmod       (-n:n), &
+           dSdl       (-n:n), &
+           rmajor     (-n:n), &
+           ans        (-n:n), &
+           ds         (-n:n), &
+           arcl       (-n:n), &
+           Zoftheta   (-n:n), &
+           dZdl       (-n:n))
 
-    allocate(smodel (-n:n), &
-         dsdrp      (-n:n), &
-         grho2      (-n:n), &
-         grho1      (-n:n), &
-         seik       (-n:n), &
-         seik1      (-n:n), &
-         seik2      (-n:n), &
-         dsdthet    (-n:n), &
-         dsdthet1   (-n:n), &
-         dsdthet2   (-n:n), &
-         gdsdum1    (-n:n), &
-         gdsdum2    (-n:n), &
-         gdsdum3    (-n:n), &
-         gdsdum4    (-n:n), &  ! MAB
-         gdsdum5    (-n:n), &  ! MAB
-         th_bish    (-n:n), &
-         Rpol       (-n:n), &
-         ltheta     (-n:n), &
-         rgrid      (-n:n), &
-         rgrid1     (-n:n), &
-         rgrid2     (-n:n), &
-         Bpolmag    (-n:n), &
-         Bmod       (-n:n), &
-         dSdl       (-n:n), &
-         rmajor     (-n:n), &
-         ans        (-n:n), &
-         ds         (-n:n), &
-         arcl       (-n:n), &
-         Zoftheta   (-n:n), &
-         dZdl       (-n:n))
+      allocate(thgrad (-n:n,2), &
+           rpgrad     (-n:n,2), &
+           crpgrad    (-n:n,2), &
+           grads      (-n:n,2))
 
-    allocate(thgrad (-n:n,2), &
-         rpgrad     (-n:n,2), &
-         crpgrad    (-n:n,2), &
-         grads      (-n:n,2))
+      allocate(bvector(-n:n,3), &
+           gradrptot  (-n:n,3), &
+           gradstot   (-n:n,3), &
+           gradztot   (-n:n,3), &
+           gradthtot  (-n:n,3))  ! MAB
 
-    allocate(bvector(-n:n,3), &
-         gradrptot  (-n:n,3), &
-         gradstot   (-n:n,3), &
-         gradztot   (-n:n,3), &
-         gradthtot  (-n:n,3))  ! MAB
+    end subroutine alloc_local_arrays
 
-  end subroutine alloc_local_arrays
+    subroutine dealloc_local_arrays
 
-  subroutine dealloc_local_arrays
+      deallocate(smodel, &
+           dsdrp     , &
+           grho2     , &
+           grho1     , &
+           seik      , &
+           seik1     , &
+           seik2     , &
+           dsdthet   , &
+           dsdthet1  , &
+           dsdthet2  , &
+           gdsdum1   , &
+           gdsdum2   , &
+           gdsdum3   , &
+           gdsdum4   , &  ! MAB
+           gdsdum5   , &  ! MAB
+           th_bish   , &
+           Rpol      , &
+           ltheta    , &
+           rgrid     , &
+           rgrid1    , &
+           rgrid2    , &
+           Bpolmag   , &
+           Bmod      , &
+           dSdl      , &
+           rmajor    , &
+           ans       , &
+           ds        , &
+           arcl      , &
+           Zoftheta  , &
+           dZdl)
 
-    deallocate(smodel, &
-         dsdrp     , &
-         grho2     , &
-         grho1     , &
-         seik      , &
-         seik1     , &
-         seik2     , &
-         dsdthet   , &
-         dsdthet1  , &
-         dsdthet2  , &
-         gdsdum1   , &
-         gdsdum2   , &
-         gdsdum3   , &
-         gdsdum4   , &  ! MAB
-         gdsdum5   , &  ! MAB
-         th_bish   , &
-         Rpol      , &
-         ltheta    , &
-         rgrid     , &
-         rgrid1    , &
-         rgrid2    , &
-         Bpolmag   , &
-         Bmod      , &
-         dSdl      , &
-         rmajor    , &
-         ans       , &
-         ds        , &
-         arcl      , &
-         Zoftheta  , &
-         dZdl)
+      deallocate(thgrad, &
+           rpgrad    , &
+           crpgrad   , &
+           grads     )
 
-    deallocate(thgrad, &
-         rpgrad    , &
-         crpgrad   , &
-         grads     )
+      deallocate(bvector, &
+           gradrptot , &
+           gradstot  , &
+           gradztot  , &
+           gradthtot )  ! MAB
 
-    deallocate(bvector, &
-         gradrptot , &
-         gradstot  , &
-         gradztot  , &
-         gradthtot )  ! MAB
+    end subroutine dealloc_local_arrays
 
-  end subroutine dealloc_local_arrays
-
-end subroutine eikcoefs
+  end subroutine eikcoefs
 
   function surfareafun(rgrid)
     use constants, only: pi
     implicit none
-    real surfareafun
-    real, dimension(:) :: rgrid  
+    real, dimension(:), intent(in) :: rgrid  
+    real :: surfareafun
     real, dimension(-ntgrid:ntgrid) :: ds, drdth, ans
-    integer i
+    integer :: i
     
     write(*,*) 'surfareafun not generalized yet? needs to be checked.'
 
@@ -1219,12 +1180,9 @@ end subroutine eikcoefs
 
     call integrate(ds, theta, ans, nth)
     surfareafun=ans(nth)-ans(-nth)
-    
-
   end function surfareafun
 
   subroutine bvectortgrid(rgrid, theta, nth, rpgrad, dpsidrp, bvector)
-
     integer, intent (in) :: nth
     real, dimension(-ntgrid:  ), intent (in) :: rgrid, theta
     real, dimension(-ntgrid:,:), intent (in) :: rpgrad
@@ -1253,15 +1211,13 @@ end subroutine eikcoefs
        bvector(i,3) = bvector(i,3) * Rinv(i)
     enddo
 
-    return
+    return!?
   end subroutine bvectortgrid
 
   subroutine gradstottgrid (rmajor, grads, gradstot)
-
     real, dimension(-ntgrid:), intent (in) :: rmajor
     real, dimension(-ntgrid:, :), intent (in) :: grads
     real, dimension(-ntgrid:, :), intent (out) :: gradstot
-
     integer :: i, k, itot
 
     do k=-nperiod+1,nperiod-1
@@ -1276,11 +1232,9 @@ end subroutine eikcoefs
           endif
        enddo
     enddo
-
   end subroutine gradstottgrid
 
   subroutine crosstgrid(a, b, c)
-
     real, dimension(-ntgrid:, :), intent (in) ::  a, b
     real, dimension(-ntgrid:, :), intent (out) ::  c
     integer :: i
@@ -1290,11 +1244,9 @@ end subroutine eikcoefs
        c(i,2)=a(i,3)*b(i,1)-b(i,3)*a(i,1)
        c(i,3)=a(i,1)*b(i,2)-b(i,1)*a(i,2)
     enddo
-
   end subroutine crosstgrid
 
   subroutine dottgrid(a, b, c) 
-
     real, dimension (-ntgrid:, :) :: a, b
     real, dimension (-ntgrid:) :: c
     integer :: i, k, itot
@@ -1305,28 +1257,22 @@ end subroutine eikcoefs
           c(itot) = a(i,1)*b(itot,1) + a(i,2)*b(itot,2) + a(i,3)*b(itot,3)
        enddo
     enddo
-
   end subroutine dottgrid
 
   subroutine dottgridf(a, b, c)
-
-    real a(-ntgrid:,:),b(-ntgrid:,:),c(-ntgrid:)
-
+    real, dimension(-ntgrid:,:), intent(in) :: a, b
+    real, dimension(-ntgrid:), intent(out) :: c
     c = a(:,1)*b(:,1) + a(:,2)*b(:,2) + a(:,3)*b(:,3)
-
   end subroutine dottgridf
 
   subroutine bmagtgrid(rgrid, bmagtg)
-
     real, dimension (-ntgrid:), intent (in) :: rgrid
     real, dimension (-ntgrid:), intent (out) :: bmagtg
-
-    integer i      
+    integer :: i      
 
     do i=-nth,nth
        bmagtg(i)=bmagfun(rgrid(i),theta(i))
     enddo
-
   end subroutine bmagtgrid
       
   real function bmagfun(r, thet)
@@ -1345,11 +1291,9 @@ end subroutine eikcoefs
        call mp_abort('bmagfun not defined.',.true.)
 !       bmagfun = sqrt(bt**2+bpmagfun(r, thet)**2)
     endif
-    
   end function bmagfun
 
   function Rpos(r, thet)
-
     use  geq, only: geq_R => Rpos
     use  peq, only: peq_R => Rpos
     use  ceq, only: ceq_R => Rpos
@@ -1368,11 +1312,9 @@ end subroutine eikcoefs
     if(dfit_eq) Rpos = deq_R (r, thet)
     if(idfit_eq)Rpos = ideq_R (r, thet)
     if(local_eq)Rpos = leq_R (r, thet)       
-
   end function Rpos
 
   function Zpos(r, thet)
-
     use  geq, only: geq_Z => Zpos
     use  peq, only: peq_Z => Zpos
     use  ceq, only: ceq_Z => Zpos
@@ -1391,11 +1333,9 @@ end subroutine eikcoefs
     if(dfit_eq) Zpos =  deq_Z (r, thet)
     if(idfit_eq)Zpos = ideq_Z (r, thet)
     if(local_eq)Zpos =  leq_Z (r, thet)       
-
   end function Zpos
   
   function invRfun(r, thet)
-
     use  geq, only: geq_invR => invR
     use  peq, only: peq_invR => invR
     use  ceq, only: ceq_invR => invR
@@ -1418,7 +1358,6 @@ end subroutine eikcoefs
        if(idfit_eq)invRfun = ideq_invR (r, thet)
        if(local_eq)invRfun =  leq_invR (r, thet)
     endif
-    
   end function invRfun
 
   subroutine drift(rgrid, rp, bvector, gradstot,  &
@@ -1429,14 +1368,13 @@ end subroutine eikcoefs
     real, dimension (-ntgrid:, :), intent (in) :: bvector, gradstot, gradrptot, gradztot, gradthtot
     real, intent (in) :: rp, dqdrp, dpsidrho, drhodrp
 
-    real, dimension (-ntgrid:ntgrid, 3) :: bgradtot, pgradtot, &
-         dummy, dummy1, curve
+    real, dimension (-ntgrid:ntgrid, 3) :: bgradtot, pgradtot, dummy, dummy1, curve
     real, dimension (-ntgrid:ntgrid, 2) :: pgrad, bgrad1
     real, dimension (-ntgrid:ntgrid) :: gbdrift1, gbdrift2, cvdrift1, cvdrift2, cdrift1, cdrift2
     real, dimension (-ntgrid:ntgrid) :: gbdrift3, cvdrift3
 
     real :: dum
-    character(1) char
+    character(1) :: char
     integer :: i, k, itot, ndum
 
     ndum = 2*nth + 1
@@ -1544,14 +1482,13 @@ end subroutine eikcoefs
        call sym(cvdrift0, 1, ntgrid)
 ! should maybe add in cdrift, cdrift0, gbdrift_th, and cvdrift_th here -- MAB
     endif
-
   end subroutine drift
 
   subroutine sym(a, isign, ntgrid)
-
-    integer i, isign, ntgrid
+    integer, intent(in) :: isign, ntgrid
     real, dimension(-ntgrid:), intent (in out) :: a
-      
+    integer :: i
+
     if(isign == 0) then
        do i=1,ntgrid
           a(i)=0.5*(a(i)+a(-i))
@@ -1564,18 +1501,16 @@ end subroutine eikcoefs
        enddo
        a(0)=0.
     endif
-
   end subroutine sym
       
-
   subroutine seikon(rp, qval, seik, dsdthet, rgrid, dpsidrp)
-    
-    real :: rp, qval
-    real, dimension(-ntgrid:) :: seik, dsdthet, rgrid
+    real, intent(in) :: rp
+    real, intent(out) :: qval
+    real, dimension(-ntgrid:), intent(out) :: seik, dsdthet, rgrid
+    real, intent(out) :: dpsidrp
     real, dimension(-ntgrid:ntgrid, 2) :: thgrad, rpgrad
-    real :: dpsidrp, dum
-    
-    character(1) char    
+    real :: dum
+    character(1) :: char    
     
     rgrid = rp
     char='P'
@@ -1587,15 +1522,20 @@ end subroutine eikcoefs
 
     call thetagrad(rgrid, thgrad)
     call eikonal(rgrid, rpgrad, thgrad, qval, seik, dsdthet, dpsidrp)
-    
   end subroutine seikon
 
   subroutine eikonal(rgrid, rpgrad, thgrad, qval, seik, dsdthet, dpsidrp)
     use constants, only: pi
-    real, dimension(-ntgrid:ntgrid) :: trip, seik, dsdthet, rgrid
-    real, dimension(-ntgrid:, :) :: rpgrad, thgrad 
-    real :: qval, dpsidrp, bi
+    implicit none
+    real, dimension(-ntgrid:), intent(in) :: rgrid
+    real, dimension(-ntgrid:), intent(out) :: seik, dsdthet
+    real, dimension(-ntgrid:,:), intent(in) ::  rpgrad, thgrad
+    real, intent(out) :: qval
+    real, intent(out) :: dpsidrp
+    real, dimension(-ntgrid:ntgrid) :: trip
+    real :: bi
     integer :: i
+
     call tripprod2dtgrid(rpgrad, thgrad, rgrid, trip)
     
     bi = btori(rgrid(0),theta(0))
@@ -1616,7 +1556,6 @@ end subroutine eikcoefs
        dpsidrp=1.
        qval=-(seik(nth)-seik(-nth))/(2.*pi)
     endif
-
   end subroutine eikonal
 
   subroutine thetagrad(rgrid, thgrad)
@@ -1625,7 +1564,7 @@ end subroutine eikcoefs
     real, dimension(-ntgrid:), intent (in) :: rgrid
     real, dimension(-ntgrid:, :), intent (out) :: thgrad
     real :: dum
-    character(1) char
+    character(1) :: char
     
     char='T'
     if(bishop == 0) then
@@ -1641,11 +1580,9 @@ end subroutine eikcoefs
        call periodic_copy(thgrad(-ntgrid:ntgrid,1),0.)
        call periodic_copy(thgrad(-ntgrid:ntgrid,2),0.)
     endif
-
   end subroutine thetagrad
 
   function diameter(rp)
-
     use geq, only: geq_diameter => diameter, geq_init_diameter => initialize_diameter
     use peq, only: peq_diameter => diameter, peq_init_diameter => initialize_diameter
     use ceq, only: ceq_diameter => diameter, ceq_init_diameter => initialize_diameter
@@ -1653,10 +1590,10 @@ end subroutine eikcoefs
     use eeq, only: bound
     use constants, only: pi
     implicit none
+    real, intent(in) :: rp
     integer :: i, initd = 1
-
-    real :: rp, diameter
-
+    real :: diameter
+    real :: broot0, brootpi
     if(rp <= rpmin .and. .not. efit_eq) then 
        diameter = 0.
        return
@@ -1677,24 +1614,24 @@ end subroutine eikcoefs
        if(idfit_eq)diameter = ideq_diameter(rp)
        if(ppl_eq)  diameter = peq_diameter(rp)
        if(chs_eq)  diameter = ceq_diameter(rp)
-       if(efit_eq) diameter = rfun(rp, 0., bound(0.)) + rfun(rp, pi, bound(pi))
+       if(efit_eq) then
+          broot0 = bound(0.)
+          brootpi = bound(pi)
+          diameter = rfun(rp, 0., broot0) + rfun(rp, pi, brootpi)
+       endif
     endif
-      
   end function diameter
 
   function psifun (rp)
-
     real, intent (in) :: rp
     real :: psifun
 
     psifun=min(1.,max(0.,(rp-psi_0)/(psi_a-psi_0)))
-    
   end function psifun
       
   function rhofun (rp)
-
     use deq, only: deq_rhofun => rhofun, init_rho => initialize_rho
-
+    implicit none
     real, intent (in) :: rp
     real :: rhofun, pbar
     integer :: i, initrho = 1
@@ -1705,22 +1642,19 @@ end subroutine eikcoefs
 
     i = init_rho(initrho)
     rhofun=deq_rhofun(pbar)
-    
   end function rhofun
       
   function rpfun(r, thet)
-
     real, intent (in) :: r, thet
     real :: rpfun
 
     rpfun=psi(r, thet)
-
   end function rpfun
       
   function rpofrho(rho)
-
+    real, intent(in) :: rho
     real :: rpofrho
-    real :: a, b, xerrbi, xerrsec, fval, soln, rho
+    real :: a, b, xerrbi, xerrsec, fval, soln
     integer :: nsolv,ier
     
     a=rpmin
@@ -1742,22 +1676,20 @@ end subroutine eikcoefs
        call root(rhofun, fval, a, b, xerrbi, xerrsec, nsolv, ier, soln)
     endif
     !<EGH
-     if (debug) then 
+    if (debug) then 
        write (*,*) "Values in root: "
        write (*,*) 'rho:  ', rho
        write (*,*) 'fval: ', fval
        write (*,*) 'soln: ', soln
        write (*,*) 'rpmin: ', rpmin
        write (*,*) 'rpmax: ', rpmax
-     end if
+    end if
     !EGH>
     rpofrho=soln
     if(ier > 0) write(11,*) 'error in rpofrho,rho=',rho
-
   end function rpofrho
   
   subroutine tripprod2dtgrid(x, y, rgrid, val)
-
     real, dimension(-ntgrid:), intent (in) :: rgrid
     real, dimension(-ntgrid:), intent (out) :: val
     real, dimension(-ntgrid:, :), intent(in) :: x, y
@@ -1768,19 +1700,17 @@ end subroutine eikcoefs
     do i=-nth,nth
        val(i)=(x(i,1)*y(i,2)-x(i,2)*y(i,1))*invRfun(rgrid(i),theta(i))
     enddo
-    
   end subroutine tripprod2dtgrid
 
   function btori(r, thet)
-
     use geq, only: geq_btori => btori , geq_init_btori => initialize_btori
     use peq, only: peq_btori => btori , ppl_init_btori => initialize_btori
     use ceq, only: ceq_btori => btori , chs_init_btori => initialize_btori
     use eeq, only: eeq_btori => btori, efit_init_btori => initialize_btori
     use leq, only: leq_btori => btori
 
-    real :: btori
     real, intent (in) :: r, thet
+    real :: btori
     real :: pbar, f
     real, save :: r_last, theta_last, I_last
     logical, save :: first_run = .true.
@@ -1832,15 +1762,14 @@ end subroutine eikcoefs
   function dbtori(r, thet)
 
  ! returns dI/dpsi
-
     use geq, only: geq_dbtori => dbtori , geq_init_dbtori => initialize_dbtori
     use peq, only: peq_dbtori => dbtori , ppl_init_dbtori => initialize_dbtori
     use ceq, only: ceq_dbtori => dbtori , chs_init_dbtori => initialize_dbtori
     use leq, only: leq_dbtori => dbtori
     use eeq, only: eeq_dbtori => dbtori, efit_init_dbtori => initialize_dbtori
 
-    real :: dbtori
     real, intent (in) :: r, thet
+    real :: dbtori
     real :: pbar, f
     integer :: i, initdb = 1
 
@@ -1875,7 +1804,6 @@ end subroutine eikcoefs
     else         
        dbtori=leq_dbtori()
     endif
-
   end function dbtori
 
   function iofrho(rho)
@@ -1884,9 +1812,9 @@ end subroutine eikcoefs
     use ceq, only: ceq_iofpbar => btori
     use eeq, only: eeq_iofpbar => btori
     use leq, only: leq_i => btori
-    
+    implicit none
+    real, intent (in) :: rho    
     real :: iofrho
-    real, intent (in) :: rho
             
     if (gen_eq) iofrho = geq_iofpbar(pbarofrho(rho))
     if (ppl_eq) iofrho = peq_iofpbar(pbarofrho(rho))
@@ -1894,11 +1822,9 @@ end subroutine eikcoefs
     if(efit_eq) iofrho = eeq_iofpbar(pbarofrho(rho))
     if(dfit_eq) iofrho = 0.
     if(local_eq) iofrho = leq_i()
-
   end function iofrho
 
   subroutine integrate(arg, grid, ans, n)
-
     real, dimension(-ntgrid:), intent (in) :: arg, grid
     real, dimension(-ntgrid:), intent (out) :: ans
     integer :: i, n
@@ -1911,11 +1837,9 @@ end subroutine eikcoefs
     do i=-1,-n,-1
        ans(i)=ans(i+1)+0.5*(grid(i)-grid(i+1))*(arg(i)+arg(i+1))
     enddo
-       
   end subroutine integrate
 
   subroutine rmajortgrid(rgrid, theta, rmajor)
-
     real, dimension(-ntgrid:), intent(in) :: rgrid, theta
     real, dimension(-ntgrid:), intent(out) :: rmajor
     integer :: i
@@ -1924,11 +1848,10 @@ end subroutine eikcoefs
        rmajor(i)=Rpos(rgrid(i),theta(i))
     enddo
     
-    return
+    return!?
   end subroutine rmajortgrid
 
   subroutine Ztgrid(rgrid, theta, Zoftheta)
-
     real, dimension(-ntgrid:), intent(in) :: rgrid, theta
     real, dimension(-ntgrid:), intent(out) :: Zoftheta
     integer :: i
@@ -1937,7 +1860,7 @@ end subroutine eikcoefs
        Zoftheta(i)=Zpos(rgrid(i),theta(i))
     enddo
     
-    return
+    return!?
   end subroutine Ztgrid
 
   function qfun(pbar)
@@ -1946,9 +1869,10 @@ end subroutine eikcoefs
     use ceq, only: ceq_qfun => qfun, chs_init_q => initialize_q
     use eeq, only: eeq_qfun => qfun, efit_init_q => initialize_q
     use leq, only: leq_qfun => qfun
-
+    implicit none
+    real, intent(in) :: pbar
+    real :: qfun
     integer :: i, initq = 1
-    real :: pbar, qfun
     
 !    if(in_nt .and. iflux == 1) then
 !       write(*,*) 'qfun not update in nt.'
@@ -1979,11 +1903,9 @@ end subroutine eikcoefs
     endif
 
     if(initq == 1) initq = 0
-
   end function qfun
 
   function pfun(r,thet)
-
     use  geq, only: geq_pfun => pfun, geq_init_pressure => initialize_pressure
     use  peq, only: peq_pfun => pfun, ppl_init_pressure => initialize_pressure
     use  ceq, only: ceq_pfun => pfun, chs_init_pressure => initialize_pressure
@@ -1991,10 +1913,10 @@ end subroutine eikcoefs
     use  deq, only: deq_pfun => pfun, dfit_init_pressure => initialize_pressure
     use ideq, only: ideq_pfun => pfun, idfit_init_pressure => initialize_pressure
     use  leq, only: leq_pfun => pfun
-
+    implicit none
     real, intent (in) :: r, thet
-    real :: pfun, f
-    real pbar
+    real :: pfun
+    real :: pbar, f
     integer :: i, initp = 1
 
     if(iflux /= 1) then
@@ -2028,11 +1950,9 @@ end subroutine eikcoefs
     endif
 
     if(initp == 1) initp = 0
-    
   end function pfun
       
   function dpfun(r, thet)
-
     use  geq, only: geq_dpfun => dpfun, geq_init_dpressure => initialize_dpressure
     use  peq, only: peq_dpfun => dpfun, ppl_init_dpressure => initialize_dpressure
     use  ceq, only: ceq_dpfun => dpfun, chs_init_dpressure => initialize_dpressure
@@ -2040,11 +1960,10 @@ end subroutine eikcoefs
     use  deq, only: deq_dpfun => dpfun, dfit_init_dpressure => initialize_dpressure
     use ideq, only: ideq_dpfun => dpfun, idfit_init_dpressure => initialize_dpressure
     use  leq, only: leq_dpfun => dpfun
-
-
+    implicit none
     real, intent (in) :: r, thet
-    real :: dpfun, f
-    real pbar
+    real :: dpfun
+    real :: pbar, f
     integer :: i, initdp = 1
 
     if(iflux /= 1) then
@@ -2071,18 +1990,16 @@ end subroutine eikcoefs
     if(efit_eq)  dpfun = eeq_dpfun(pbar)
     if(dfit_eq)  dpfun = deq_dpfun(pbar)
     if(idfit_eq) dpfun = ideq_dpfun(pbar)
-    
   end function dpfun
 
   function beta_a_fun(r,thet)
-    
     use  geq, only: geq_beta => betafun,  geq_init_beta => initialize_beta
     use  peq, only: peq_beta => betafun,  ppl_init_beta => initialize_beta
     use  ceq, only: ceq_beta => betafun,  chs_init_beta => initialize_beta
     use  eeq, only: eeq_beta => betafun, efit_init_beta => initialize_beta
     use  deq, only: deq_beta => betafun, dfit_init_beta => initialize_beta
     use ideq, only: ideq_beta => betafun, idfit_init_beta => initialize_beta
-
+    implicit none
     real, intent (in) :: r, thet
     real :: beta_a_fun
     real :: pbar, f
@@ -2122,14 +2039,11 @@ end subroutine eikcoefs
 
     initbeta = 0
     beta_a_fun=f
-
   end function beta_a_fun
       
   function pbarofrho(rho)
-
     real, intent (in) :: rho
     real :: pbarofrho
-    
 !     punt for now; not used
 
     if(iflux /= 1) then
@@ -2139,23 +2053,24 @@ end subroutine eikcoefs
     endif
 
     pbarofrho=min(1.,max(0.,(rpofrho(rho)-psi_0)/(psi_a-psi_0)))
-    
   end function pbarofrho
 
   function dqdrhofun(rho)
-    
     real, intent (in) :: rho
     real dqdrhofun
     
     dqdrhofun=shat*qfun(pbarofrho(rho))/(rhoc)
-
   end function dqdrhofun
 
   subroutine root(f,fval,a,b,xerrbi,xerrsec,nsolv,ier,soln)
-
+    implicit none
     real, external :: f
-    real :: fval,a,b,a1,b1,f1,f2,f3,trial,xerrbi,xerrsec,soln,aold
-    integer :: i,ier,nsolv,niter,isolv
+    real, intent(in) :: fval, a, b, xerrbi, xerrsec
+    real, intent(out) :: soln
+    integer, intent(in) :: nsolv
+    integer, intent(out) :: ier
+    real :: a1, b1, f1, f2, f3, trial, aold
+    integer :: i,niter,isolv
     
     ier=0
     a1=a
@@ -2214,10 +2129,9 @@ end subroutine eikcoefs
   function phi(rp)
     use mp, only: mp_abort
     implicit none
-    integer, parameter :: nimax = 200
-
-    real :: phi
     real, intent (in) :: rp
+    real :: phi
+    integer, parameter :: nimax = 200
     real :: pbar, pb(nimax), dpb
     integer :: i, ni
       
@@ -2242,11 +2156,9 @@ end subroutine eikcoefs
        phi=phi+0.5*dpb*(qfun(pb(i+1))+qfun(pb(i)))
     enddo
     phi=phi*(psi_a-psi_0)   ! fixed by MB
-
   end function phi
       
   function psi(r, thet)
-
     use  geq, only: geq_psi => psi,  geq_init_psi => initialize_psi
     use  peq, only: peq_psi => psi,  ppl_init_psi => initialize_psi
     use  ceq, only: ceq_psi => psi,  chs_init_psi => initialize_psi
@@ -2254,10 +2166,9 @@ end subroutine eikcoefs
     use  deq, only: deq_psi => psi, dfit_init_psi => initialize_psi
     use ideq, only: ideq_psi => psi, idfit_init_psi => initialize_psi
     use  leq, only: leq_psi => psi
-
-    real :: psi
+    implicit none
     real, intent (in) :: r, thet
-    
+    real :: psi    
     integer :: init = 1, i
      
     if(r == 0.) then
@@ -2296,19 +2207,16 @@ end subroutine eikcoefs
     endif
 
     init = 0
-
   end function psi
 
   function between(x,x1,x2)
-
+    real, intent(in) :: x, x1, x2
     logical :: between
-    real :: x, x1, x2
     if( ((x1 <= x).and.(x <= x2)) .or. ((x1 >= x).and.(x >= x2)) ) then
        between = .true.
     else
        between = .false.
     end if
-
   end function between
 
   !This routine is just used by eik, not GS2
@@ -2405,7 +2313,7 @@ end subroutine geofax
     real, intent (in) :: rp
     real :: rcenter
     integer :: i, init_rc = 1
-
+    real :: broot0, brootpi
     if(eqinit == 1) init_rc = 1
 
     if (gen_eq)  i = geq_init_rc(init_rc) 
@@ -2421,9 +2329,12 @@ end subroutine geofax
     if(ppl_eq)   rcenter = peq_rcenter(rp) 
     if(chs_eq)   rcenter = ceq_rcenter(rp) 
 
-    if(efit_eq)  rcenter = rmaj + 0.5*(rfun(rp, 0., bound(0.))-rfun(rp,pi,bound(pi)))
+    if(efit_eq) then
+       broot0 = bound(0.)
+       brootpi= bound(pi)
+       rcenter = rmaj + 0.5*(rfun(rp, 0., broot0 )-rfun(rp,pi,brootpi))
+    endif
     if(local_eq) rcenter = leq_rcenter()
-
   end function rcenter
 
   function bmodfun(r,thet)
@@ -2431,9 +2342,8 @@ end subroutine geofax
     use ideq, only: ideqitem => eqitem, ideqB_psi => B_psi
     use mp, only: mp_abort
     implicit none
-    real :: bmodfun
     real, intent (in) :: r, thet
-
+    real :: bmodfun
     integer :: init = 1
     real :: f
 
@@ -2453,17 +2363,14 @@ end subroutine geofax
        write(*,*) 'Stopping in bmodfun.'  
        call mp_abort('You must use gen_eq or idfit_eq to call bmodfun.',.true.)
     endif
-    
   end function bmodfun
 
   subroutine arclength (ntheta, nperiod, gpar, arcl)
     use constants, only: pi
     implicit none
     integer, intent (in) :: ntheta, nperiod
-!    real, dimension(-ntgrid:), intent (in) :: theta
     real, dimension(-ntgrid:), intent (out) :: arcl
     real, dimension(-ntgrid:), intent (in out) :: gpar
-
     integer :: nth, j, k
     real :: arcfac
     
@@ -2486,14 +2393,12 @@ end subroutine geofax
           gpar(j+k*ntheta)=2.*pi*arcfac
        enddo
     enddo
-    
   end subroutine arclength
 
   subroutine loftheta(rgrid, theta, ltheta)
-
-    real, dimension (-ntgrid:) :: rgrid, theta, ltheta
+    real, dimension (-ntgrid:), intent(in) :: rgrid, theta
+    real, dimension (-ntgrid:), intent(out) :: ltheta
     integer :: i
-    
     real :: rold, told, rpos_old, zpos_old, rpos_new, zpos_new
     real :: r, thet  !, L_tot
         
@@ -2536,14 +2441,13 @@ end subroutine geofax
        rold=r
        told=thet
     enddo
-
   end subroutine loftheta
 
   subroutine gradl (ltheta, f, dfdl, ext, n)
     real, dimension (-ntgrid:), intent(in) :: ltheta, f
     real, dimension (-ntgrid:), intent(out) :: dfdl
     real, intent(in) :: ext
-    integer :: n
+    integer, intent(in) :: n
     integer :: i
 
     dfdl(-n) = (f(n-1) + ext - f(-n+1)) &
@@ -2554,17 +2458,14 @@ end subroutine geofax
     enddo
     
     dfdl(n) = dfdl(-n)
-
   end subroutine gradl
 
   subroutine th_bishop(rpgrad, th_bish, nth)
     use constants, only: pi
     implicit none
     integer, intent (in) :: nth
-    
     real, dimension (-ntgrid:, :), intent (in) :: rpgrad
     real, dimension (-ntgrid:), intent (out) :: th_bish
-
     real, dimension (-ntgrid:ntgrid) :: magrp
     real, dimension (-ntgrid:ntgrid, 2) :: tvec
     integer :: i
@@ -2593,16 +2494,13 @@ end subroutine geofax
           th_bish(i)=acos(max(min(tvec(i,1),1.0),-1.0))
        endif
     enddo
-
   end subroutine th_bishop
 
   subroutine B_pol(rgrid, theta, rpgrad, Bpolmag, nth)
-
     integer, intent (in) :: nth
     real, dimension (-ntgrid:), intent (in) :: rgrid, theta
     real, dimension (-ntgrid:, :), intent (in) :: rpgrad
     real, dimension (-ntgrid:)   , intent (out) :: Bpolmag
-    
     real, dimension(-ntgrid:ntgrid) :: Rinv
     integer :: i
      
@@ -2613,11 +2511,9 @@ end subroutine geofax
     do i=-nth,nth
        Bpolmag(i)=sqrt(rpgrad(i,1)**2 + rpgrad(i,2)**2)*Rinv(i)
     enddo
-    
   end subroutine B_pol
 
   subroutine B_mod(rgrid, theta, Bpolmag, Bmod, nth)
-
     integer, intent (in) :: nth
     real, dimension (-ntgrid:), intent (in) :: rgrid, theta, Bpolmag
     real, dimension(-ntgrid:), intent (out) :: Bmod
@@ -2629,17 +2525,16 @@ end subroutine geofax
        Bmod(i)=sqrt((bi*invRfun(rgrid(i),theta(i)))**2 &
             +Bpolmag(i)**2)
     enddo
-    
   end subroutine B_mod
 
   subroutine R_pol(theta, th_bish, ltheta, Rpol, nth)
     use constants, only: pi
+    implicit none
     integer, intent (in) :: nth
     real, dimension(-ntgrid:), intent (in) :: th_bish, theta, ltheta
     real, dimension(-ntgrid:), intent (out) :: Rpol
     real, dimension(-ntgrid:ntgrid) :: dthdl
     integer :: i, is
-
 ! 
 ! R = 1/(d theta/dl * d th_bish/d theta)
 ! 
@@ -2690,17 +2585,14 @@ end subroutine geofax
     do i=-nth,nth
        Rpol(i) = 1/(Rpol(i)*dthdl(i))
     enddo
-
   end subroutine R_pol
 
   subroutine test(rgrid, theta, Bpolmag, Bmod, Rpol, th_bish, bgrad, nth)
     implicit none
     integer, intent (in) :: nth
-
     real, dimension(-ntgrid:), intent (in) :: rgrid, theta, Bmod, Bpolmag, &
          Rpol, th_bish
     real, dimension(-ntgrid:, :), intent(in) :: bgrad
-
     real, dimension(-ntgrid:ntgrid) :: rmajor, bbgrad
     real :: dp, bi, di, bp
     integer :: i
@@ -2737,24 +2629,17 @@ end subroutine geofax
 !            Bmod(i), bgrad(i,2)
     enddo
 
-  100 format(20(1x,g13.6))
+100 format(20(1x,g13.6))
   end subroutine test
 
   subroutine tdef(nthg, ntheta_returned)
     use constants, only: pi
     implicit none
 !RN>
-!    integer :: nthg, nthsave, i, ntheta_returned
-    integer :: nthg, i
+    integer, intent(in) :: nthg
     integer, intent(out), optional :: ntheta_returned
+    integer :: i
 !<RN
-!cmr Jun06: adding following debug switch
-    !logical, parameter :: debug=.false.
-!cmr
-!    logical, parameter :: first = .true.
-    
-!    if(.not.first) return
-!    first = .false.
 
 !    nthsave=nth
     nth=nthg/2   ! correct, at least for geq
@@ -2781,15 +2666,12 @@ end subroutine geofax
        theta(i)=i*pi/float(nth)
        theta(-i)=-theta(i)
     enddo
-
   end subroutine tdef
 
   subroutine alloc_Xanth (n)
-
-    integer n
+    integer, intent(in) :: n
 
     if (allocated(g11_X)) return
-
     allocate (g11_X     (-n:n), &
               g12_X     (-n:n), &
               g22_X     (-n:n), &
@@ -2798,12 +2680,10 @@ end subroutine geofax
               K1_X      (-n:n), &
               K2_X      (-n:n), &
               gradpar_X (-n:n))
-
   end subroutine alloc_Xanth
 
   subroutine alloc_module_arrays(n)
-
-    integer n
+    integer, intent(in) :: n
 !cmr Jun06: adding following debug switch
     logical, parameter :: debug=.false.
 !cmr
@@ -2871,7 +2751,6 @@ end subroutine geofax
   end subroutine dealloc_module_arrays
 
   subroutine finish_geometry
-    
     use  geq, only:  geq_finish
     use  peq, only:  peq_finish
     use  ceq, only:  ceq_finish
@@ -2879,8 +2758,8 @@ end subroutine geofax
     use  deq, only:  deq_finish => dfit_finish
     use ideq, only: ideq_finish => dfit_finish
     use  leq, only:  leq_finish
-
     implicit none
+
     call dealloc_module_arrays
     eqinit = 1
 
@@ -2891,13 +2770,12 @@ end subroutine geofax
     if(dfit_eq)  call  deq_finish
     if(idfit_eq) call ideq_finish
     if(local_eq) call  leq_finish
-
   end subroutine finish_geometry
 
   subroutine init_theta(nt)
     use constants, only: pi
     integer, intent(in) :: nt
-    integer i
+    integer :: i
 
 !cmr Jun06: adding following debug switch
     logical, parameter :: debug=.false.
@@ -2917,10 +2795,8 @@ end subroutine geofax
   end subroutine init_theta
 
   subroutine periodic_copy(a, ext)
-
-    real, dimension(-ntgrid:ntgrid) :: a
-    
-    real ext
+    real, dimension(-ntgrid:ntgrid), intent(in out) :: a
+    real, intent(in) :: ext
     integer :: i, k, itot
 
     if(nperiod == 1) return
@@ -2938,14 +2814,10 @@ end subroutine geofax
           a(itot) = a(i) + k*ext
        enddo
     enddo
-
   end subroutine periodic_copy
 
-  subroutine bishop_gradB(rgrid, Bmod, Bpolmag, Rpol, th_bish, ltheta, &
-       gradB)
-    
-    real, dimension(-ntgrid:), intent (in) :: rgrid, Bmod, Bpolmag, &
-         Rpol, th_bish, ltheta
+  subroutine bishop_gradB(rgrid, Bmod, Bpolmag, Rpol, th_bish, ltheta, gradB)
+    real, dimension(-ntgrid:), intent (in) :: rgrid, Bmod, Bpolmag, Rpol, th_bish, ltheta
     real, dimension(-ntgrid:,:), intent(out) :: gradB
     real, dimension(-ntgrid:ntgrid) :: rmajor, dBdl
     real :: bi, bp
@@ -2961,7 +2833,6 @@ end subroutine geofax
             - bi**2*sin(th_bish(i))/rmajor(i)**3/bp)
        gradB(i,2)=dBdl(i)
     enddo
-
   end subroutine bishop_gradB
 
   subroutine check(geq, eeq, peq, leq, deq, ideq, ceq)
@@ -3035,11 +2906,9 @@ end subroutine geofax
        write(*,*) 'Stopping.'
        call mp_abort('Clash of equilibrium flags.')
     endif
-
   end subroutine check
 
   subroutine grad(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     
      use  geq, only:  geq_gradient => gradient
      use  peq, only:  peq_gradient => gradient
      use  ceq, only:  ceq_gradient => gradient
@@ -3047,12 +2916,12 @@ end subroutine geofax
      use  deq, only:  deq_gradient => gradient
      use ideq, only: ideq_gradient => gradient
      use  leq, only:  leq_gradient => gradient
-
-     integer :: nth, ntgrid
-     real, dimension(-ntgrid:) :: rgrid, theta
-     real, dimension(-ntgrid:,:) :: gradf
-     character(1) :: char
-     real rp
+     implicit none
+     integer, intent(in) :: nth, ntgrid
+     real, dimension(-ntgrid:), intent(in) :: rgrid, theta
+     real, dimension(-ntgrid:,:), intent(out) :: gradf
+     character(1), intent(in) :: char
+     real, intent(in) :: rp
 
      if(gen_eq)   call  geq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(ppl_eq)   call  peq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
@@ -3061,11 +2930,9 @@ end subroutine geofax
      if(dfit_eq)  call  deq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(idfit_eq) call ideq_gradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(local_eq) call  leq_gradient(theta, gradf, char, rp, nth, ntgrid)
-
    end subroutine grad
 
    subroutine bgrad(rgrid, theta, gradf, char, rp, nth, ntgrid)
-     
      use  geq, only:  geq_bgradient => bgradient
      use  peq, only:  peq_bgradient => bgradient
      use  ceq, only:  ceq_bgradient => bgradient
@@ -3073,12 +2940,12 @@ end subroutine geofax
      use  deq, only:  deq_bgradient => bgradient
      use ideq, only: ideq_bgradient => bgradient
      use  leq, only:  leq_bgradient => bgradient
-
-     integer :: nth, ntgrid
-     real, dimension(-ntgrid:) :: rgrid, theta
-     real, dimension(-ntgrid:,:) :: gradf
-     character(1) :: char
-     real rp
+     implicit none
+     integer, intent(in) :: nth, ntgrid
+     real, dimension(-ntgrid:), intent(in) :: rgrid, theta
+     real, dimension(-ntgrid:,:), intent(out) :: gradf
+     character(1), intent(in) :: char
+     real, intent(in) :: rp
 
      if(gen_eq)   call  geq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(ppl_eq)   call  peq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
@@ -3087,7 +2954,6 @@ end subroutine geofax
      if(dfit_eq)  call  deq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(idfit_eq) call ideq_bgradient(rgrid, theta, gradf, char, rp, nth, ntgrid)
      if(local_eq) call  leq_bgradient(theta, gradf, char, rp, nth, ntgrid)
-
    end subroutine bgrad
 
   subroutine rtg(rgrid, rp)
@@ -3097,6 +2963,7 @@ end subroutine geofax
     implicit none
     real, dimension(-ntgrid:), intent (out) :: rgrid
     real, intent (in) :: rp
+    real :: broot
     integer :: i
     
     if(.not. (efit_eq .or. dfit_eq)) then
@@ -3105,23 +2972,27 @@ end subroutine geofax
 
     if (efit_eq) then
        do i=-nth,nth
-          rgrid(i)=rfun(rp, theta(i), ebound(theta(i)))
+          broot=ebound(theta(i))
+          rgrid(i)=rfun(rp, theta(i), broot)
        enddo
     else if (dfit_eq) then
        do i=-nth,nth
-          rgrid(i)=rfun(rp, theta(i), dbound(theta(i)))
+          broot = dbound(theta(i))
+          rgrid(i)=rfun(rp, theta(i), broot)
        enddo
     endif
     if(nperiod>1) call periodic_copy(rgrid,0.0)
   end subroutine rtg
 
   function rfun(rp, thet, broot)
-
     use eeq, only: ebound => bound
     use deq, only: dbound => bound
+    implicit none
+    real, intent(in) :: rp, thet
+    real, intent(in out) :: broot
     integer :: i, j, k, imax, jmax, kmax
     real :: rfun, fa, fb, fbroot, bmult, rootval, thetroot
-    real :: a, b, xerrsec, rp, thet, broot
+    real :: a, b, xerrsec
 
     if(.not. (efit_eq .or. dfit_eq)) then
        rfun = rp
@@ -3132,7 +3003,6 @@ end subroutine geofax
     rootval=rp
     a=0.
     b=broot
-
 
     if(broot < 0.) then
        if (efit_eq) broot = ebound(thet)
@@ -3174,20 +3044,18 @@ end subroutine geofax
     rfun=zbrent(rpfun, a, b, rootval, thetroot, xerrsec)
 !         write(*,1000) a, b, fa, fb, rfun, thet
 ! 1000 format(1x,11e16.9)
-
   end function rfun
 
   function zbrent(func, x1, x2, rootval, thetroot, tol)
     use mp, only: mp_abort
     implicit none
-    real :: zbrent, func
-!    real, parameter :: eps = 3.e-8, eps1 = 2.e-5
+    real, intent (in) :: x1, x2, rootval, thetroot, tol
+    real, external :: func
+    real :: zbrent
     real, parameter :: eps = 3.e-8, eps1 = 2.e-8
     integer, parameter :: itmax = 100
-    real, intent (in) :: x1, x2, rootval, thetroot, tol
     real :: a, b, c, fa, fb, fc, d, e, tol1, xm, q, p, r, s
     integer :: iter
-    external func
 
     a=x1
     b=x2
@@ -3263,39 +3131,33 @@ end subroutine geofax
 11     continue
        call mp_abort('zbrent exceeding maximum iterations.',.true.)
        zbrent=b
-       
   end function zbrent
 
   !Not used by GS2 (just eik/et)
   subroutine Hahm_Burrell(i, a)   
-
     use geq, only: geq_Hahm_Burrell => Hahm_Burrell
     use peq, only: peq_Hahm_Burrell => Hahm_Burrell
     use ceq, only: ceq_Hahm_Burrell => Hahm_Burrell
-
-    integer i
-    real a
+    implicit none
+    integer, intent(in) :: i
+    real, intent(in) :: a
     
     !Should be a select case?
     if(gen_eq) call geq_Hahm_Burrell(i, a)
     if(ppl_eq) call peq_Hahm_Burrell(i, a)
     if(chs_eq) call ceq_Hahm_Burrell(i, a)
-
-
   end subroutine Hahm_Burrell
 
   function nth_get()
-    
-    integer nth_get
+    integer :: nth_get
 
     nth_get = nth
-
   end function nth_get
 
   subroutine drho_drp(rp, drhodrp)
-
-    real :: rp1, rp2, rp, rho1, rho2
+    real, intent(in) :: rp
     real, intent (out) :: drhodrp
+    real :: rp1, rp2, rho1, rho2
 
 !     compute d rho / d rp
     rp1=rp*(1.-delrho)
@@ -3314,15 +3176,12 @@ end subroutine geofax
        rho2=rhofun(rp2)
     endif
     drhodrp=(rho2-rho1)/(rp2-rp1)
-
   end subroutine drho_drp
 
   subroutine drho_drhod(rp, drhodrp, drhodrhod)
-
-    real :: rp1, rp2, rp, rho1, rho2
-    real, intent (in) :: drhodrp
+    real, intent (in) :: drhodrp, rp
     real, intent (out) :: drhodrhod
-
+    real :: rp1, rp2,  rho1, rho2
 !     compute d rho / d rb
     rp1=rp*(1.-delrho)
     rp2=rp*(1.+delrho)
@@ -3330,24 +3189,21 @@ end subroutine geofax
     rho2=0.5*diameter(rp2)
 
     drhodrhod=drhodrp/((rho2-rho1)/(rp2-rp1))
-
   end subroutine drho_drhod
 
   function fluxavg(f)
     real, dimension(-nth:nth), intent(in) :: f
-    real, dimension(-nth:nth) :: delth
     real :: fluxavg
+    real, dimension(-nth:nth) :: delth
 
     delth(-nth+1:nth-1) = 0.5*(theta(-nth+2:nth)-theta(-nth:nth-2))
     delth(-nth) = 0.5*(theta(-nth+1)-theta(-nth))
     delth(nth) = 0.5*(theta(nth)-theta(nth-1))
 
     fluxavg = sum(f*jacob(-nth:nth)*delth)/sum(jacob(-nth:nth)*delth)
-
   end function fluxavg
 
   function f_trap(b_mag)
-    
     real, dimension(-nth:nth), intent (in) :: b_mag
     real :: f_trap, ftu, ftl, havg, h2avg, h(-nth:nth)
 
@@ -3359,15 +3215,12 @@ end subroutine geofax
     ftu = 1.0 - h2avg/havg**2*(1.0-sqrt(1.0-havg)*(1.0+0.5*havg))
     ftl = 1.0 - h2avg*fluxavg((1.0-sqrt(1.0-h)*(1.0+0.5*h))/h**2)
     f_trap = 0.75*ftu + 0.25*ftl 
-    
   end function f_trap
 
   subroutine plotdata (rgrid, seik, grads, dpsidrho)
-
     real, dimension (-ntgrid:), intent (in) :: rgrid, seik
     real, dimension (-ntgrid:,:), intent (in) :: grads
     real, intent (in) :: dpsidrho
-
     real :: rplus, rminus, dr
     integer :: i
 !
@@ -3402,10 +3255,7 @@ end subroutine geofax
        Zprime(i) = (Zpos(rplus, theta(i))-Zpos(rminus, theta(i)))/dr
        aprime(i) = grads(i,1)*dpsidrho
     end do
-
   end subroutine plotdata
-
-
 end module geometry
 
 

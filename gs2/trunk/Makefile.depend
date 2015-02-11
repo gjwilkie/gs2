@@ -17,7 +17,6 @@ ball_mod = \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
-	 runtime_tests.o \
 	 spl.o 
 
 drive_mod = \
@@ -137,7 +136,6 @@ eiktest_mod = \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
-	 runtime_tests.o \
 	 spl.o 
 
 ffttester_mod = \
@@ -761,7 +759,6 @@ ediff.o:
 eeq.o: \
 	 constants.o \
 	 mp.o \
-	 runtime_tests.o \
 	 spl.o 
 et.o: \
 	 constants.o \
