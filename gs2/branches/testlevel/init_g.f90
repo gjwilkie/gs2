@@ -672,6 +672,7 @@ contains
     call broadcast (ikx_init)
     call broadcast (kpar_init)
     call broadcast (restart_eig_id)
+    call broadcast (constant_random_flag)
     ! <RN
     call init_save (restart_file)
     
