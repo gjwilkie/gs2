@@ -400,8 +400,11 @@ contains
     ! Configuration for the new diagnostics module
     type(diagnostics_init_options_type) :: diagnostics_init_options
     real :: precision_test
+#endif
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
+
+#ifdef NEW_DIAG
     call debug_message(state%verb, &
       'gs2_main::initialize_diagnostics calling init_gs2_diagnostics_new')
 
