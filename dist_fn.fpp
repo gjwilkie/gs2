@@ -3631,6 +3631,13 @@ endif
     if (.not. box .and. shat .ne. 0.0 ) then
 ! MR, March 2009: impact of ExB shear on extended theta grid computed here
 !                 for finite shat
+
+! ASSUMES range of theta0 is exactly 2pi minus one point, so that modes
+! falling off one end come back on the other, shifted by ntheta?
+! If nperiod = 1, this reduces to a single point. By contrast with box,
+! there is no duplication at the join, so no need to ensure single-valuedness.
+! -- comment by GC, 2015-01-27
+
        do ik =1,naky
           j=jump(ik)
           if (j .eq. 0) cycle     
@@ -3657,7 +3664,7 @@ endif
                    phi(:,i,ik) = phi(:,i-j,ik)
                 enddo
                 phi(:iright,:iib ,ik) = temp2(ileft:,:)
-                phi(iright+1:ntgrid,:iib,:) = 0.0
+                phi(iright+1:ntgrid,:iib,ik) = 0.0
              endif
           endif
           if (fapar > epsilon(0.0)) then
@@ -3674,7 +3681,7 @@ endif
                    apar(:,i,ik) = apar(:,i-j,ik)
                 enddo
                 apar(:iright,:iib ,ik) = temp2(ileft:,:)
-                apar(iright+1:ntgrid,:iib,:) = 0.0
+                apar(iright+1:ntgrid,:iib,ik) = 0.0
              endif
           endif
           if (fbpar > epsilon(0.0)) then
@@ -3691,7 +3698,7 @@ endif
                    bpar(:,i,ik) = bpar(:,i-j,ik)
                 enddo
                 bpar(:iright,:iib ,ik) = temp2(ileft:,:)
-                bpar(iright+1:ntgrid,:iib,:) = 0.0
+                bpar(iright+1:ntgrid,:iib,ik) = 0.0
              endif
           end if
 
