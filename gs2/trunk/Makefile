@@ -223,6 +223,10 @@ sinclude Makefile.local
 
 #############################################################################
 
+#Record the top level path
+GK_HEAD_DIR:=$(PWD)
+export GK_HEAD_DIR
+
 UTILS=utils
 GEO=geo
 
@@ -368,6 +372,7 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
+#Setup the flags for using the eigensolver
 ifdef WITH_EIG
 	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
 	ifdef PETSC_ARCH
@@ -388,9 +393,10 @@ ifdef WITH_EIG
 	CFLAGS += -DWITH_EIG 
 endif 
 
+#Make empty targets if not using the new diagnostics
 ifeq ($(USE_NEW_DIAG),on)
 #ifdef USE_NEW_DIAG
-sinclude Makefile.diagnostics
+sinclude diagnostics/Makefile.diagnostics
 else
 distclean_simpledataio:
 clean_simpledataio:
@@ -492,7 +498,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks clean_tests
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests nonlinear_tests benchmarks clean_tests
 
 all: $(.DEFAULT_GOAL)
 
@@ -576,13 +582,6 @@ ifdef CLEAN_TEXTFILES
 endif
 
 export CLEANCOMMAND
-
-clean_tests:
-	$(MAKE) clean -C linear_tests 
-	$(MAKE) clean -C unit_tests 
-
-clean_benchmarks:
-	$(MAKE) clean -C benchmarks 
 
 cleanlib:
 	-rm -f *.a
@@ -689,7 +688,9 @@ revision:
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 
-sinclude Makefile.tests_and_benchmarks
+#This is the location of the individual test suites
+TEST_DIR:=tests
+sinclude $(TEST_DIR)/Makefile.tests_and_benchmarks
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
