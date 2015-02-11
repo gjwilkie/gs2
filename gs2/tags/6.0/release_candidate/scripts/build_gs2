@@ -1,0 +1,180 @@
+#! /bin/bash
+# A script for building GS2. This is free software, released
+# under the MIT licence.
+# Written by:
+#            Edmund Highcock (edmundhighcock@users.sourceforge.net)
+# Modified by:
+#            D Dickinson (ddickinson@users.sourceforge.net)
+
+function short_help(){
+    cat <<EOF
+usage: ./$(basename $0) Options
+
+OPTIONS:
+   -h          Show this message and long help
+   -c <VAL>    Pass <VAL> as extra commands to make
+   -s <VAL>    Specify the system name, used to determine which configuration to use
+   -o <VAL>    Specify operation to perform, can be one of:
+                     ls              : List the supported systems 
+                     help            : Prints the long help
+                     man             : Pipes the long help to less
+                     config          : Creates the configuration file
+                     print_config    : Creates and prints the configuration file
+                     build           : Runs make to compile code (no target specfied) <DEFAULT>
+                     gs2             : Runs make to compile gs2 executable
+                     tests           : Uses make to run unit_tests and linear_tests
+                     unit_tests      : Run unit_tests
+                     linear_tests    : Run linear_tests
+                     nonlinear_tests : Run nonlinear_tests
+                     update          : Updates this script <NOT IMPLEMENTED>
+                     depend          : Builds the dependency file
+                     clean           : Runs make clean
+                     distclean       : Runs make distclean
+EOF
+
+}
+function print_help {
+  echo ""
+  echo " GS2 Build Script"
+  echo
+  echo "This script is a utility for building GS2."
+  echo "To build gs2, execute:" 
+  echo " $ ./build_gs2 -s <system>"
+  echo 
+  echo "If you have set GK_SYSTEM you can neglect the -s"
+  echo "option."
+  echo 
+  echo "To see a list of available systems:"
+  echo " $ ./build_gs2 -o ls"
+  echo 
+  echo "To run the tests: "
+  echo " $ ./build_gs2 -o tests -s <system>"
+  echo 
+  echo "For more specific commands you can use the "
+  echo "-c flag:"
+  echo " $ ./build_gs2 -c DEBUG=on"
+  echo " $ ./build_gs2 -c 'DEBUG=on USE_FFT=fftw3'"
+  echo "The -c flag passes an arbitrary string to the"
+  echo "make command."
+  echo 
+  echo "To print the configuration for a given system:"
+  echo " $ ./build_gs2 -s <system> -o print_config "
+  echo 
+  echo "You can use this to configure your system"
+  echo "without building GS2 like this:"
+  echo " $ ./build_gs2 -s <system> -o config "
+  echo " $ source system_config"
+  echo
+  echo "It uses a standard set of choices about"
+  echo "configuration based on the value of -s. These"
+  echo "choices may need to be maintained as software is upgraded."
+  echo "If this script is being run from within a release of GS2,"
+  echo "rather than from the development repository, it can be updated"
+  echo "to the latest development version using: "
+  echo " $ ./build_gs2 -o update"
+  echo
+}
+
+function check_system_set {
+    if [ "$GK_SYSTEM" == "" ] 
+    then
+	echo "ERROR: Please set the -s option or set the GK_SYSTEM environment variable."
+	exit 1
+    #SYSTEM_SET=1
+  #else 
+    #SYSTEM_SET=0
+    fi
+}
+
+
+function run_configuration {
+    make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles || exit 1
+}
+
+function setup_build {
+    check_system_set
+    run_configuration
+    source system_config
+}
+
+
+#Defaults
+MAKE_OPTIONAL_COMMAND=""
+COMMAND="build"
+
+#Parse arguments
+while getopts "hs:c:o:" OPTIONS
+do
+    case ${OPTIONS} in
+	h)
+	    short_help
+	    exit 0
+	    ;;
+	s)
+	    GK_SYSTEM=${OPTARG}
+	    ;;
+	c)
+	    MAKE_OPTIONAL_COMMAND=${OPTARG}
+	    ;;
+	o)
+	    COMMAND=${OPTARG}
+	    ;;
+
+	*)
+	    short_help
+	    exit 1
+	    ;;
+    esac
+done
+
+#Now perform operation
+case $COMMAND in 
+    man)
+	print_help | less
+	exit 0
+	;;
+    help)
+	print_help
+	;;
+    config)
+	check_system_set
+	run_configuration
+	;;
+    print_config)
+	check_system_set
+	run_configuration
+	echo
+	echo "Configuration for system $GK_SYSTEM:"
+	cat system_config
+	;;
+    ls)
+	find Makefiles -type f -exec grep -q STANDARD_SYSTEM_CONFIGURATION {} \; -print | grep -v svn | grep -Ev '~$|swp$' | sed 's|Makefiles/Makefile\.||g' | sort #| xargs echo
+	;;
+    build)
+	setup_build
+	make $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND 
+	;;
+    tests|unit_tests|linear_tests|nonlinear_tests|depend|gs2)
+	setup_build
+	make $COMMAND $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND 
+	;;
+    update)
+	echo "update function not implemented yet!"
+	exit 1
+	;;
+    clean)
+	make clean
+	;;
+    distclean)
+	make distclean
+	;;
+    *)
+	echo "ERROR: Unknown command $COMMAND. Run" 
+	echo " $ ./build_gs2 -h" 
+	echo "for usage."
+	echo " $ ./build_gs2 -o man"
+	echo "for more details."
+	;;
+esac
+
+exit 0
