@@ -64,7 +64,7 @@ contains
   end subroutine init_diagnostics_fluxes
   
   subroutine finish_diagnostics_fluxes
-    deallocate (pflux, pflux_tormom, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
+    deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange, exchange1)
   end subroutine finish_diagnostics_fluxes
 

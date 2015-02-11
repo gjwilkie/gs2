@@ -56,7 +56,6 @@ program test_le_grids
   call announce_module_test('le_grids')
 
   call announce_test('init_le_grids')
-  !stop 1
 
   allocate(sizes(1))
   allocate(energy_results(8,2,2)) ! negrid, nspec, nresults 

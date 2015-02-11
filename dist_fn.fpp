@@ -738,13 +738,12 @@ subroutine check_dist_fn(report_unit)
 !       if (skexist) read (unit=input_unit("source_knobs"), nml=source_knobs)
        if (skexist) read (unit=in_file, nml=source_knobs)
 
+       if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
 
        ierr = error_unit()
        call get_option_value &
             (boundary_option, boundaryopts, boundary_option_switch, &
             ierr, "boundary_option in dist_fn_knobs",.true.)
-
-       if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
 
        call get_option_value &
             (source_option, sourceopts, source_option_switch, &
@@ -3536,7 +3535,7 @@ endif
     integer :: ierr, j 
     integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo
     integer:: iib, iit, ileft, iright, i
-    integer, save :: istep_last=0
+    integer, save :: istep_last
     integer, intent(in) :: istep
     logical, intent(in), optional :: field_local
     logical :: field_local_loc
@@ -3573,8 +3572,6 @@ endif
              dkx = akx(2)-akx(1)
           else
              write(ierr,*) "exb_shear: ERROR, need ntheta0>1 for sheared flow"
-             !Warning, dkx has not been set => Should really halt run or find
-             !a suitable default definition for dkx.
           endif
        else
 ! MR, March 2009: on extended theta grid theta0_shift tracks ExB shear
@@ -3586,11 +3583,7 @@ endif
           endif
        end if
     end if
-
-    !Check if we want to exit without applying flow shear
-    if (istep.eq.istep_last) return !Don't allow flow shear to happen more than once per step    
-    if (g_exb_start_timestep > istep) return !Flow shear not active yet, set in timesteps
-    if (g_exb_start_time >= 0 .and. code_time < g_exb_start_time) return !Flow shear not active yet, set in time
+    
     
     ! BD: To do: Put the right timestep in here.
     ! For now, approximate Greg's dt == 1/2 (t_(n+1) - t_(n-1))
@@ -3598,14 +3591,15 @@ endif
     !
     ! Note: at first time step, there is a difference of a factor of 2.
     !
+ 
     ! necessary to get factor of 2 right in first time step and
     ! also to get things right after changing time step size
     ! added May 18, 2009 -- MAB
     gdt = 0.5*(code_dt + code_dt_old)
-
-    !Update istep_last
+    if (g_exb_start_timestep > istep) return
+    if (g_exb_start_time >= 0 .and. code_time < g_exb_start_time) return
+    if (istep.eq.istep_last) return !Don't allow flow shear to happen more than once per step
     istep_last = istep
-
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file
 ! CMR, 5/10/2010: multiply timestep by tunits(ik) for wstar_units=.true. 

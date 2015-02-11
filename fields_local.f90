@@ -3627,9 +3627,6 @@ contains
     use mp, only: proc0
     use fields_implicit, only: init_allfields_implicit
     implicit none
-    !EGH Note that this will fail if someone has set
-    ! the parameter new_field_init in init_g to .false.
-    ! Add a warning/check?
     call init_allfields_implicit
   end subroutine init_allfields_local
 

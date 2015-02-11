@@ -428,7 +428,6 @@ contains
     use mp, only: broadcast, proc0, mp_abort
     use le_grids, only: init_weights
     use gs2_save, only: restart_writable
-    use normalisations, only: init_normalisations
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
@@ -447,7 +446,6 @@ contains
         & module contained in the diagnostics folder instead. PLEASE AMEND YOUR &
         & SCRIPTS TO USE THE NEW OUTPUT FILE ENDING IN .cdf"
 
-    call init_normalisations
     call init_theta_grid
     call init_kt_grids
     call init_run_parameters
@@ -828,7 +826,6 @@ contains
     use antenna, only: dump_ant_amp
     use kt_grids, only: naky, ntheta0
     use gs2_time, only: user_time, user_dt
-
     implicit none
     integer, intent (in) :: istep
     integer :: istatus
