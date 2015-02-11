@@ -1,4 +1,3 @@
-
 !> A module which contains a series of high level tests used in the
 !! linear and nonlinear test cases, as well as a driver function 
 !! which runs GS2.
@@ -7,13 +6,17 @@ module functional_tests
   use unit_tests, only: process_test, announce_test, print_with_stars
   use runtime_tests, only: verbosity
 
+  implicit none
+
+  private
+
   !> Check that the relative error of the growth rates as a 
   !! function of ky with respect to the given rslt is less than
   !! err. rslt should be an array of length naky which contains
   !! the growth rates as a function of ky.
   !! Returns .true. for pass and .false. for fail
   public :: check_growth_rate
- 
+
   !> Run gs2 and then call the test_function to check the results 
   !! corresponding to the input file provided. test_name should 
   !! be a character(*) containing the title of the tests, and 
@@ -21,17 +24,19 @@ module functional_tests
   !! .true. for pass and false for .fail.
   public :: test_gs2
 
-
+  public :: check_growth_rates_equal_in_list
 contains
 
   subroutine announce_functional_test(test_name)
     character(*), intent(in) :: test_name
     if (verbosity() .gt. 0) call print_with_stars('Starting functional test: ', test_name)
   end subroutine announce_functional_test
+
   subroutine close_functional_test(test_name)
     character(*), intent(in) :: test_name
     if (verbosity() .gt. 0) call print_with_stars('Completed functional test: ', test_name)
   end subroutine close_functional_test
+
   function check_growth_rate(rslt, err)
     use unit_tests, only: ilast_step
     use gs2_diagnostics, only: get_omegaavg
@@ -46,16 +51,13 @@ contains
     complex, dimension(ntheta0, naky) :: omegaavg
 
     check_growth_rate = .true.
-  
 
     if (proc0) then
-      call announce_check('growth rate')
-      call get_omegaavg(ilast_step-1, dummy, omegaavg)
-      check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
-      call process_check(check_growth_rate, check_result, 'growth rate')
+       call announce_check('growth rate')
+       call get_omegaavg(ilast_step-1, dummy, omegaavg)
+       check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
+       call process_check(check_growth_rate, check_result, 'growth rate')
     end if
-
-
   end function check_growth_rate
 
   function check_growth_rates_equal_in_list(err)
@@ -81,41 +83,35 @@ contains
 
     omegas=0.
     omegaavg=0.
-  
 
     if (proc0) then
-      !call announce_check('growth rate')
-      call get_omegaavg(ilast_step-1, dummy, omegaavg)
-      !check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
-      !call process_check(check_growth_rate, check_result, 'growth rate')
-      call scope(allprocs)
-      ! work out which job in the list we are
-      do i = 1,njobs
-        if (iproc==grp0(i-1)) ijob = i 
-      end do
-      ! Get the omegas from this job
-      omegas(:,ijob) = aimag(omegaavg(1,:))
-      if (wstar_units) then
-        omegas(:, ijob) = omegas(:,ijob) * aky(:) / 2.0
-      end if
+       !call announce_check('growth rate')
+       call get_omegaavg(ilast_step-1, dummy, omegaavg)
+       !check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
+       !call process_check(check_growth_rate, check_result, 'growth rate')
+       call scope(allprocs)
+       ! work out which job in the list we are
+       do i = 1,njobs
+          if (iproc==grp0(i-1)) ijob = i 
+       end do
+       ! Get the omegas from this job
+       omegas(:,ijob) = aimag(omegaavg(1,:))
+       if (wstar_units) then
+          omegas(:, ijob) = omegas(:,ijob) * aky(:) / 2.0
+       end if
     else
-      call scope(allprocs)
+       call scope(allprocs)
     end if
 
     call sum_allreduce(omegas)
     call scope(subprocs)
 
     do i = 2,njobs
-      call announce_check('growth rate')
-      check_result = agrees_with(omegas(:,1), omegas(:,i), err)
-      call process_check( &
-        check_growth_rates_equal_in_list, check_result, 'growth rate')
+       call announce_check('growth rate')
+       check_result = agrees_with(omegas(:,1), omegas(:,i), err)
+       call process_check( &
+            check_growth_rates_equal_in_list, check_result, 'growth rate')
     end do
-
-    
-     
-
-
 
   end function check_growth_rates_equal_in_list
 
@@ -131,7 +127,6 @@ contains
     character(*), intent(in) :: test_name
     logical, external :: test_function
 
-
     call init_mp
 
     test_driver_flag = .true.
@@ -140,7 +135,6 @@ contains
     if (proc0) call announce_functional_test(test_name)
 
     call run_gs2(mp_comm)
-
 
     call announce_test('results')
     call process_test(test_function(), 'results')
@@ -155,6 +149,5 @@ contains
 
     call finish_mp
   end subroutine test_gs2
-
 end module functional_tests
 

@@ -4,6 +4,12 @@ module gs2_time
 
   private
 
+  public :: user_dt, code_dt, update_time, code_dt_old
+  public :: user_time, code_time, check_time_step_too_large
+  public :: save_dt_min, save_dt, save_dt_cfl, write_dt
+  public :: init_tstart, init_delt
+  public :: code_dt_cfl, code_dt_min, user2code
+
   real :: user_dt, code_dt 
   real :: user_tstart, code_tstart
   real :: user_dt_cfl = -1.
@@ -19,14 +25,6 @@ module gs2_time
   real :: user_time = 0.
   real :: code_time = 0.
 
-!  real :: dt
-
-  public :: user_dt, code_dt, update_time, code_dt_old
-  public :: user_time, code_time, check_time_step_too_large
-  public :: save_dt_min, save_dt, save_dt_cfl, write_dt
-  public :: init_tstart, init_delt
-  public :: code_dt_cfl, code_dt_min, user2code
-  
 contains
 
   subroutine init_tstart (tstart)
@@ -40,7 +38,6 @@ contains
 
   subroutine init_delt (delt)
     real, intent (in) :: delt
-
 !
 ! delt_in is a user input, from the run_parameters module.
 ! In a perfect world, we could have a gs2_time namelist. 
@@ -53,7 +50,7 @@ contains
   !Check if the current time step is too big
   subroutine check_time_step_too_large(reset)
     implicit none
-    logical, intent(inout) :: reset
+    logical, intent(out) :: reset
     reset=(code_dt>code_dt_cfl)
   end subroutine check_time_step_too_large
 

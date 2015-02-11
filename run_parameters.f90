@@ -1,34 +1,28 @@
 !> This module is basically a store for the input parameters that are specified in the namelists \a knobs and \a parameters. In general, the names of the public variables in this module are the same as the name of the input parameter they correspond to.
- 
-
 module run_parameters
   implicit none
+
+  private
 
   public :: init_run_parameters, finish_run_parameters
   public :: check_run_parameters, wnml_run_parameters
   public :: write_trinity_parameters
-
-
   public :: beta, zeff, tite, reset, immediate_reset
   public :: fphi, fapar, fbpar
-!  public :: delt, delt_max, wunits, woutunits, tunits
   public :: code_delt_max, wunits, woutunits, tunits
   public :: nstep, wstar_units, eqzip, margin
   public :: secondary, tertiary, harris
-  public :: ieqzip
-  public :: k0
-  public :: vnm_init
+  public :: ieqzip, k0
+  public :: delt_option_switch, delt_option_hand
+  public :: delt_option_auto, vnm_init
   public :: avail_cpu_time, margin_cpu_time
-!  public :: include_lowflow, rhostar, neo_test
   public :: rhostar, neo_test
   public :: do_eigsolve
   !> If true and nonlinear_mode is "off", return
   !! simple diffusive estimates of fluxes to trinity
   public :: trinity_linear_fluxes
-
   public :: user_comments
 
-  private
 
   real :: beta, zeff, tite
   real :: fphi, fapar, fbpar, faperp
@@ -42,14 +36,12 @@ module run_parameters
   logical :: wstar_units, eqzip
   logical :: secondary, tertiary, harris
   real :: k0
-  integer, public :: delt_option_switch
-  integer, public, parameter :: delt_option_hand = 1, delt_option_auto = 2
+  integer :: delt_option_switch
+  integer, parameter :: delt_option_hand = 1, delt_option_auto = 2
   logical :: initialized = .false.
   logical :: rpexist, knexist
   real :: rhostar
-!  logical :: include_lowflow, neo_test
   logical :: neo_test
-
   logical :: trinity_linear_fluxes, do_eigsolve
 
   character(len=100000) :: user_comments
@@ -63,10 +55,9 @@ module run_parameters
        eqzip_option_equilibrium = 4
 
 contains
-
   subroutine check_run_parameters(report_unit)
-  implicit none
-  integer :: report_unit
+    implicit none
+    integer, intent(in) :: report_unit
     if (fphi /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -132,10 +123,10 @@ contains
   end subroutine check_run_parameters
 
   subroutine wnml_run_parameters(unit,electrons,collisions)
-  implicit none
-  integer :: unit
-  logical :: electrons, collisions
-     if (rpexist) then
+    implicit none
+    integer, intent(in) :: unit
+    logical, intent(in) :: electrons, collisions
+    if (rpexist) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "parameters"
        write (unit, fmt="(' beta = ',e17.10)") beta       ! if zero, fapar, fbpar should be zero
@@ -144,8 +135,8 @@ contains
 !CMR, 10/2/2011: zip not in this namelist, so removing it!
 !       if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
-     endif
-     if (knexist) then
+    endif
+    if (knexist) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "knobs"
        write (unit, fmt="(' fphi   = ',f6.3)") fphi
@@ -168,15 +159,13 @@ contains
        end select
        write (unit, fmt="(' immediate_reset = ',L1)") immediate_reset
        write (unit, fmt="(' /')")
-     endif
+    endif
   end subroutine wnml_run_parameters
 
   subroutine init_run_parameters
     use kt_grids, only: init_kt_grids, naky, nakx => ntheta0
     use gs2_time, only: init_delt, user2code
-    
     implicit none
-!    logical, save :: initialized = .false.
 
     if (initialized) return
     initialized = .true.
@@ -422,14 +411,11 @@ contains
   end subroutine adjust_time_norm
 
   subroutine finish_run_parameters
-
     implicit none
 
     if (allocated(wunits)) deallocate (wunits, woutunits, tunits)
     if (allocated(ieqzip)) deallocate (ieqzip)
 
     initialized = .false.
-
   end subroutine finish_run_parameters
-
 end module run_parameters

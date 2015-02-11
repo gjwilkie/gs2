@@ -13,6 +13,7 @@ module gs2_layouts
 ! <TT
 
   implicit none
+
   private
 
   public :: factors
@@ -384,17 +385,16 @@ module gs2_layouts
 contains
   subroutine wnml_gs2_layouts(unit)
     implicit none
-    integer :: unit
+    integer, intent(in) :: unit
     if (.not. exist) return
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "layouts_knobs"
-       write (unit, fmt="(' layout = ',a)") '"'//trim(layout)//'"'
-       write (unit, fmt="(' local_field_solve = ',L1)") local_field_solve
-       write (unit, fmt="(' /')")
+    write (unit, *)
+    write (unit, fmt="(' &',a)") "layouts_knobs"
+    write (unit, fmt="(' layout = ',a)") '"'//trim(layout)//'"'
+    write (unit, fmt="(' local_field_solve = ',L1)") local_field_solve
+    write (unit, fmt="(' /')")
   end subroutine wnml_gs2_layouts
 
   subroutine init_gs2_layouts
-    
     use mp, only: proc0
     implicit none
 
@@ -513,12 +513,12 @@ contains
   end subroutine broadcast_results
 
   subroutine check_accel (ntheta0, naky, nlambda, negrid, nspec, nblock)
-
     use mp, only: nproc
     implicit none
     integer, intent (in) :: negrid, nspec, nlambda, naky, ntheta0
+    integer, intent (out) :: nblock
     integer, dimension(:,:), allocatable :: facs
-    integer :: nsfacs, nefacs, nyfacs, nxfacs, nlfacs, nblock
+    integer :: nsfacs, nefacs, nyfacs, nxfacs, nlfacs
     integer :: i
 
     if (.not. layout == 'lxyes') then
