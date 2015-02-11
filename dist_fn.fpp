@@ -3544,6 +3544,7 @@ endif
     logical, save :: exb_first = .true.
     complex , dimension(-ntgrid:ntgrid) :: z
     character(130) :: str
+    integer :: link_it
 
     ierr = error_unit()
 
@@ -3811,6 +3812,12 @@ endif
                 end do
                 do it = ntheta0 + jump(ik) + 1, ntheta0
                    phi(:,ikx_indexed(it),ik) = 0.
+                   if (boundary_option_switch.eq.boundary_option_linked) then
+                  !! check vs. itleft & +ntgrid (dep. sgn(j)?)
+                  !! check vs. it & ikx_indexed(link_it)
+                      link_it = itright(ik,ikx_indexed(it))     ! NB itright(.,it) < it (where not -1)?
+                      if (link_it.ge.0) phi(-ntgrid,link_it,ik) = 0.
+                   end if
                 end do
              end if
              if (fapar > epsilon(0.0)) then
@@ -3819,6 +3826,10 @@ endif
                 end do
                 do it = ntheta0 + jump(ik) + 1, ntheta0
                    apar (:,ikx_indexed(it),ik) = 0.
+                   if (boundary_option_switch.eq.boundary_option_linked) then
+                      link_it = itright(ik,ikx_indexed(it))
+                      if (link_it.ge.0) apar(-ntgrid,link_it,ik) = 0.
+                   end if
                 end do
              end if
              if (fbpar > epsilon(0.0)) then 
@@ -3827,6 +3838,10 @@ endif
                 end do
                 do it = ntheta0 + jump(ik) + 1, ntheta0
                    bpar (:,ikx_indexed(it),ik) = 0.
+                   if (boundary_option_switch.eq.boundary_option_linked) then
+                      link_it = itright(ik,ikx_indexed(it))
+                      if (link_it.ge.0) bpar(-ntgrid,link_it,ik) = 0.
+                   end if
                 end do
              end if
              do is=1,nspec
@@ -3854,6 +3869,13 @@ endif
                       do it = ntheta0 + jump(ik) + 1, ntheta0                     
                          to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
                          if (idx_local (g_lo, to_iglo)) g0(:,:,to_iglo) = 0.
+                         if (boundary_option_switch.eq.boundary_option_linked) then
+                            link_it = itright(ik,ikx_indexed(it))
+                            if (link_it.ge.0) then
+                               to_iglo = idx(g_lo, ik, link_it, il, ie, is)
+                               if (idx_local (g_lo, to_iglo)) g0(-ntgrid,:,to_iglo) = 0.
+                            end if
+                         end if
                       enddo
 
                    enddo
@@ -3868,6 +3890,10 @@ endif
                 end do
                 do it = jump(ik), 1, -1
                    phi(:,ikx_indexed(it),ik) = 0.
+                   if (boundary_option_switch.eq.boundary_option_linked) then
+                      link_it = itleft(ik,ikx_indexed(it))           ! NB itleft(,it) > it (where not -1)?
+                      if (link_it.ge.0) phi(ntgrid,link_it,ik) = 0.
+                   end if
                 end do
              end if
              if (fapar > epsilon(0.0)) then
@@ -3876,6 +3902,10 @@ endif
                 end do
                 do it = jump(ik), 1, -1
                    apar(:,ikx_indexed(it),ik) = 0.
+                   if (boundary_option_switch.eq.boundary_option_linked) then
+                      link_it = itleft(ik,ikx_indexed(it))
+                      if (link_it.ge.0) apar(ntgrid,link_it,ik) = 0.
+                   end if
                 end do
              end if
              if (fbpar > epsilon(0.0)) then
@@ -3884,6 +3914,10 @@ endif
                 end do
                 do it = jump(ik), 1, -1
                    bpar(:,ikx_indexed(it),ik) = 0.
+                   if (boundary_option_switch.eq.boundary_option_linked) then
+                      link_it = itleft(ik,ikx_indexed(it))
+                      if (link_it.ge.0) bpar(ntgrid,link_it,ik) = 0.
+                   end if
                 end do
              end if
              do is=1,nspec
@@ -3911,6 +3945,13 @@ endif
                       do it = jump(ik), 1, -1
                          to_iglo = idx(g_lo, ik, ikx_indexed(it), il, ie, is)
                          if (idx_local (g_lo, to_iglo)) g0(:,:,to_iglo) = 0.
+                         if (boundary_option_switch.eq.boundary_option_linked) then
+                            link_it = itleft(ik,ikx_indexed(it))
+                            if (link_it.ge.0) then
+                               to_iglo = idx(g_lo, ik, link_it, il, ie, is)
+                               if (idx_local (g_lo, to_iglo)) g0(ntgrid,:,to_iglo) = 0.
+                            end if
+                         end if
                       enddo
 
                    enddo
