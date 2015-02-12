@@ -3887,6 +3887,7 @@ contains
     initialized = .false.
 
   end subroutine finish_le_grids
+
   subroutine finish_weights
     if (allocated(werr)) deallocate (werr)
     if (allocated(wlerr)) deallocate (wlerr)
