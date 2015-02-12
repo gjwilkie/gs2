@@ -26,41 +26,44 @@ end module old_interface_store
 !! compatibility. 
 !!
 !! The basic flow of a gs2 program can be seen in gs2.fpp, reproduced here:
-!!    type(gs2_program_state_type) :: state
-!!    call initialize_gs2(state)
-!!    call initialize_equations(state)
-!!    call initialize_diagnostics(state)
-!!    if (state%do_eigsolve) then 
-!!      call run_eigensolver(state)
-!!    else
-!!      call evolve_equations(state, state%nstep)
-!!    end if
-!!    call finalize_diagnostics(state)
-!!    call finalize_equations(state)
-!!    call finalize_gs2(state)
+!!
+!!     type(gs2_program_state_type) :: state
+!!     call initialize_gs2(state)
+!!     call initialize_equations(state)
+!!     call initialize_diagnostics(state)
+!!     if (state%do_eigsolve) then 
+!!       call run_eigensolver(state)
+!!     else
+!!       call evolve_equations(state, state%nstep)
+!!     end if
+!!     call finalize_diagnostics(state)
+!!     call finalize_equations(state)
+!!     call finalize_gs2(state)
 !!
 !! You can manipulate the gs2_program_state before running gs2. A typical
 !! manipulation is to pass in an external mpi communicator (which also 
 !! means that MPI_Init is not called within initialize_gs2. 
-!!    state%mp_comm_external = .true
-!!    state%mp_comm = my_mpi_communicator
-!!    call initialize_gs2(state)
-!!    ...
+!!
+!!     state%mp_comm_external = .true
+!!     state%mp_comm = my_mpi_communicator
+!!     call initialize_gs2(state)
+!!     ...
 !! 
 !! You can also override parameters: typically this is done either before
 !! calling initialize_equations, or between two calls to evolve equations;
 !! here we manipulate the temperature gradient of the first species:
-!!    call prepare_profiles_overrides(state)
-!!    state%init%prof_ov%override_tprim(1) = .true.
-!!    state%init%prof_ov%tprim(1) = 5.5
-!!    call initialize_equations(state)
-!!    call initialize_diagnostics(state)
-!!    call evolve_equations(state, state%nstep/2)
-!!    call prepare_profiles_overrides(state)
-!!    state%init%prof_ov%tprim(1) = 6.0
-!!    call initialize_equations(state)
-!!    call evolve_equations(state, state%nstep/2)
-!!    ...
+!!
+!!     call prepare_profiles_overrides(state)
+!!     state%init%prof_ov%override_tprim(1) = .true.
+!!     state%init%prof_ov%tprim(1) = 5.5
+!!     call initialize_equations(state)
+!!     call initialize_diagnostics(state)
+!!     call evolve_equations(state, state%nstep/2)
+!!     call prepare_profiles_overrides(state)
+!!     state%init%prof_ov%tprim(1) = 6.0
+!!     call initialize_equations(state)
+!!     call evolve_equations(state, state%nstep/2)
+!!     ...
 !!   
 !! It is very important to note that just because this interface is presented
 !! in an object-oriented way, it does not, unfortunately, mean that the entire
@@ -78,26 +81,10 @@ module gs2_main
   implicit none
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
 
-  !> The object which specifies and records the gs2 program state.
-  !! Some attributes of the object, like mp_comm_external, are
-  !! designed to directly manipulated by the user, and some are
-  !! designed to store program state information and be 
-  !! manipulated internally, like init%level.
   public :: gs2_program_state_type
 
-  !> Initialise message passing, open the input file, split the 
-  !! communicator if running in list mode or if nensembles > 1,
-  !! initialize the timers. After calling this function, gs2
-  !! reaches init%level = basic. If it is desired to provide
-  !! an external commuicator or set the input file name externally,
-  !! these should be set before calling this function. 
   public :: initialize_gs2
-
-  !> Initialize all the modules which are used to evolve the 
-  !! equations. After calling this function, gs2 reaches 
-  !! init%level = full. 
   public :: initialize_equations
-
   public :: initialize_diagnostics, evolve_equations, run_eigensolver
   public :: finalize_diagnostics, finalize_equations, finalize_gs2
   public :: gs2_trin_init
@@ -117,18 +104,8 @@ module gs2_main
   public :: old_iface_state
   !> Unit tests
 
-  !> This function calls reset_gs2 using
-  !! all the default parameters, multiplied
-  !! by a factor. It is used
-  !! in the gs2_reinit unit test
   public :: gs2_main_unit_test_reset_gs2
 
-  !> Starts the global wall clock timer
-  !! used by check time. This is useful
-  !! if you have multiple copies of gs2 
-  !! running but you don't want to start 
-  !! them all at the same time, but you
-  !! want them all to respect avail_cpu_time
   public :: initialize_wall_clock_timer
 
 
@@ -142,6 +119,8 @@ module gs2_main
     real :: main_loop(2)
   end type gs2_timers_type
 
+  !> A type for storing outputs of gs2
+  !! for access externally
   type gs2_outputs_type
     !> The gradient of the flux tube volume wrt
     !! the flux label: related to the surface
@@ -160,6 +139,11 @@ module gs2_main
     real :: vflux
   end type gs2_outputs_type
 
+  !> The object which specifies and records the gs2 program state.
+  !! Some attributes of the object, like mp_comm_external, are
+  !! designed to directly manipulated by the user, and some are
+  !! designed to store program state information and be 
+  !! manipulated internally, like init\%level.
   type gs2_program_state_type
 
     ! Flags indicating the current state of the 
@@ -268,11 +252,23 @@ module gs2_main
 contains
 # endif
 
+  !> Starts the global wall clock timer
+  !! used by check time. This is useful
+  !! if you have multiple copies of gs2 
+  !! running but you don't want to start 
+  !! them all at the same time, but you
+  !! want them all to respect avail_cpu_time
   subroutine initialize_wall_clock_timer
     use job_manage, only: init_checktime
     call init_checktime
   end subroutine initialize_wall_clock_timer
 
+  !> Initialise message passing, open the input file, split the 
+  !! communicator if running in list mode or if nensembles > 1,
+  !! initialize the timers. After calling this function, gs2
+  !! reaches init%level = basic. If it is desired to provide
+  !! an external commuicator or set the input file name externally,
+  !! these should be set before calling this function. 
   subroutine initialize_gs2(state)
     use file_utils, only: init_file_utils
     use file_utils, only: run_name, run_name_target
@@ -382,7 +378,7 @@ contains
     !Set using_measure_scatter to indicate we want to use in "gather/scatter" timings
     using_measure_scatter=.false.
 
-    !> Initialize the gs2 initialization system
+    ! Initialize the gs2 initialization system
     call init_gs2_init(state%init)
 
     !state%gs2_initialized = .true.
@@ -392,6 +388,9 @@ contains
 
   end subroutine initialize_gs2
 
+  !> Initialize all the modules which are used to evolve the 
+  !! equations. After calling this function, gs2 reaches 
+  !! init%level = full. 
   subroutine initialize_equations(state)
     use fields, only: init_fields
     use geometry, only: surfarea, dvdrhon
@@ -1092,7 +1091,7 @@ contains
 
 
 
-  !> This is the main subroutine in which gs2 is initialized, equations are advanced,
+  !> Deprecated. This is the main subroutine in which gs2 is initialized, equations are advanced,
   !!   and the program is finalized.
   !! \section Basic Structure 
   !!  This subroutine broadly falls into 3 sections: 
@@ -1277,6 +1276,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
   end subroutine finish_gs2
   
+  !> This function calls reset_gs2 using
+  !! all the default parameters, multiplied
+  !! by a factor. It is used
+  !! in the gs2_reinit unit test
   function gs2_main_unit_test_reset_gs2(fac)
     use species, only: spec, nspec
     use dist_fn, only: g_exb 
