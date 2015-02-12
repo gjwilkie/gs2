@@ -1,7 +1,22 @@
 module deq
 
   implicit none
+
   private
+
+  public :: dfit_init, dfitin, gradient, eqitem, bgradient, dfit_finish
+  public :: invR
+  public :: Rpos
+  public :: Zpos
+  public :: btori,    initialize_btori
+  public :: dbtori,   initialize_dbtori
+  public :: qfun,     initialize_q
+  public :: pfun,     initialize_pressure
+  public :: dpfun,    initialize_dpressure
+  public :: betafun,  initialize_beta
+  public :: bound,    initialize_bound
+  public :: psi,      initialize_psi
+  public :: rhofun,   initialize_rho
 
   integer :: nw, nh, nbbbs, nrho
 
@@ -28,24 +43,7 @@ module deq
   logical :: init_R = .true.
   logical :: init_Z = .true.
 
-  public :: dfit_init, dfitin, gradient, eqitem, bgradient, dfit_finish
-
-  public :: invR
-  public :: Rpos
-  public :: Zpos
-  public :: btori,    initialize_btori
-  public :: dbtori,   initialize_dbtori
-  public :: qfun,     initialize_q
-  public :: pfun,     initialize_pressure
-  public :: dpfun,    initialize_dpressure
-  public :: betafun,  initialize_beta
-  public :: bound,    initialize_bound
-  public :: psi,      initialize_psi
-  public :: rhofun,   initialize_rho
-
-
 contains
-  
   subroutine dfitin(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq)
 !
 !     This subroutine reads an DFIT output file containing 
@@ -67,17 +65,20 @@ contains
     use splines, only: inter_cspl
     implicit none
 
+    character(len=80), intent(in) :: eqfile
+    real, intent(out) :: psi_0, psi_a, B_T, amin, rmaj
+    integer, intent(in) :: initeq
     real :: p_0
-    real :: rwid, zhei, amin, B_T
-    real :: psi_0, psi_a, rmaj, bcentr
+    real :: rwid, zhei
+    real :: bcentr
     real :: delta_R, delta_Z
 !    real :: fitp_surf2, ierr, rleft, zxy11, zxy1n, zxym1, zxymn
 !    real, dimension(:), allocatable :: temp, zp, zx1, zxm, zy1, zyn
-    character(80) :: filename, eqfile
+    character(80) :: filename
     
-    integer :: i, j, init, initeq, nhb, nwb
+    integer :: i, j, init, nhb, nwb
     integer :: jmin, jmax
-    
+!What is the following for?    
     data init /1/
     save init
     
@@ -304,8 +305,9 @@ contains
   subroutine tderm(f, dfm)
     use constants, only: pi
     implicit none
-    integer i, j
-    real f(:,:), dfm(:,:,:)
+    real, dimension(:,:), intent(in) :: f
+    real, dimension(:,:,:), intent(out) :: dfm
+    integer :: i, j
     
 ! DFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for DFIT output.    
@@ -341,8 +343,9 @@ contains
   subroutine derm(f, dfm)
 
     implicit none
-    integer i, j
-    real f(:,:), dfm(:,:,:)
+    real, dimension(:,:), intent(in) :: f
+    real, dimension(:,:,:), intent(out) :: dfm
+    integer :: i, j
     
 ! DFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for DFIT output.    
@@ -370,14 +373,15 @@ contains
   end subroutine derm
 
   subroutine gradient(rgrid, theta, grad, char, rp, nth, ntm)
-
     use splines, only: inter_d_cspl
-    integer nth, ntm
-    character(1) char
+    implicit none
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
-    real aa(1), daa(1), rp, rpt(1)
-    integer i
+    character(len=1), intent(in) :: char
+    real, intent(in) :: rp
+    integer, intent(in) :: nth, ntm
+    real :: aa(1), daa(1), rpt(1)
+    integer :: i
     
     grad = 0.
     do i=-nth, nth
@@ -396,16 +400,17 @@ contains
   end subroutine gradient
 
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-
     use splines, only: inter_d_cspl
     implicit none
-    
-    integer nth_used, ntm
-    character(1) char
-    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
-    real tmp(2), aa(1), daa(1), rp, rpt(1)
+
+    real, dimension(-ntm:), intent(in) :: rgrid, theta
+    real, dimension(-ntm:,:), intent(out) :: grad
+    character(len=1), intent(in) :: char
+    real, intent(in) :: rp
+    integer, intent(in) :: nth_used, ntm
+    real :: tmp(2), aa(1), daa(1), rpt(1)
     real, dimension(nw, nh, 2) ::  dbish
-    integer i
+    integer :: i
  
     dbish(:,:,1) = sqrt(dpm(:,:,1)**2 + dpm(:,:,2)**2)
     dbish(:,:,2) = 0.
@@ -445,11 +450,11 @@ contains
   subroutine eqitem(r, thetin, f, fstar)
     use mp, only: mp_abort
     implicit none
-    integer :: i, j, istar, jstar
     real, intent (in) :: r, thetin, f(:,:)
     real, intent (out) :: fstar
-    real st, dt, sr, dr
-    real r_pos, z_pos
+    integer :: i, j, istar, jstar
+    real :: st, dt, sr, dr
+    real :: r_pos, z_pos
     
     r_pos = Rpos(r, thetin)
     z_pos = Zpos(r, thetin)
@@ -512,110 +517,99 @@ contains
   end subroutine eqitem
 
   function Zpos (r, theta)
-   
     real, intent (in) :: r, theta
     real :: Zpos
     
     Zpos = Z_mag + r * sin(theta)
-
   end function Zpos
 
   function Rpos (r, theta)
-   
     real, intent (in) :: r, theta
     real :: Rpos
 
     Rpos = R_mag + r * cos(theta)
-    
   end function Rpos
 
   function invR (r, theta)
-   
     real, intent (in) :: r, theta
     real :: invR
 
     invR = 1/(R_mag + r*cos(theta))
-    
   end function invR
 
   function initialize_psi (init) 
-
-    integer :: init, initialize_psi
+    integer, intent(in) :: init
+    integer :: initialize_psi
     
     init_psi = .false.
     if(init == 1) init_psi = .true.
     initialize_psi = 1
-
   end function initialize_psi
 
   function psi (r, theta)
-   
     real, intent (in) :: r, theta
     real :: f, psi
 
     call eqitem(r, theta, dfit_psi, f)
     psi = f
-    
   end function psi
    
   function initialize_btori (init) 
-
-    integer :: init, initialize_btori
+    integer, intent(in) :: init
+    integer :: initialize_btori
     
     init_btori = .false.
     if(init == 1) init_btori = .true.
     initialize_btori = 1
-
   end function initialize_btori
 
   function btori (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, btori
+    implicit none
+    real, intent(in) :: pbar
+    real :: btori
     type (spline), save :: spl
 
     if(init_btori) call new_spline(nw, psi_bar, fp, spl)
 
     btori = splint(pbar, spl)
-
   end function btori
 
   function initialize_dbtori (init) 
-
-    integer :: init, initialize_dbtori
+    integer, intent(in) :: init
+    integer :: initialize_dbtori
     
     init_dbtori = .false.
     if(init == 1) init_dbtori = .true.
     initialize_dbtori = 1
-
   end function initialize_dbtori
 
   function dbtori (pbar)
-  
     use splines, only: new_spline, dsplint, spline
-    real :: pbar, dbtori
+    implicit none
+    real, intent(in) :: pbar
+    real :: dbtori
     type (spline), save :: spl
 
     if(init_dbtori) call new_spline(nw, psi_bar, fp, spl)
 
     dbtori = dsplint(pbar, spl)/psi_N
-
   end function dbtori
 
   function initialize_q (init) 
-
-    integer :: init, initialize_q
+    integer, intent(in) :: init
+    integer :: initialize_q
     
     init_q = .false.
     if(init == 1) init_q = .true.
     initialize_q = 1
-
   end function initialize_q
 
   function qfun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, qfun
+    implicit none
+    real, intent(in) :: pbar
+    real :: qfun
     type (spline), save :: spl
 
     if(init_q) then
@@ -623,131 +617,124 @@ contains
     endif
 
     qfun = splint(pbar, spl)
-
   end function qfun
 
   function initialize_pressure (init) 
-
-    integer :: init, initialize_pressure
+    integer, intent(in) :: init
+    integer :: initialize_pressure
     
     init_pressure = .false.
     if(init == 1) init_pressure = .true.
     initialize_pressure = 1
-
   end function initialize_pressure
 
   function pfun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, pfun
+    implicit none
+    real, intent(in) :: pbar
+    real :: pfun
     type (spline), save :: spl
 
     if(init_pressure) call new_spline(nw, psi_bar, pressure, spl)
 
     pfun = splint(pbar, spl) * beta_0/2.
-
   end function pfun
 
   function initialize_dpressure (init) 
-
-    integer :: init, initialize_dpressure
+    integer, intent(in) :: init
+    integer :: initialize_dpressure
     
     init_dpressure = .false.
     if(init == 1) init_dpressure = .true.
     initialize_dpressure = 1
-
   end function initialize_dpressure
 
   function dpfun (pbar)
-  
     use splines, only: new_spline, dsplint, spline
-    real :: pbar, dpfun
+    implicit none
+    real, intent(in) :: pbar
+    real :: dpfun
     type (spline), save :: spl
 
     if(init_dpressure) call new_spline(nw, psi_bar, pressure, spl)
 
     dpfun = dsplint(pbar, spl)/psi_N * beta_0/2.
-
   end function dpfun
 
   function initialize_beta (init) 
-
-    integer :: init, initialize_beta
+    integer, intent(in) :: init
+    integer :: initialize_beta
     
     init_beta = .false.
     if(init == 1) init_beta = .true.
     initialize_beta = 1
-
   end function initialize_beta
 
   function betafun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, betafun
+    implicit none
+    real, intent(in) :: pbar
+    real :: betafun
     type (spline), save :: spl
 
     if(init_beta) call new_spline(nw, psi_bar, beta, spl)
 
     betafun = splint(pbar, spl)
-
   end function betafun
 
   function initialize_rho (init) 
-
-    integer :: init, initialize_rho
+    integer, intent(in) :: init
+    integer :: initialize_rho
     
     init_rho = .false.
     if(init == 1) init_rho = .true.
     initialize_rho = 1
-
   end function initialize_rho
 
   function rhofun (pbar)
-  
     use splines, only: new_spline, splint, spline
-    real :: pbar, rhofun
+    implicit none
+    real, intent(in) :: pbar
+    real :: rhofun
     type (spline), save :: spl
 
     if(init_rho) call new_spline(nrho, psi_mid, rho_mid, spl)
 
     rhofun = splint(pbar, spl)
-
   end function rhofun
 
   function initialize_bound (init) 
-
-    integer :: init, initialize_bound
+    integer, intent(in) :: init
+    integer :: initialize_bound
     
     init_bound = .false.
     if(init == 1) init_bound = .true.
     initialize_bound = 1
-
   end function initialize_bound
 
   function bound(theta) 
-
     use splines, only: new_spline, splint, spline
-    real :: theta, bound
+    implicit none
+    real, intent(in) :: theta
+    real :: bound
     type (spline), save :: spl
 
     if(init_bound) call new_spline(nbbbs, thetab, r_bound, spl)
     init_bound = .false.
     
     bound = splint(theta, spl)
-
   end function bound    
 
   subroutine alloc_module_arrays(np, nw, nh, nws, nhs, nrho)
-
-  integer :: np, nw, nh, nws, nhs, nrho
+    integer, intent(in) :: np, nw, nh, nws, nhs, nrho
  
-  allocate (rho_mid(nrho), psi_mid(nrho))
-  allocate (psi_bar(np), fp(np), qsf(np), pressure(np), beta(np))
-  allocate (dummy(nws), dfit_R(nw), dfit_Z(nh))
-  allocate (spsi_bar(nws), sdfit_R(nws), sdfit_Z(nhs))
+    allocate (rho_mid(nrho), psi_mid(nrho))
+    allocate (psi_bar(np), fp(np), qsf(np), pressure(np), beta(np))
+    allocate (dummy(nws), dfit_R(nw), dfit_Z(nh))
+    allocate (spsi_bar(nws), sdfit_R(nws), sdfit_Z(nhs))
 !  allocate (dfit_psi(nw, nh), sdfit_psi(nws, nhs))
-  allocate (dfit_psi(nw, nh))
-  allocate (dpm(nw, nh, 2), dtm(nw, nh, 2))
+    allocate (dfit_psi(nw, nh))
+    allocate (dpm(nw, nh, 2), dtm(nw, nh, 2))
 
   end subroutine alloc_module_arrays
 
@@ -766,10 +753,10 @@ contains
     call dealloc_module_arrays
   end subroutine dfit_finish
 
+!Could we use routines from the sorting module instead?
   subroutine sort(a, b, c, d)
-
-    real, dimension(:) :: a, b, c, d
-    real tmp
+    real, dimension(:), intent(in out) :: a, b, c, d
+    real :: tmp
     integer :: i, j, jmax
 
     jmax = size(a)
@@ -785,5 +772,4 @@ contains
        enddo
     enddo
   end subroutine sort
-
 end module deq

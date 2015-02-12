@@ -1,6 +1,8 @@
 module gs2_reinit
   implicit none
 
+  private
+
   public :: reset_time_step, delt_adj
   public :: check_time_step, time_reinit
   public :: init_reinit, wnml_gs2_reinit
@@ -29,7 +31,6 @@ module gs2_reinit
   !! you are doing.
   public :: gs2_reinit_unit_test_set_in_memory
 
-  private
 
   real :: delt_adj, dt0
   real :: delt_cushion
@@ -50,7 +51,7 @@ contains
 
   subroutine wnml_gs2_reinit(unit)
     implicit none
-    integer :: unit
+    integer, intent(in) :: unit
     write (unit, *)
     write (unit, fmt="(' &',a)") "reinit_knobs"
     write (unit, fmt="(' delt_adj = ',e17.10)") delt_adj
@@ -87,12 +88,12 @@ contains
     use file_utils, only: error_unit
     use job_manage, only: time_message
     implicit none
+    integer, intent(in) :: istep 
     logical, intent(inout) :: my_exit
+    integer, intent (in), optional :: job_id
     logical :: reset_in
-    integer :: istep 
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer, save :: nconsec=0
-    integer, intent (in), optional :: job_id
     type(init_type), intent(inout) :: current_init
 
 

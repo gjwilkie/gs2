@@ -1179,8 +1179,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use theta_grid, only: finish_theta_grid
     use gs2_transforms, only: finish_transforms
     use gs2_save, only: finish_gs2_save
+    use normalisations, only: finish_normalisations
     implicit none
 
+    call finish_normalisations
     call finish_antenna
     call finish_collisions
     call finish_dist_fn

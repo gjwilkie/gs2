@@ -2,6 +2,8 @@ module lowflow
   
   implicit none
 
+  private
+
   public :: get_lowflow_terms, finish_lowflow_terms
   public :: phineo, dphidth, mach_lab
 
@@ -509,7 +511,7 @@ contains
     
     implicit none
     
-    real :: enrgy, enrgymax
+    real, intent(in) :: enrgy, enrgymax
     real :: zfnc
     
     zfnc = 2.*sqrt(enrgy/enrgymax)-1.

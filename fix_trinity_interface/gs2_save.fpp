@@ -27,7 +27,9 @@ module gs2_save
 
   implicit none
 
+  private
   public :: gs2_restore, gs2_save_for_restart, finish_gs2_save
+
   public :: read_many, save_many, gs2_save_response, gs2_restore_response
   public :: restore_current_scan_parameter_value
   public :: init_gs2_save, init_dt, init_tstart, init_ant_amp
@@ -52,8 +54,7 @@ module gs2_save
 
   logical :: read_many, save_many ! Read and write single or multiple restart files
   
-  private
-  character (300), save :: restart_file
+  character (300) :: restart_file
 
 # ifdef NETCDF
   real, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi

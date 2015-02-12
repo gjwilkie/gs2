@@ -6,10 +6,10 @@ module egrid
 
   implicit none
 
+  private
+
   public :: setvgrid, init_egrid
   public :: zeroes, x0
-
-  private
 
   real :: x0
   real, dimension(:), allocatable, save :: zeroes
@@ -17,22 +17,18 @@ module egrid
 contains
 
   subroutine init_egrid (negrid)
-    
+    implicit none
     integer, intent (in) :: negrid
 
     if (.not. allocated(zeroes)) then
        allocate (zeroes(negrid-1)) ; zeroes = 0.
     end if
-
   end subroutine init_egrid
 
   subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
-
     use constants, only: pi => dpi
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
-
     implicit none
-    
     integer, intent (in) :: negrid
     real, intent (in) :: vcut
     integer, intent (in) :: nesub
@@ -66,13 +62,14 @@ contains
     x0 = sqrt(epts(negrid))
 
   end subroutine setvgrid
-
 end module egrid
 
 module le_grids
   
   use redistribute, only: redist_type
   implicit none
+
+  private
 
   public :: init_le_grids, finish_le_grids
   public :: init_g2le_redistribute, init_lambda_redistribute, init_energy_redistribute
@@ -93,8 +90,6 @@ module le_grids
   !> Unit tests
   public :: le_grids_unit_test_init_le_grids
   public :: le_grids_unit_test_integrate_species
-
-  private
 
   interface integrate_moment
      module procedure integrate_moment_c34
@@ -123,14 +118,14 @@ module le_grids
   end interface
 
   real, dimension (:), allocatable :: xx ! (ng2)
-  real, dimension (:,:), allocatable, save :: werr, wlerr, xloc ! mbmark
-  real, dimension (:,:,:), allocatable, save :: wlterr
-  real, dimension (:,:,:,:), allocatable, save :: lgrnge
-  real, dimension (:,:,:), allocatable, save :: wlmod
-  real, dimension (:,:,:), allocatable, save :: wtmod
-  real, dimension (:,:), allocatable, save :: wmod
-  real, dimension (:,:), allocatable, save :: lpe, lpl
-  real, dimension (:,:,:,:), allocatable, save :: lpt
+  real, dimension (:,:), allocatable :: werr, wlerr, xloc ! mbmark
+  real, dimension (:,:,:), allocatable :: wlterr
+  real, dimension (:,:,:,:), allocatable :: lgrnge
+  real, dimension (:,:,:), allocatable :: wlmod
+  real, dimension (:,:,:), allocatable :: wtmod
+  real, dimension (:,:), allocatable :: wmod
+  real, dimension (:,:), allocatable :: lpe, lpl
+  real, dimension (:,:,:,:), allocatable :: lpt
 
   real, dimension (:), allocatable :: energy, w, anon, dele, speed ! (negrid)
   real, dimension (:), allocatable :: al, delal ! (nlambda)
@@ -183,15 +178,15 @@ contains
 
   subroutine wnml_le_grids(unit)
     implicit none
-    integer :: unit
+    integer, intent(in) :: unit
     if (.not. exist) return
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "le_grids_knobs"
-       write (unit, fmt="(' nesub = ',i4)") nesub
-       write (unit, fmt="(' nesuper = ',i4)") nesuper
-       write (unit, fmt="(' ngauss = ',i4)") ngauss
-       write (unit, fmt="(' vcut = ',e17.10)") vcut
-       write (unit, fmt="(' /')")
+    write (unit, *)
+    write (unit, fmt="(' &',a)") "le_grids_knobs"
+    write (unit, fmt="(' nesub = ',i4)") nesub
+    write (unit, fmt="(' nesuper = ',i4)") nesuper
+    write (unit, fmt="(' ngauss = ',i4)") ngauss
+    write (unit, fmt="(' vcut = ',e17.10)") vcut
+    write (unit, fmt="(' /')")
   end subroutine wnml_le_grids
 
   subroutine init_le_grids (accelerated_x, accelerated_v)
@@ -202,7 +197,6 @@ contains
     use gs2_layouts, only: init_gs2_layouts
     implicit none
     logical, intent (out) :: accelerated_x, accelerated_v
-!    logical, save :: initialized = .false.
     integer :: il, ie
 
     if (initialized) return
@@ -997,7 +991,6 @@ contains
 
   end subroutine integrate_species_le
 
-
   function le_grids_unit_test_integrate_species(g, weights, sizes, rslt, err)
     use unit_tests, only: announce_check, process_check, agrees_with
     use theta_grid, only: ntgrid
@@ -1008,7 +1001,7 @@ contains
     real, dimension (:), intent (in) :: weights
     integer, dimension (:), intent (in) :: sizes
     complex, dimension (:,:,:), allocatable :: total
-    complex, dimension (-ntgrid:,:,:) :: rslt
+    complex, dimension (-ntgrid:,:,:), intent(in) :: rslt
     real, intent(in) :: err
     logical :: le_grids_unit_test_integrate_species
     logical :: tr
@@ -1040,13 +1033,9 @@ contains
     deallocate(total)
 
     le_grids_unit_test_integrate_species = tr
-
-
-
   end function le_grids_unit_test_integrate_species
 
-  subroutine legendre_transform (g, tote, totl, tott)
-    
+  subroutine legendre_transform (g, tote, totl, tott)  
     use egrid, only: zeroes
     use mp, only: nproc
     use theta_grid, only: ntgrid, bmag, bmax
@@ -1410,7 +1399,6 @@ contains
 
   end subroutine integrate_moment_r33
 
-
   subroutine integrate_moment_e (lo, g, total, all)
 !Integrate over velocity space whilst in e_lo_LAYOUT. 
     use layouts_type, only: e_layout_type
@@ -1448,7 +1436,6 @@ contains
        call sum_reduce (total, 0)
     end if
   end subroutine integrate_moment_e
-
 
   subroutine integrate_moment_lz (lo, g, total, all)
 !Integrate over velocity space whilst in lz_lo_LAYOUT. 
@@ -1495,7 +1482,6 @@ contains
        call sum_reduce (total, 0)
     end if
   end subroutine integrate_moment_lz
-
 
   subroutine integrate_moment_lec (lo, g, total)
 !Perform an integral over velocity space whilst in the LE_LAYOUT in 
@@ -1586,7 +1572,6 @@ contains
     ! No need for communication since all velocity grid points are together
     ! and each prcessor does not touch the unset place
   end subroutine integrate_moment_le
-
 
   subroutine integrate_kysum (g, ig, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
@@ -1854,11 +1839,9 @@ contains
   end subroutine set_grids
 
   subroutine lgridset
-
     use theta_grid, only: ntgrid, bmag, bmax, eps
     use gauss_quad, only: get_legendre_grids_from_cheb
     use file_utils, only: open_output_file, close_output_file
-
     implicit none
 
 ! note that xgauss and wgauss are transposed wrt original code
@@ -2101,9 +2084,7 @@ contains
   end subroutine lgridset
 
   subroutine xigridset
-
     use theta_grid, only: ntgrid, bmag
-
     implicit none
 
     integer :: ig, je, ixi
@@ -2175,9 +2156,7 @@ contains
   end subroutine xigridset
 
   subroutine lagrange_coefs (ig, nodes, lfac, xloc)
-    
     use theta_grid, only: bmag, bmax
-
     implicit none
 
     integer, intent (in) :: ig
@@ -3908,7 +3887,6 @@ contains
     initialized = .false.
 
   end subroutine finish_le_grids
-
   subroutine finish_weights
     if (allocated(werr)) deallocate (werr)
     if (allocated(wlerr)) deallocate (wlerr)

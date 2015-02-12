@@ -7,26 +7,26 @@ module nonlinear_terms
 !
   implicit none
 
-  public :: init_nonlinear_terms, finish_nonlinear_terms
-  public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
-  public :: add_explicit_terms
-  public :: finish_init, reset_init, algorithm, nonlin, accelerated
-  public :: nonlinear_terms_unit_test_time_add_nl, cfl
-
   private
 
+  public :: init_nonlinear_terms, finish_nonlinear_terms
+  public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
+  public :: add_explicit_terms, nonlinear_mode_switch
+  public :: finish_init, reset_init, algorithm, nonlin, accelerated
+  public :: nonlinear_terms_unit_test_time_add_nl, cfl
+  public :: nonlinear_mode_none, nonlinear_mode_on
+
   ! knobs
-  integer, public :: nonlinear_mode_switch
+  integer :: nonlinear_mode_switch
   integer :: flow_mode_switch !THIS IS NOT SUPPORTED, SHOULD BE REMOVED?
 
-  integer, public, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
-  integer, public, parameter :: flow_mode_off = 1, flow_mode_on = 2
+  integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
+  integer, parameter :: flow_mode_off = 1, flow_mode_on = 2
 
-
-  real, save, dimension (:,:), allocatable :: ba, gb, bracket
+  real, dimension (:,:), allocatable :: ba, gb, bracket
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
 
-  real, save, dimension (:,:,:), allocatable :: aba, agb, abracket
+  real, dimension (:,:,:), allocatable :: aba, agb, abracket
   ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
 
 ! CFL coefficients
@@ -48,15 +48,14 @@ module nonlinear_terms
   
 contains
   
-
   subroutine check_nonlinear_terms(report_unit,delt_adj)
     use gs2_time, only: code_dt_min
     use kt_grids, only: box
     use run_parameters, only: margin, code_delt_max, nstep, wstar_units
     use theta_grid, only: nperiod
     implicit none
-    integer :: report_unit
-    real :: delt_adj
+    integer, intent(in) :: report_unit
+    real, intent(in) :: delt_adj
     if (nonlin) then
        write (report_unit, *) 
        write (report_unit, fmt="('This is a nonlinear simulation.')")
@@ -106,10 +105,9 @@ contains
     endif
   end subroutine check_nonlinear_terms
 
-
   subroutine wnml_nonlinear_terms(unit)
-  implicit none
-  integer :: unit
+    implicit none
+    integer, intent(in) :: unit
     if (.not. exist) return
     if (nonlinear_mode_switch == nonlinear_mode_on) then
        write (unit, *)
@@ -150,7 +148,6 @@ contains
     if (debug) write(6,*) "init_nonlinear_terms: init_dist_fn_layouts"
     call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
     
-
     call read_parameters
 
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
@@ -254,7 +251,7 @@ contains
     integer, intent (in) :: istep
     real, intent (in) :: bd
     real :: dt_cfl
-    logical, save :: nl = .true.
+    logical, parameter :: nl = .true.
 
     select case (nonlinear_mode_switch)
     case (nonlinear_mode_none)
@@ -271,9 +268,7 @@ contains
     end select
   end subroutine add_explicit_terms
 
-
   subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd,  nl)
-
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use dist_fn_arrays, only: g
@@ -376,8 +371,8 @@ contains
       if (minval(jend) .gt. ng2) trapped=.true.
 
       ! factor of one-half appears elsewhere
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          il = il_idx(g_lo, iglo)
+      do iglo = g_lo%llim_proc, g_lo%ulim_proc
+         il = il_idx(g_lo, iglo)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !CMR, 7/10/2014: 
@@ -388,48 +383,46 @@ contains
 !                                 ie assume forbidden gtmp is zero on entry 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-          if ( nl_forbid_force_zero ) then
+         if ( nl_forbid_force_zero ) then
          ! force spurious gtmp outside trapped boundary to be zero
-             where (forbid(:,il))
-                 gtmp(:,1,iglo) = 0.0
-                 gtmp(:,2,iglo) = 0.0
-             end where
-          endif
+            where (forbid(:,il))
+               gtmp(:,1,iglo) = 0.0
+               gtmp(:,2,iglo) = 0.0
+            end where
+         endif
 
-          do ig = -ntgrid, ntgrid-1
+         do ig = -ntgrid, ntgrid-1
 !
 !CMR, 7/10/2014: 
 ! loop sets gtmp to value at upwinded cell center RIGHT of theta(ig)
 !           except for ttp where upwinding makes no sense!
 !
-             if (il >= ittp(ig)) cycle
-             if ( trapped .and. ( il > jend(ig) .or. il > jend(ig+1)) ) then
-!
+            if (il >= ittp(ig)) cycle
+            if ( trapped .and. ( il > jend(ig) .or. il > jend(ig+1)) ) then
+               !
 !CMR, 7/10/2014: 
 !   if either ig or ig+1 is forbidden, no source possible in a cell RIGHT of theta(ig) 
 !   => gtmp(ig,1:2,iglo)=0
 !
-                gtmp(ig,1:2,iglo) = 0.0
-             else 
+               gtmp(ig,1:2,iglo) = 0.0
+            else 
 !
 !CMR, 7/10/2014: 
 !    otherwise ig and ig+1 BOTH allowed, and upwinding in cell RIGHT of theta(ig) is fine
 !
-                gtmp(ig,1,iglo) = (1.+bd)*gtmp(ig+1,1,iglo) + (1.-bd)*gtmp(ig,1,iglo)
-                gtmp(ig,2,iglo) = (1.-bd)*gtmp(ig+1,2,iglo) + (1.+bd)*gtmp(ig,2,iglo)
+               gtmp(ig,1,iglo) = (1.+bd)*gtmp(ig+1,1,iglo) + (1.-bd)*gtmp(ig,1,iglo)
+               gtmp(ig,2,iglo) = (1.-bd)*gtmp(ig+1,2,iglo) + (1.+bd)*gtmp(ig,2,iglo)
 
-             endif 
-          end do
-       end do
-
+            endif
+         end do
+      end do
     end subroutine center
-
   end subroutine add_explicit
 
   subroutine nonlinear_terms_unit_test_time_add_nl(g1, phi, apar, bpar)
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use theta_grid, only: ntgrid
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     call add_nl(g1, phi, apar, bpar)
   end subroutine nonlinear_terms_unit_test_time_add_nl
@@ -745,7 +738,6 @@ contains
     call finish_transforms
 
   end subroutine finish_nonlinear_terms
-
 end module nonlinear_terms
 
 

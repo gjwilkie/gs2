@@ -2,14 +2,13 @@ module le_derivatives
 
   implicit none
 
-  public :: vspace_derivatives
-
   private
+
+  public :: vspace_derivatives
 
 contains
 
   subroutine vspace_derivatives (g, gold, g1, phi, bpar, phinew, bparnew, diagnostics, gtoc, ctog)
-
     use redistribute, only: gather, scatter
     use dist_fn_arrays, only: c_rate, g_adjust
     use gs2_layouts, only: g_lo, le_lo
@@ -33,16 +32,6 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar, phinew, bparnew
     integer, optional, intent (in) :: diagnostics
 
-# ifdef LOWFLOW
-    integer :: ile, ig, ie, ixi, isgn, il, is
-    integer, dimension (2) :: i
-    real :: dvp, vp0
-    complex, dimension (:,:), allocatable :: gtmp
-# endif
-    complex, dimension (:,:,:), allocatable :: gle
-    complex, dimension (:,:,:), allocatable :: gc1, gc2, gc3
-    logical :: heating_flag
-
 !CMR, 12/9/2013: 
 !CMR   New logical optional input parameters gtoc, ctog used to set
 !CMR   flags (g_to_c and c_to_g) to control whether redistributes required
@@ -54,8 +43,18 @@ contains
 !CMR   Just realised we need to be careful with g_adjust if we avoid
 !CMR   mapping g_lo <=> le_lo    Mmmm, a little more to think about here ;-(
 !CMR
-    logical, optional :: gtoc, ctog
+    logical, intent(in), optional :: gtoc, ctog
     logical :: g_to_c, c_to_g
+
+# ifdef LOWFLOW
+    integer :: ile, ig, ie, ixi, isgn, il, is
+    integer, dimension (2) :: i
+    real :: dvp, vp0
+    complex, dimension (:,:), allocatable :: gtmp
+# endif
+    complex, dimension (:,:,:), allocatable :: gle
+    complex, dimension (:,:,:), allocatable :: gc1, gc2, gc3
+    logical :: heating_flag
 
     if (present(gtoc)) then 
        g_to_c=gtoc 
@@ -195,9 +194,8 @@ contains
   end if
 
   contains
-
+    
     subroutine get_gvpa (g_in, dv, ig0, il0, ixi0, ie0, g_out)
-
       use theta_grid, only: bmag
       use le_grids, only: speed, energy, al, xi, negrid, jend
       use mp, only: mp_abort
@@ -393,7 +391,5 @@ contains
       deallocate (var)
 
     end subroutine interp_g
-
   end subroutine vspace_derivatives
-
 end module le_derivatives
