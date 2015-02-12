@@ -2,14 +2,16 @@ module species
   implicit none
 
   private
+  public :: init_species, finish_species !, reinit_species, init_trin_species, finish_trin_species
 
-  public :: init_species, finish_species, reinit_species, init_trin_species, finish_trin_species
   public :: write_trinity_parameters
   public :: wnml_species, check_species
   public :: nspec, specie, spec
   public :: ion_species, electron_species, slowing_down_species, tracer_species
   public :: has_electron_species, has_slowing_down_species
   public :: ions, electrons, impurity
+  public :: set_overrides
+  public :: determine_species_order
 
   type :: specie
      real :: z
@@ -196,17 +198,17 @@ contains
   end subroutine wnml_species
   
   subroutine init_species
-    use mp, only: trin_flag
+    !use mp, only: trin_flag
     implicit none
 
     if (initialized) return
     initialized = .true.
 
     call read_parameters
-    if (trin_flag) then
-       call reinit_species (ntspec_trin, dens_trin, &
-         temp_trin, fprim_trin, tprim_trin, nu_trin)
-    endif
+    !if (trin_flag) then
+       !call reinit_species (ntspec_trin, dens_trin, &
+         !temp_trin, fprim_trin, tprim_trin, nu_trin)
+    !endif
   end subroutine init_species
 
   subroutine read_parameters
@@ -363,114 +365,66 @@ contains
     initialized = .false.
   end subroutine finish_species
 
-  subroutine finish_trin_species
-    implicit none
-    call finish_species
-    if (allocated(dens_trin)) deallocate(dens_trin)
-    if (allocated(temp_trin)) deallocate(temp_trin)
-    if (allocated(fprim_trin)) deallocate(fprim_trin)
-    if (allocated(tprim_trin)) deallocate(tprim_trin)
-    if (allocated(nu_trin)) deallocate(nu_trin)
-  end subroutine finish_trin_species
-
-  subroutine reinit_species (ntspec, dens, temp, fprim, tprim, nu)
-
+  !> This routine is used only for Trinity
+  subroutine determine_species_order
     use mp, only: broadcast, proc0, mp_abort
-    use job_manage, only: trin_restart
 
     implicit none
 
-    integer, intent (in) :: ntspec
-    real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
+    integer is
+     if (nspec == 1) then
+        ions = 1
+        electrons = 0
+        impurity = 0
+     else
+        ! if 2 or more species in GS2 calculation, figure out which is main ion
+        ! and which is electron via mass (main ion mass assumed to be one)
+        do is = 1, nspec
+           if (abs(spec(is)%mass-1.0) <= epsilon(0.0)) then
+              ions = is
+           else if (spec(is)%mass < 0.3) then
+              ! for electrons, assuming electrons are at least a factor of 3 less massive
+              ! than main ion and other ions are no less than 30% the mass of the main ion
+              electrons = is
+           else if (spec(is)%mass > 1.0 + epsilon(0.0)) then
+              impurity = is
+           else
+              if (proc0) write (*,*) &
+                   "Error: TRINITY requires the main ions to have mass 1", &
+                   "and the secondary ions to be impurities (mass > 1)"
+              call mp_abort("Error: TRINITY requires the main ions to have mass 1 and the secondary ions to be impurities (mass > 1)")
+           end if
+        end do
+     end if
+  end subroutine determine_species_order
 
+  subroutine set_overrides(prof_ov)
+    use overrides, only: profiles_overrides_type
+    type(profiles_overrides_type), intent(in) :: prof_ov
     integer :: is
-    logical, save :: first = .true.
+    do is = 1,nspec
+      if (prof_ov%override_tprim(is)) spec(is)%tprim = prof_ov%tprim(is)
+      if (prof_ov%override_fprim(is)) spec(is)%fprim = prof_ov%fprim(is)
+      if (prof_ov%override_temp(is)) spec(is)%temp = prof_ov%temp(is)
+      if (prof_ov%override_dens(is)) spec(is)%dens = prof_ov%dens(is)
+      if (prof_ov%override_vnewk(is)) spec(is)%vnewk = prof_ov%vnewk(is)
+    end do
+    call calculate_and_broadcast_species_properties
+  end subroutine set_overrides
 
-    if(trin_restart) first = .true.
 
-    if (first) then
-       if (nspec == 1) then
-          ions = 1
-          electrons = 0
-          impurity = 0
-       else
-          ! if 2 or more species in GS2 calculation, figure out which is main ion
-          ! and which is electron via mass (main ion mass assumed to be one)
-          do is = 1, nspec
-             if (abs(spec(is)%mass-1.0) <= epsilon(0.0)) then
-                ions = is
-             else if (spec(is)%mass < 0.3) then
-                ! for electrons, assuming electrons are at least a factor of 3 less massive
-                ! than main ion and other ions are no less than 30% the mass of the main ion
-                electrons = is
-             else if (spec(is)%mass > 1.0 + epsilon(0.0)) then
-                impurity = is
-             else
-                if (proc0) write (*,*) &
-                     "Error: TRINITY requires the main ions to have mass 1", &
-                     "and the secondary ions to be impurities (mass > 1)"
-                call mp_abort("Error: TRINITY requires the main ions to have mass 1 and the secondary ions to be impurities (mass > 1)")
-             end if
-          end do
-       end if
-       first = .false.
+  subroutine calculate_and_broadcast_species_properties
+    use mp, only: proc0, broadcast
+    integer :: is
+    if (proc0) then 
+      do is = 1, nspec
+         spec(is)%stm = sqrt(spec(is)%temp/spec(is)%mass)
+         spec(is)%zstm = spec(is)%z/sqrt(spec(is)%temp*spec(is)%mass)
+         spec(is)%tz = spec(is)%temp/spec(is)%z
+         spec(is)%zt = spec(is)%z/spec(is)%temp
+         spec(is)%smz = abs(sqrt(spec(is)%temp*spec(is)%mass)/spec(is)%z)
+      end do
     end if
-
-    if (proc0) then
-
-       nspec = ntspec
-
-       ! TRINITY passes in species in following order: main ion, electron, impurity (if present)
-
-       ! for now, hardwire electron density to be reference density
-       ! main ion temperature is reference temperature
-       ! main ion mass is assumed to be the reference mass
-       
-       ! if only 1 species in the GS2 calculation, it is assumed to be main ion
-       ! and ion density = electron density
-       if (nspec == 1) then
-          spec(1)%dens = 1.0
-          spec(1)%temp = 1.0
-          spec(1)%fprim = fprim(1)
-          spec(1)%tprim = tprim(1)
-          spec(1)%vnewk = nu(1)
-       else
-          spec(ions)%dens = dens(1)/dens(2)
-          spec(ions)%temp = 1.0
-          spec(ions)%fprim = fprim(1)
-          spec(ions)%tprim = tprim(1)
-          spec(ions)%vnewk = nu(1)
-
-          spec(electrons)%dens = 1.0
-          spec(electrons)%temp = temp(2)/temp(1)
-          spec(electrons)%fprim = fprim(2)
-          spec(electrons)%tprim = tprim(2)
-          spec(electrons)%vnewk = nu(2)
-
-          if (nspec > 2) then
-             spec(impurity)%dens = dens(3)/dens(2)
-             spec(impurity)%temp = temp(3)/temp(1)
-             spec(impurity)%fprim = fprim(3)
-             spec(impurity)%tprim = tprim(3)
-             spec(impurity)%vnewk = nu(3)
-          end if
-       end if
-
-       do is = 1, nspec
-          spec(is)%stm = sqrt(spec(is)%temp/spec(is)%mass)
-          spec(is)%zstm = spec(is)%z/sqrt(spec(is)%temp*spec(is)%mass)
-          spec(is)%tz = spec(is)%temp/spec(is)%z
-          spec(is)%zt = spec(is)%z/spec(is)%temp
-          spec(is)%smz = abs(sqrt(spec(is)%temp*spec(is)%mass)/spec(is)%z)
-
-!          write (*,100) 'reinit_species', rhoc_ms, spec(is)%temp, spec(is)%fprim, &
-!               spec(is)%tprim, spec(is)%vnewk, real(is)
-       end do
-
-    end if
-
-!100 format (a15,9(1x,1pg18.11))
-
     call broadcast (nspec)
 
     do is = 1, nspec
@@ -485,8 +439,7 @@ contains
        call broadcast (spec(is)%zt)
        call broadcast (spec(is)%smz)
     end do
-
-  end subroutine reinit_species
+  end subroutine calculate_and_broadcast_species_properties
 
   subroutine write_trinity_parameters(trinpars_unit)
     integer, intent(in) :: trinpars_unit
@@ -507,22 +460,4 @@ contains
 
   end subroutine write_trinity_parameters
 
-  subroutine init_trin_species (ntspec_in, dens_in, temp_in, fprim_in, tprim_in, nu_in)
-    implicit none
-    integer, intent (in) :: ntspec_in
-    real, dimension (:), intent (in) :: dens_in, fprim_in, temp_in, tprim_in, nu_in
-
-    if (.not. allocated(dens_trin)) allocate (dens_trin(size(dens_in)))
-    if (.not. allocated(fprim_trin)) allocate (fprim_trin(size(fprim_in)))
-    if (.not. allocated(temp_trin)) allocate (temp_trin(size(temp_in)))
-    if (.not. allocated(tprim_trin)) allocate (tprim_trin(size(tprim_in)))
-    if (.not. allocated(nu_trin)) allocate (nu_trin(size(nu_in)))
-
-    ntspec_trin = ntspec_in
-    dens_trin = dens_in
-    temp_trin = temp_in
-    fprim_trin = fprim_in
-    tprim_trin = tprim_in
-    nu_trin = nu_in
-  end subroutine init_trin_species
 end module species

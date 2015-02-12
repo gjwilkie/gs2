@@ -44,6 +44,7 @@ dump_grids_mod = \
 	 leq.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 overrides.o \
 	 peq.o \
 	 read_chease.o \
 	 redistribute.o \
@@ -82,6 +83,7 @@ dump_response_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_heating.o \
+	 gs2_init.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -100,6 +102,7 @@ dump_response_mod = \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
@@ -184,6 +187,7 @@ ffttester_mod = \
 	 gs2_diagnostics.o \
 	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
+	 gs2_init.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_main.o \
@@ -205,6 +209,7 @@ ffttester_mod = \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -257,6 +262,7 @@ generate_fftw_wisdom_mod = \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
@@ -318,6 +324,7 @@ gs2_mod = \
 	 gs2_diagnostics.o \
 	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
+	 gs2_init.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_main.o \
@@ -339,6 +346,7 @@ gs2_mod = \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -381,13 +389,15 @@ ideal_ball_mod = \
 	 leq.o \
 	 mp.o \
 	 netcdf_utils.o \
+	 overrides.o \
 	 peq.o \
 	 read_chease.o \
 	 runtime_tests.o \
 	 spl.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 unit_tests.o 
 
 ingen_mod = \
 	 antenna.o \
@@ -415,6 +425,7 @@ ingen_mod = \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
 	 gs2_heating.o \
+	 gs2_init.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
@@ -436,6 +447,7 @@ ingen_mod = \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -716,6 +728,7 @@ dist_fn.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 overrides.o \
 	 prof.o \
 	 redistribute.o \
 	 run_parameters.o \
@@ -792,7 +805,8 @@ fields.o: \
 	 nonlinear_terms.o \
 	 run_parameters.o \
 	 text_options.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 unit_tests.o 
 fields_arrays.o: 
 fields_implicit.o: \
 	 antenna.o \
@@ -808,7 +822,8 @@ fields_implicit.o: \
 	 mp.o \
 	 prof.o \
 	 run_parameters.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 unit_tests.o 
 fields_local.o: \
 	 antenna.o \
 	 dist_fn.o \
@@ -943,6 +958,28 @@ gs2_diagnostics_new.o: \
 gs2_heating.o: \
 	 mp.o \
 	 species.o 
+gs2_init.o: \
+	 antenna.o \
+	 collisions.o \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
+	 fields.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_layouts.o \
+	 gs2_save.o \
+	 hyper.o \
+	 init_g.o \
+	 kt_grids.o \
+	 le_grids.o \
+	 mp.o \
+	 nonlinear_terms.o \
+	 overrides.o \
+	 run_parameters.o \
+	 species.o \
+	 theta_grid.o \
+	 theta_grid_params.o \
+	 unit_tests.o 
 gs2_io.o: \
 	 constants.o \
 	 convert.o \
@@ -977,6 +1014,7 @@ gs2_main.o: \
 	 geometry.o \
 	 gs2_diagnostics.o \
 	 gs2_diagnostics_new.o \
+	 gs2_init.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -990,31 +1028,23 @@ gs2_main.o: \
 	 mp.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
+	 overrides.o \
 	 parameter_scan.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 runtime_tests.o \
 	 species.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
 	 unit_tests.o 
 gs2_reinit.o: \
-	 antenna.o \
-	 collisions.o \
-	 dist_fn.o \
 	 dist_fn_arrays.o \
-	 fields.o \
-	 fields_arrays.o \
 	 file_utils.o \
-	 gs2_layouts.o \
-	 gs2_save.o \
+	 gs2_init.o \
 	 gs2_time.o \
-	 init_g.o \
 	 job_manage.o \
-	 kt_grids.o \
 	 mp.o \
-	 nonlinear_terms.o \
-	 run_parameters.o \
-	 theta_grid.o 
+	 run_parameters.o 
 gs2_save.o: \
 	 antenna_data.o \
 	 constants.o \
@@ -1109,7 +1139,8 @@ init_g.o: \
 	 species.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 unit_tests.o 
 job_manage.o: \
 	 file_utils.o \
 	 mp.o 
@@ -1187,6 +1218,8 @@ normalisations.o: \
 	 runtime_tests.o 
 om.o: \
 	 command_line.o 
+overrides.o: \
+	 file_utils.o 
 parameter_scan.o: \
 	 dist_fn.o \
 	 file_utils.o \
@@ -1234,8 +1267,8 @@ simpledataiof.o:
 sorting.o: 
 species.o: \
 	 file_utils.o \
-	 job_manage.o \
 	 mp.o \
+	 overrides.o \
 	 text_options.o 
 spfunc.o: \
 	 constants.o 
@@ -1252,9 +1285,12 @@ theta_grid.o: \
 	 runtime_tests.o \
 	 spl.o \
 	 text_options.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 unit_tests.o 
 theta_grid_params.o: \
-	 file_utils.o 
+	 file_utils.o \
+	 overrides.o \
+	 unit_tests.o 
 unit_tests.o: \
 	 mp.o \
 	 runtime_tests.o 

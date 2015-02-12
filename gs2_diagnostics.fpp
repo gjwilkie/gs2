@@ -438,14 +438,14 @@ contains
     if (initialized) return
     initialized = .true.
 
-    if (proc0) write (*,*) " WARNING: &
-        & THE OLD DIAGNOSTICS MODULE IS NOW DEPRECATED.&
-        & It is scheduled to be disabled by default on 1st Jan 2015 and removed&
-        & from the repository on 1st March 2015. Do not edit or extend this module&
-        & in any way apart from vital fixes. Any changes you make may not be &
-        & transferred to the new diagnostics module... please use the new diagnostics &
-        & module contained in the diagnostics folder instead. PLEASE AMEND YOUR &
-        & SCRIPTS TO USE THE NEW OUTPUT FILE ENDING IN .cdf"
+    !if (proc0) write (*,*) " WARNING: &
+        !& THE OLD DIAGNOSTICS MODULE IS NOW DEPRECATED.&
+        !& It is scheduled to be disabled by default on 1st Jan 2015 and removed&
+        !& from the repository on 1st March 2015. Do not edit or extend this module&
+        !& in any way apart from vital fixes. Any changes you make may not be &
+        !& transferred to the new diagnostics module... please use the new diagnostics &
+        !& module contained in the diagnostics folder instead. PLEASE AMEND YOUR &
+        !& SCRIPTS TO USE THE NEW OUTPUT FILE ENDING IN .cdf"
 
     call init_normalisations
     call init_theta_grid
@@ -828,6 +828,7 @@ contains
     use antenna, only: dump_ant_amp
     use kt_grids, only: naky, ntheta0
     use gs2_time, only: user_time, user_dt
+    use le_grids, only: finish_weights
 
     implicit none
     integer, intent (in) :: istep
@@ -839,6 +840,7 @@ contains
     if (write_g) call write_f (last)
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
     if (write_cerr) call collision_error (phinew, bparnew, last)
+    if (write_verr .and. proc0) call finish_weights
 
     !Close some of the open ascii output files
     call close_files

@@ -86,28 +86,29 @@ contains
     use dist_fn, only: init_dist_fn
     use init_g, only: ginit, init_init_g
     use antenna, only: init_antenna
+    use unit_tests, only: debug_message
     implicit none
-    logical, parameter :: debug=.false.
+    integer, parameter :: verb=3
     
-    if (debug) write(6,*) "init_fields: init_theta_grid"
+    call debug_message(verb, "init_fields: init_theta_grid")
     call init_theta_grid
     
 !CMR,30/3/2009:
 ! call init_init_g before init_run_parameters to read delt from restart file
 
-    if (debug) write(6,*) "init_fields: init_init_g"
+    call debug_message(verb, "init_fields: init_init_g")
     call init_init_g
-    if (debug) write(6,*) "init_fields: init_run_parameters"
+    call debug_message(verb, "init_fields: init_run_parameters")
     call init_run_parameters
-    if (debug) write(6,*) "init_fields: init_dist_fn"
+    call debug_message(verb, "init_fields: init_dist_fn")
     call init_dist_fn
-    !if (debug) write(6,*) "init_fields: init_parameter_scan"
+    !call debug_message(verb, "init_fields: init_parameter_scan")
     !call init_parameter_scan
-    if (debug) write(6,*) "init_fields: init_antenna"
+    call debug_message(verb, "init_fields: init_antenna")
     call init_antenna !Must come before allocate_arrays so we know if we need apar_ext
-    if (debug) write(6,*) "init_fields: read_parameters"
+    call debug_message(verb, "init_fields: read_parameters")
     call read_parameters
-    if (debug) write(6,*) "init_fields: allocate_arrays"
+    call debug_message(verb, "init_fields: allocate_arrays")
     call allocate_arrays
   end subroutine fields_pre_init
 
@@ -115,17 +116,21 @@ contains
     use fields_implicit, only: init_fields_implicit
     use fields_test, only: init_fields_test
     use fields_local, only: init_fields_local
+    use unit_tests, only: debug_message
     implicit none
+    integer, parameter :: verb=3
     logical, parameter :: debug = .false.
     select case (fieldopt_switch)
     case (fieldopt_implicit)
-       if (debug) write(6,*) "init_fields: init_fields_implicit"
+       call debug_message(verb, &
+         "fields::fields_init_response init_fields_implicit")
        call init_fields_implicit
     case (fieldopt_test)
-       if (debug) write(6,*) "init_fields: init_fields_test"
+       call debug_message(verb, "fields::fields_init_response init_fields_test")
        call init_fields_test
     case (fieldopt_local)
-       if (debug) write(6,*) "init_fields: init_fields_local"
+       call debug_message(verb, &
+         "fields::fields_init_response init_fields_local")
        call init_fields_local
     case default
        !Silently ignore unsupported field options
@@ -157,14 +162,17 @@ contains
     if (debug) write(6,*) "init_fields: nl_finish_init"
     call nl_finish_init
 
-    if (debug) write(6,*) "init_fields: ginit"
-    call ginit (restarted)
-    if (restarted .and. .not. force_maxwell_reinit) return
-    if (debug) write(6,*) "init_fields: init_antenna"
-    call init_antenna
+    ! EGH Commented out the following lines as they are now
+    ! handled by gs2_init
 
-    !Set the initial fields
-    call set_init_fields
+    !if (debug) write(6,*) "init_fields: ginit"
+    !call ginit (restarted)
+    !if (restarted .and. .not. force_maxwell_reinit) return
+    !if (debug) write(6,*) "init_fields: init_antenna"
+    !call init_antenna
+
+    !!Set the initial fields
+    !call set_init_fields
 
     !If running in flux tube disable evolution of ky=kx=0 mode
     if(gridopt_switch.eq.gridopt_box) kwork_filter(1,1)=.true.
@@ -463,7 +471,13 @@ contains
 
     implicit none
 
-    call reset_init
+    initialized  = .false.
+    phi = 0.
+    phinew = 0.
+    apar = 0.
+    aparnew = 0.
+    bpar = .0
+    bparnew = 0.
     
     select case (fieldopt_switch)
     case (fieldopt_implicit)

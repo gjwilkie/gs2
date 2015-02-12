@@ -18,6 +18,43 @@ module dist_fn
   private
 
   public :: init_dist_fn, finish_dist_fn
+  
+  !> Initializes a limited selection of arrays,
+  !! for example g, gnew, vperp2, typically those which 
+  !! are needed by other modules that don't need 
+  !! dist_fn to be fully initialized (e.g. nonlinear_terms)
+  !! This initialization level depends on grid sizes.
+  public :: init_dist_fn_arrays
+ 
+  !> Deallocates arrays allocated in init_dist_fn_arrays
+  public :: finish_dist_fn_arrays
+
+  !> Reads the dist_fn_knobs, source knobs, and 
+  !! dist_fn_species_knobs namelists. This has be done independently
+  !! of initializing the distribution function because
+  !! it needs to be possible to override parameters such
+  !! as g_exb.
+  public :: init_dist_fn_parameters
+  public :: finish_dist_fn_parameters
+
+  !> Initializes parallel boundary conditions. This level
+  !! depends on geometry.
+  public :: init_dist_fn_level_1
+  public :: finish_dist_fn_level_1
+
+  !> Initializes bessel functions and field_eq. Note 
+  !! that this level depends on species paramters.
+  public :: init_dist_fn_level_2
+  public :: finish_dist_fn_level_2
+
+  !> Fully initialize the dist_fn module. Note that
+  !! this level depends on the size of the timestep.
+  public :: init_dist_fn_level_3
+  public :: finish_dist_fn_level_3
+
+  public :: set_overrides
+
+
   !!> init_vpar is called by init_dist_fn should only be called separately 
   !!! for testing purposes
   !public :: init_vpar
@@ -193,7 +230,15 @@ module dist_fn
   integer :: i_class
 
   logical :: initialized = .false.
-  logical :: initializing = .true.
+
+  logical :: exb_first = .false.
+
+  logical :: initialized_dist_fn_parameters = .false.
+  logical :: initialized_dist_fn_arrays = .false.
+  logical :: initialized_dist_fn_level_1 = .false.
+  logical :: initialized_dist_fn_level_2 = .false.
+  logical :: initialized_dist_fn_level_3 = .false.
+  !logical :: initializing = .true.
   logical :: readinit = .false.
   logical :: bessinit = .false.
   logical :: connectinit = .false.
@@ -544,22 +589,16 @@ contains
     end do
   end subroutine wnml_dist_fn_species
 
-  subroutine init_dist_fn
-    use mp, only: proc0, finish_mp, mp_abort
-    use species, only: init_species, nspec
+  subroutine init_dist_fn_parameters
+    use gs2_layouts, only: init_gs2_layouts
+    use kt_grids, only: init_kt_grids
+    use le_grids, only: init_le_grids
+    use species, only: init_species
     use theta_grid, only: init_theta_grid
-    use kt_grids, only: init_kt_grids, naky, ntheta0
-    use le_grids, only: init_le_grids, nlambda, negrid
-    use run_parameters, only: init_run_parameters
-    use collisions, only: init_collisions!, vnmult
-    use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
-    use nonlinear_terms, only: init_nonlinear_terms
-    use hyper, only: init_hyper
-    implicit none
     logical,parameter:: debug=.false.
 
-    if (initialized) return
-    initialized = .true.
+    if (initialized_dist_fn_parameters) return
+    initialized_dist_fn_parameters  = .true.
 
     if (debug) write(6,*) "init_dist_fn: init_gs2_layouts"
     call init_gs2_layouts
@@ -578,6 +617,23 @@ contains
 
     if (debug) write(6,*) "init_dist_fn: read_parameters"
     call read_parameters
+
+  end subroutine init_dist_fn_parameters
+
+  subroutine init_dist_fn_arrays
+    use mp, only: proc0, finish_mp, mp_abort
+    use species, only: nspec
+    use kt_grids, only: naky, ntheta0
+    use le_grids, only: nlambda, negrid
+    use gs2_layouts, only: init_dist_fn_layouts
+    use nonlinear_terms, only: init_nonlinear_terms
+    use run_parameters, only: init_run_parameters
+    logical,parameter:: debug=.false.
+
+    if (initialized_dist_fn_arrays) return
+    initialized_dist_fn_arrays  = .true.
+
+    call init_dist_fn_parameters
 
     if (test) then
        if (proc0) then
@@ -603,6 +659,58 @@ contains
     if (debug) write(6,*) "init_dist_fn: allocate_arrays"
     call allocate_arrays
 
+
+  end subroutine init_dist_fn_arrays
+
+  subroutine init_dist_fn_level_1
+    if (initialized_dist_fn_level_1) return
+    initialized_dist_fn_level_1 = .true.
+
+    call init_dist_fn_arrays
+
+    !if (debug) write(6,*) "init_dist_fn: init_vperp2"
+    call init_vperp2
+
+    call init_dist_fn_arrays
+    call init_bc
+  
+  end subroutine init_dist_fn_level_1
+
+  subroutine init_dist_fn_level_2
+    logical,parameter:: debug=.false.
+
+    if (initialized_dist_fn_level_2) return
+    initialized_dist_fn_level_2 = .true.
+
+    call init_dist_fn_level_1
+
+    if (debug) write(6,*) "init_dist_fn: init_bessel"
+    call init_bessel
+
+    if (debug) write(6,*) "init_dist_fn: init_fieldeq"
+    call init_fieldeq
+  end subroutine init_dist_fn_level_2
+
+  subroutine init_dist_fn
+    call init_dist_fn_level_3
+  end subroutine init_dist_fn
+
+  subroutine init_dist_fn_level_3
+    use mp, only: proc0, finish_mp, mp_abort
+    use species, only: init_species, nspec
+    use collisions, only: init_collisions!, vnmult
+    use hyper, only: init_hyper
+    implicit none
+    logical,parameter:: debug=.false.
+
+    if (initialized_dist_fn_level_3) return
+    initialized_dist_fn_level_3 = .true.
+
+    if (initialized) return
+    initialized = .true.
+
+    call init_dist_fn_level_2
+
     if (debug) write(6,*) "init_dist_fn: init_vpar"
     call init_vpar
 
@@ -611,9 +719,6 @@ contains
 
     if (debug) write(6,*) "init_dist_fn: init_wstar"
     call init_wstar
-
-    if (debug) write(6,*) "init_dist_fn: init_bessel"
-    call init_bessel
 
 !    call init_vnmult (vnmult)
     if (debug) write(6,*) "init_dist_fn: init_collisions"
@@ -629,9 +734,6 @@ contains
     if (debug) write(6,*) "init_dist_fn: init_invert_rhs"
     call init_invert_rhs
 
-    if (debug) write(6,*) "init_dist_fn: init_fieldeq"
-    call init_fieldeq
-
     if (debug) write(6,*) "init_dist_fn: init_hyper"
     call init_hyper
 
@@ -641,7 +743,142 @@ contains
     if (debug) write(6,*) "init_dist_fn: init_source_term"
     call init_source_term
 
-  end subroutine init_dist_fn
+  end subroutine init_dist_fn_level_3
+
+  subroutine finish_dist_fn
+    call finish_dist_fn_parameters
+  end subroutine finish_dist_fn
+
+  subroutine finish_dist_fn_parameters
+    if (.not. initialized_dist_fn_parameters) return
+    initialized_dist_fn_parameters = .false.
+    call finish_dist_fn_arrays
+    readinit = .false.
+    if (allocated(fexp)) deallocate (fexp, bkdiff, bd_exp)
+  end subroutine finish_dist_fn_parameters
+
+  subroutine finish_dist_fn_arrays
+    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift, vperp2
+
+    if (.not. initialized_dist_fn_arrays) return
+    initialized_dist_fn_arrays = .false.
+
+    call finish_dist_fn_level_1
+    if (allocated(g)) deallocate (g, gnew, g0)
+    if (allocated(source_coeffs)) deallocate(source_coeffs)
+    if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
+    if (allocated(g_h)) deallocate (g_h, save_h)
+    if (allocated(kx_shift)) deallocate (kx_shift)
+    if (allocated(theta0_shift)) deallocate (theta0_shift)
+    if (allocated(vperp2)) deallocate (vperp2)
+    initialized_dist_fn_arrays = .false.
+  end subroutine finish_dist_fn_arrays
+
+  subroutine finish_dist_fn_level_1
+    use redistribute, only: delete_redist
+#ifdef LOWFLOW
+    use lowflow, only: finish_lowflow_terms
+    use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
+#endif
+    implicit none
+    if (.not. initialized_dist_fn_level_1) return
+    initialized_dist_fn_level_1 = .false.
+
+    accelerated_x = .false. ; accelerated_v = .false.
+    no_comm = .false.
+    connectinit = .false.
+    lpolinit = .false. ; fyxinit = .false. ; cerrinit = .false. ; mominit = .false.
+    increase = .true. ; decrease = .false.
+    exb_first = .false.
+
+    call finish_dist_fn_level_2
+
+    if (allocated(l_links)) deallocate (l_links, r_links, n_links)
+    if (allocated(M_class)) deallocate (M_class, N_class)
+    if (allocated(itleft)) deallocate (itleft, itright)
+    if (allocated(connections)) deallocate (connections)
+    if (allocated(g_adj)) deallocate (g_adj)
+    if (allocated(jump)) deallocate (jump)
+    if (allocated(ikx_indexed)) deallocate (ikx_indexed)
+    if (allocated(ufac)) deallocate (ufac)
+    if (allocated(fl_avg)) deallocate (fl_avg)
+    if (allocated(awgt)) deallocate (awgt)
+    if (allocated(kmax)) deallocate (kmax)
+    if (allocated(mom_coeff)) deallocate (mom_coeff, mom_coeff_npara, mom_coeff_nperp, &
+         mom_coeff_tpara, mom_coeff_tperp, mom_shift_para, mom_shift_perp)
+
+    call delete_redist(gc_from_left)
+    call delete_redist(gc_from_right)
+    call delete_redist(links_p)
+    call delete_redist(links_h)
+    call delete_redist(wfb_p)
+    call delete_redist(wfb_h)
+    call delete_redist(pass_right)
+    call delete_redist(pass_left)
+    call delete_redist(pass_wfb)
+    call delete_redist(parity_redist)
+
+    ! gc_from_left, gc_from_right, links_p, links_h, wfb_p, wfb_h
+#ifdef LOWFLOW
+    call finish_lowflow_terms
+    if(allocated(vparterm)) deallocate(vparterm)
+    if(allocated(hneoc)) deallocate(hneoc)
+    if(allocated(wdfac)) deallocate(wdfac)
+    if(allocated(wstarfac)) deallocate(wstarfac)
+    if(allocated(wdttpfac)) deallocate(wdttpfac)
+    if(allocated(wstar_neo)) deallocate(wstar_neo)
+    if(allocated(wcurv)) deallocate(wcurv)
+#endif
+
+  end subroutine finish_dist_fn_level_1
+
+  subroutine finish_dist_fn_level_2
+    use dist_fn_arrays, only: aj0, aj1
+
+    if (.not. initialized_dist_fn_level_2) return
+    initialized_dist_fn_level_2 = .false.
+
+    call finish_dist_fn_level_3
+    bessinit = .false. 
+    feqinit = .false.  
+    if (allocated(aj0)) deallocate (aj0, aj1)
+    if (allocated(gridfac1)) deallocate (gridfac1, gamtot, gamtot1, gamtot2)
+    if (allocated(gamtot3)) deallocate (gamtot3)
+    if (allocated(a)) deallocate (a, b, r, ainv)
+  end subroutine finish_dist_fn_level_2
+  
+  subroutine finish_dist_fn_level_3
+    use dist_fn_arrays, only: gnew, g
+    use dist_fn_arrays, only: vpa, vpac, vpar
+    use dist_fn_arrays, only: ittp
+    !initializing  = .true.
+    if (.not. initialized_dist_fn_level_3) return
+    initialized_dist_fn_level_3 = .false.
+
+    initialized = .false.
+    
+    wdrift = 0.
+    wdriftttp = 0.
+    a = 0.
+    b = 0.
+    r = 0.
+    ainv = 0.
+    gnew = 0.
+    g0 = 0.
+    g = 0.
+
+    if (allocated(vpa)) deallocate (vpa, vpac, vpar)
+    if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
+    if (allocated(wstar)) deallocate (wstar)
+  end subroutine finish_dist_fn_level_3
+
+  subroutine set_overrides(prof_ov)
+    use overrides, only: profiles_overrides_type
+    type(profiles_overrides_type), intent(in) :: prof_ov
+    if (prof_ov%override_g_exb) g_exb = prof_ov%g_exb
+    if (prof_ov%override_mach) mach = prof_ov%mach
+  end subroutine set_overrides
+
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
@@ -1082,8 +1319,30 @@ contains
 
   end function wcoriolis_func
 
+  subroutine init_vperp2
+    use theta_grid, only: ntgrid, bmag
+    use gs2_layouts, only: g_lo, ik_idx, il_idx, ie_idx, is_idx
+    use dist_fn_arrays, only: vperp2
+    use le_grids, only: energy, al
+    implicit none
+    real :: al1, e1
+    integer :: iglo
+    if (.not.allocated(vperp2)) then
+       allocate (vperp2 (-ntgrid:ntgrid,  g_lo%llim_proc:g_lo%ulim_alloc))
+    endif
+    vperp2 = 0.
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       al1 = al(il_idx(g_lo,iglo))
+       e1 = energy(ie_idx(g_lo,iglo))
+
+       vperp2(:,iglo) = bmag*al1*e1
+    end do
+
+
+  end subroutine init_vperp2
+
   subroutine init_vpar
-    use dist_fn_arrays, only: vpa, vpar, vpac, vperp2
+    use dist_fn_arrays, only: vpa, vpar, vpac
     use species, only: spec
     use theta_grid, only: ntgrid, delthet, bmag, gradpar
     use le_grids, only: energy, al
@@ -1097,10 +1356,11 @@ contains
     if (.not.allocated(vpa)) then
        allocate (vpa    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vpac   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-       allocate (vperp2 (-ntgrid:ntgrid,  g_lo%llim_proc:g_lo%ulim_alloc))
+       ! EGH Put vperp2 in a separate function
+       !allocate (vperp2 (-ntgrid:ntgrid,  g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (vpar   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     endif
-    vpa = 0. ; vpac = 0. ; vperp2 = 0. ; vpar = 0.
+    vpa = 0. ; vpac = 0.; vpar = 0.
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        al1 = al(il_idx(g_lo,iglo))
@@ -1108,7 +1368,7 @@ contains
 
        vpa(:,1,iglo) = sqrt(e1*max(0.0, 1.0 - al1*bmag))
        vpa(:,2,iglo) = - vpa(:,1,iglo)
-       vperp2(:,iglo) = bmag*al1*e1
+       !vperp2(:,iglo) = bmag*al1*e1
 
        where (1.0 - al1*bmag < 100.0*epsilon(0.0))
           vpa(:,1,iglo) = 0.0
@@ -1197,6 +1457,8 @@ contains
 
     if (bessinit) return
     bessinit = .true.
+
+    !write(*,*) 'Allocating aj0', ntgrid, g_lo%llim_proc, g_lo%ulim_alloc
 
     allocate (aj0(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate (aj1(-ntgrid:ntgrid,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -1306,6 +1568,12 @@ endif
        end do
     end do
 
+
+  end subroutine init_invert_rhs
+
+  subroutine init_bc
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
     select case (boundary_option_switch)
     case (boundary_option_linked)
        if(opt_init_bc)then
@@ -1330,8 +1598,7 @@ endif
        M_class = naky*ntheta0 ; N_class = 1
        
     end select
-
-  end subroutine init_invert_rhs
+  end subroutine init_bc
 
   subroutine init_source_term
     use dist_fn_arrays, only: vpar, vpac, aj0
@@ -3545,7 +3812,7 @@ endif
     logical :: field_local_loc
     real, save :: dkx, dtheta0
     real :: gdt
-    logical, save :: exb_first = .true.
+    !logical, save :: exb_first = .true.
     complex , dimension(-ntgrid:ntgrid) :: z
     character(130) :: str
 
@@ -7655,21 +7922,21 @@ endif
   end subroutine get_heat
 
   subroutine reset_init
+    call finish_dist_fn_level_3
 
-    use dist_fn_arrays, only: gnew, g
-    implicit none
-    initializing  = .true.
-    initialized = .false.
-    
-    wdrift = 0.
-    wdriftttp = 0.
-    a = 0.
-    b = 0.
-    r = 0.
-    ainv = 0.
-    gnew = 0.
-    g0 = 0.
-    g = 0.
+    !use dist_fn_arrays, only: gnew, g
+    !initializing  = .true.
+    !initialized = .false.
+   ! 
+    !wdrift = 0.
+    !wdriftttp = 0.
+    !a = 0.
+    !b = 0.
+    !r = 0.
+    !ainv = 0.
+    !gnew = 0.
+    !g0 = 0.
+    !g = 0.
 
   end subroutine reset_init
 
@@ -8892,77 +9159,6 @@ endif
 !    initialized=.true.
   end subroutine init_mom_coeff
 
-  subroutine finish_dist_fn
-    use redistribute, only: delete_redist
-    use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
-    use dist_fn_arrays, only: aj0, aj1   
-    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
-#ifdef LOWFLOW
-    use lowflow, only: finish_lowflow_terms
-    use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
-#endif
-    implicit none
-
-    accelerated_x = .false. ; accelerated_v = .false.
-    no_comm = .false.
-    readinit = .false. ; bessinit = .false. ; connectinit = .false.
-    feqinit = .false. ; lpolinit = .false. ; fyxinit = .false. ; cerrinit = .false. ; mominit = .false.
-    increase = .true. ; decrease = .false.
-
-    call reset_init
-
-    if (allocated(fexp)) deallocate (fexp, bkdiff, bd_exp)
-    if (allocated(ittp)) deallocate (ittp, wdrift, wdriftttp)
-    if (allocated(vpa)) deallocate (vpa, vpac, vperp2, vpar)
-    if (allocated(wstar)) deallocate (wstar)
-    if (allocated(aj0)) deallocate (aj0, aj1)
-    if (allocated(a)) deallocate (a, b, r, ainv)
-    if (allocated(l_links)) deallocate (l_links, r_links, n_links)
-    if (allocated(M_class)) deallocate (M_class, N_class)
-    if (allocated(itleft)) deallocate (itleft, itright)
-    if (allocated(connections)) deallocate (connections)
-    if (allocated(g_adj)) deallocate (g_adj)
-    if (allocated(g)) deallocate (g, gnew, g0)
-    if (allocated(source_coeffs)) deallocate(source_coeffs)
-    if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
-    if (allocated(g_h)) deallocate (g_h, save_h)
-    if (allocated(kx_shift)) deallocate (kx_shift)
-    if (allocated(theta0_shift)) deallocate (theta0_shift)
-    if (allocated(jump)) deallocate (jump)
-    if (allocated(ikx_indexed)) deallocate (ikx_indexed)
-    if (allocated(ufac)) deallocate (ufac)
-    if (allocated(gridfac1)) deallocate (gridfac1, gamtot, gamtot1, gamtot2)
-    if (allocated(gamtot3)) deallocate (gamtot3)
-    if (allocated(fl_avg)) deallocate (fl_avg)
-    if (allocated(awgt)) deallocate (awgt)
-    if (allocated(kmax)) deallocate (kmax)
-    if (allocated(mom_coeff)) deallocate (mom_coeff, mom_coeff_npara, mom_coeff_nperp, &
-         mom_coeff_tpara, mom_coeff_tperp, mom_shift_para, mom_shift_perp)
-
-    call delete_redist(gc_from_left)
-    call delete_redist(gc_from_right)
-    call delete_redist(links_p)
-    call delete_redist(links_h)
-    call delete_redist(wfb_p)
-    call delete_redist(wfb_h)
-    call delete_redist(pass_right)
-    call delete_redist(pass_left)
-    call delete_redist(pass_wfb)
-    call delete_redist(parity_redist)
-
-    ! gc_from_left, gc_from_right, links_p, links_h, wfb_p, wfb_h
-
-#ifdef LOWFLOW
-    call finish_lowflow_terms
-    if(allocated(vparterm)) deallocate(vparterm)
-    if(allocated(hneoc)) deallocate(hneoc)
-    if(allocated(wdfac)) deallocate(wdfac)
-    if(allocated(wstarfac)) deallocate(wstarfac)
-    if(allocated(wdttpfac)) deallocate(wdttpfac)
-    if(allocated(wstar_neo)) deallocate(wstar_neo)
-    if(allocated(wcurv)) deallocate(wcurv)
-#endif
-  end subroutine finish_dist_fn
 
 #ifdef LOWFLOW
   ! This rouinte must be called after init_collisions as it relies on the 

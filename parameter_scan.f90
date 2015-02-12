@@ -23,6 +23,7 @@ module parameter_scan
   public :: finish_parameter_scan
   public :: update_scan_parameter_value
   public :: allocate_target_arrays
+  public :: deallocate_target_arrays
   public :: target_parameter_switch, scan_type_switch, scan_type_none
   public :: target_parameter_hflux_tot, target_parameter_momflux_tot, target_parameter_phi2_tot
   public :: scan_restarted
@@ -134,12 +135,16 @@ contains
      !write (*,*) "allocating target arrays ", nwrite, ",", nstep 
   end subroutine allocate_target_arrays
 
-
-  subroutine finish_parameter_scan
-    use file_utils, only: close_output_file
+  subroutine deallocate_target_arrays
     if (allocated(hflux_tot)) deallocate(hflux_tot)
     if (allocated(momflux_tot)) deallocate(momflux_tot)
     if (allocated(phi2_tot)) deallocate(phi2_tot)
+  end subroutine deallocate_target_arrays
+
+
+  subroutine finish_parameter_scan
+    use file_utils, only: close_output_file
+    call deallocate_target_arrays
     call close_output_file(scan_output_file)
   end subroutine finish_parameter_scan
   

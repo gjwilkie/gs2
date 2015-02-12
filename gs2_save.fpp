@@ -29,10 +29,12 @@ module gs2_save
 
   private
 
-  public :: gs2_restore, gs2_save_for_restart, finish_save
+  public :: gs2_restore, gs2_save_for_restart, finish_gs2_save
+
   public :: read_many, save_many, gs2_save_response, gs2_restore_response
   public :: restore_current_scan_parameter_value
-  public :: init_save, init_dt, init_tstart, init_ant_amp
+  public :: init_gs2_save, init_dt, init_tstart, init_ant_amp
+  public :: set_restart_file
   public :: init_vnm, restart_writable, EigNetcdfID
   public :: init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
 !# ifdef NETCDF
@@ -800,7 +802,14 @@ contains
     end if
 # endif
        
-    if (exit) then
+    ! EGH Why don't we just close the file every time? As things stand
+    ! if you reinitalise the timestep in a nonlinear run, but don't have
+    ! save_for_restart true in gs2_diagnostics, then the last call to
+    ! this function will leave the file open. This is highly non-intuitive
+    ! behaviour and causes nasty error messages when you run with parallel 
+    ! netcdf.
+    !if (exit) then
+    if (.true.) then
        i = nf90_close (ncid)
        if (i /= NF90_NOERR) &
             call netcdf_error (istatus, message='nf90_close error')
@@ -1417,14 +1426,17 @@ contains
     restart_writable=writable
   end function restart_writable
 
-  subroutine init_save (file)
+  subroutine init_gs2_save
+  end subroutine init_gs2_save
+
+  subroutine set_restart_file (file)
     character(300), intent (in) :: file
     
     restart_file = file
 
-  end subroutine init_save
+  end subroutine set_restart_file
 
-  subroutine finish_save
+  subroutine finish_gs2_save
 #ifdef NETCDF    
     if (allocated(tmpr)) deallocate(tmpr)
     if (allocated(tmpi)) deallocate(tmpi)
@@ -1436,7 +1448,7 @@ contains
     initialized = .false.
     initialized_dfn = .false.
 #endif
-  end subroutine finish_save
+  end subroutine finish_gs2_save
 
   subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
 # ifdef NETCDF

@@ -21,6 +21,8 @@ module gs2_layouts
   public :: is_kx_local
   
   public :: init_dist_fn_layouts, init_gs2_layouts
+  public :: finish_dist_fn_layouts !EGH
+  public :: finish_gs2_layouts
   public :: wnml_gs2_layouts
   public :: init_parity_layouts ! MAB
 ! TT>
@@ -405,6 +407,10 @@ contains
     call broadcast_results
 
   end subroutine init_gs2_layouts
+
+  subroutine finish_gs2_layouts
+    initialized_layouts = .false.
+  end subroutine finish_gs2_layouts
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist, error_unit
@@ -1998,7 +2004,6 @@ contains
     call finish_jfields_layouts
 
     initialized_layouts = .false.
-    initialized_dist_fn_layouts = .false.
     initialized_le_layouts = .false.
     initialized_energy_layouts = .false.
     initialized_lambda_layouts = .false.
@@ -2009,6 +2014,10 @@ contains
 
   end subroutine finish_layouts
 ! > HJL
+
+  subroutine finish_dist_fn_layouts
+    initialized_dist_fn_layouts = .false.
+  end subroutine finish_dist_fn_layouts
 
 !<DD>Added
   function ik_idx_f (lo, i)
