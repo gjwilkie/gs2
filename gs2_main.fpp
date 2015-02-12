@@ -11,19 +11,93 @@ end module old_interface_store
 
 # ifndef MAKE_LIB
 
-!> This module contains the functions gs2_main::run_gs2, gs2_main::finish_gs2 and gs2_main::reset_gs2, whose
-!! purpose should be reasonably obvious. These functions were originally part of
-!! program GS2, but have now been moved to this module so that GS2 itself can be
-!! called as a library by, for example, Trinity. All the program GS2 does is
-!! include this module and call run_gs2.
+!> This module provides the external interface to gs2. It contains functions
+!! to initialize gs2, functions to run gs2, functions to finalize gs2 and 
+!! functions to override/tweak gs2 parameters. 
+!!
+!! gs2_main contains both the new and the old interface to gs2. The new interface
+!! comprises the gs2_program_state_type object, and functions for manipulating
+!! that object, which are documented individually. 
+!!
+!! The old interface
+!! consists of the functions run_gs2, finish_gs2, trin_finish_gs2, reset_gs2
+!! and gs2_trin_init. These functions have been reimplemented using the 
+!! new interface. They are deprecated and are provided only for backwards
+!! compatibility. 
+!!
+!! The basic flow of a gs2 program can be seen in gs2.fpp, reproduced here:
+!!    type(gs2_program_state_type) :: state
+!!    call initialize_gs2(state)
+!!    call initialize_equations(state)
+!!    call initialize_diagnostics(state)
+!!    if (state%do_eigsolve) then 
+!!      call run_eigensolver(state)
+!!    else
+!!      call evolve_equations(state, state%nstep)
+!!    end if
+!!    call finalize_diagnostics(state)
+!!    call finalize_equations(state)
+!!    call finalize_gs2(state)
+!!
+!! You can manipulate the gs2_program_state before running gs2. A typical
+!! manipulation is to pass in an external mpi communicator (which also 
+!! means that MPI_Init is not called within initialize_gs2. 
+!!    state%mp_comm_external = .true
+!!    state%mp_comm = my_mpi_communicator
+!!    call initialize_gs2(state)
+!!    ...
+!! 
+!! You can also override parameters: typically this is done either before
+!! calling initialize_equations, or between two calls to evolve equations;
+!! here we manipulate the temperature gradient of the first species:
+!!    call prepare_profiles_overrides(state)
+!!    state%init%prof_ov%override_tprim(1) = .true.
+!!    state%init%prof_ov%tprim(1) = 5.5
+!!    call initialize_equations(state)
+!!    call initialize_diagnostics(state)
+!!    call evolve_equations(state, state%nstep/2)
+!!    call prepare_profiles_overrides(state)
+!!    state%init%prof_ov%tprim(1) = 6.0
+!!    call initialize_equations(state)
+!!    call evolve_equations(state, state%nstep/2)
+!!    ...
+!!   
+!! It is very important to note that just because this interface is presented
+!! in an object-oriented way, it does not, unfortunately, mean that the entire
+!! program state, i.e. data arrays etc, is encapsulated in the gs2_program_state 
+!! object. In fact most data is stored globally as module public variables. 
+!! The gs2_program_state object is provided for convenience, as a way of
+!! monitoring the execution state of gs2, and because it is hoped that in the 
+!! future gs2 will, in fact, be thread safe and have proper data encapsulation.
+!! A particular consequence of this is that only one instance of the
+!! gs2_program_state object should exist on each process, i.e. in a given 
+!! memory space.
 
 module gs2_main
   use gs2_init, only: init_type, init_level_list
   implicit none
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
 
+  !> The object which specifies and records the gs2 program state.
+  !! Some attributes of the object, like mp_comm_external, are
+  !! designed to directly manipulated by the user, and some are
+  !! designed to store program state information and be 
+  !! manipulated internally, like init%level.
   public :: gs2_program_state_type
-  public :: initialize_gs2, initialize_equations
+
+  !> Initialise message passing, open the input file, split the 
+  !! communicator if running in list mode or if nensembles > 1,
+  !! initialize the timers. After calling this function, gs2
+  !! reaches init%level = basic. If it is desired to provide
+  !! an external commuicator or set the input file name externally,
+  !! these should be set before calling this function. 
+  public :: initialize_gs2
+
+  !> Initialize all the modules which are used to evolve the 
+  !! equations. After calling this function, gs2 reaches 
+  !! init%level = full. 
+  public :: initialize_equations
+
   public :: initialize_diagnostics, evolve_equations, run_eigensolver
   public :: finalize_diagnostics, finalize_equations, finalize_gs2
   public :: gs2_trin_init
