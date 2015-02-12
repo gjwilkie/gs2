@@ -90,7 +90,6 @@ contains
     implicit none
     integer, parameter :: verb=3
     
-
     call debug_message(verb, "init_fields: init_theta_grid")
     call init_theta_grid
     

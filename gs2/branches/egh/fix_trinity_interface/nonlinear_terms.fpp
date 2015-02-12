@@ -736,7 +736,6 @@ contains
     initialized = .false. ; initializing = .true.
 
     call finish_transforms
-
   end subroutine finish_nonlinear_terms
 end module nonlinear_terms
 
