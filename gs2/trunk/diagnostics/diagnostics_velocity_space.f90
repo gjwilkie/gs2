@@ -6,6 +6,7 @@ module diagnostics_velocity_space
   private
 
   public :: init_diagnostics_velocity_space, write_velocity_space_checks
+  public :: finish_diagnostics_velocity_space
 
 contains
   
@@ -22,6 +23,16 @@ contains
     ! to provide an error estimate for v-space integrals (energy and untrapped)
     if (proc0) call init_weights
   end subroutine init_diagnostics_velocity_space
+
+  subroutine finish_diagnostics_velocity_space(gnostics)
+    use le_grids, only: finish_weights
+    use mp, only: proc0
+    use diagnostics_config, only: diagnostics_type
+    implicit none
+    type(diagnostics_type), intent(in) :: gnostics 
+    if (proc0) call finish_weights
+  end subroutine finish_diagnostics_velocity_space
+
   
   
   subroutine write_velocity_space_checks(gnostics)

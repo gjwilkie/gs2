@@ -80,6 +80,7 @@ module le_grids
   public :: xloc, sgn, ixi_to_il, ixi_to_isgn, speed, xi
   public :: xx, nterp, new_trap_int, vcut
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
+  public :: finish_weights
   public :: eint_error, lint_error, trap_error, wdim
   public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
@@ -3853,8 +3854,6 @@ contains
     if (allocated(zeroes)) deallocate (zeroes)
     if (allocated(energy)) deallocate (energy, dele, al, wl, jend, forbid, xx, lgrnge, xloc, speed)
     if (allocated(integration_work)) deallocate (integration_work)
-    if (allocated(wlerr)) deallocate (wlerr)
-    if (allocated(werr)) deallocate (werr)
     if (allocated(wlterr)) deallocate (wlterr)
     if (allocated(w)) deallocate (w)
     if (allocated(anon)) deallocate (anon)
@@ -3885,10 +3884,16 @@ contains
     leinit = .false.
     lzinit = .false.
     einit = .false.
-    init_weights_init = .false.
     initialized = .false.
 
   end subroutine finish_le_grids
+
+  subroutine finish_weights
+    if (allocated(werr)) deallocate (werr)
+    if (allocated(wlerr)) deallocate (wlerr)
+    init_weights_init = .false.
+  end subroutine finish_weights
+
 end module le_grids
 
 

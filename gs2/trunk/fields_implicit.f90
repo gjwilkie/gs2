@@ -67,13 +67,17 @@ contains
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
     use run_parameters, only: fphi, fapar, fbpar
+    use unit_tests, only: should_print
     use mp, only: mp_abort
 !    use parameter_scan_arrays, only: run_scan
     implicit none
-    logical, parameter :: debug=.false.
+
+    logical :: debug=.false.
 
     if (initialized) return
     initialized = .true.
+
+    debug = should_print(3)
 
     !Check we have at least one field. If not abort.
     !Note, we do this here rather than as soon as we read input file

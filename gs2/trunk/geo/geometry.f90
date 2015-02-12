@@ -22,6 +22,7 @@ module geometry
   public :: qsf, rmaj, shat, kxfac, aminor, finish_geometry, drhodpsin
   public :: p_prime_input, invLp_input, beta_prime_input, alpha_input, dp_mult
   public :: gs2d_eq, idfit_eq, dfit_eq, s_hat_new, beta_prime_new, debug
+  public :: job_id
 
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
@@ -71,7 +72,13 @@ module geometry
   integer :: ntgrid, nth, ntheta
 
   integer :: verb = 2 ! Verbosity of print statements | Should we use runtime_tests:verbosity?
-  logical :: debug = .true.
+  ! EGH debug now set by verb, which (in GS2) is set in theta_grid
+  !> If debug then print out lots of debug info.
+  !! debug is true if (verb > 3)
+  logical :: debug = .false.
+  !> job_id is the job id in a  Trinity or list mode run. Used
+  !! for debug statements
+  integer :: job_id
 
   character(len=800) :: eqfile
 
@@ -304,8 +311,9 @@ contains
     eeq_verbosity = verb
 
 !     compute the initial constants
+    debug = (verb > 2)
     
-if (debug) write(6,*) "eikcoefs: local_eq=",local_eq
+if (debug) write(6,*) "eikcoefs: local_eq=",local_eq, 'jid=',job_id
     if (local_eq .and. iflux == 1) then
        write (*,*) 'Forcing iflux = 0'
        iflux = 0
@@ -322,11 +330,13 @@ if (debug) write(6,*) "eikcoefs: local_eq=",local_eq
        endif
     endif
 
-if (debug) write(6,*) "eikcoefs: call check"
+if (debug) write(6,*) "eikcoefs: call check", 'jid=',job_id
+
     call check(gen_eq, efit_eq, ppl_eq, &
          local_eq, dfit_eq, idfit_eq, chs_eq) 
 
-if (debug) write(6,*) "eikcoefs: allocated(theta)", allocated(theta)
+if (debug) write(6,*) "eikcoefs: allocated(theta)", allocated(theta), 'jid=',job_id
+
     if(.not. gen_eq .and. .not. ppl_eq &
     .and. .not. transp_eq .and. .not. chs_eq &
          .and. .not. allocated(theta)) then
@@ -347,7 +357,8 @@ if (debug) write(6,*) "eikcoefs: allocated(theta)", allocated(theta)
        call alloc_local_arrays(ntgrid)
     endif
 
-if (debug) write(6,*) "eikcoefs: iflux=",iflux, 'chs_eq=', chs_eq
+if (debug) write(6,*) "eikcoefs: iflux=",iflux, 'chs_eq=', chs_eq, 'jid=',job_id
+
     select case (iflux)
        case (0)
           avgrmid=1.
@@ -362,7 +373,8 @@ if (debug) write(6,*) "eikcoefs: iflux=",iflux, 'chs_eq=', chs_eq
              endif
 !CMR+SSAAR: moved following if clause ahead of ppl_eq to avoid ball problems 
           else if(transp_eq) then
-if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile
+if (debug) write(6,fmt='("eikcoefs: transp_eq, eqfile=",a)') eqfile, 'jid=',job_id
+
              ppl_eq = .true.
              call teqin(eqfile, psi_0, psi_a, rmaj, B_T0, avgrmid, eqinit, in_nt, nthg)
 if (debug) write(6,*) 'eikcoefs: transp_eq, called teqin'
@@ -437,13 +449,14 @@ if (debug) write(6,*) "eikcoefs: if (writelots)"
 
     rho=rhoc
 
-if (debug) write(6,*) "eikcoefs: find rp"
+if (debug) write(6,*) "eikcoefs: find rp", 'jid=',job_id
+
     if(iflux == 1) then
        rpmin = psi_0
        rpmax = psi_a
 if (debug) write(6,*) "eikcoefs: rpmin,rpmax=",rpmin,rpmax
        rp = rpofrho(rho)
-if (debug) write(6,*) "eikcoefs: rp=",rp
+if (debug) write(6,*) "eikcoefs: rp=",rp, 'jid=',job_id
     else
        rpmin = 0.
        rpmax = 1.0
@@ -2542,6 +2555,7 @@ end subroutine geofax
 !
 ! find this point:
 
+    !write (*,*) 'th_bish', th_bish
     is = nth-1
     do i=1,nth-1
        if(abs(th_bish(i+1)-th_bish(i)) > pi) then

@@ -1,8 +1,6 @@
 module gs2_reinit
   implicit none
 
-  private
-
   public :: reset_time_step, delt_adj
   public :: check_time_step, time_reinit
   public :: init_reinit, wnml_gs2_reinit
@@ -24,13 +22,14 @@ module gs2_reinit
   !! otherwise the current field and dist_fn values will be lost. The
   !! logical flag in_memory must be given the same value that was 
   !! set in save_fields_and_dist_fn. 
-  !public :: reinit_gk_and_field_equations
+  public :: reinit_gk_and_field_equations
 
   !> This function overrides the in_memory flag
   !! and should only be used if you know what
   !! you are doing.
   public :: gs2_reinit_unit_test_set_in_memory
 
+  private
 
   real :: delt_adj, dt0
   real :: delt_cushion
@@ -51,7 +50,7 @@ contains
 
   subroutine wnml_gs2_reinit(unit)
     implicit none
-    integer, intent(in) :: unit
+    integer :: unit
     write (unit, *)
     write (unit, fmt="(' &',a)") "reinit_knobs"
     write (unit, fmt="(' delt_adj = ',e17.10)") delt_adj
@@ -74,6 +73,38 @@ contains
   end subroutine increase_time_step
 
 
+  subroutine reinit_gk_and_field_equations(reset_antenna)
+    use run_parameters, only: fphi, fapar, fbpar
+    use dist_fn_arrays, only: g_restart_tmp
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use collisions, only: c_reset => reset_init
+    use dist_fn, only: d_reset => reset_init
+    use fields, only: f_reset => finish_fields, init_fields
+    use init_g, only: g_reset => reset_init
+    use nonlinear_terms, only: nl_reset => reset_init
+    use antenna, only: a_reset => reset_init
+    use gs2_init, only: load_saved_field_values
+    logical, intent(in) :: reset_antenna
+! prepare to reinitialize inversion matrix, etc.
+    call d_reset
+    call c_reset
+    call f_reset
+    call g_reset(.not.in_memory)
+    call nl_reset
+
+    if (reset_antenna) call a_reset
+
+    write (*,*) 'EEEETTTT'
+
+! reinitialize
+    call init_fields
+
+    write (*,*) 'EEEEFFF'
+
+!Update fields if done in memory
+!Don't need/want to update if force_maxwell_reinit
+    call load_saved_field_values
+  end subroutine reinit_gk_and_field_equations
 
 
 
@@ -82,19 +113,19 @@ contains
     use gs2_time, only: code_dt, user_dt, code_dt_cfl, save_dt
     use dist_fn_arrays, only: gnew
     use gs2_time, only: code_dt_min
-    use gs2_init, only: init_type, init
+    use gs2_init, only: save_fields_and_dist_fn, init_level_type, init
     use gs2_init, only: init_level_list
     use mp, only: proc0
     use file_utils, only: error_unit
     use job_manage, only: time_message
     implicit none
-    integer, intent(in) :: istep 
     logical, intent(inout) :: my_exit
-    integer, intent (in), optional :: job_id
     logical :: reset_in
+    integer :: istep 
     integer, save :: istep_last = -1 ! allow adjustment on first time step
     integer, save :: nconsec=0
-    type(init_type), intent(inout) :: current_init
+    integer, intent (in), optional :: job_id
+    type(init_level_type), intent(inout) :: current_init
 
 
     if (first) call init_reinit
@@ -129,7 +160,7 @@ contains
     reset_in=reset
     reset=.false.
 
-    !call save_fields_and_dist_fn
+    call save_fields_and_dist_fn
 
     gnew = 0.
 
@@ -153,7 +184,7 @@ contains
     ! have not changed so resetting antenna would cause
     ! an unnecessary discontinuity
     !call reinit_gk_and_field_equations(reset_antenna=.false.)
-    call init(current_init, init_level_list%full)
+    call init(current_init, init_level_list%fields)
     
     if (proc0 .and. .not. present(job_id)) call time_message(.true.,time_reinit,' Re-initialize')
 
