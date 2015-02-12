@@ -2,6 +2,8 @@ module fields
 
   implicit none
 
+  private 
+
   public :: init_fields, finish_fields
   public :: read_parameters, wnml_fields, check_fields
   public :: advance, force_maxwell_reinit
@@ -12,8 +14,6 @@ module fields
   !> Made public for unit tests
   public :: fields_pre_init
   public :: remove_zonal_flows_switch
-
-  private
 
   interface fieldlineavgphi
      module procedure fieldlineavgphi_loc
@@ -34,7 +34,7 @@ contains
   subroutine check_fields(report_unit)
     use fields_local, only: minNrow, do_smart_update
     implicit none
-    integer :: report_unit
+    integer, intent(in) :: report_unit
     select case (fieldopt_switch)
     case (fieldopt_implicit)
        write (report_unit, fmt="('The field equations will be advanced in time implicitly.')")
@@ -59,23 +59,23 @@ contains
   subroutine wnml_fields(unit)
     use fields_local, only: minNrow, do_smart_update
     implicit none
-    integer :: unit
-     if (.not. exist) return 
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "fields_knobs"
-       select case (fieldopt_switch)
-       case (fieldopt_implicit)
-          write (unit, fmt="(' field_option = ',a)") '"implicit"'
-       case (fieldopt_test)
-          write (unit, fmt="(' field_option = ',a)") '"test"'
-       case (fieldopt_local)
-          write (unit, fmt="(' field_option = ',a)") '"local"'
-          write (unit, fmt="(' minNrow = ',I0)") minNrow
-          write (unit, fmt="(' do_smart_update = ',L1)") do_smart_update
-       end select
-       if(dump_response) write (unit, fmt="(' dump_response = ',L1)") dump_response
-       if(read_response) write (unit, fmt="(' read_response = ',L1)") read_response
-       write (unit, fmt="(' /')")
+    integer, intent(in) :: unit
+    if (.not. exist) return 
+    write (unit, *)
+    write (unit, fmt="(' &',a)") "fields_knobs"
+    select case (fieldopt_switch)
+    case (fieldopt_implicit)
+       write (unit, fmt="(' field_option = ',a)") '"implicit"'
+    case (fieldopt_test)
+       write (unit, fmt="(' field_option = ',a)") '"test"'
+    case (fieldopt_local)
+       write (unit, fmt="(' field_option = ',a)") '"local"'
+       write (unit, fmt="(' minNrow = ',I0)") minNrow
+       write (unit, fmt="(' do_smart_update = ',L1)") do_smart_update
+    end select
+    if(dump_response) write (unit, fmt="(' dump_response = ',L1)") dump_response
+    if(read_response) write (unit, fmt="(' read_response = ',L1)") read_response
+    write (unit, fmt="(' /')")
   end subroutine wnml_fields
 
   !> Calls all initialisations required for init_fields_implicit/local, 
@@ -89,7 +89,6 @@ contains
     use unit_tests, only: debug_message
     implicit none
     integer, parameter :: verb=3
-
     
 
     call debug_message(verb, "init_fields: init_theta_grid")

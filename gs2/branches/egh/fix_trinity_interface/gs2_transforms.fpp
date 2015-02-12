@@ -35,12 +35,12 @@ module gs2_transforms
 
   implicit none
 
+  private
+
   public :: init_transforms, finish_transforms
   public :: init_x_transform, init_zf, kz_spectrum
   public :: transform_x, transform_y, transform2
   public :: inverse_x, inverse_y, inverse2
-
-  private
 
   logical :: initialized=.false., initialized_x=.false., initialized_y_fft=.false.
   logical :: initialized_x_redist=.false., initialized_y_redist=.false., initialized_3d=.false.
@@ -94,10 +94,10 @@ module gs2_transforms
 ! terms
   logical :: accel = .false.
 
-  logical, save, dimension (:), allocatable :: aidx  ! aidx == aliased index
-  integer, save, dimension (:), allocatable :: ia, iak
-  complex, save, dimension (:, :), allocatable :: fft, xxf
-  complex, save, dimension (:, :, :), allocatable :: ag
+  logical, dimension (:), allocatable :: aidx  ! aidx == aliased index
+  integer, dimension (:), allocatable :: ia, iak
+  complex, dimension (:, :), allocatable :: fft, xxf
+  complex, dimension (:, :, :), allocatable :: ag
 
 contains
 
@@ -1048,12 +1048,14 @@ contains
     integer :: i
 # endif
 # else
-    real, dimension (:,yxf_lo%llim_proc:) :: yxf
+    real, dimension (:,yxf_lo%llim_proc:), intent(in out) :: yxf
 # endif
 
 
     call prof_entering ("transform_y5d", "gs2_transforms")
 
+!Note here we're doing the communication even if we're not using
+!an FFT routine.
     fft = 0.
     call gather (x2y, xxf, fft)
 
@@ -1170,19 +1172,13 @@ contains
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
-
 # ifdef FFT
-
     real, dimension (:,:,accelx_lo%llim_proc:), intent (out) :: axf
-
 # else
-
     real, dimension (:,:,accelx_lo%llim_proc:) :: axf
-
 # endif
-
-
-    integer :: iglo, k, i, idx
+    integer, intent(out) :: i
+    integer :: iglo, k, idx
     integer :: itgrid, iduo
     integer :: ntgrid
 
@@ -1260,7 +1256,8 @@ contains
     implicit none
     real, dimension (:,:,accelx_lo%llim_proc:), intent (in out) :: axf
     complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: g
-    integer :: iglo, i, idx, k
+    integer, intent(out) :: i
+    integer :: iglo, idx, k
     integer :: itgrid, iduo
     integer :: ntgrid
 
@@ -1321,9 +1318,9 @@ contains
   end subroutine inverse2_5d_accel
 
   subroutine init_3d (nny_in, nnx_in, how_many_in)
-
     use fft_work, only: init_crfftw, init_rcfftw, delete_fft
-    integer :: nny_in, nnx_in, how_many_in
+    implicit none
+    integer, intent(in) :: nny_in, nnx_in, how_many_in
     integer, save :: nnx, nny, how_many
 
     if (initialized_3d) then
@@ -1362,7 +1359,7 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     implicit none
-    integer :: nnx, nny
+    integer, intent(in) :: nnx, nny
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     real, dimension (:,:,-ntgrid:), intent (out) :: phixf  
     real, dimension (:,:,:), allocatable :: phix
@@ -1420,9 +1417,9 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     implicit none
-    real, dimension (:,:,-ntgrid:):: phixf
-    complex, dimension (-ntgrid:,:,:) :: phi
-    integer :: nnx, nny
+    real, dimension (:,:,-ntgrid:), intent(in) :: phixf
+    complex, dimension (-ntgrid:,:,:), intent(out) :: phi
+    integer, intent(in) :: nnx, nny
     complex, dimension (:,:,:), allocatable :: aphi
     real, dimension (:,:,:), allocatable :: phix
     real :: fac
@@ -1479,7 +1476,7 @@ contains
     use fft_work, only: FFTW_BACKWARD, delete_fft, init_crfftw
     use kt_grids, only: naky, nakx => ntheta0, nx, aky
     implicit none
-    integer :: nnx, nny
+    integer, intent(in) :: nnx, nny
     complex, intent (in) :: phi(:,:)
     real, intent (out) :: phixf  (:,:)
     real, allocatable :: phix(:,:)
@@ -1540,7 +1537,7 @@ contains
     implicit none
     real, intent(in) :: phixf(:,:)
     complex, intent(out) :: phi(:,:)
-    integer :: nnx, nny
+    integer, intent(in) :: nnx, nny
     complex, allocatable :: aphi(:,:)
     real, allocatable :: phix(:,:)
     real :: fac
@@ -1598,7 +1595,7 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     implicit none
-    integer :: nnx, nny
+    integer, intent(in) :: nnx, nny
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: den
     real, dimension (:,:,-ntgrid:), intent (out) :: phixf  
     real, dimension (:,:,:), allocatable :: phix

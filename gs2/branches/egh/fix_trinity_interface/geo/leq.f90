@@ -1,9 +1,14 @@
 module leq
   implicit none
 
-  integer :: nr, nt
   private
   
+  public :: leq_init, leqin, gradient, eqitem, bgradient, leq_finish
+  public :: invR, Rpos, Zpos, diameter, btori, dbtori,  qfun, pfun
+  public :: dpfun, betafun, psi, rcenter, dpdrhofun
+
+  integer :: nr, nt
+
   real, allocatable, dimension (:)     :: eqpsi, fp, beta, pressure
   real, allocatable, dimension (:,:)   :: R_psi, Z_psi
   real, allocatable, dimension (:,:,:) :: drm, dzm, dbtm, dpm, dtm
@@ -19,17 +24,11 @@ module leq
 
   type (flux_surface) :: surf
 
-  public :: leq_init, leqin, gradient, eqitem, bgradient, leq_finish
-
-  public :: invR, Rpos, Zpos, diameter, btori, dbtori,  qfun, pfun, &
-       dpfun, betafun, psi, rcenter, dpdrhofun
-
 contains
-
   subroutine leqin(R0, Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap, nt_used)
-        
-    real :: R0, Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap
-    integer :: nt_used
+    implicit none
+    real, intent(in) :: R0, Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap
+    integer, intent(in) :: nt_used
 
 !R0   3.1601153788426086        3.0818707511680938        1.3431053933541011
 !      0.10381317967192064        3.3317843820181277E-002   8.0267210436786265E-002
@@ -71,8 +70,7 @@ contains
   end subroutine leqin
 
   subroutine alloc_arrays(nr, nt)
-
-    integer :: nr, nt
+    integer, intent(in) :: nr, nt
 
     allocate(eqpsi(nr), fp(nr), beta(nr), pressure(nr))
     allocate(R_psi(nr, nt), Z_psi(nr, nt))
@@ -80,7 +78,6 @@ contains
          dpm(nr, nt, 2), dtm(nr, nt, 2))
     allocate(dpcart(nr, nt, 2), dtcart(nr, nt, 2), dbtcart(nr, nt, 2))
     allocate(dpbish(nr, nt, 2), dtbish(nr, nt, 2), dbtbish(nr, nt, 2))
-
   end subroutine alloc_arrays
 
   subroutine dealloc_arrays
@@ -101,10 +98,9 @@ contains
     use constants, only: pi=>pi
     implicit none
     real, dimension(nr, nt) :: eqpsi1, eqth, eqbtor
-
-    real dr(3)
-    real t, r
-    integer i, j
+    real :: dr(3)
+    real :: t, r
+    integer :: i, j
    
     dr(1) = -surf%dr
     dr(2) = 0.
@@ -171,9 +167,10 @@ contains
   subroutine derm(f, dfm, char)
     use constants, only: pi=>pi
     implicit none
-    integer i, j
-    character(1) :: char
-    real f(:,:), dfm(:,:,:)
+    real, dimension(:,:), intent(in) :: f
+    real, dimension(:,:,:), intent(out) :: dfm
+    character(1), intent(in) :: char
+    integer :: i, j
     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
@@ -211,20 +208,19 @@ contains
     do j=2,nt-1
        dfm(:,j,2)=0.5*(f(:,j+1)-f(:,j-1))
     enddo
-    
   end subroutine derm
 
   subroutine gradient(theta, grad, char, rp, nth_used, ntm)
-
     use splines, only: inter_d_cspl
     implicit none
-    
-    integer nth_used, ntm
-    character(1) char
-    real theta(-ntm:), grad(-ntm:,:)
-    real tmp(2), aa(1), daa(1), rp, rpt(1)
+    integer, intent(in) :: nth_used, ntm
+    character(1), intent(in) :: char
+    real, dimension(-ntm:), intent(in) :: theta
+    real, dimension(-ntm:,:), intent(out) :: grad
+    real, intent(in) :: rp
+    real :: tmp(2), aa(1), daa(1), rpt(1)
     real, dimension(nr,nt,2) :: dcart
-    integer i
+    integer :: i
     
     select case(char)
     case('D')  ! diagnostic 
@@ -266,20 +262,19 @@ contains
           grad(i,2)=grad(i,2)*daa(1)*0.5*beta_0
        enddo
     endif
-
   end subroutine gradient
 
   subroutine bgradient(theta, grad, char, rp, nth_used, ntm)
-
     use splines, only: inter_d_cspl
     implicit none
-    
-    integer nth_used, ntm
-    character(1) char
-    real theta(-ntm:), grad(-ntm:,:)
-    real :: aa(1), daa(1), rp, rpt(1)
+    integer, intent(in) :: nth_used, ntm
+    character(1), intent(in) :: char
+    real, dimension(-ntm:), intent(in) :: theta
+    real, dimension(-ntm:,:), intent(out) :: grad
+    real, intent(in) :: rp
+    real :: aa(1), daa(1), rpt(1)
     real, dimension(nr,nt,2) ::  dbish
-    integer i
+    integer :: i
 
     select case(char)
     case('D')  ! diagnostic
@@ -314,17 +309,18 @@ contains
           grad(i,2)=grad(i,2)*daa(1) * 0.5*beta_0
        enddo
     endif
-
   end subroutine bgradient
 
   subroutine eqitem(theta_in, f, fstar, char)
     use constants, only: pi=>pi
     implicit none
+    real, intent(in) :: theta_in
+    real, dimension(:,:), intent(in) :: f
+    real, intent(out) :: fstar
+    character(1), intent(in) :: char
     integer :: j, istar, jstar
-    character(1) :: char
-    real :: thet, fstar, tp, tps, theta_in
+    real :: thet, tp, tps
     real :: st, dt
-    real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
 ! find r on psi mesh
     
@@ -376,13 +372,10 @@ contains
 !     write(*,*) f(istar,jstar),f(istar+1,jstar)
 !     write(*,*) eqpsi(istar),eqpsi(istar+1)
 !     write(*,*) mtheta(jstar),mtheta(jstar+1)
-      
   end subroutine eqitem
 
   subroutine eqdcart(dfm, dfcart)
-      
     implicit none
-
     real, dimension (:,:,:), intent(in)  :: dfm
     real, dimension (:,:,:), intent(out) :: dfcart
     real, dimension (size(dfm,1),size(dfm,2)) :: denom
@@ -400,11 +393,9 @@ contains
           dfcart(i,j,:)=dfcart(i,j,:)/denom(i,j)
        enddo
     enddo
-    
   end subroutine eqdcart
 
   subroutine eqdbish(dcart, dbish)
-    
     implicit none
     real, dimension(:, :, :), intent (in) :: dcart
     real, dimension(:, :, :), intent(out) :: dbish
@@ -421,24 +412,19 @@ contains
           dbish(i,j,:) = dbish(i,j,:)/denom(i,j)
       enddo
     enddo
-
   end subroutine eqdbish
 
   function invR (r, theta)
-   
     real, intent (in) :: r, theta
     real :: invR
     
     invR=1./Rpos(r, theta)
-    
   end function invR
 
   function rcenter()
-
     real :: rcenter
 
     rcenter = surf%R_center
-    
   end function rcenter
 
   function Rpos (r, theta)
@@ -458,26 +444,21 @@ contains
     gp = -sin(theta + surf%d * sin(theta-0.5*pi*surf%a))*(surf%dp*sin(theta-0.5*surf%a)-surf%d*0.5*pi*surf%ap*cos(theta-0.5*pi*surf%a))
     
     Rpos = surf%R_center + surf%delp*dr + g*surf%r + (g+surf%r*gp)*dr
-    
   end function Rpos
 
   function Zpos (r, theta)
-   
     real, intent (in) :: r, theta
     real :: Zpos, dr
     
     dr = r - surf%r
     Zpos = surf%k*sin(theta)*surf%r + (surf%r*surf%kp + surf%k)*sin(theta)*dr
-    
   end function Zpos
 
   function psi (r)
-   
     real, intent (in) :: r
     real :: psi
 
     psi = r - surf%r
-    
   end function psi
 
   function mod2pi (theta)
@@ -509,15 +490,13 @@ contains
        if(th <= pi .and. th >= -pi) out=.false.
     enddo
     mod2pi=th
-
   end function mod2pi
    
   function diameter (rp)
-  
-    real :: rp, diameter
+    real, intent(in) :: rp
+    real :: diameter
 
     diameter = 2.*rp
-
   end function diameter
 
   function dbtori ()
@@ -542,22 +521,16 @@ contains
   
   function dpfun ()  
     real :: dpfun    
-
-       dpfun = -1.
-
+    dpfun = -1.
   end function dpfun
 
   function dpdrhofun()
-
     real :: dpdrhofun
-
     dpdrhofun = surf%pp
-
   end function dpdrhofun
   
   function betafun ()  
     real :: betafun
     betafun = beta_0
   end function betafun
-
 end module leq

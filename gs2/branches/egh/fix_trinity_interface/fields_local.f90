@@ -912,7 +912,7 @@ contains
     use mp, only: proc0
     implicit none
     class(supercell_type), intent(inout) :: self
-    character(len=*), optional :: prefix
+    character(len=*), optional, intent(in) :: prefix
     character(len=80) :: fname
     integer :: lun=24
     complex, dimension(:,:), allocatable :: tmp

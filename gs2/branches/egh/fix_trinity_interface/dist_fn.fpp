@@ -14,6 +14,9 @@
 module dist_fn
   use redistribute, only: redist_type
   implicit none
+
+  private
+
   public :: init_dist_fn, finish_dist_fn
   
   !> Initializes a limited selection of arrays,
@@ -88,7 +91,6 @@ module dist_fn
   public :: init_enforce_parity, get_leftmost_it
   public :: gridfac1, awgt, gamtot3, fl_avg, apfac
   public :: adiabatic_option_switch, adiabatic_option_fieldlineavg
-  private
 
   ! knobs
   complex, dimension (:), allocatable :: fexp ! (nspec)
@@ -175,7 +177,7 @@ module dist_fn
   ! (N(links), 2, -g-layout-)
 
 !  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
-  complex, dimension (:,:,:), allocatable, save :: gexp_1, gexp_2, gexp_3
+  complex, dimension (:,:,:), allocatable :: gexp_1, gexp_2, gexp_3
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   ! momentum conservation
@@ -208,7 +210,7 @@ module dist_fn
      logical :: neighbor
   end type connections_type
 
-  type (connections_type), dimension (:), allocatable :: connections
+  type (connections_type), dimension (:), allocatable, save :: connections
   ! (-g-layout-)
 
   ! linked only
@@ -264,13 +266,13 @@ module dist_fn
 
 contains
 
-subroutine check_dist_fn(report_unit)
-  use kt_grids, only: grid_option, gridopt_box, gridopt_switch
-  use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_on
-  use species, only: spec, nspec, has_electron_species
-  implicit none
-  integer :: report_unit
-  integer :: is 
+  subroutine check_dist_fn(report_unit)
+    use kt_grids, only: grid_option, gridopt_box, gridopt_switch
+    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_on
+    use species, only: spec, nspec, has_electron_species
+    implicit none
+    integer, intent(in) :: report_unit
+    integer :: is 
     if (gridfac /= 1.) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
@@ -357,84 +359,84 @@ subroutine check_dist_fn(report_unit)
 
     if (.not. has_electron_species(spec)) then
        select case (adiabatic_option_switch)
-          case (adiabatic_option_default)
-             write (report_unit, *) 
-             write (report_unit, fmt="('The adiabatic electron response is of the form:')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('             ne = Phi')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('This is appropriate for an ETG simulation,')") 
-             write (report_unit, fmt="('where the role of ions and electrons in GS2 is switched.')")
-             write (report_unit, *) 
-    
-          case (adiabatic_option_fieldlineavg)
-             write (report_unit, *) 
-             write (report_unit, fmt="('The adiabatic electron response is of the form:')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('             ne = Phi - <Phi>')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('The angle brackets denote a proper field line average.')") 
-             write (report_unit, fmt="('This is appropriate for an ITG simulation.')") 
-             write (report_unit, *) 
-             
-          case (adiabatic_option_yavg)
-             write (report_unit, *) 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, fmt="('The adiabatic electron response is of the form:')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('             ne = Phi - <Phi>_y')")
-             write (report_unit, *) 
-             write (report_unit, fmt="('The angle brackets denote an average over y only.')") 
-             write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-             write (report_unit, fmt="('Perhaps you want field-line-average-term for adiabatic_option.')") 
-             write (report_unit, fmt="('################# WARNING #######################')")
-             write (report_unit, *) 
-          end select
-       end if
+       case (adiabatic_option_default)
+          write (report_unit, *) 
+          write (report_unit, fmt="('The adiabatic electron response is of the form:')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('             ne = Phi')")
+          write (report_unit, *) 
+          write (report_unit, fmt="('This is appropriate for an ETG simulation,')") 
+          write (report_unit, fmt="('where the role of ions and electrons in GS2 is switched.')")
+          write (report_unit, *) 
 
-       if (poisfac /= 0.) then
+       case (adiabatic_option_fieldlineavg)
           write (report_unit, *) 
-          write (report_unit, fmt="('Quasineutrality is not enforced.  The ratio (lambda_Debye/rho)**2 = ',e11.4)") poisfac
+          write (report_unit, fmt="('The adiabatic electron response is of the form:')")
           write (report_unit, *) 
-       end if
-          
-       if (mult_imp .and. nonlinear_mode_switch == nonlinear_mode_on) then
+          write (report_unit, fmt="('             ne = Phi - <Phi>')")
           write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('For nonlinear runs, all species must use the same values of fexpr and bakdif')")
-          write (report_unit, fmt="('in the dist_fn_species_knobs_x namelists.')")
-          write (report_unit, fmt="('THIS IS AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('The angle brackets denote a proper field line average.')") 
+          write (report_unit, fmt="('This is appropriate for an ITG simulation.')") 
           write (report_unit, *) 
-       end if
 
-       if (test) then
+       case (adiabatic_option_yavg)
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Test = T in the dist_fn_knobs namelist will stop the run before ')")
-          write (report_unit, fmt="('any significant calculation is done, and will result in several ')")
-          write (report_unit, fmt="('variables that determine array sizes to be written to the screen.')")
-          write (report_unit, fmt="('THIS MAY BE AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
+          write (report_unit, fmt="('The adiabatic electron response is of the form:')")
           write (report_unit, *) 
-       end if
-
-       if (def_parity .and. nonlinear_mode_switch == nonlinear_mode_on) then
+          write (report_unit, fmt="('             ne = Phi - <Phi>_y')")
           write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('Choosing a definite parity for a nonlinear run has never been tested.')")
+          write (report_unit, fmt="('The angle brackets denote an average over y only.')") 
           write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+          write (report_unit, fmt="('Perhaps you want field-line-average-term for adiabatic_option.')") 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
-       end if
+       end select
+    end if
 
-       if (def_parity) then
-          if (even) then
-             write (report_unit, fmt="('Only eigenmodes of even parity will be included.')")
-          else
-             write (report_unit, fmt="('Only eigenmodes of odd parity will be included.')")
-          end if
+    if (poisfac /= 0.) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('Quasineutrality is not enforced.  The ratio (lambda_Debye/rho)**2 = ',e11.4)") poisfac
+       write (report_unit, *) 
+    end if
+
+    if (mult_imp .and. nonlinear_mode_switch == nonlinear_mode_on) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('For nonlinear runs, all species must use the same values of fexpr and bakdif')")
+       write (report_unit, fmt="('in the dist_fn_species_knobs_x namelists.')")
+       write (report_unit, fmt="('THIS IS AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (test) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Test = T in the dist_fn_knobs namelist will stop the run before ')")
+       write (report_unit, fmt="('any significant calculation is done, and will result in several ')")
+       write (report_unit, fmt="('variables that determine array sizes to be written to the screen.')")
+       write (report_unit, fmt="('THIS MAY BE AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (def_parity .and. nonlinear_mode_switch == nonlinear_mode_on) then
+       write (report_unit, *) 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, fmt="('Choosing a definite parity for a nonlinear run has never been tested.')")
+       write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
+       write (report_unit, fmt="('################# WARNING #######################')")
+       write (report_unit, *) 
+    end if
+
+    if (def_parity) then
+       if (even) then
+          write (report_unit, fmt="('Only eigenmodes of even parity will be included.')")
+       else
+          write (report_unit, fmt="('Only eigenmodes of odd parity will be included.')")
        end if
+    end if
 
     write (report_unit, *) 
     write (report_unit, fmt="('------------------------------------------------------------')")
@@ -450,25 +452,25 @@ subroutine check_dist_fn(report_unit)
     write (report_unit, *) 
 
     select case (source_option_switch)
-       
+
     case (source_option_full)
        write (report_unit, *) 
        write (report_unit, fmt="('The standard GK equation will be solved.')")
        write (report_unit, *) 
-       
+
     case(source_option_phiext_full)
        write (report_unit, *) 
        write (report_unit, fmt="('The standard GK equation will be solved,')")
        write (report_unit, fmt="('with an additional source proportional to Phi*F_0')")
        write (report_unit, fmt="('Together with phi_ext = -1., this is the usual way to &
-             & calculate the Rosenbluth-Hinton response.')")
+            & calculate the Rosenbluth-Hinton response.')")
        write (report_unit, *) 
 
     end select
 
-! 
-! implicitness parameters
-!
+    ! 
+    ! implicitness parameters
+    !
     do is = 1, nspec
        if (aimag(fexp(is)) /= 0.) then
           write (report_unit, *) 
@@ -482,13 +484,13 @@ subroutine check_dist_fn(report_unit)
 
        write (report_unit, fmt="('Species ',i2,' has fexpr = ', e11.4)") is, real(fexp(is))
     end do
-
+    
   end subroutine check_dist_fn
 
   subroutine wnml_dist_fn(unit)
-  use species, only: spec, has_electron_species
-  implicit none
-  integer :: unit
+    use species, only: spec, has_electron_species
+    implicit none
+    integer, intent(in) :: unit
     if (dfexist) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "dist_fn_knobs"
@@ -519,18 +521,18 @@ subroutine check_dist_fn(report_unit)
 
        if (.not. has_electron_species(spec)) then
           select case (adiabatic_option_switch)
-             
+
           case (adiabatic_option_default)
              write (unit, *)
              write (unit, fmt="(' adiabatic_option = ',a)") &
                   & '"no-field-line-average-term"'
-             
+
           case (adiabatic_option_fieldlineavg)
              write (unit, fmt="(' adiabatic_option = ',a)") '"field-line-average-term"'
-             
+
           case (adiabatic_option_yavg)
              write (unit, fmt="(' adiabatic_option = ',a)") '"iphi00=3"'
-             
+
           end select
        end if
 
@@ -563,28 +565,28 @@ subroutine check_dist_fn(report_unit)
           write (unit, fmt="(' gamma0 = ',e17.10)") gamma0
           write (unit, fmt="(' t0 = ',e17.10)") t0
           write (unit, fmt="(' phi_ext = ',e17.10)") phi_ext
-       
+
        end select
        write (unit, fmt="(' /')")
     endif
-
   end subroutine wnml_dist_fn
 
 
   subroutine wnml_dist_fn_species(unit)
-     use species, only: nspec
-     implicit none
-     integer :: unit, i
-     character (100) :: line
-     do i=1,nspec
-         write (unit, *)
-         write (line, *) i
-         write (unit, fmt="(' &',a)") &
+    use species, only: nspec
+    implicit none
+    integer, intent(in) :: unit
+    integer :: i
+    character (100) :: line
+    do i=1,nspec
+       write (unit, *)
+       write (line, *) i
+       write (unit, fmt="(' &',a)") &
             & trim("dist_fn_species_knobs_"//trim(adjustl(line)))
-         write (unit, fmt="(' fexpr = ',e13.6)") real(fexp(i))
-         write (unit, fmt="(' bakdif = ',e13.6)") bkdiff(i)
-         write (unit, fmt="(' bd_exp = ',i6,'  /')") bd_exp(i)
-      end do
+       write (unit, fmt="(' fexpr = ',e13.6)") real(fexp(i))
+       write (unit, fmt="(' bakdif = ',e13.6)") bkdiff(i)
+       write (unit, fmt="(' bd_exp = ',i6,'  /')") bd_exp(i)
+    end do
   end subroutine wnml_dist_fn_species
 
   subroutine init_dist_fn_parameters
@@ -3310,7 +3312,7 @@ endif
 
     implicit none
 
-    type (redist_type), intent(inout) :: pass_obj !Redist type object to hold communication logic
+    type (redist_type), intent(out) :: pass_obj !Redist type object to hold communication logic
     character(1),intent(in)::dir                  !Character string for direction of communication, should be 'l' for left and 'r' for right
     character(1),intent(in)::typestr              !Character string for type of data to be communicated. Should be 'c','r','i' or 'l'
     integer,intent(in) :: sigma                   !Which sigma index to send
@@ -3690,8 +3692,8 @@ endif
     use hyper, only: hyper_diff
     use run_parameters, only: reset
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
-    complex, dimension (-ntgrid:,:,:), intent (in out) :: phinew, aparnew, bparnew
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phinew, aparnew, bparnew
     integer, intent (in) :: istep
     integer, optional, intent (in) :: mode
     integer :: modep
@@ -3797,14 +3799,15 @@ endif
 
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    integer, intent(in) :: istep
     complex, dimension(:,:,:), allocatable :: temp 
     complex, dimension(:,:), allocatable :: temp2
     integer, dimension(1), save :: itmin
     integer :: ierr, j 
     integer :: ik, it, ie, is, il, isgn, to_iglo, from_iglo
     integer:: iib, iit, ileft, iright, i
-    integer, save :: istep_last
-    integer, intent(in) :: istep
+    integer, save :: istep_last=0
+    !integer, intent(in) :: istep EGH commented... faulty merge?
     logical, intent(in), optional :: field_local
     logical :: field_local_loc
     real, save :: dkx, dtheta0
@@ -3840,6 +3843,8 @@ endif
              dkx = akx(2)-akx(1)
           else
              write(ierr,*) "exb_shear: ERROR, need ntheta0>1 for sheared flow"
+             !Warning, dkx has not been set => Should really halt run or find
+             !a suitable default definition for dkx.
           endif
        else
 ! MR, March 2009: on extended theta grid theta0_shift tracks ExB shear
@@ -3851,7 +3856,11 @@ endif
           endif
        end if
     end if
-    
+
+    !Check if we want to exit without applying flow shear
+    if (istep.eq.istep_last) return !Don't allow flow shear to happen more than once per step    
+    if (g_exb_start_timestep > istep) return !Flow shear not active yet, set in timesteps
+    if (g_exb_start_time >= 0 .and. code_time < g_exb_start_time) return !Flow shear not active yet, set in time
     
     ! BD: To do: Put the right timestep in here.
     ! For now, approximate Greg's dt == 1/2 (t_(n+1) - t_(n-1))
@@ -3859,15 +3868,14 @@ endif
     !
     ! Note: at first time step, there is a difference of a factor of 2.
     !
- 
     ! necessary to get factor of 2 right in first time step and
     ! also to get things right after changing time step size
     ! added May 18, 2009 -- MAB
     gdt = 0.5*(code_dt + code_dt_old)
-    if (g_exb_start_timestep > istep) return
-    if (g_exb_start_time >= 0 .and. code_time < g_exb_start_time) return
-    if (istep.eq.istep_last) return !Don't allow flow shear to happen more than once per step
+
+    !Update istep_last
     istep_last = istep
+
 ! kx_shift is a function of time.   Update it here:  
 ! MR, 2007: kx_shift array gets saved in restart file
 ! CMR, 5/10/2010: multiply timestep by tunits(ik) for wstar_units=.true. 
@@ -4327,8 +4335,7 @@ endif
     use gs2_layouts, only: ik_idx,it_idx,proc_id,g_lo
     implicit none
     integer, intent(in) :: iglo
-    integer, intent(out) :: iglo_conn
-    integer, intent(out) :: iproc_conn
+    integer, intent(out) :: iglo_conn, iproc_conn
     integer :: it, ik, it_conn, link, tmp
 
     !Get indices
@@ -5315,8 +5322,8 @@ endif
 ! This change sets g_wesson (or h) to be self-periodic for wfb, not g !!!
 ! NB this code change will implement this only in ballooning space, 
 ! and not in a linked fluxtube.
-
-    complex :: adjl, adjr, dadj
+      implicit none
+      complex :: adjl, adjr, dadj
 
       if (il .eq. ng2+1) then 
          adjl = anon(ie)*2.0*vperp2(ntgl,iglo)*aj1(ntgl,iglo) &
@@ -6743,7 +6750,7 @@ endif
     implicit none
     logical, parameter :: full_arr=moment_to_allprocs
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
-    real, dimension (:,:,:), intent (in out) :: flx
+    real, dimension (:,:,:), intent (out) :: flx
     real, dimension (-ntgrid:,:,:) :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
     real :: wgt
@@ -6761,16 +6768,16 @@ endif
     ! EGH for new parallel I/O everyone
     ! calculates fluxes
     !if (proc0) then
-       do is = 1, nspec
-          do ik = 1, naky
-             do it = 1, ntheta0
-                wgt = sum(dnorm(:,it,ik)*grho)
-                flx(it,ik,is) = sum(aimag(total(:,it,ik,is)*conjg(fld(:,it,ik))) &
-                     *dnorm(:,it,ik)*aky(ik))/wgt
-             end do
+    do is = 1, nspec
+       do ik = 1, naky
+          do it = 1, ntheta0
+             wgt = sum(dnorm(:,it,ik)*grho)
+             flx(it,ik,is) = sum(aimag(total(:,it,ik,is)*conjg(fld(:,it,ik))) &
+                  *dnorm(:,it,ik)*aky(ik))/wgt
           end do
        end do
-       flx = flx*0.5
+    end do
+    flx = flx*0.5
     ! end if
 
     deallocate (total)
@@ -6790,7 +6797,7 @@ endif
 #endif
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
-    real, dimension (:,:,:), intent (in out) :: flx
+    real, dimension (:,:,:), intent (out) :: flx
     real, dimension (-ntgrid:,:,:) :: dnorm
 !<DD> Moved directive to here (was previously just around flx= line below)
 !     as if we haven't compiled with LOWFLOW then this routine shouldn't
@@ -7032,7 +7039,7 @@ endif
     use mp, only: proc0
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: fld
-    real, dimension (:,:,:), intent (in out) :: flx
+    real, dimension (:,:,:), intent (out) :: flx
     real, dimension (-ntgrid:,:,:) :: dnorm
     complex, dimension (:,:,:,:), allocatable :: total
     real :: wgt
@@ -7180,7 +7187,8 @@ endif
     use antenna, only: antenna_apar
     implicit none
     !Passed
-    real, dimension(:,:) ::  j_ext
+    !Intent(in) only needed as initialised to zero at top level
+    real, dimension(:,:), intent(in out) ::  j_ext 
     !Local 
     complex, dimension(:,:,:), allocatable :: j_extz
     integer :: ig,ik, it                             !Indices
@@ -7242,10 +7250,10 @@ endif
     use hyper, only: D_v, D_eta, nexp, hypervisc_filter
 
     implicit none
-    type (heating_diagnostics) :: h
-    type (heating_diagnostics), dimension(:,:) :: hk
+    type (heating_diagnostics), intent(in out) :: h
+    type (heating_diagnostics), dimension(:,:), intent(in out) :: hk
 !    complex, dimension (-ntgrid:,:,:), pointer :: hh, hnew
-    complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
+    complex, dimension (-ntgrid:,:,:), intent(in) :: phi, apar, bpar, phinew, aparnew, bparnew
     complex, dimension(:,:,:,:), allocatable :: tot
 !    complex, dimension (:,:,:), allocatable :: epar
     complex, dimension(:,:,:), allocatable :: bpardot, apardot, phidot, j_ext
@@ -7933,9 +7941,7 @@ endif
   end subroutine reset_init
 
   subroutine reset_physics
-
     call init_wstar
-
   end subroutine reset_physics
 
   subroutine get_verr (errest, erridx, phi, bpar)
@@ -8885,12 +8891,10 @@ endif
   end subroutine collision_error
 
   subroutine boundary(linked)
-
-    logical :: linked
-
+    implicit none
+    logical, intent(out) :: linked
     call init_dist_fn
     linked = boundary_option_switch == boundary_option_linked
-
   end subroutine boundary
 
 ! This subroutine only returns epar correctly for linear runs.
@@ -8900,7 +8904,9 @@ endif
     use run_parameters, only: tunits, fphi, fapar
     use gs2_time, only: code_dt
     use kt_grids, only: naky, ntheta0
-    complex, dimension(-ntgrid:,:,:) :: phi, apar, phinew, aparnew, epar
+    implicit none
+    complex, dimension(-ntgrid:,:,:), intent(in) :: phi, apar, phinew, aparnew
+    complex, dimension(-ntgrid:,:,:), intent(out) :: epar
     complex :: phi_m, apar_m
 
     integer :: ig, ik, it
@@ -8927,7 +8933,7 @@ endif
     use gs2_layouts, only: it_idx,ik_idx,g_lo,il_idx,ie_idx,is_idx,idx,proc_id
     implicit none
     integer, intent (in) :: iglo
-    integer, intent (in out) :: iglo_left, ipleft
+    integer, intent (out) :: iglo_left, ipleft
     integer :: iglo_star
     integer :: it_cur,ik,it,il,ie,is
     iglo_star = iglo
@@ -8958,7 +8964,7 @@ endif
     use gs2_layouts, only: it_idx,ik_idx,g_lo,il_idx,ie_idx,is_idx,idx,proc_id
     implicit none
     integer, intent (in) :: iglo
-    integer, intent (in out) :: iglo_right, ipright
+    integer, intent (out) :: iglo_right, ipright
     integer :: iglo_star
     integer :: it_cur,ik,it,il,ie,is
     iglo_star = iglo
@@ -9019,40 +9025,28 @@ endif
   end subroutine dot
 
   complex function fdot (fl, fr, fnewl, fnewr, dtinv)
-
     complex, intent (in) :: fl, fr, fnewl, fnewr
     real, intent (in) :: dtinv
-    
     fdot = 0.5*(fnewl+fnewr-fl-fr)*dtinv
-
   end function fdot
 
 ! construct time and space-centered quantities
 ! (should use actual bakdif and fexpr values?)
 !
   complex function favg (fl, fr, fnewl, fnewr)
-
     complex, intent (in) :: fl, fr, fnewl, fnewr
-    
     favg = 0.25*(fnewl+fnewr+fl+fr)
-
   end function favg
  
-   complex function fdot_t (f,fnew, dtinv)
-
+  complex function fdot_t (f,fnew, dtinv)
     complex, intent (in) :: f, fnew
     real, intent (in) :: dtinv
-    
     fdot_t = (fnew-f)*dtinv
-
   end function fdot_t
 
- complex function favg_x (fl, fr)
-
+  complex function favg_x (fl, fr)
     complex, intent (in) :: fl, fr
-    
     favg_x = 0.5*(fl+fr)
-
   end function favg_x
 
   subroutine init_mom_coeff

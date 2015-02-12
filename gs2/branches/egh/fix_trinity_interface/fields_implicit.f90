@@ -1,6 +1,8 @@
 module fields_implicit
   implicit none
 
+  private
+ 
   public :: init_fields_implicit
   public :: advance_implicit
   public :: remove_zonal_flows
@@ -11,8 +13,6 @@ module fields_implicit
 
   !> Unit tests
   public :: fields_implicit_unit_test_init_fields_implicit
-
-  private
 
 !///////////////////////////////////////////////////////
 !// DERIVED TYPES FOR FIELD MATRIX REPRESENTATION

@@ -81,15 +81,15 @@ module gs2_diagnostics
 ! HJL <  Variables for convergence condition testing
   integer :: trin_istep = 0
   integer :: conv_isteps_converged = 0
-  real, save, allocatable, dimension(:) :: conv_heat
-  real, save :: heat_sum_av = 0, heat_av = 0, heat_av_test = 0
+  real, allocatable, dimension(:) :: conv_heat
+  real :: heat_sum_av = 0, heat_av = 0, heat_av_test = 0
 
 
   ! internal
   logical :: write_any, write_any_fluxes, dump_any
   logical, private :: initialized = .false.
 ! HJL < moved here so that it can be deallocated
-  complex, allocatable, save, dimension (:,:,:) :: domega
+  complex, allocatable, dimension (:,:,:) :: domega
 ! > HJL
   !<EGH moved here to make available for diffusivity function
   complex, dimension (:, :), allocatable :: omega, omegaavg
@@ -107,7 +107,7 @@ module gs2_diagnostics
 
   complex, dimension (:,:,:), allocatable :: omegahist
   ! (navg,ntheta0,naky)
-  type (heating_diagnostics), save :: h
+  type (heating_diagnostics) :: h
   type (heating_diagnostics), dimension(:), save, allocatable :: h_hist
   type (heating_diagnostics), dimension(:,:), save, allocatable :: hk
   type (heating_diagnostics), dimension(:,:,:), save, allocatable :: hk_hist
@@ -160,54 +160,54 @@ module gs2_diagnostics
 contains
   !> Define NetCDF vars, call real_init, which calls read_parameters; broadcast all the different write flags. 
    subroutine wnml_gs2_diagnostics(unit)
-   implicit none
-   integer :: unit
-       if (.not.exist) return
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "gs2_diagnostics_knobs"
-       write (unit, fmt="(' save_for_restart = ',L1)") save_for_restart
-       write (unit, fmt="(' save_distfn = ',L1)") save_distfn
-       write (unit, fmt="(' save_many = ',L1)") save_many
-       write (unit, fmt="(' file_safety_check = ',L1)") file_safety_check
-       write (unit, fmt="(' print_line = ',L1)") print_line 
-       write (unit, fmt="(' write_line = ',L1)") write_line
-       write (unit, fmt="(' print_flux_line = ',L1)") print_flux_line
-       write (unit, fmt="(' write_flux_line = ',L1)") write_flux_line
-       write (unit, fmt="(' nmovie = ',i6)") nmovie
-       write (unit, fmt="(' nwrite_mult = ',i6)") nwrite_mult
-       write (unit, fmt="(' nwrite = ',i6)") nwrite
-       write (unit, fmt="(' nsave = ',i6)") nsave
-       write (unit, fmt="(' navg = ',i6)") navg
-       write (unit, fmt="(' omegatol = ',e17.10)") omegatol
-       write (unit, fmt="(' omegatinst = ',e17.10)") omegatinst
-! should be legal -- not checked yet
-       if (igomega /= 0) write (unit, fmt="(' igomega = ',i6)") igomega  
-       
-       if (write_ascii) then
-          write (unit, fmt="(' write_ascii = ',L1)") write_ascii
-          write (unit, fmt="(' write_omega = ',L1)") write_omega
-          write (unit, fmt="(' write_omavg = ',L1)") write_omavg
-       end if
-       write (unit, fmt="(' write_hrate = ',L1)") write_hrate
-       write (unit, fmt="(' write_lorentzian = ',L1)") write_lorentzian
-       write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc
-       write (unit, fmt="(' write_final_fields = ',L1)") write_final_fields
-       write (unit, fmt="(' write_final_epar = ',L1)") write_final_epar
-       write (unit, fmt="(' write_final_db = ',L1)") write_final_db
-       write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
-       write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
-       write (unit, fmt="(' write_nl_flux = ',L1)") write_nl_flux
-       write (unit, fmt="(' exit_when_converged = ',L1)") exit_when_converged
-       write (unit, fmt="(' use_nonlin_convergence = ',L1)") use_nonlin_convergence
-       if (write_avg_moments) write (unit, fmt="(' write_avg_moments = ',L1)") write_avg_moments
-       if (dump_check1) write (unit, fmt="(' dump_check1 = ',L1)") dump_check1
-       if (dump_check2) write (unit, fmt="(' dump_check2 = ',L1)") dump_check2
-       if (dump_fields_periodically) &
-            write (unit, fmt="(' dump_fields_periodically = ',L1)") dump_fields_periodically
-       if (make_movie) &
-            write (unit, fmt="(' make_movie = ',L1)") make_movie
+     implicit none
+     integer, intent(in) :: unit
+     if (.not.exist) return
+     write (unit, *)
+     write (unit, fmt="(' &',a)") "gs2_diagnostics_knobs"
+     write (unit, fmt="(' save_for_restart = ',L1)") save_for_restart
+     write (unit, fmt="(' save_distfn = ',L1)") save_distfn
+     write (unit, fmt="(' save_many = ',L1)") save_many
+     write (unit, fmt="(' file_safety_check = ',L1)") file_safety_check
+     write (unit, fmt="(' print_line = ',L1)") print_line 
+     write (unit, fmt="(' write_line = ',L1)") write_line
+     write (unit, fmt="(' print_flux_line = ',L1)") print_flux_line
+     write (unit, fmt="(' write_flux_line = ',L1)") write_flux_line
+     write (unit, fmt="(' nmovie = ',i6)") nmovie
+     write (unit, fmt="(' nwrite_mult = ',i6)") nwrite_mult
+     write (unit, fmt="(' nwrite = ',i6)") nwrite
+     write (unit, fmt="(' nsave = ',i6)") nsave
+     write (unit, fmt="(' navg = ',i6)") navg
+     write (unit, fmt="(' omegatol = ',e17.10)") omegatol
+     write (unit, fmt="(' omegatinst = ',e17.10)") omegatinst
+     ! should be legal -- not checked yet
+     if (igomega /= 0) write (unit, fmt="(' igomega = ',i6)") igomega  
 
-       write (unit, fmt="(' /')")       
+     if (write_ascii) then
+        write (unit, fmt="(' write_ascii = ',L1)") write_ascii
+        write (unit, fmt="(' write_omega = ',L1)") write_omega
+        write (unit, fmt="(' write_omavg = ',L1)") write_omavg
+     end if
+     write (unit, fmt="(' write_hrate = ',L1)") write_hrate
+     write (unit, fmt="(' write_lorentzian = ',L1)") write_lorentzian
+     write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc
+     write (unit, fmt="(' write_final_fields = ',L1)") write_final_fields
+     write (unit, fmt="(' write_final_epar = ',L1)") write_final_epar
+     write (unit, fmt="(' write_final_db = ',L1)") write_final_db
+     write (unit, fmt="(' write_final_moments = ',L1)") write_final_moments
+     write (unit, fmt="(' write_final_antot = ',L1)") write_final_antot
+     write (unit, fmt="(' write_nl_flux = ',L1)") write_nl_flux
+     write (unit, fmt="(' exit_when_converged = ',L1)") exit_when_converged
+     write (unit, fmt="(' use_nonlin_convergence = ',L1)") use_nonlin_convergence
+     if (write_avg_moments) write (unit, fmt="(' write_avg_moments = ',L1)") write_avg_moments
+     if (dump_check1) write (unit, fmt="(' dump_check1 = ',L1)") dump_check1
+     if (dump_check2) write (unit, fmt="(' dump_check2 = ',L1)") dump_check2
+     if (dump_fields_periodically) &
+          write (unit, fmt="(' dump_fields_periodically = ',L1)") dump_fields_periodically
+     if (make_movie) &
+          write (unit, fmt="(' make_movie = ',L1)") make_movie
+
+     write (unit, fmt="(' /')")       
    end subroutine wnml_gs2_diagnostics
 
    subroutine check_gs2_diagnostics(report_unit)
@@ -218,7 +218,7 @@ contains
      use init_g, only : restart_file
      use gs2_save, only: restart_writable
      implicit none
-     integer :: report_unit
+     integer, intent(in) :: report_unit
      logical :: writable
      write (report_unit, *) 
      write (report_unit, fmt="('------------------------------------------------------------')")
@@ -428,6 +428,7 @@ contains
     use mp, only: broadcast, proc0, mp_abort
     use le_grids, only: init_weights
     use gs2_save, only: restart_writable
+    use normalisations, only: init_normalisations
     implicit none
     logical, intent (in) :: list
     integer, intent (in) :: nstep
@@ -446,6 +447,7 @@ contains
         !& module contained in the diagnostics folder instead. PLEASE AMEND YOUR &
         !& SCRIPTS TO USE THE NEW OUTPUT FILE ENDING IN .cdf"
 
+    call init_normalisations
     call init_theta_grid
     call init_kt_grids
     call init_run_parameters
@@ -827,6 +829,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_time, only: user_time, user_dt
     use le_grids, only: finish_weights
+
     implicit none
     integer, intent (in) :: istep
     integer :: istatus
@@ -971,12 +974,13 @@ contains
     implicit none
     integer, intent (in) :: istep
     logical, intent (out) :: exit
+    logical, intent (in), optional:: debopt
 
     real, dimension (ntheta0, naky) :: phitot
     real :: phi2, apar2, bpar2
     real :: t
     integer :: ik, it, is, write_mod
-    complex, save :: wtmp_new
+    complex, save :: wtmp_new !This shouldn't need to be given the save property
 
     real, dimension (ntheta0, nspec) :: x_qmflux
     real, dimension (nspec) ::  heat_fluxes,  part_fluxes, mom_fluxes, parmom_fluxes, perpmom_fluxes, part_tormom_fluxes
@@ -993,7 +997,6 @@ contains
 
     real, save :: t_old = 0.
     logical :: last = .false.
-    logical,optional:: debopt
     logical:: debug=.false.
 
     if (present(debopt)) debug=debopt
@@ -1469,7 +1472,7 @@ contains
     use parameter_scan, only: target_parameter_switch,target_parameter_hflux_tot
     use parameter_scan, only: target_parameter_momflux_tot,target_parameter_phi2_tot
     implicit none
-    real, dimension(:) :: scan_hflux, scan_momflux, scan_phi2
+    real, dimension(:), intent(in out) :: scan_hflux, scan_momflux, scan_phi2
 
     select case(target_parameter_switch)
     case(target_parameter_hflux_tot)
@@ -3289,8 +3292,8 @@ contains
     use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, zero_htype
     implicit none
     integer, intent (in) :: istep
-    type (heating_diagnostics) :: h
-    type (heating_diagnostics), dimension(:,:) :: hk
+    type (heating_diagnostics), intent(in out) :: h
+    type (heating_diagnostics), dimension(:,:), intent(in out) :: hk
 
     real, dimension(-ntgrid:ntgrid) :: wgt
     real :: fac
@@ -3348,7 +3351,8 @@ contains
     implicit none
     !Passed
     integer, intent (in) :: istep
-    real, dimension(:,:) ::  j_ext
+    !Shouldn't really need intent in here but it's beacuse we zero it before calling calc_jext
+    real, dimension(:,:), intent(in out) ::  j_ext
     !Local 
     integer :: i
 
@@ -3420,12 +3424,13 @@ contains
     integer, intent (in) :: istep
     logical, intent (in out) :: exit
     complex, dimension (:,:), intent (out) :: omegaavg
+    logical, intent (in), optional :: debopt
     real :: fac
 !CMR, 7/11/2008: save here crucial to avoid crippling memory leak with mpixl!
 !HJL - moved to top of module
 !    complex, allocatable, save, dimension (:,:,:) :: domega
     integer :: j
-    logical, optional :: debopt
+
     logical :: debug=.false.
     if (debug) write(6,*) "get_omeaavg: allocate domega"
 if (.not. allocated(domega)) allocate(domega(navg,ntheta0,naky))
@@ -3955,12 +3960,12 @@ if (debug) write(6,*) "get_omegaavg: done"
   subroutine par_spectrum(an, an2)
     use gs2_transforms, only: kz_spectrum
     use theta_grid, only: ntgrid
-    complex, dimension(:,:,:) :: an, an2    
+    complex, dimension(:,:,:), intent(in) :: an
+    complex, dimension(:,:,:), intent(out) :: an2
     real :: scale
 
     call kz_spectrum (an, an2)
     scale = 1./real(4*ntgrid**2)
     an2 = an2*scale
-
   end subroutine par_spectrum
 end module gs2_diagnostics

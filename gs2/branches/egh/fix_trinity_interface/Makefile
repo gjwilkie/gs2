@@ -223,6 +223,10 @@ sinclude Makefile.local
 
 #############################################################################
 
+#Record the top level path
+GK_HEAD_DIR:=$(PWD)
+export GK_HEAD_DIR
+
 UTILS=utils
 GEO=geo
 
@@ -368,6 +372,7 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
+#Setup the flags for using the eigensolver
 ifdef WITH_EIG
 	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
 	ifdef PETSC_ARCH
@@ -388,9 +393,10 @@ ifdef WITH_EIG
 	CFLAGS += -DWITH_EIG 
 endif 
 
+#Make empty targets if not using the new diagnostics
 ifeq ($(USE_NEW_DIAG),on)
 #ifdef USE_NEW_DIAG
-sinclude Makefile.diagnostics
+sinclude diagnostics/Makefile.diagnostics
 else
 distclean_simpledataio:
 clean_simpledataio:
@@ -429,7 +435,7 @@ ifdef SUBDIR
 	VPATH +=:..
 endif
 DEPEND=Makefile.depend
-DEPEND_CMD=$(PERL) fortdep
+DEPEND_CMD=$(PERL) scripts/fortdep
 
 # most common include and library directories
 DEFAULT_INC_LIST = . $(UTILS) $(GEO) .. ../$(UTILS) ../$(GEO)
@@ -495,7 +501,7 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks clean_tests
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests nonlinear_tests benchmarks clean_tests
 
 all: $(.DEFAULT_GOAL)
 
@@ -574,20 +580,13 @@ clean: clean_simpledataio
 	-rm -f *.o *.mod *.g90 *.h core */core
 
 CLEANCOMMAND=echo $$$$PWD
-CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch *.timing.* *.moments *.cdf *.jext *.parity *.heat *.heat2 *.vres2 *.amoments *.eigenfunc *.nc* *.mom2 *.epar
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch *.timing.* *.moments *.cdf *.jext *.parity *.heat *.heat2 *.vres2 *.amoments *.eigenfunc *.nc* *.mom2 *.epar .*.in results_of_test.txt *.stop *.fftw_wisdom *.phase *.kpar *.interp *.dist 
 
 ifdef CLEAN_TEXTFILES
 	CLEANCOMMAND+= *~ *.orig
 endif
 
 export CLEANCOMMAND
-
-clean_tests:
-	$(MAKE) clean -C linear_tests 
-	$(MAKE) clean -C unit_tests 
-
-clean_benchmarks:
-	$(MAKE) clean -C benchmarks 
 
 cleanlib:
 	-rm -f *.a
@@ -604,7 +603,7 @@ tar:
 ### setting tar_exec local $(TARLIST*) variables
 # expand wildcards listed $(TARLIST_wild) in ( $(TARLIST_dir) + . )
 # directories and add them into TARLIST
-tar_exec: TARLIST = makehead.awk fortdep AstroGK.in
+tar_exec: TARLIST = makehead.awk scripts/fortdep AstroGK.in
 tar_exec: TARLIST_dir = Makefiles utils geo Aux
 tar_exec: TARLIST_wild = *.f90 *.fpp *.inc *.c Makefile Makefile.* README README.*
 tar_exec: TARLIST += $(foreach dir,. $(TARLIST_dir),$(wildcard $(addprefix $(dir)/,$(TARLIST_wild))))
@@ -694,7 +693,9 @@ revision:
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 
-sinclude Makefile.tests_and_benchmarks
+#This is the location of the individual test suites
+TEST_DIR:=tests
+sinclude $(TEST_DIR)/Makefile.tests_and_benchmarks
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^

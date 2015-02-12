@@ -17,7 +17,6 @@ ball_mod = \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
-	 runtime_tests.o \
 	 spl.o 
 
 drive_mod = \
@@ -101,7 +100,6 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 overrides.o \
@@ -141,7 +139,6 @@ eiktest_mod = \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
-	 runtime_tests.o \
 	 spl.o 
 
 ffttester_mod = \
@@ -209,9 +206,9 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -346,9 +343,9 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -447,9 +444,9 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -775,7 +772,6 @@ ediff.o:
 eeq.o: \
 	 constants.o \
 	 mp.o \
-	 runtime_tests.o \
 	 spl.o 
 et.o: \
 	 constants.o \
@@ -914,6 +910,7 @@ gs2_diagnostics.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 prof.o \
@@ -996,6 +993,7 @@ gs2_io.o: \
 	 mp.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
 	 species.o \
@@ -1029,6 +1027,7 @@ gs2_main.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 overrides.o \
 	 parameter_scan.o \
 	 redistribute.o \
@@ -1140,7 +1139,8 @@ init_g.o: \
 	 species.o \
 	 text_options.o \
 	 theta_grid.o \
-	 theta_grid_params.o 
+	 theta_grid_params.o \
+	 unit_tests.o 
 job_manage.o: \
 	 file_utils.o \
 	 mp.o 
@@ -1194,7 +1194,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1213,6 +1212,10 @@ nonlinear_terms.o: \
 	 species.o \
 	 text_options.o \
 	 theta_grid.o 
+normalisations.o: \
+	 file_utils.o \
+	 mp.o \
+	 runtime_tests.o 
 om.o: \
 	 command_line.o 
 overrides.o: \
@@ -1237,8 +1240,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
