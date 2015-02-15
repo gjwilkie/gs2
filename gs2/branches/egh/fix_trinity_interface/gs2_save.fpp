@@ -8,9 +8,10 @@ module gs2_save
 !  use netcdf, only: NF90_FLOAT, NF90_DOUBLE
 # ifdef NETCDF_PARALLEL
 ! If using netcdf version 4.1.2 or older delete NF90_MPIIO
-  use netcdf, only: NF90_HDF5,NF90_MPIIO
+  use netcdf, only: NF90_HDF5,NF90_MPIIO, NF90_CLOBBER, NF90_NETCDF4
   use netcdf, only: nf90_var_par_access, NF90_COLLECTIVE
   use netcdf, only: nf90_put_att, NF90_GLOBAL, nf90_get_att
+  use netcdf, only: nf90_create_par
 # endif
   use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR, NF90_UNLIMITED
   use netcdf, only: nf90_create, nf90_open, nf90_sync, nf90_close
@@ -99,7 +100,7 @@ contains
 # else
     use mp, only: proc0
 # endif    
-    use mp, only: iproc, barrier
+    use mp, only: iproc, barrier, broadcast
     use theta_grid, only: ntgrid
 ! Must include g_layout_type here to avoid obscure bomb while compiling
 ! gs2_diagnostics.f90 (which uses this module) with the Compaq F90 compiler:
@@ -118,6 +119,7 @@ contains
     use dist_fn_arrays, only: vpa, vperp2
     !</DD> Added for saving distribution function
     use parameter_scan_arrays, only: current_scan_parameter_value
+    use unit_tests, only: debug_message
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
@@ -138,11 +140,15 @@ contains
 # endif
     logical :: exit
     logical :: local_init !<DD> Added for saving distribution function
+    integer, parameter :: verb = 3
 
 
 !*********-----------------------_**********************
 
     istatus = 0
+    !ncid = -1 
+    call broadcast(ncid)
+    call broadcast(file_proc)
     
     if (present(exit_in)) then
        exit = exit_in
@@ -160,6 +166,8 @@ contains
     total_elements = g_lo%ulim_world+1
 
     if (n_elements <= 0) return
+    
+    call debug_message(verb, 'gs2_save::gs2_save_for_restart checking init')
 
     !<DD> Added for saving distribution function
     IF (PRESENT(distfn)) THEN
@@ -216,13 +224,21 @@ contains
 
        file_proc = trim(trim(file_proc)//adjustl(suffix))          
 
+       call debug_message(verb, 'gs2_save::gs2_save_for_restart opening file')
+       call debug_message(verb, 'file proc is')
+       call debug_message(verb, file_proc)
+
 # ifdef NETCDF_PARALLEL       
        if(save_many) then
 # endif
           istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
 # ifdef NETCDF_PARALLEL
        else
+          call debug_message(verb, &
+            'gs2_save::gs2_save_for_restart calling barrier before delete file')
           call barrier
+          call debug_message(verb, &
+            'gs2_save::gs2_save_for_restart called barrier before delete file')
           
           if(iproc .eq. 0) then
              open(unit=tmpunit, file=file_proc)
@@ -230,8 +246,10 @@ contains
           end if
 
           call barrier
+          call debug_message(verb, &
+            'gs2_save::gs2_save_for_restart called barrier before opening')
 ! If using netcdf version 4.1.2 or older replace NF90_MPIIO with NF90_CLOBBER
-          istatus = nf90_create (file_proc, IOR(NF90_HDF5,NF90_MPIIO), ncid, comm=mp_comm, info=mp_info)
+          istatus = nf90_create_par (file_proc, IOR(NF90_NETCDF4,IOR(NF90_MPIIO,NF90_CLOBBER)), comm=mp_comm, info=mp_info,ncid=ncid)
        end if
 # endif
 
@@ -251,6 +269,7 @@ contains
           end if
        endif
 # endif
+       call debug_message(verb, 'gs2_save::gs2_save_for_restart defining dimensions')
        
        if (n_elements > 0) then
           istatus = nf90_def_dim (ncid, "theta", 2*ntgrid+1, thetaid)
@@ -338,6 +357,8 @@ contains
        !</DD> Added for saving distribution function
        
        if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
+
+       call debug_message(verb, 'gs2_save::gs2_save_for_restart defining variables')
 
        istatus = nf90_def_var (ncid, "t0", netcdf_real, t0id)
        if (istatus /= NF90_NOERR) then
@@ -581,6 +602,7 @@ contains
        end if
     end if
 
+    call debug_message(verb, 'gs2_save::gs2_save_for_restart writing scalars')
 # ifdef NETCDF_PARALLEL                    
     if(save_many .or. iproc == 0) then
 # endif
@@ -682,6 +704,7 @@ contains
             allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
        tmpr = real(g)
+      call debug_message(verb, 'gs2_save::gs2_save_for_restart writing dist fn')
 
 # ifdef NETCDF_PARALLEL
        if(save_many) then
