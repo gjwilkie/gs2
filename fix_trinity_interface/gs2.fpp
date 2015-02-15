@@ -45,8 +45,12 @@
 !! 
 !!  <tt> make doc sync_doc USER=[sourceforge user name]</tt>
 
-!> Main Program which calls the gs2_main::run_gs2 subroutine. Used when running GS2
-!! standalone, as opposed as a library for Trinity.
+!> Main program. Used when running GS2
+!! standalone, as opposed as a library for, e.g., Trinity.
+!! Essentially this initializes a gs2_program_state_type 
+!! object, and then calls the standard sequence of subroutines
+!! from gs2_main to run the program. See gs2_main for more 
+!! information.
 
 program gs2
 
