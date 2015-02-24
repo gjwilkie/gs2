@@ -652,12 +652,14 @@ contains
     ! switch to what it was when this function was
     ! called.
     ! 
+    call debug_message(state%verb, &
+      'gs2_main::evolve_equations restoring initial value override')
     state%init%initval_ov%override = temp_initval_override_store
     if (state%init%initval_ov%init) then
       call set_initval_overrides_to_current_vals(state%init%initval_ov)
     end if
 
-    call debug_message(state%verb, 'gs2_main::evolve_equations finished')
+    call debug_message(state%verb,'gs2_main::evolve_equations finished')
 
 
   end subroutine evolve_equations
@@ -727,7 +729,7 @@ contains
     call debug_message(state%verb, 'gs2_main::reset_equations starting')
 
     ! EGH is this line necessary?
-    gnew = 0.
+    !gnew = 0.
     call save_dt (code_dt)
     ! This call to gs2_diagnostics::reset_init sets some time averages
     ! and counters to zero... used mainly for trinity convergence checks.
