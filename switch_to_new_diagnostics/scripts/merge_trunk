@@ -1,0 +1,2 @@
+#! /bin/bash
+svn merge https://svn.code.sf.net/p/gyrokinetics/code/gs2/trunk
