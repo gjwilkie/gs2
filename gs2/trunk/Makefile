@@ -563,7 +563,7 @@ depend: $(FORTFROMRUBY)
 # Make sure template dependencies are specified
 gs2_init.f90: templates/gs2_init_template.f90
 
-doc: $(F90FROMFPP)
+doc: $(F90FROMFPP) $(FORTFROMRUBY)
 	doxygen ../doxygen/gs2 
 	rm -f $(F90FROMFPP)
 
