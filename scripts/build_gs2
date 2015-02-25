@@ -76,25 +76,22 @@ function print_help {
 }
 
 function check_system_set {
-    if [ "$GK_SYSTEM" == "" ] 
-    then
-	echo "ERROR: Please set the -s option or set the GK_SYSTEM environment variable."
-	exit 1
-    #SYSTEM_SET=1
-  #else 
-    #SYSTEM_SET=0
-    fi
+if [ "$GK_SYSTEM" == "" ] 
+then
+  echo "ERROR: Please set the -s option or set the GK_SYSTEM environment variable."
+  exit 1
+fi
 }
 
 
 function run_configuration {
-    make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles || exit 1
+make system_config GK_SYSTEM=$GK_SYSTEM -I Makefiles || exit 1
 }
 
 function setup_build {
-    check_system_set
-    run_configuration
-    source system_config
+check_system_set
+run_configuration
+source system_config
 }
 
 
@@ -105,76 +102,78 @@ COMMAND="build"
 #Parse arguments
 while getopts "hs:c:o:" OPTIONS
 do
-    case ${OPTIONS} in
-	h)
-	    short_help
-	    exit 0
-	    ;;
-	s)
-	    GK_SYSTEM=${OPTARG}
-	    ;;
-	c)
-	    MAKE_OPTIONAL_COMMAND=${OPTARG}
-	    ;;
-	o)
-	    COMMAND=${OPTARG}
-	    ;;
+  case ${OPTIONS} in
+    h)
+      short_help
+      exit 0
+      ;;
+    s)
+      GK_SYSTEM=${OPTARG}
+      ;;
+    c)
+      MAKE_OPTIONAL_COMMAND=${OPTARG}
+      ;;
+    o)
+      COMMAND=${OPTARG}
+      ;;
 
-	*)
-	    short_help
-	    exit 1
-	    ;;
-    esac
+    *)
+      short_help
+      exit 1
+      ;;
+  esac
 done
 
 #Now perform operation
 case $COMMAND in 
-    man)
-	print_help | less
-	exit 0
-	;;
-    help)
-	print_help
-	;;
-    config)
-	check_system_set
-	run_configuration
-	;;
-    print_config)
-	check_system_set
-	run_configuration
-	echo
-	echo "Configuration for system $GK_SYSTEM:"
-	cat system_config
-	;;
-    ls)
-	find Makefiles -type f -exec grep -q STANDARD_SYSTEM_CONFIGURATION {} \; -print | grep -v svn | grep -Ev '~$|swp$' | sed 's|Makefiles/Makefile\.||g' | sort #| xargs echo
-	;;
-    build)
-	setup_build
-	make $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND 
-	;;
-    tests|unit_tests|linear_tests|nonlinear_tests|depend|gs2)
-	setup_build
-	make $COMMAND $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND 
-	;;
-    update)
-	echo "update function not implemented yet!"
-	exit 1
-	;;
-    clean)
-	make clean
-	;;
-    distclean)
-	make distclean
-	;;
-    *)
-	echo "ERROR: Unknown command $COMMAND. Run" 
-	echo " $ ./build_gs2 -h" 
-	echo "for usage."
-	echo " $ ./build_gs2 -o man"
-	echo "for more details."
-	;;
+  man)
+    print_help | less
+    exit 0
+    ;;
+  help)
+    print_help
+    ;;
+  config)
+    check_system_set
+    run_configuration
+    ;;
+  print_config)
+    check_system_set
+    run_configuration
+    echo
+    echo "Configuration for system $GK_SYSTEM:"
+    cat system_config
+    ;;
+  ls)
+    find Makefiles -type f -exec grep -q STANDARD_SYSTEM_CONFIGURATION {} \; -print | grep -v svn | grep -Ev '~$|swp$|orig$' | sed 's|Makefiles/Makefile\.||g' | sort #| xargs echo
+    ;;
+  build)
+    setup_build
+    make $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND 
+    ;;
+  tests|unit_tests|linear_tests|nonlinear_tests|depend|gs2)
+    setup_build
+    make $COMMAND $MAKEFLAGS GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND 
+    ;;
+  update)
+    echo "update function not implemented yet!"
+    exit 1
+    ;;
+  clean)
+    setup_build
+    make clean
+    ;;
+  distclean)
+    setup_build
+    make distclean
+    ;;
+  *)
+    echo "ERROR: Unknown command $COMMAND. Run" 
+    echo " $ ./build_gs2 -h" 
+    echo "for usage."
+    echo " $ ./build_gs2 -o man"
+    echo "for more details."
+    ;;
 esac
 
 exit 0

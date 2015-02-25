@@ -31,8 +31,6 @@ module gs2_init
   use overrides, only: miller_geometry_overrides_type
   use overrides, only: profiles_overrides_type
   use overrides, only: initial_values_overrides_type
-  !> A type for storing the current initialization
-  !! status.
   public :: init_type
   !> A list of possible intialization levels.
   public :: init_level_list
@@ -68,7 +66,6 @@ module gs2_init
 
   public :: in_memory
 
-  private
 
   !> A type for labelling the different init
   !! levels available in gs2.
@@ -106,27 +103,46 @@ module gs2_init
 
   type(init_level_list_type) :: init_level_list
 
-  !> A type for storing the init_level of gs2.
+  !> A type for storing the current initialization
+  !! status, as well as all the overrides.
   type init_type
     !> The current init level
     integer :: level = 0
     !> Whether or not diagnostics have been initialized
     logical :: diagnostics_initialized = .false.
+    !> An object for overriding all or selected
+    !! Miller geometry parameters. You must call
+    !! gs2_main::prepare_miller_geometry_overrides 
+    !! before setting these overrides. See 
+    !! documentation for the overrides::miller_geometry_overrides_type
+    !! for more information.
     type(miller_geometry_overrides_type) :: mgeo_ov
+    !> An object for overriding all or selected
+    !! profile parameters such as species temperature, density, and gradients
+    !! as well as the flow gradient and mach number. You must call
+    !! gs2_main::prepare_profiles_overrides 
+    !! before setting these overrides. See 
+    !! documentation for the overrides::profiles_overrides_type
+    !! for more information.
     type(profiles_overrides_type) :: prof_ov
+    !> An object for overriding the initial values of 
+    !! the fields and distribution function. You must call
+    !! gs2_main::prepare_initial_values_overrides 
+    !! before setting these overrides. This override
+    !! is very complicated. See 
+    !! documentation for the overrides::initial_values_overrides_type
+    !! for more information.
     type(initial_values_overrides_type) :: initval_ov
-
-    !> If true, force loading initial values of fields
-    !! and dist_fn from the restart file(s).
-    logical :: force_restart = .false.
 
 
     !> A list of possible init levels
     !type(init_level_list_type) :: levels
   end type init_type
 
-  complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
-  logical :: fields_and_dist_fn_saved = .false.
+  private
+
+  !complex, dimension(:,:,:), allocatable :: phi_tmp, apar_tmp, bpar_tmp
+  !logical :: fields_and_dist_fn_saved = .false.
   logical :: in_memory = .false.  
 contains
   !> Initialize gs2 to the level of target_level.

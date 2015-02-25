@@ -153,7 +153,9 @@ module gs2_main
     logical :: diagnostics_initialized = .false.
 
     !> A type for keeping track of the current
-    !! initialization level of gs2
+    !! initialization level of gs2, as well
+    !! as storing all the overrides. See 
+    !! gs2_init::init_type for more information.
     type(init_type) :: init
 
 
@@ -177,8 +179,7 @@ module gs2_main
     !! gs2 program
     logical :: do_eigsolve = .false.
 
-    !> Number of timesteps in evolve_equations
-    !! It is set equal to run_parameters::nstep in 
+    !> This parameter is set equal to run_parameters::nstep in 
     !! initialize_equations and is the maximum
     !! number of timesteps that can be run 
     !! without reinitalising the diagnostics. 
