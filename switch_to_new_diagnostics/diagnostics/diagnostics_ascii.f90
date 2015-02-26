@@ -18,6 +18,7 @@ module diagnostics_ascii
    integer :: vres
    integer :: lpc
    integer :: vres2
+   integer :: cres
    integer :: parity
    integer :: jext
    logical :: write_to_out = .false.
@@ -28,6 +29,7 @@ module diagnostics_ascii
    logical :: write_to_vres = .false.
    logical :: write_to_lpc = .false.
    logical :: write_to_vres2 = .false.
+   logical :: write_to_cres = .false.
    logical :: write_to_parity = .false.
    logical :: write_to_jext = .false.
   end type diagnostics_ascii_type
@@ -46,6 +48,7 @@ contains
     if (ascii_files%write_to_vres  ) call open_output_file(ascii_files%vres, '.new.vres')
     if (ascii_files%write_to_lpc   ) call open_output_file(ascii_files%lpc, '.new.lpc')
     if (ascii_files%write_to_vres2 ) call open_output_file(ascii_files%vres2, '.new.vres2')
+    if (ascii_files%write_to_cres  ) call open_output_file(ascii_files%cres, '.new.cres')
     if (ascii_files%write_to_parity) call open_output_file(ascii_files%parity, '.new.parity')
     if (ascii_files%write_to_jext  ) call open_output_file(ascii_files%jext, '.new.jext')
   end subroutine init_diagnostics_ascii
@@ -61,6 +64,7 @@ contains
     if (ascii_files%write_to_vres  ) call close_output_file(ascii_files%vres)
     if (ascii_files%write_to_lpc   ) call close_output_file(ascii_files%lpc)
     if (ascii_files%write_to_vres2 ) call close_output_file(ascii_files%vres2)
+    if (ascii_files%write_to_cres  ) call close_output_file(ascii_files%cres)
     if (ascii_files%write_to_parity) call close_output_file(ascii_files%parity)
     if (ascii_files%write_to_jext  ) call close_output_file(ascii_files%jext)
   end subroutine finish_diagnostics_ascii
@@ -76,6 +80,7 @@ contains
     if (ascii_files%write_to_vres  ) call flush_output_file(ascii_files%vres)
     if (ascii_files%write_to_lpc   ) call flush_output_file(ascii_files%lpc)
     if (ascii_files%write_to_vres2 ) call flush_output_file(ascii_files%vres2)
+    if (ascii_files%write_to_cres  ) call flush_output_file(ascii_files%cres)
     if (ascii_files%write_to_parity) call flush_output_file(ascii_files%parity)
     if (ascii_files%write_to_jext  ) call flush_output_file(ascii_files%jext)
   end subroutine flush_output_files
