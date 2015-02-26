@@ -42,6 +42,7 @@ contains
     use diagnostics_antenna, only: init_diagnostics_antenna
     use diagnostics_nonlinear_convergence, only: init_nonlinear_convergence
     use nonlinear_terms, only: nonlin
+    use gs2_save, only: save_many
     use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
@@ -74,6 +75,12 @@ contains
        end if
        gnostics%write_any = .false.
     end if
+
+    !!!!!!!!!!!!!!!!!!!!!!!
+    !! Adjust other modules
+    !!!!!!!!!!!!!!!!!!!!!!!
+    save_many = gnostics%save_many
+
     if (.not. gnostics%write_any) return
 
     ! For the moment, hardwire these so as not to 
@@ -151,6 +158,7 @@ contains
     call create_dimensions(gnostics%parallel.or.proc0)
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
+
     
     if(proc0.and.debug) write (*,*) 'finished initializing new diagnostics'
   end subroutine init_gs2_diagnostics_new
@@ -214,6 +222,7 @@ contains
     gnostics%ascii_files%write_to_lpc    = gnostics%write_verr    .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_vres   = gnostics%write_verr    .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_vres2  = gnostics%write_verr    .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_cres   = gnostics%write_cerr    .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_phase  = gnostics%write_cross_phase .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_jext   = gnostics%write_jext    .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_parity = gnostics%write_parity  .and.  gnostics%write_ascii
@@ -261,7 +270,7 @@ contains
     if (gnostics%write_gyx) call write_fyx (phinew,bparnew,.true.)
     if (gnostics%write_g) call write_f (.true.)
     if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.true.,gnostics%istep)
-    if (gnostics%write_cerr) call collision_error(phinew,bparnew,.true.)
+    !if (gnostics%write_cerr) call collision_error(phinew,bparnew,.true.)
     
     call finish_diagnostics_config(gnostics)
   end subroutine finish_gs2_diagnostics_new
@@ -299,11 +308,15 @@ contains
     use fields_arrays, only: phinew, bparnew
     use dist_fn, only: write_fyx, write_f, write_poly, collision_error
     implicit none
+    integer :: nwrite_large
+
+    nwrite_large = gnostics%nwrite*gnostics%nwrite_mult
     ! Random stuff that needs to be put in properly or removed
-    if (gnostics%write_gyx .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_fyx (phinew,bparnew,.false.)
-    if (gnostics%write_g   .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_f (.false.)
+    if (gnostics%write_gyx .and. &
+      mod(gnostics%istep,nwrite_large) == 0) call write_fyx (phinew,bparnew,.false.)
+    if (gnostics%write_g   .and. mod(gnostics%istep,nwrite_large) == 0) call write_f (.false.)
     if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.false.,gnostics%istep)
-    if (gnostics%write_cerr) call collision_error(phinew,bparnew,.false.)
+    !if (gnostics%write_cerr) call collision_error(phinew,bparnew,.false.)
   end subroutine run_diagnostics_to_be_updated
   
   !> Create or write all variables according to the value of istep:
@@ -321,6 +334,7 @@ contains
     use diagnostics_moments, only: write_moments, write_full_moments_notgc
     use diagnostics_omega, only: calculate_omega, write_omega
     use diagnostics_velocity_space, only: write_velocity_space_checks
+    use diagnostics_velocity_space, only: write_collision_error
     use diagnostics_heating, only: calculate_heating, write_heating
     use diagnostics_geometry, only: write_geometry
     use diagnostics_nonlinear_convergence, only: check_nonlin_convergence
@@ -397,9 +411,10 @@ contains
        if (gnostics%write_symmetry) call write_symmetry(gnostics)
        if (gnostics%write_parity) call write_parity(gnostics)
        if (gnostics%write_verr) call write_velocity_space_checks(gnostics)
+       if (gnostics%write_cerr) call write_collision_error(gnostics) ! NB only ascii atm
        if (gnostics%write_moments) call write_moments(gnostics)
        if (gnostics%write_full_moments_notgc) call write_full_moments_notgc(gnostics)
-       if (gnostics%write_movie) call write_movie(gnostics)
+       if (gnostics%make_movie) call write_movie(gnostics)
        if (gnostics%write_heating) call write_heating(gnostics)
        if (nonlin.and.gnostics%use_nonlin_convergence) call check_nonlin_convergence(gnostics)
        if (gnostics%write_cross_phase.and.has_electron_species(spec)) call write_cross_phase(gnostics)

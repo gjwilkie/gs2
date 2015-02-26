@@ -8667,6 +8667,9 @@ endif
 
   end subroutine write_fyx
 
+  !> This routine is now only needed by the old diagnostics
+  !! module and is scheduled for deletion. Its functionality
+  !! is now in diagnostics/diagnostics_velocity_space.f90
   subroutine collision_error (phi, bpar, last)
     
     use mp, only: proc0, send, receive, barrier

@@ -13,6 +13,7 @@ ascii_files = [
   'vres',
   'lpc',
   'vres2',
+  'cres',
   'parity',
   'jext'
 ]
