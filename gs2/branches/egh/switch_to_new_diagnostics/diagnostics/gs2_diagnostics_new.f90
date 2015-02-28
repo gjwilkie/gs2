@@ -141,7 +141,7 @@ contains
     if (gnostics%write_heating) call init_diagnostics_heating(gnostics)
     call read_input_file_and_get_size(gnostics)
     
-    call sdatio_init(gnostics%sfile, trim(run_name)//'.cdf')
+    call sdatio_init(gnostics%sfile, trim(run_name)//'.out.nc')
     if (gnostics%parallel) then 
        call set_parallel(gnostics%sfile, mp_comm)
     else
@@ -217,7 +217,7 @@ contains
   subroutine set_ascii_file_switches
     implicit none
     gnostics%ascii_files%write_to_out   = .true.
-    gnostics%ascii_files%write_to_fields = gnostics%write_fields  .and.  gnostics%write_ascii
+    !gnostics%ascii_files%write_to_fields = gnostics%write_fields  .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_heat   = gnostics%write_heating .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_heat2  = gnostics%write_heating .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_lpc    = gnostics%write_verr    .and.  gnostics%write_ascii
@@ -245,14 +245,23 @@ contains
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
     use simpledataio, only: closefile
+    use unit_tests, only: debug_message
+    
     implicit none
+    integer, parameter :: verb=3
     if (.not. gnostics%write_any) return
     
+    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+      & calling save_restart_dist_fn')
     call save_restart_dist_fn
     
+    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+      & calling run_old_final_routines')
     call run_old_final_routines
     
     deallocate(gnostics%fluxfac)
+    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+      & finishing submodules')
     call finish_diagnostics_fluxes
     call finish_diagnostics_omega
     call finish_diagnostics_antenna(gnostics)
@@ -494,16 +503,24 @@ contains
     use mp, only: proc0
     use kt_grids, only: ntheta0, naky
     use theta_grid, only: ntgrid
+    use unit_tests, only: debug_message
     implicit none
     complex, dimension (ntheta0, naky) :: phi0
+    integer, parameter :: verb=3
     
     if(gnostics%write_kpar.or.gnostics%write_gs) call init_par_filter
     
     ! ntg_out is imported from diagnostics_final_routines
     ntg_out = ntgrid
     if (proc0) then
+       call debug_message(verb, 'gs2_diagnostics_new::run_old_final_routines &
+         & calling do_write_eigenfunc')
        if (gnostics%write_eigenfunc) call do_write_eigenfunc(gnostics,phi0)
+       call debug_message(verb, 'gs2_diagnostics_new::run_old_final_routines &
+         & calling do_write_final_fields')
        if (gnostics%write_final_fields) call do_write_final_fields(gnostics)
+       call debug_message(verb, 'gs2_diagnostics_new::run_old_final_routines &
+         & calling do_write_kpar')
        if (gnostics%write_kpar) call do_write_kpar(gnostics)
        if (gnostics%write_final_epar) call do_write_final_epar(gnostics)
        

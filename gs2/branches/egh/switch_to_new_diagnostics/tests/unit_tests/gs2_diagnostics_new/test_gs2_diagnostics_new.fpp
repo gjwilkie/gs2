@@ -237,7 +237,7 @@ contains
     command = ''
     write(command,'("./compare ",A,A," ",A,A," ",A,A," ",A,A," ",A,A)') &
          '"',"old_diagnostics/test_gs2_diagnostics_new.out.nc",var_name,'"',&
-         '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"'
+         '"',"test_gs2_diagnostics_new.out.nc",new_var_name,'"'
     
     if (should_print(3)) write(*,*) trim(command)
     call system(" echo ""F"" > tmpdata.dat")
@@ -258,7 +258,7 @@ contains
 #ifdef NEW_DIAG
     command = "if [ ""`cat old_diagnostics/test_gs2_diagnostics_new."//file_name//"  &
      & | tail -n "//n_lines//"`"" = &
-     &  ""`cat test_gs2_diagnostics_new.new."//file_name//"   | tail -n "//n_lines//"`"" ]; &
+     &  ""`cat test_gs2_diagnostics_new."//file_name//"   | tail -n "//n_lines//"`"" ]; &
      & then echo ""T"" > tmpdata.dat; fi"
     
     if (should_print(3)) write(*,*) trim(command)

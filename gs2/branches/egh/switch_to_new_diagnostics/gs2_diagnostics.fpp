@@ -829,12 +829,16 @@ contains
     use kt_grids, only: naky, ntheta0
     use gs2_time, only: user_time, user_dt
     use le_grids, only: finish_weights
+    use unit_tests, only: debug_message
 
     implicit none
     integer, intent (in) :: istep
     integer :: istatus
     complex, dimension (ntheta0, naky) :: phi0
     logical :: last = .true.
+
+    call debug_message(3, 'gs2_diagnostics::finish_gs2_diagnostics &
+      & starting')
 
     if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
