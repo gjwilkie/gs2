@@ -136,10 +136,12 @@ contains
   end function check_growth_rates_equal_in_list
 
   subroutine test_gs2(test_name, test_function)
-    use gs2_main, only: run_gs2, finish_gs2
+    use gs2_main, only: run_gs2, finish_gs2, old_iface_state
+    use gs2_main, only: finalize_diagnostics, finalize_equations, finalize_gs2
     use unit_tests, only: functional_test_flag, ilast_step
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics, only: finish_gs2_diagnostics
+    use run_parameters, only: use_old_diagnostics
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
 #endif
@@ -159,11 +161,17 @@ contains
     call announce_test('results')
     call process_test(test_function(), 'results')
 
-    call finish_gs2_diagnostics(ilast_step)
-#ifdef NEW_DIAG
-    call finish_gs2_diagnostics_new
-#endif
-    call finish_gs2
+!    if (use_old_diagnostics) then
+!      call finish_gs2_diagnostics(ilast_step)
+!#ifdef NEW_DIAG
+!    else
+!      call finish_gs2_diagnostics_new
+!#endif
+!    end if
+    !call finish_gs2
+    call finalize_diagnostics(old_iface_state)
+    call finalize_equations(old_iface_state)
+    call finalize_gs2(old_iface_state)
 
     if (proc0) call close_functional_test(test_name)
 
