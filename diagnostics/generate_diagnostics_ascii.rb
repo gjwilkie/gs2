@@ -6,13 +6,13 @@
 # ascii output files
 ascii_files = [
   'out',
-  'fields',
   'phase',
   'heat',
   'heat2',
   'vres',
   'lpc',
   'vres2',
+  'cres',
   'parity',
   'jext'
 ]
@@ -32,7 +32,7 @@ class Generator
 	end
     #"write(*,*) \"name\", \"#@name\", ascii_files%write_to_#@name
   def open_output_file
-    "if (ascii_files%write_to_#{sprintf("%-#{@max}s", @name)}) call open_output_file(ascii_files%#@name, '.new.#@name')"
+    "if (ascii_files%write_to_#{sprintf("%-#{@max}s", @name)}) call open_output_file(ascii_files%#@name, '.#@name')"
   end
   def close_output_file
     "if (ascii_files%write_to_#{sprintf("%-#{@max}s", @name)}) call close_output_file(ascii_files%#@name)"

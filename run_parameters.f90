@@ -23,6 +23,11 @@ module run_parameters
   public :: trinity_linear_fluxes
   public :: user_comments
 
+  !> If true use old diagnostics. Included for testing
+  !! only and will eventually be removed. Please use 
+  !! the new diagnostics module!
+  public :: use_old_diagnostics
+
 
   real :: beta, zeff, tite
   real :: fphi, fapar, fbpar, faperp
@@ -43,6 +48,7 @@ module run_parameters
   real :: rhostar
   logical :: neo_test
   logical :: trinity_linear_fluxes, do_eigsolve
+  logical :: use_old_diagnostics
 
   character(len=100000) :: user_comments
 
@@ -226,7 +232,8 @@ contains
          delt_option, margin, secondary, tertiary, faperp, harris, &
 !         avail_cpu_time, eqzip_option, include_lowflow, neo_test
          avail_cpu_time, margin_cpu_time, eqzip_option, neo_test, &
-         trinity_linear_fluxes, do_eigsolve, immediate_reset
+         trinity_linear_fluxes, do_eigsolve, immediate_reset, &
+         use_old_diagnostics
 
     if (proc0) then
        fbpar = -1.0
@@ -253,6 +260,7 @@ contains
        do_eigsolve = .false.
        immediate_reset = .true.
        user_comments = ''
+       use_old_diagnostics = .false.
        
        in_file = input_unit_exist("parameters", rpexist)
 !       if (rpexist) read (unit=input_unit("parameters"), nml=parameters)
@@ -346,6 +354,7 @@ contains
     call broadcast (trinity_linear_fluxes)
     call broadcast (do_eigsolve)
     call broadcast (immediate_reset)
+    call broadcast (use_old_diagnostics)
 
     user_delt_max = delt
 

@@ -217,7 +217,7 @@
  nwrite = 10 ! Output diagnostic data every nwrite
  navg = 10 ! Any time averages performed over navg
  omegatol = -0.001 ! The convergence has to be better than one part in 1/omegatol
- omegatinst = -1.0 ! Recommended value: 500.
+ omegatinst = 1.0e6 ! Recommended value: 500.
  save_for_restart = .true. ! Write restart files.
   ! write_flux_line not specified --- 
   ! write_ascii not specified --- 

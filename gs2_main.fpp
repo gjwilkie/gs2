@@ -454,6 +454,11 @@ contains
 
   end subroutine initialize_equations
 
+  !> Initialize the diagostics modules. This function can only be
+  !! called when the init level is 'full', i.e., after calling 
+  !! initialize_equations.  However, gs2 can be partially
+  !! uninitialized without finalizing the diagnostics, for example to
+  !! change parameters such as the timestep.
   subroutine initialize_diagnostics(state)
     use gs2_diagnostics, only: init_gs2_diagnostics
     use gs2_diagnostics, only: nwrite, write_nl_flux
@@ -464,9 +469,9 @@ contains
     use gs2_diagnostics_new, only: run_diagnostics
 #endif
     use job_manage, only: time_message
-    use mp, only: proc0
+    use mp, only: proc0, mp_abort
     use parameter_scan, only: allocate_target_arrays
-    use run_parameters, only: nstep
+    use run_parameters, only: nstep, use_old_diagnostics
     use unit_tests, only: debug_message
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
@@ -478,38 +483,83 @@ contains
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
+    if (state%init%diagnostics_initialized) &
+      call mp_abort('Calling initialize_diagnostics twice', .true.)
+
+    if (.not. use_old_diagnostics) then
 #ifdef NEW_DIAG
-    call debug_message(state%verb, &
-      'gs2_main::initialize_diagnostics calling init_gs2_diagnostics_new')
+      call debug_message(state%verb, &
+        'gs2_main::initialize_diagnostics calling init_gs2_diagnostics_new')
 
 #ifdef NETCDF_PARALLEL
-    diagnostics_init_options%parallel_io_capable = .true.
-    diagnostics_init_options%parallel_io_capable = .false.
+      diagnostics_init_options%parallel_io_capable = .true.
+      diagnostics_init_options%parallel_io_capable = .false.
 #else
-    diagnostics_init_options%parallel_io_capable = .false.
+      diagnostics_init_options%parallel_io_capable = .false.
 #endif
 
-    ! Here we check if reals have been promoted to doubles
-    diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
-    ! Check whether this is a Trinity run... enforces calculation of the
-    ! fluxes
-    diagnostics_init_options%is_trinity_run = state%is_trinity_job
-    call init_gs2_diagnostics_new(diagnostics_init_options)
-    ! Create variables and write constants
-    call run_diagnostics(-1,state%exit)
-    ! Write initial values
-    call run_diagnostics(0,state%exit)
+      ! Here we check if reals have been promoted to doubles
+      diagnostics_init_options%default_double =  (precision(precision_test).gt.10)
+      ! Check whether this is a Trinity run... enforces calculation of the
+      ! fluxes
+      diagnostics_init_options%is_trinity_run = state%is_trinity_job
+      call init_gs2_diagnostics_new(diagnostics_init_options)
+      ! Create variables and write constants
+      call run_diagnostics(-1,state%exit)
+      ! Write initial values
+      call run_diagnostics(0,state%exit)
+#else
+      call mp_abort("use_old_diagnostics is .false. but you have &
+        & not built gs2 with new diagnostics enabled", .true.)
 #endif
+    else ! if use_old_diagnostics
 
-    call debug_message(state%verb, &
-      'gs2_main::initialize_diagnostics calling init_gs2_diagnostics')
-    call init_gs2_diagnostics (state%list, nstep)
-    call allocate_target_arrays(nwrite,write_nl_flux) ! must be after init_gs2_diagnostics
-    call loop_diagnostics(0,state%exit)
+      call debug_message(state%verb, &
+        'gs2_main::initialize_diagnostics calling init_gs2_diagnostics')
+      call init_gs2_diagnostics (state%list, nstep)
+      call allocate_target_arrays(nwrite,write_nl_flux) ! must be after init_gs2_diagnostics
+      call loop_diagnostics(0,state%exit)
+    end if
+
+    state%init%diagnostics_initialized = .true.
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
   end subroutine initialize_diagnostics
+
+  !> Run the initial value solver. nstep_run must
+  !! be less than or equal to state%nstep, which is 
+  !! set from the input file. The cumulative number of
+  !! steps that can be run cannot exceed state%nstep, 
+  !! without a call to reset_equations.
+  !! Examples:
+  !!
+  !!    call evolve_equations(state, state%nstep) ! Basic run
+  !!
+  !! Note that these two calls: 
+  !!  
+  !!    call evolve_equations(state, state%nstep/2) 
+  !!    call evolve_equations(state, state%nstep/2)
+  !!
+  !! will in general have the identical effect to the single call above.
+  !! There are circumstances when this is not true,
+  !! for example, if the first of the two calls to evolve_equations  
+  !! exits without running nstep/2 steps (perhaps because the
+  !! growth rate has converged). 
+  !!
+  !! This example will cause an error because the total number
+  !! of steps exceeds state%nstep:
+  !!
+  !!    call evolve_equations(state, state%nstep/2) 
+  !!    call evolve_equations(state, state%nstep/2)
+  !!    call evolve_equations(state, state%nstep/2)
+  !!
+  !! This is OK:
+  !!
+  !!    call evolve_equations(state, state%nstep/2) 
+  !!    call evolve_equations(state, state%nstep/2)
+  !!    call reset_equations(state)
+  !!    call evolve_equations(state, state%nstep/2)
 
   subroutine evolve_equations(state, nstep_run)
     use collisions, only: vnmult
@@ -529,6 +579,7 @@ contains
     use parameter_scan, only: update_scan_parameter_value
     use run_parameters, only: reset, fphi, fapar, fbpar, nstep
     use run_parameters, only: avail_cpu_time, margin_cpu_time
+    use run_parameters, only: use_old_diagnostics
     use unit_tests, only: ilast_step, debug_message
     use gs2_init, only: init
     type(gs2_program_state_type), intent(inout) :: state
@@ -576,7 +627,6 @@ contains
 
           !If we've triggered a reset then actually reset
           if (reset) then
-             ! if called within trinity, do not dump info to screen
              call prepare_initial_values_overrides(state)
              call set_initval_overrides_to_current_vals(state%init%initval_ov)
              state%init%initval_ov%override = .true.
@@ -593,11 +643,15 @@ contains
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        if(proc0) call time_message(.false.,state%timers%diagnostics,' Diagnostics')
-       call loop_diagnostics (istep, state%exit)
-       if(state%exit) state%converged = .true.
+       if (use_old_diagnostics) then 
+         call loop_diagnostics (istep, state%exit)
 #ifdef NEW_DIAG
-       call run_diagnostics (istep, state%exit)
+       else 
+         call run_diagnostics (istep, state%exit)
 #endif
+       end if
+       if(state%exit) state%converged = .true.
+
        if(proc0) call time_message(.false.,state%timers%diagnostics,' Diagnostics')
        if (proc0) call time_message(.false.,state%timers%advance,' Advance time step')
 
@@ -713,8 +767,9 @@ contains
   subroutine reset_equations (state)
 
     use gs2_diagnostics, only: gd_reset => reset_init
+    use gs2_diagnostics_new, only: reset_averages_and_counters
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
-    use run_parameters, only: trinity_linear_fluxes
+    use run_parameters, only: trinity_linear_fluxes, use_old_diagnostics
     use dist_fn_arrays, only: gnew
     use gs2_time, only: code_dt, save_dt
     use mp, only: scope, subprocs, allprocs
@@ -734,7 +789,11 @@ contains
     call save_dt (code_dt)
     ! This call to gs2_diagnostics::reset_init sets some time averages
     ! and counters to zero... used mainly for trinity convergence checks.
-    call gd_reset
+    if (use_old_diagnostics) then
+      call gd_reset
+    else 
+      call reset_averages_and_counters
+    end if
 
     if (trinity_linear_fluxes .and. &
        nonlinear_mode_switch .eq. nonlinear_mode_none) &
@@ -758,8 +817,9 @@ contains
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new 
 #endif
     use job_manage, only: time_message
-    use mp, only: proc0
+    use mp, only: proc0, mp_abort
     use parameter_scan, only: deallocate_target_arrays
+    use run_parameters, only: use_old_diagnostics
     use unit_tests, only: debug_message
     type(gs2_program_state_type), intent(inout) :: state
 
@@ -769,16 +829,25 @@ contains
 
     call debug_message(state%verb, 'gs2_main::finalize_diagnostics starting')
 
+    if (.not. state%init%diagnostics_initialized) &
+      call mp_abort('Calling finalize_diagnostics when &
+      & diagnostics are not initialized', .true.)
+
+    if (.not. use_old_diagnostics) then
 #ifdef NEW_DIAG
-    call finish_gs2_diagnostics_new 
+      call finish_gs2_diagnostics_new 
 #endif
-    call finish_gs2_diagnostics (state%istep_end)
+    else
+      call finish_gs2_diagnostics (state%istep_end)
+    end if
 
     call deallocate_target_arrays
 
     state%istep_end = 1
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+
+    state%init%diagnostics_initialized = .false.
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
   end subroutine finalize_diagnostics
@@ -965,15 +1034,20 @@ contains
     use gs2_diagnostics, only: pflux_avg, qflux_avg, heat_avg, vflux_avg !, start_time, nwrite, write_nl_flux
     use gs2_diagnostics, only: diffusivity
     use gs2_diagnostics, only: ensemble_average
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: gnostics
+#endif 
     use gs2_time, only: user_time
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use run_parameters, only: trinity_linear_fluxes
     use species, only: nspec, spec
     use species, only: ions, electrons, impurity
+    use run_parameters, only: use_old_diagnostics
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
     real :: time_interval
     real :: diff
+    real, dimension(nspec) :: qf, pf, ht, vf
     integer :: is
 
     time_interval = user_time-start_time
@@ -987,7 +1061,13 @@ contains
    ! linear case. This is for testing Trinity
    if (trinity_linear_fluxes .and. &
          nonlinear_mode_switch .eq. nonlinear_mode_none) then
-     diff = diffusivity()
+     if (use_old_diagnostics) then
+       diff = diffusivity()
+     else
+#ifdef NEW_DIAG
+       diff = gnostics%current_results%diffusivity
+#endif 
+     endif
      do is = 1,nspec
        ! Q = n chi grad T = n (gamma / k^2) dT / dr
        ! = dens  n_r (gamma_N v_thr / k_N**2 rho_r a) dT / drho drho/dr
@@ -997,17 +1077,32 @@ contains
        ! = dens (gamma_N / k_N**2) temp tprim grho
        !   
        ! grho factored to diffusivity in diagnostics
-       qflux_avg(is) =  diff * spec(is)%dens * spec(is)%temp * spec(is)%tprim 
-       pflux_avg(is) =  diff * spec(is)%dens**2.0 * spec(is)%fprim 
-       heat_avg = 0.0
+       qf(is) =  diff * spec(is)%dens * spec(is)%temp * spec(is)%tprim 
+       pf(is) =  diff * spec(is)%dens**2.0 * spec(is)%fprim 
+       ht = 0.0
+       vf = 0.0
      end do
      time_interval = 1.0
+   else 
+     if (use_old_diagnostics) then
+       qf = qflux_avg
+       pf = pflux_avg
+       ht = heat_avg
+       vf = vflux_avg
+     else
+#ifdef NEW_DIAG
+       qf = gnostics%current_results%species_heat_flux_avg
+       pf = gnostics%current_results%species_particle_flux_avg
+       ht = gnostics%current_results%species_heating_avg
+       vf = gnostics%current_results%species_momentum_flux_avg
+#endif
+     endif
    end if
 
-   state%outputs%pflux = pflux_avg/time_interval
-   state%outputs%qflux = qflux_avg/time_interval
-   state%outputs%heat = heat_avg/time_interval
-   state%outputs%vflux = vflux_avg(1)/time_interval
+   state%outputs%pflux = pf/time_interval
+   state%outputs%qflux = qf/time_interval
+   state%outputs%heat = ht/time_interval
+   state%outputs%vflux = vf(1)/time_interval
   end subroutine calculate_outputs
 
 
@@ -1256,7 +1351,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_transforms, only: finish_transforms
     use gs2_save, only: finish_gs2_save
     use normalisations, only: finish_normalisations
-    use normalisations, only: finish_normalisations
     implicit none
 
     call finish_normalisations
@@ -1325,6 +1419,10 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use run_parameters, only: trinity_linear_fluxes
     use species, only: nspec, spec, impurity, ions, electrons
     use species, only: determine_species_order
+    use run_parameters, only: use_old_diagnostics
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: reset_averages_and_counters
+#endif
 
     implicit none
 
@@ -1367,7 +1465,13 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     call save_dt (code_dt)
     ! This call to gs2_diagnostics::reset_init sets some time averages
     ! and counters to zero... used mainly for trinity convergence checks.
-    call gd_reset
+    if (use_old_diagnostics) then
+      call gd_reset
+    else
+#ifdef NEW_DIAG
+      call reset_averages_and_counters
+#endif
+    end if
 
     call prepare_profiles_overrides(old_iface_state)
 

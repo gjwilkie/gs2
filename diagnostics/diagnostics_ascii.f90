@@ -11,23 +11,23 @@ module diagnostics_ascii
   !! ascii output units
   type diagnostics_ascii_type
    integer :: out
-   integer :: fields
    integer :: phase
    integer :: heat
    integer :: heat2
    integer :: vres
    integer :: lpc
    integer :: vres2
+   integer :: cres
    integer :: parity
    integer :: jext
    logical :: write_to_out = .false.
-   logical :: write_to_fields = .false.
    logical :: write_to_phase = .false.
    logical :: write_to_heat = .false.
    logical :: write_to_heat2 = .false.
    logical :: write_to_vres = .false.
    logical :: write_to_lpc = .false.
    logical :: write_to_vres2 = .false.
+   logical :: write_to_cres = .false.
    logical :: write_to_parity = .false.
    logical :: write_to_jext = .false.
   end type diagnostics_ascii_type
@@ -38,29 +38,29 @@ contains
   subroutine init_diagnostics_ascii(ascii_files)
     use file_utils, only: open_output_file
     type(diagnostics_ascii_type), intent(inout) :: ascii_files
-    if (ascii_files%write_to_out   ) call open_output_file(ascii_files%out, '.new.out')
-    if (ascii_files%write_to_fields) call open_output_file(ascii_files%fields, '.new.fields')
-    if (ascii_files%write_to_phase ) call open_output_file(ascii_files%phase, '.new.phase')
-    if (ascii_files%write_to_heat  ) call open_output_file(ascii_files%heat, '.new.heat')
-    if (ascii_files%write_to_heat2 ) call open_output_file(ascii_files%heat2, '.new.heat2')
-    if (ascii_files%write_to_vres  ) call open_output_file(ascii_files%vres, '.new.vres')
-    if (ascii_files%write_to_lpc   ) call open_output_file(ascii_files%lpc, '.new.lpc')
-    if (ascii_files%write_to_vres2 ) call open_output_file(ascii_files%vres2, '.new.vres2')
-    if (ascii_files%write_to_parity) call open_output_file(ascii_files%parity, '.new.parity')
-    if (ascii_files%write_to_jext  ) call open_output_file(ascii_files%jext, '.new.jext')
+    if (ascii_files%write_to_out   ) call open_output_file(ascii_files%out, '.out')
+    if (ascii_files%write_to_phase ) call open_output_file(ascii_files%phase, '.phase')
+    if (ascii_files%write_to_heat  ) call open_output_file(ascii_files%heat, '.heat')
+    if (ascii_files%write_to_heat2 ) call open_output_file(ascii_files%heat2, '.heat2')
+    if (ascii_files%write_to_vres  ) call open_output_file(ascii_files%vres, '.vres')
+    if (ascii_files%write_to_lpc   ) call open_output_file(ascii_files%lpc, '.lpc')
+    if (ascii_files%write_to_vres2 ) call open_output_file(ascii_files%vres2, '.vres2')
+    if (ascii_files%write_to_cres  ) call open_output_file(ascii_files%cres, '.cres')
+    if (ascii_files%write_to_parity) call open_output_file(ascii_files%parity, '.parity')
+    if (ascii_files%write_to_jext  ) call open_output_file(ascii_files%jext, '.jext')
   end subroutine init_diagnostics_ascii
 
   subroutine finish_diagnostics_ascii(ascii_files)
     use file_utils, only: close_output_file
     type(diagnostics_ascii_type), intent(inout) :: ascii_files
     if (ascii_files%write_to_out   ) call close_output_file(ascii_files%out)
-    if (ascii_files%write_to_fields) call close_output_file(ascii_files%fields)
     if (ascii_files%write_to_phase ) call close_output_file(ascii_files%phase)
     if (ascii_files%write_to_heat  ) call close_output_file(ascii_files%heat)
     if (ascii_files%write_to_heat2 ) call close_output_file(ascii_files%heat2)
     if (ascii_files%write_to_vres  ) call close_output_file(ascii_files%vres)
     if (ascii_files%write_to_lpc   ) call close_output_file(ascii_files%lpc)
     if (ascii_files%write_to_vres2 ) call close_output_file(ascii_files%vres2)
+    if (ascii_files%write_to_cres  ) call close_output_file(ascii_files%cres)
     if (ascii_files%write_to_parity) call close_output_file(ascii_files%parity)
     if (ascii_files%write_to_jext  ) call close_output_file(ascii_files%jext)
   end subroutine finish_diagnostics_ascii
@@ -69,13 +69,13 @@ contains
     use file_utils, only: flush_output_file
     type(diagnostics_ascii_type), intent(in) :: ascii_files
     if (ascii_files%write_to_out   ) call flush_output_file(ascii_files%out)
-    if (ascii_files%write_to_fields) call flush_output_file(ascii_files%fields)
     if (ascii_files%write_to_phase ) call flush_output_file(ascii_files%phase)
     if (ascii_files%write_to_heat  ) call flush_output_file(ascii_files%heat)
     if (ascii_files%write_to_heat2 ) call flush_output_file(ascii_files%heat2)
     if (ascii_files%write_to_vres  ) call flush_output_file(ascii_files%vres)
     if (ascii_files%write_to_lpc   ) call flush_output_file(ascii_files%lpc)
     if (ascii_files%write_to_vres2 ) call flush_output_file(ascii_files%vres2)
+    if (ascii_files%write_to_cres  ) call flush_output_file(ascii_files%cres)
     if (ascii_files%write_to_parity) call flush_output_file(ascii_files%parity)
     if (ascii_files%write_to_jext  ) call flush_output_file(ascii_files%jext)
   end subroutine flush_output_files

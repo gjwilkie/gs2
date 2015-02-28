@@ -136,6 +136,7 @@ contains
     t = gnostics%user_time
     
     !<DD>Should this only occur for write_ascii=T?
+    ! EGH Yes...
     call get_unused_unit (unit)
     write (filename, "('dump.fields.t=',e13.6)") t
     open (unit=unit, file=filename, status="unknown")
