@@ -8,7 +8,7 @@
 # This list is used in generating diagnostics_config.f90
 input_variables_for_diagnostics_config = [
   ['integer', 'nwrite', '10'],
-  ['integer', 'nwrite_large', '100'],
+  ['integer', 'nwrite_mult', '10'],
   ['logical', 'write_any', '.true.'],
 
   # If built with parallel IO capability 
@@ -43,7 +43,7 @@ input_variables_for_diagnostics_config = [
   ['logical', 'write_phi_over_time'],
   ['logical', 'write_apar_over_time'],
   ['logical', 'write_bpar_over_time'],
-  ['logical', 'write_movie', '.false.'],
+  ['logical', 'make_movie', '.false.'],
   ['logical', 'dump_fields_periodically', '.false.'],
 
   # Parameters for writing out moments such as density etc
@@ -59,7 +59,8 @@ input_variables_for_diagnostics_config = [
 
   # Parameters for writing out fluxes
   ['logical', 'write_fluxes', '.true.'],
-  ['logical', 'write_fluxes_by_mode', '.false.'],
+  # CHANGE BACK TO FALSE below
+  ['logical', 'write_fluxes_by_mode', '.true.'],
   ['logical', 'write_symmetry', '.false.'],
   ['logical', 'write_parity', '.false.'],
 
@@ -72,6 +73,7 @@ input_variables_for_diagnostics_config = [
 
   # Parameters for writing out velocity space diagnostics
   ['logical', 'write_verr', '.true.'],
+  ['logical', 'write_cerr', '.false.'],
   ['logical', 'write_max_verr', '.false.'],
   ['integer', 'ncheck', '10'],
 
@@ -90,8 +92,6 @@ input_variables_for_diagnostics_config = [
   ['logical', 'write_lpoly', '.false.'],
 
 
-  # Switches on write collision_error
-  ['logical', 'write_cerr', '.false.'],
 
   # Parameters controlling Trinity convergence tests
   ['integer', 'conv_nstep_av', '4000'],
@@ -129,10 +129,24 @@ input_variables_for_diagnostics_config = [
   # default to true. EGH
   ['integer', 'nsave', '1000'],
   ['logical', 'save_for_restart', '.false.'],
+  ['logical', 'save_many', '.false.'],
   ['logical', 'file_safety_check', '.true.'],
 
   # Save the distribution function
   ['logical', 'save_distfn', '.false.'],
+
+  # These parameters have no effect and are
+  # provided only for backwards compatibility
+  # with old namelists
+  ['logical', 'write_omavg', '.true.'],
+  ['logical', 'write_gg', '.false.'],
+  ['logical', 'ob_midplane', '.false.'],
+  ['logical', 'write_nl_flux', '.true.'],
+  ['logical', 'write_hrate', '.false.'],
+  ['logical', 'write_avg_moments', '.false.'],
+  ['logical', 'dump_check1', '.false.'],
+  ['logical', 'dump_check2', '.false.'],
+  ['integer', 'nmovie', '-1'],
 
 ]
 
@@ -215,6 +229,7 @@ module diagnostics_config
      real :: total_momentum_flux
      real :: total_particle_flux
      real :: max_growth_rate
+     real :: diffusivity
 
      ! Individual heat fluxes
      real, dimension(:), allocatable :: species_es_heat_flux
@@ -235,6 +250,10 @@ module diagnostics_config
      ! Heating
      real, dimension(:), allocatable :: species_heating
      real, dimension(:), allocatable :: species_heating_avg
+
+     ! Growth rates
+     complex, dimension(:,:), allocatable :: omega_average
+
   end type results_summary_type
 
   !> A type for storing the diagnostics configuration,
@@ -260,6 +279,7 @@ module diagnostics_config
      logical :: is_trinity_run
      real :: user_time
      real :: user_time_old
+     real :: start_time
      real, dimension(:), allocatable :: fluxfac
      #{generators.map{|g| g.declaration}.join("\n     ") }
   end type diagnostics_type
@@ -285,6 +305,7 @@ contains
 
   subroutine allocate_current_results(gnostics)
     use species, only: nspec
+    use kt_grids, only: naky, ntheta0
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
 
@@ -301,6 +322,7 @@ contains
     allocate(gnostics%current_results%species_particle_flux_avg(nspec))
     allocate(gnostics%current_results%species_heating(nspec))
     allocate(gnostics%current_results%species_heating_avg(nspec))
+    allocate(gnostics%current_results%omega_average(ntheta0, naky))
   end subroutine allocate_current_results
 
   subroutine deallocate_current_results(gnostics)
@@ -310,6 +332,9 @@ contains
     ! how to correctly deallocate the derived type
     !<DD>What's written below should work fine, just need to
     !deallocate anything explicitly allocated.
+    ! EGH: I know what the problem is, the results should be pointers
+    ! and not allocatable because they are in a derived type. Will
+    ! fix shortly.
     return
     
     ! One call deallocates gnostics and all allocatable arrays 
@@ -334,7 +359,7 @@ contains
     implicit none
     type(diagnostics_type), intent(out) :: gnostics
     #{generators.map{|g| g.declaration}.join("\n    ") }
-    namelist /diagnostics_config/ &
+    namelist /gs2_diagnostics_knobs/ &
          #{generators.map{|g| g.name}.join(", &\n         ")}
 
     integer :: in_file
@@ -343,8 +368,8 @@ contains
     if (proc0) then
        #{generators.map{|g| g.set_default}.join("\n       ")}
 
-       in_file = input_unit_exist ("diagnostics_config", exist)
-       if (exist) read (unit=in_file, nml=diagnostics_config)
+       in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
+       if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
 
        #{generators.map{|g| g.set_parameters_type_value}.join("\n       ")}
 

@@ -11,6 +11,7 @@ module gs2_diagnostics_new
   
   public :: init_gs2_diagnostics_new
   public :: finish_gs2_diagnostics_new
+  public :: reset_averages_and_counters
   public :: run_diagnostics
   public :: gnostics
   
@@ -42,6 +43,7 @@ contains
     use diagnostics_antenna, only: init_diagnostics_antenna
     use diagnostics_nonlinear_convergence, only: init_nonlinear_convergence
     use nonlinear_terms, only: nonlin
+    use gs2_save, only: save_many
     use file_utils, only: run_name, error_unit
     use mp, only: mp_comm, proc0
     use kt_grids, only: naky, aky
@@ -74,6 +76,12 @@ contains
        end if
        gnostics%write_any = .false.
     end if
+
+    !!!!!!!!!!!!!!!!!!!!!!!
+    !! Adjust other modules
+    !!!!!!!!!!!!!!!!!!!!!!!
+    save_many = gnostics%save_many
+
     if (.not. gnostics%write_any) return
 
     ! For the moment, hardwire these so as not to 
@@ -133,7 +141,7 @@ contains
     if (gnostics%write_heating) call init_diagnostics_heating(gnostics)
     call read_input_file_and_get_size(gnostics)
     
-    call sdatio_init(gnostics%sfile, trim(run_name)//'.cdf')
+    call sdatio_init(gnostics%sfile, trim(run_name)//'.out.nc')
     if (gnostics%parallel) then 
        call set_parallel(gnostics%sfile, mp_comm)
     else
@@ -151,6 +159,7 @@ contains
     call create_dimensions(gnostics%parallel.or.proc0)
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
+
     
     if(proc0.and.debug) write (*,*) 'finished initializing new diagnostics'
   end subroutine init_gs2_diagnostics_new
@@ -208,12 +217,13 @@ contains
   subroutine set_ascii_file_switches
     implicit none
     gnostics%ascii_files%write_to_out   = .true.
-    gnostics%ascii_files%write_to_fields = gnostics%write_fields  .and.  gnostics%write_ascii
+    !gnostics%ascii_files%write_to_fields = gnostics%write_fields  .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_heat   = gnostics%write_heating .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_heat2  = gnostics%write_heating .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_lpc    = gnostics%write_verr    .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_vres   = gnostics%write_verr    .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_vres2  = gnostics%write_verr    .and.  gnostics%write_ascii
+    gnostics%ascii_files%write_to_cres   = gnostics%write_cerr    .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_phase  = gnostics%write_cross_phase .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_jext   = gnostics%write_jext    .and.  gnostics%write_ascii
     gnostics%ascii_files%write_to_parity = gnostics%write_parity  .and.  gnostics%write_ascii
@@ -235,14 +245,23 @@ contains
     use mp, only: proc0
     use fields_arrays, only: phinew, bparnew
     use simpledataio, only: closefile
+    use unit_tests, only: debug_message
+    
     implicit none
+    integer, parameter :: verb=3
     if (.not. gnostics%write_any) return
     
+    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+      & calling save_restart_dist_fn')
     call save_restart_dist_fn
     
+    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+      & calling run_old_final_routines')
     call run_old_final_routines
     
     deallocate(gnostics%fluxfac)
+    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+      & finishing submodules')
     call finish_diagnostics_fluxes
     call finish_diagnostics_omega
     call finish_diagnostics_antenna(gnostics)
@@ -261,7 +280,7 @@ contains
     if (gnostics%write_gyx) call write_fyx (phinew,bparnew,.true.)
     if (gnostics%write_g) call write_f (.true.)
     if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.true.,gnostics%istep)
-    if (gnostics%write_cerr) call collision_error(phinew,bparnew,.true.)
+    !if (gnostics%write_cerr) call collision_error(phinew,bparnew,.true.)
     
     call finish_diagnostics_config(gnostics)
   end subroutine finish_gs2_diagnostics_new
@@ -299,11 +318,15 @@ contains
     use fields_arrays, only: phinew, bparnew
     use dist_fn, only: write_fyx, write_f, write_poly, collision_error
     implicit none
+    integer :: nwrite_large
+
+    nwrite_large = gnostics%nwrite*gnostics%nwrite_mult
     ! Random stuff that needs to be put in properly or removed
-    if (gnostics%write_gyx .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_fyx (phinew,bparnew,.false.)
-    if (gnostics%write_g   .and. mod(gnostics%istep,gnostics%nwrite_large) == 0) call write_f (.false.)
+    if (gnostics%write_gyx .and. &
+      mod(gnostics%istep,nwrite_large) == 0) call write_fyx (phinew,bparnew,.false.)
+    if (gnostics%write_g   .and. mod(gnostics%istep,nwrite_large) == 0) call write_f (.false.)
     if (gnostics%write_lpoly) call write_poly (phinew,bparnew,.false.,gnostics%istep)
-    if (gnostics%write_cerr) call collision_error(phinew,bparnew,.false.)
+    !if (gnostics%write_cerr) call collision_error(phinew,bparnew,.false.)
   end subroutine run_diagnostics_to_be_updated
   
   !> Create or write all variables according to the value of istep:
@@ -321,8 +344,10 @@ contains
     use diagnostics_moments, only: write_moments, write_full_moments_notgc
     use diagnostics_omega, only: calculate_omega, write_omega
     use diagnostics_velocity_space, only: write_velocity_space_checks
+    use diagnostics_velocity_space, only: write_collision_error
     use diagnostics_heating, only: calculate_heating, write_heating
     use diagnostics_geometry, only: write_geometry
+    use diagnostics_normalisations, only: write_normalisations
     use diagnostics_nonlinear_convergence, only: check_nonlin_convergence
     use diagnostics_turbulence, only: write_cross_phase, write_correlation
     use diagnostics_turbulence, only: write_correlation_extend
@@ -370,11 +395,13 @@ contains
          .or.  gnostics%is_trinity_run)
     
     gnostics%user_time = user_time
+    if (istep .eq. 0) gnostics%start_time = user_time
     
     ! Write constants/parameters
     if (istep < 1) then
        call write_dimensions
        call write_geometry(gnostics)
+       call write_normalisations(gnostics)
        call write_input_file(gnostics)
     end if
     
@@ -397,9 +424,10 @@ contains
        if (gnostics%write_symmetry) call write_symmetry(gnostics)
        if (gnostics%write_parity) call write_parity(gnostics)
        if (gnostics%write_verr) call write_velocity_space_checks(gnostics)
+       if (gnostics%write_cerr) call write_collision_error(gnostics) ! NB only ascii atm
        if (gnostics%write_moments) call write_moments(gnostics)
        if (gnostics%write_full_moments_notgc) call write_full_moments_notgc(gnostics)
-       if (gnostics%write_movie) call write_movie(gnostics)
+       if (gnostics%make_movie) call write_movie(gnostics)
        if (gnostics%write_heating) call write_heating(gnostics)
        if (nonlin.and.gnostics%use_nonlin_convergence) call check_nonlin_convergence(gnostics)
        if (gnostics%write_cross_phase.and.has_electron_species(spec)) call write_cross_phase(gnostics)
@@ -436,6 +464,30 @@ contains
     
     exit = gnostics%exit
   end subroutine run_diagnostics
+
+  !> Reset cumulative flux and heating averages
+  !! that are used, e.g. for Trinity.
+  !! Does not at the moment apply to average
+  !! growth rates.
+  subroutine reset_averages_and_counters
+    use nonlinear_terms, only: nonlin
+    use diagnostics_nonlinear_convergence, only: &
+      dnc_reset => reset_averages_and_counters
+    use diagnostics_fluxes, only: &
+      fluxes_reset => reset_averages_and_counters
+    use diagnostics_heating, only: &
+      heating_reset => reset_averages_and_counters
+    use gs2_time, only: user_time
+    
+! HJL > reset values for convergence condition
+    if (nonlin.and.gnostics%use_nonlin_convergence) &
+      call dnc_reset(gnostics)
+    call fluxes_reset(gnostics)
+    call heating_reset(gnostics)
+
+    gnostics%start_time = user_time
+
+  end subroutine reset_averages_and_counters
   
   subroutine run_old_final_routines
     use diagnostics_final_routines,only: do_write_eigenfunc
@@ -453,16 +505,24 @@ contains
     use mp, only: proc0
     use kt_grids, only: ntheta0, naky
     use theta_grid, only: ntgrid
+    use unit_tests, only: debug_message
     implicit none
     complex, dimension (ntheta0, naky) :: phi0
+    integer, parameter :: verb=3
     
     if(gnostics%write_kpar.or.gnostics%write_gs) call init_par_filter
     
     ! ntg_out is imported from diagnostics_final_routines
     ntg_out = ntgrid
     if (proc0) then
+       call debug_message(verb, 'gs2_diagnostics_new::run_old_final_routines &
+         & calling do_write_eigenfunc')
        if (gnostics%write_eigenfunc) call do_write_eigenfunc(gnostics,phi0)
+       call debug_message(verb, 'gs2_diagnostics_new::run_old_final_routines &
+         & calling do_write_final_fields')
        if (gnostics%write_final_fields) call do_write_final_fields(gnostics)
+       call debug_message(verb, 'gs2_diagnostics_new::run_old_final_routines &
+         & calling do_write_kpar')
        if (gnostics%write_kpar) call do_write_kpar(gnostics)
        if (gnostics%write_final_epar) call do_write_final_epar(gnostics)
        
