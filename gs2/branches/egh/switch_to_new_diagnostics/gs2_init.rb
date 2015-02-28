@@ -1,5 +1,9 @@
 # This file generates the file gs2_init.f90.
 # For more information see the help in gs2_init.f90
+# If you want to add a new module to the initialization
+# system, see the help for the DEPENDENCIES constant
+# just below. 
+#
 # To run:
 #    $ ruby gs2_init.rb gs2_init.f90
 #
@@ -9,6 +13,26 @@
 
 class GenerateInit
 
+  # If you want to add a new module to this list, what you
+  # have to do is include it in the following form:
+  #
+  # ['new_module_name', ['dependency1', 'dependency2']],
+  #
+  # where dependency1 etc are modules that need to be 
+  # initialized before your new module.
+  #
+  # Importantly, you also have to make sure that your
+  # module has the public subroutines init_new_module_name
+  # and finish_new_module_name. This module will call
+  # the first subroutine when initializing your module,
+  # and the second when finishing it.
+  #
+  # More sophisticated initialisation of your module is
+  # possible, (e.g. passing parameters to the init
+  # or finish functions, but then you have to add your own case 
+  # to the subroutine function below. See dist_fn_layouts
+  # as an example.
+  #
   # Initialization levels should be listed in order of cost
   # with highest cost at the top. Overrides should all be at
   # the bottome to make sure they appear as high as possible
@@ -16,7 +40,7 @@ class GenerateInit
   DEPENDENCIES = [ 
     # full is a special level to signify complete
     # initialiation
-    ['full', ['set_initial_values']],
+    ['full', ['set_initial_values', 'normalisations']],
     ['fields' , ['collisions', 'antenna', 'dist_fn_level_3']],
     ['dist_fn_level_3' , ['dist_fn_level_2', 'hyper', 'override_timestep']],
     ['dist_fn_level_1' , ['dist_fn_arrays']], 
@@ -32,6 +56,7 @@ class GenerateInit
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid']],
     ['antenna' , ['species', 'run_parameters', 'override_profiles']],
     ['theta_grid' , ['theta_grid_params', 'override_miller_geometry']],
+    ['normalisations', []],
     ['theta_grid_params' , []],
     ['kt_grids' , ['theta_grid']],
     ['gs2_save' , []],
@@ -64,13 +89,6 @@ class GenerateInit
   # A list of levels in ascending order of dependence, i.e. the leftmost
   # in the array must be initialized first.
   LEVELS = []
-            #['theta_grid', 'kt_grids', 'gs2_layouts', 'gs2_save'],
-            #['run_parameters', 'init_g', 'species', 'le_grids'],
-            #['dist_fn_layouts', 'antenna'],
-            #['nonlinear_terms', 'collisions'],
-            #['fields'],
-           #].flatten
-
   # Here we make a hash of {module => [dependencies]}
   # We can't make DEPENDENCIES itself a hash because 
   # we care about the order in which the modules
@@ -80,17 +98,10 @@ class GenerateInit
   DEPENDENCIES.each{|mod,dependencies| deps[mod] = dependencies}
   modules_remaining = DEPENDENCIES.map{|mod,dependencies| mod}
 
-  #p deps, 'deps'
-  #exit
-
+  # Now we make the LEVELS list. This block determines
+  # the order the levels have to be reached, i.e.
+  # the order in which modules are initialized.
   while modules_remaining.size > 0
-    #p 'modules_remaining', modules_remaining, 'LEVELS', LEVELS
-    #deps.keys.each do |k|
-      #if deps[k] - LEVELS == []
-        #LEVELS.push k
-        #deps.delete k
-      #end 
-    #end
     modules_remaining.each do |mod|
       if deps[mod] - LEVELS == [] # i.e. all dependencies already in LEVELS
         LEVELS.push mod
@@ -100,12 +111,15 @@ class GenerateInit
     end
   end 
   
-  #p LEVELS, 'LEVELS'
 
+  # This is the basic level that must be reached
+  # before calling the init subroutine from this
+  # module.
   GS2_LEVEL = 1
 
   @@level_counter = GS2_LEVEL+1
   
+  # The constructor for each level object.
   def initialize(level)
     @level_name = level
 		@level_sub_name = level + '_subroutine'
@@ -121,10 +135,14 @@ class GenerateInit
     @@level_counter += 1
   end
 
+  # Declaration of the level within the 
+  # level_list_type object.
   def level_declaration
     "integer :: #@level_name = #@level_number"
   end 
 
+  # Code for determining if the module should
+  # be initialized.
   def up
     "if (up() .and. current%level .lt. init_level_list%#@level_name) call #@level_sub_name"
   end  

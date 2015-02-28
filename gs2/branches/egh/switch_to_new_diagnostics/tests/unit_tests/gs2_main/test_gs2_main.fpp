@@ -1,7 +1,8 @@
 
-!> This unit runs a tiny grid with nstep=10000, and checks
-!! that both the .stop and the avail_cpu_time mechanisms
-!! are working
+!> This unit tests the gs2 main interface,
+!! and by repeatedly initializing and finalizing
+!! gs2, tests that gs2 is being properly tidied up,
+!! variables deallocated etc.
 !
 program test_gs2_main
   use gs2_main

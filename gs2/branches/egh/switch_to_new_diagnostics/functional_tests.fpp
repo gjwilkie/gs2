@@ -42,6 +42,10 @@ contains
     use gs2_diagnostics, only: get_omegaavg
     use kt_grids, only: ntheta0, naky
     use mp, only: proc0
+    use run_parameters, only: use_old_diagnostics
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: gnostics
+#endif
     real, dimension(naky), intent(in) :: rslt
     real, intent(in) :: err
     logical :: check_growth_rate
@@ -54,7 +58,13 @@ contains
 
     if (proc0) then
        call announce_check('growth rate')
-       call get_omegaavg(ilast_step-1, dummy, omegaavg)
+       if (use_old_diagnostics) then
+         call get_omegaavg(ilast_step-1, dummy, omegaavg)
+       else
+#ifdef NEW_DIAG
+         omegaavg = gnostics%current_results%omega_average
+#endif
+       end if
        check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
        call process_check(check_growth_rate, check_result, 'growth rate')
     end if
@@ -69,6 +79,10 @@ contains
     use kt_grids, only: aky
     use run_parameters, only: wstar_units
     use job_manage, only: njobs
+    use run_parameters, only: use_old_diagnostics
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: gnostics
+#endif
     implicit none
     real, intent(in) :: err
     real, dimension(naky, njobs) :: omegas
@@ -86,7 +100,13 @@ contains
 
     if (proc0) then
        !call announce_check('growth rate')
-       call get_omegaavg(ilast_step-1, dummy, omegaavg)
+       if (use_old_diagnostics) then
+         call get_omegaavg(ilast_step-1, dummy, omegaavg)
+       else
+#ifdef NEW_DIAG
+         omegaavg = gnostics%current_results%omega_average
+#endif
+       end if
        !check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
        !call process_check(check_growth_rate, check_result, 'growth rate')
        call scope(allprocs)

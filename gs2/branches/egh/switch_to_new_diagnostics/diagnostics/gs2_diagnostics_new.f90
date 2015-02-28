@@ -11,6 +11,7 @@ module gs2_diagnostics_new
   
   public :: init_gs2_diagnostics_new
   public :: finish_gs2_diagnostics_new
+  public :: reset_averages_and_counters
   public :: run_diagnostics
   public :: gnostics
   
@@ -384,6 +385,7 @@ contains
          .or.  gnostics%is_trinity_run)
     
     gnostics%user_time = user_time
+    if (istep .eq. 0) gnostics%start_time = user_time
     
     ! Write constants/parameters
     if (istep < 1) then
@@ -451,6 +453,30 @@ contains
     
     exit = gnostics%exit
   end subroutine run_diagnostics
+
+  !> Reset cumulative flux and heating averages
+  !! that are used, e.g. for Trinity.
+  !! Does not at the moment apply to average
+  !! growth rates.
+  subroutine reset_averages_and_counters
+    use nonlinear_terms, only: nonlin
+    use diagnostics_nonlinear_convergence, only: &
+      dnc_reset => reset_averages_and_counters
+    use diagnostics_fluxes, only: &
+      fluxes_reset => reset_averages_and_counters
+    use diagnostics_heating, only: &
+      heating_reset => reset_averages_and_counters
+    use gs2_time, only: user_time
+    
+! HJL > reset values for convergence condition
+    if (nonlin.and.gnostics%use_nonlin_convergence) &
+      call dnc_reset(gnostics)
+    call fluxes_reset(gnostics)
+    call heating_reset(gnostics)
+
+    gnostics%start_time = user_time
+
+  end subroutine reset_averages_and_counters
   
   subroutine run_old_final_routines
     use diagnostics_final_routines,only: do_write_eigenfunc

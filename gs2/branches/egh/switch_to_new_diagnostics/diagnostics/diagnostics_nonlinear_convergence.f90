@@ -8,6 +8,7 @@ module diagnostics_nonlinear_convergence
   public :: check_nonlin_convergence
   public :: init_nonlinear_convergence
   public :: finish_nonlinear_convergence
+  public :: reset_averages_and_counters
 
   integer :: trin_istep = 0
   integer :: conv_isteps_converged = 0
@@ -28,6 +29,19 @@ contains
     type(diagnostics_type), intent(in) :: gnostics
     deallocate(conv_heat)
   end subroutine  finish_nonlinear_convergence
+
+  subroutine reset_averages_and_counters(gnostics)
+    use diagnostics_config, only: diagnostics_type
+    use mp, only: proc0
+    implicit none
+    type(diagnostics_type), intent(in) :: gnostics
+    if (proc0) then
+       conv_isteps_converged = 0
+       heat_sum_av = 0.0
+       conv_heat = 0.0
+       trin_istep = 0
+     end if
+  end subroutine reset_averages_and_counters
 
   !> Trinity convergence condition - simple and experimental
   !! look for the averaged differential of the summed averaged heat flux to drop below a threshold

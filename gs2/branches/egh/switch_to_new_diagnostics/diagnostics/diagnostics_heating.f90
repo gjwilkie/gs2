@@ -8,6 +8,9 @@ module diagnostics_heating
   public :: init_diagnostics_heating, finish_diagnostics_heating
   public :: calculate_heating, write_heating
 
+  !> Set averages in gnostics\%current_results to 0.
+  public :: reset_averages_and_counters
+
   type (heating_diagnostics) :: h
   type (heating_diagnostics), dimension(:), allocatable :: h_hist
   type (heating_diagnostics), dimension(:,:), allocatable :: hk
@@ -58,6 +61,13 @@ contains
        allocate (hk_hist(1,1,0))
     end if
   end subroutine init_diagnostics_heating
+
+  subroutine reset_averages_and_counters(gnostics)
+    use diagnostics_config, only: diagnostics_type
+    implicit none
+    type(diagnostics_type), intent (inout) :: gnostics
+    gnostics%current_results%species_heating_avg = 0.0
+  end subroutine reset_averages_and_counters
   
   subroutine calculate_heating (gnostics)
     use mp, only: proc0
