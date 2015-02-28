@@ -229,6 +229,7 @@ module diagnostics_config
      real :: total_momentum_flux
      real :: total_particle_flux
      real :: max_growth_rate
+     real :: diffusivity
 
      ! Individual heat fluxes
      real, dimension(:), allocatable :: species_es_heat_flux
@@ -249,6 +250,10 @@ module diagnostics_config
      ! Heating
      real, dimension(:), allocatable :: species_heating
      real, dimension(:), allocatable :: species_heating_avg
+
+     ! Growth rates
+     complex, dimension(:,:), allocatable :: omega_average
+
   end type results_summary_type
 
   !> A type for storing the diagnostics configuration,
@@ -274,6 +279,7 @@ module diagnostics_config
      logical :: is_trinity_run
      real :: user_time
      real :: user_time_old
+     real :: start_time
      real, dimension(:), allocatable :: fluxfac
      #{generators.map{|g| g.declaration}.join("\n     ") }
   end type diagnostics_type
@@ -299,6 +305,7 @@ contains
 
   subroutine allocate_current_results(gnostics)
     use species, only: nspec
+    use kt_grids, only: naky, ntheta0
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
 
@@ -315,6 +322,7 @@ contains
     allocate(gnostics%current_results%species_particle_flux_avg(nspec))
     allocate(gnostics%current_results%species_heating(nspec))
     allocate(gnostics%current_results%species_heating_avg(nspec))
+    allocate(gnostics%current_results%omega_average(ntheta0, naky))
   end subroutine allocate_current_results
 
   subroutine deallocate_current_results(gnostics)
@@ -324,6 +332,9 @@ contains
     ! how to correctly deallocate the derived type
     !<DD>What's written below should work fine, just need to
     !deallocate anything explicitly allocated.
+    ! EGH: I know what the problem is, the results should be pointers
+    ! and not allocatable because they are in a derived type. Will
+    ! fix shortly.
     return
     
     ! One call deallocates gnostics and all allocatable arrays 

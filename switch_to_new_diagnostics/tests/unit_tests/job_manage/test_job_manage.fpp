@@ -9,6 +9,9 @@ program test_job_manage
   !call test_gs2('Linear CBC (unit test) to test new diagnostics', checks)
     use gs2_main, only: run_gs2, finish_gs2, trin_finish_gs2
     !use gs2_main, only: run_gs2, trin_finish_gs2
+    use gs2_main, only: old_iface_state, finalize_gs2, finalize_diagnostics
+    use gs2_main, only: reset_equations, initialize_diagnostics
+    use gs2_main, only: finalize_equations
     use unit_tests
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics, only: finish_gs2_diagnostics
@@ -44,6 +47,7 @@ program test_job_manage
 #ifdef NEW_DIAG
     !call finish_gs2_diagnostics_new
 #endif 
+    call reset_equations(old_iface_state)
 
     !write (*,*) 'calling trin_finish_gs2'
     !call trin_finish_gs2
@@ -56,14 +60,18 @@ program test_job_manage
      "that gs2 doesn't run without limit when avail_cpu_time is set")
 
 
-    call finish_gs2_diagnostics(ilast_step)
-#ifdef NEW_DIAG
-    call finish_gs2_diagnostics_new
-#endif 
-
-   call finish_gs2
+!    call finish_gs2_diagnostics(ilast_step)
+!#ifdef NEW_DIAG
+!    call finish_gs2_diagnostics_new
+!#endif 
+!
+!   call finish_gs2
 
     !call trin_finish_gs2
+
+    call finalize_diagnostics(old_iface_state)
+    call finalize_equations(old_iface_state)
+    call finalize_gs2(old_iface_state)
 
 
 

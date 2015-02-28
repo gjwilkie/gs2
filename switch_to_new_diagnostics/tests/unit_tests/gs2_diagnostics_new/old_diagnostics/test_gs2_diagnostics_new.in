@@ -18,60 +18,6 @@
 !==============================================================================
 
 
-&diagnostics_config
-!     These two are overriden to be true if the verbosity is high enough
-      print_line = .false.
-      print_flux_line = .false.
-
-      nwrite = 10
-      write_any = .true.
-      write_fields = .true.
-      write_phi_over_time = .false.
-      write_apar_over_time = .false.
-      write_bpar_over_time = .false.
-      write_fluxes = .true.
-      write_fluxes_by_mode = .true.
-
-      write_ntot_over_time = .true.
-
-      write_movie = .true.
-      write_heating = .true.
-
-      write_g = .true.
-      write_lpoly = .true.
-
-      omegatol = -0.001
-
-      use_nonlin_convergence = .true.
-
-      write_cross_phase = .true.
-
-      write_jext = .true.
-
-      write_symmetry = .true.
-
-      write_full_moments_notgc = .true.
-
-      write_correlation = .true.
-      write_correlation_extend = .true.
-
-      write_parity = .true.
-
-write_eigenfunc=.true.
-write_final_fields=.true.
-write_kpar=.true.
-write_final_epar=.true.
-write_final_db=.true.
-write_final_moments=.true.
-write_final_antot=.true.
-write_gs=.true.
-
-save_for_restart=.true.
-
-save_distfn=.true.
-
-enable_parallel = .true.
-/
 
 !==============================
 !GENERAL PARAMETERS  
@@ -80,6 +26,7 @@ enable_parallel = .true.
  beta = 0.1 ! Ratio of particle to magnetic pressure (reference Beta, not total beta):  beta=n_0 T_0 /( B^2 / (8 pi))
  zeff = 1.0 ! Effective ionic charge.
 /
+
 
 &kt_grids_knobs
  grid_option = "box" ! The general layout of the perpendicular grid.
@@ -154,6 +101,7 @@ enable_parallel = .true.
 !  
 !==============================
 &knobs
+ use_old_diagnostics = .true.
  wstar_units = .false. ! For linear runs only. Evolves each k_y with a different timestep.
  fphi = 1.0 ! Multiplies Phi (electrostatic potential).
  fapar = 1.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)

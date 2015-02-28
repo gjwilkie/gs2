@@ -50,6 +50,7 @@ program test_gs2_reinit
   use theta_grid, only: ntgrid, init_theta_grid
   use gs2_layouts, only: init_gs2_layouts, g_lo, ie_idx
   use fields_local, only: fields_local_functional, fieldmat
+  use run_parameters, only: use_old_diagnostics
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
     use gs2_diagnostics_new, only: gnostics
@@ -92,6 +93,7 @@ program test_gs2_reinit
 
    call initialize_gs2(old_iface_state)
    call initialize_equations(old_iface_state)
+   call initialize_diagnostics(old_iface_state)
 
     allocate(gbak(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
     allocate(phi_bak(-ntgrid:ntgrid,ntheta0,naky))
@@ -122,7 +124,7 @@ program test_gs2_reinit
 
     !call run_gs2(mp_comm)
 
-    call finalize_diagnostics(old_iface_state)
+    !call finalize_diagnostics(old_iface_state)
 
     call announce_test('init down and up')
     call finalize_diagnostics(old_iface_state)
@@ -261,11 +263,14 @@ program test_gs2_reinit
         !"average heat flux")
 
 
-    call finish_gs2_diagnostics(ilast_step)
-
+    if (use_old_diagnostics) then
+      call finish_gs2_diagnostics(ilast_step)
+    else
 #ifdef NEW_DIAG
-    call finish_gs2_diagnostics_new
+      call finish_gs2_diagnostics_new
 #endif
+    end if
+
     call finish_gs2
 
    call close_module_test("gs2_reinit")
