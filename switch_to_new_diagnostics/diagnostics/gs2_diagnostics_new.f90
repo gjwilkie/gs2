@@ -347,6 +347,7 @@ contains
     use diagnostics_velocity_space, only: write_collision_error
     use diagnostics_heating, only: calculate_heating, write_heating
     use diagnostics_geometry, only: write_geometry
+    use diagnostics_normalisations, only: write_normalisations
     use diagnostics_nonlinear_convergence, only: check_nonlin_convergence
     use diagnostics_turbulence, only: write_cross_phase, write_correlation
     use diagnostics_turbulence, only: write_correlation_extend
@@ -400,6 +401,7 @@ contains
     if (istep < 1) then
        call write_dimensions
        call write_geometry(gnostics)
+       call write_normalisations(gnostics)
        call write_input_file(gnostics)
     end if
     

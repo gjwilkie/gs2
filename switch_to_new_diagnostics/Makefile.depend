@@ -100,8 +100,10 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 overrides.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
@@ -164,6 +166,7 @@ ffttester_mod = \
 	 diagnostics_metadata.o \
 	 diagnostics_moments.o \
 	 diagnostics_nonlinear_convergence.o \
+	 diagnostics_normalisations.o \
 	 diagnostics_omega.o \
 	 diagnostics_screen_printout.o \
 	 diagnostics_turbulence.o \
@@ -206,6 +209,7 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
@@ -301,6 +305,7 @@ gs2_mod = \
 	 diagnostics_metadata.o \
 	 diagnostics_moments.o \
 	 diagnostics_nonlinear_convergence.o \
+	 diagnostics_normalisations.o \
 	 diagnostics_omega.o \
 	 diagnostics_screen_printout.o \
 	 diagnostics_turbulence.o \
@@ -343,6 +348,7 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
@@ -444,6 +450,7 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
@@ -555,6 +562,7 @@ diagnostics_config.o: \
 	 diagnostics_ascii.o \
 	 diagnostics_dimensions.o \
 	 file_utils.o \
+	 kt_grids.o \
 	 mp.o \
 	 simpledataiof.o \
 	 species.o \
@@ -669,6 +677,9 @@ diagnostics_nonlinear_convergence.o: \
 	 gs2_time.o \
 	 job_manage.o \
 	 mp.o 
+diagnostics_normalisations.o: \
+	 diagnostics_config.o \
+	 normalisations.o 
 diagnostics_omega.o: \
 	 constants.o \
 	 diagnostics_config.o \
@@ -706,11 +717,17 @@ diagnostics_velocity_space.o: \
 	 diagnostics_create_and_write.o \
 	 diagnostics_dimensions.o \
 	 dist_fn.o \
+	 dist_fn_arrays.o \
 	 fields_arrays.o \
+	 file_utils.o \
+	 gs2_layouts.o \
 	 gs2_time.o \
 	 le_grids.o \
 	 mp.o \
-	 species.o 
+	 redistribute.o \
+	 run_parameters.o \
+	 species.o \
+	 theta_grid.o 
 dist_fn.o: \
 	 antenna.o \
 	 collisions.o \
@@ -935,6 +952,7 @@ gs2_diagnostics_new.o: \
 	 diagnostics_metadata.o \
 	 diagnostics_moments.o \
 	 diagnostics_nonlinear_convergence.o \
+	 diagnostics_normalisations.o \
 	 diagnostics_omega.o \
 	 diagnostics_screen_printout.o \
 	 diagnostics_turbulence.o \
@@ -954,6 +972,7 @@ gs2_diagnostics_new.o: \
 	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
+	 unit_tests.o \
 	 volume_averages.o 
 gs2_heating.o: \
 	 mp.o \
@@ -974,6 +993,7 @@ gs2_init.o: \
 	 le_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
+	 normalisations.o \
 	 overrides.o \
 	 run_parameters.o \
 	 species.o \
@@ -1061,7 +1081,8 @@ gs2_save.o: \
 	 netcdf_utils.o \
 	 parameter_scan_arrays.o \
 	 species.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 unit_tests.o 
 gs2_time.o: 
 gs2_transforms.o: \
 	 fft_work.o \
@@ -1194,6 +1215,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1240,7 +1262,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
