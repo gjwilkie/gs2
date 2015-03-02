@@ -528,9 +528,9 @@ contains
   end subroutine initialize_diagnostics
 
   !> Run the initial value solver. nstep_run must
-  !! be less than or equal to state%nstep, which is 
+  !! be less than or equal to state\%nstep, which is 
   !! set from the input file. The cumulative number of
-  !! steps that can be run cannot exceed state%nstep, 
+  !! steps that can be run cannot exceed state\%nstep, 
   !! without a call to reset_equations.
   !! Examples:
   !!
@@ -548,7 +548,7 @@ contains
   !! growth rate has converged). 
   !!
   !! This example will cause an error because the total number
-  !! of steps exceeds state%nstep:
+  !! of steps exceeds state\%nstep:
   !!
   !!      call evolve_equations(state, state%nstep/2) 
   !!      call evolve_equations(state, state%nstep/2)
