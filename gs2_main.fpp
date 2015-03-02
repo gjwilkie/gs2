@@ -267,7 +267,7 @@ contains
   !> Initialise message passing, open the input file, split the 
   !! communicator if running in list mode or if nensembles > 1,
   !! initialize the timers. After calling this function, gs2
-  !! reaches init%level = basic. If it is desired to provide
+  !! reaches init\%level = basic. If it is desired to provide
   !! an external commuicator or set the input file name externally,
   !! these should be set before calling this function. 
   subroutine initialize_gs2(state)
@@ -391,7 +391,7 @@ contains
 
   !> Initialize all the modules which are used to evolve the 
   !! equations. After calling this function, gs2 reaches 
-  !! init%level = full. 
+  !! init\%level = full. 
   subroutine initialize_equations(state)
     use fields, only: init_fields
     use geometry, only: surfarea, dvdrhon
@@ -534,12 +534,12 @@ contains
   !! without a call to reset_equations.
   !! Examples:
   !!
-  !!    call evolve_equations(state, state%nstep) ! Basic run
+  !!      call evolve_equations(state, state%nstep) ! Basic run
   !!
   !! Note that these two calls: 
   !!  
-  !!    call evolve_equations(state, state%nstep/2) 
-  !!    call evolve_equations(state, state%nstep/2)
+  !!      call evolve_equations(state, state%nstep/2) 
+  !!      call evolve_equations(state, state%nstep/2)
   !!
   !! will in general have the identical effect to the single call above.
   !! There are circumstances when this is not true,
@@ -550,16 +550,16 @@ contains
   !! This example will cause an error because the total number
   !! of steps exceeds state%nstep:
   !!
-  !!    call evolve_equations(state, state%nstep/2) 
-  !!    call evolve_equations(state, state%nstep/2)
-  !!    call evolve_equations(state, state%nstep/2)
+  !!      call evolve_equations(state, state%nstep/2) 
+  !!      call evolve_equations(state, state%nstep/2)
+  !!      call evolve_equations(state, state%nstep/2)
   !!
   !! This is OK:
   !!
-  !!    call evolve_equations(state, state%nstep/2) 
-  !!    call evolve_equations(state, state%nstep/2)
-  !!    call reset_equations(state)
-  !!    call evolve_equations(state, state%nstep/2)
+  !!      call evolve_equations(state, state%nstep/2) 
+  !!      call evolve_equations(state, state%nstep/2)
+  !!      call reset_equations(state)
+  !!      call evolve_equations(state, state%nstep/2)
 
   subroutine evolve_equations(state, nstep_run)
     use collisions, only: vnmult
