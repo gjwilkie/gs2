@@ -26,11 +26,11 @@ module normalisations
      character(len=6), dimension(:), allocatable, public :: names
 
      !The normalisations
-     real :: aref !Reference mass in atomic mass units
+     real :: mref !Reference mass in atomic mass units
      real :: zref !Reference charge in units of the elementary charge
      real :: nref !Reference density in m^3
      real :: tref !Reference temperature in eV
-     real :: lref !Reference length in m
+     real :: aref !Reference length in m
      real :: vref !Reference (thermal) velocity in m/s
      real :: bref !Reference magnetic field in Tesla
      real :: rhoref !Reference Larmor radius in m
@@ -74,16 +74,16 @@ contains
     !add some string utils to do this sort of stuff we'll rely
     !on developer doing the right thing.
     select case (trim(val_name))
-    case("aref")
-       self%aref=val
+    case("mref")
+       self%mref=val
     case("zref")
        self%zref=val
     case("nref")
        self%nref=val
     case("tref")
        self%tref=val
-    case("lref")
-       self%lref=val
+    case("aref")
+       self%aref=val
     case("vref")
        self%vref=val
     case("bref")
@@ -106,16 +106,16 @@ contains
     !add some string utils to do this sort of stuff we'll rely
     !on developer doing the right thing.
     select case (trim(val_name))
-    case("aref")
-       norms_get_value=self%aref
+    case("mref")
+       norms_get_value=self%mref
     case("zref")
        norms_get_value=self%zref
     case("nref")
        norms_get_value=self%nref
     case("tref")
        norms_get_value=self%tref
-    case("lref")
-       norms_get_value=self%lref
+    case("aref")
+       norms_get_value=self%aref
     case("vref")
        norms_get_value=self%vref
     case("bref")
@@ -132,17 +132,17 @@ contains
     use mp, only: proc0, broadcast
     implicit none
     class(norms_type), intent(in out) :: self
-    real :: aref,zref,nref,tref,lref,vref,bref,rhoref
+    real :: mref,zref,nref,tref,aref,vref,bref,rhoref
     integer :: in_file
-    namelist/normalisations/aref,zref,nref,tref,lref,vref,bref,rhoref
+    namelist/normalisations/mref,zref,nref,tref,aref,vref,bref,rhoref
 
     !Set defaults, check if namelist present and read
     if(proc0) then
-       aref = self%def_val
+       mref = self%def_val
        zref = self%def_val
        nref = self%def_val
        tref = self%def_val
-       lref = self%def_val
+       aref = self%def_val
        vref = self%def_val
        bref = self%def_val
        rhoref = self%def_val
@@ -152,21 +152,21 @@ contains
     endif
 
     !Now broadcast values
-    call broadcast(aref)
+    call broadcast(mref)
     call broadcast(zref)
     call broadcast(nref)
     call broadcast(tref)
-    call broadcast(lref)
+    call broadcast(aref)
     call broadcast(vref)
     call broadcast(bref)
     call broadcast(rhoref)
 
     !Now copy parameters into holder type
-    call self%set_value("aref",aref)
+    call self%set_value("mref",mref)
     call self%set_value("zref",zref)
     call self%set_value("nref",nref)
     call self%set_value("tref",tref)
-    call self%set_value("lref",lref)
+    call self%set_value("aref",aref)
     call self%set_value("vref",vref)
     call self%set_value("bref",bref)
     call self%set_value("rhoref",rhoref)
@@ -180,11 +180,11 @@ contains
     !First setup allowed normalisations
     self%nnorm=8
     if(.not.allocated(self%names)) allocate(self%names(self%nnorm))
-    self%names(1)="aref"
+    self%names(1)="mref"
     self%names(2)="zref"
     self%names(3)="nref"
     self%names(4)="tref"
-    self%names(5)="lref"
+    self%names(5)="aref"
     self%names(6)="vref"
     self%names(7)="bref"
     self%names(8)="rhoref"
