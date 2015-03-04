@@ -568,6 +568,7 @@ contains
     use gs2_diagnostics, only: nsave, loop_diagnostics
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: run_diagnostics
+    use gs2_diagnostics_new, only: gnostics
 #endif
     use gs2_reinit, only: reset_time_step
     use gs2_reinit, only: check_time_step
@@ -639,8 +640,15 @@ contains
           if(state%exit) exit
        enddo
        
-       if (nsave > 0 .and. mod(istep, nsave) == 0) &
-            call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+       if (use_old_diagnostics) then
+         if (nsave > 0 .and. mod(istep, nsave) == 0) &
+              call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+       else
+#ifdef NEW_DIAG
+         if (gnostics%nsave > 0 .and. mod(istep, gnostics%nsave) == 0) &
+              call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
+#endif
+       end if
        call update_time
        if(proc0) call time_message(.false.,state%timers%diagnostics,' Diagnostics')
        if (use_old_diagnostics) then 

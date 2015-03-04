@@ -86,8 +86,8 @@ contains
 
     ! For the moment, hardwire these so as not to 
     ! conflict with the old module. 
-    gnostics%save_for_restart = .false.
-    gnostics%save_distfn = .false.
+    !gnostics%save_for_restart = .false.
+    !gnostics%save_distfn = .false.
     
     ! Set whether this is a Trinity run.. enforces certain 
     ! calculations
