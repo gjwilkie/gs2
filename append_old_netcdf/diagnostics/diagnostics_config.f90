@@ -82,6 +82,7 @@ module diagnostics_config
      integer :: nwrite
      integer :: nwrite_mult
      logical :: write_any
+     logical :: append_old
      logical :: enable_parallel
      logical :: serial_netcdf4
      integer :: igomega
@@ -231,6 +232,7 @@ contains
     integer :: nwrite
     integer :: nwrite_mult
     logical :: write_any
+    logical :: append_old
     logical :: enable_parallel
     logical :: serial_netcdf4
     integer :: igomega
@@ -305,6 +307,7 @@ contains
          nwrite, &
          nwrite_mult, &
          write_any, &
+         append_old, &
          enable_parallel, &
          serial_netcdf4, &
          igomega, &
@@ -383,6 +386,7 @@ contains
        nwrite = 10
        nwrite_mult = 10
        write_any = .true.
+       append_old = .false.
        enable_parallel = .false.
        serial_netcdf4 = .false.
        igomega = 0
@@ -460,6 +464,7 @@ contains
        gnostics%nwrite = nwrite
        gnostics%nwrite_mult = nwrite_mult
        gnostics%write_any = write_any
+       gnostics%append_old = append_old
        gnostics%enable_parallel = enable_parallel
        gnostics%serial_netcdf4 = serial_netcdf4
        gnostics%igomega = igomega
@@ -536,6 +541,7 @@ contains
     call broadcast (gnostics%nwrite)
     call broadcast (gnostics%nwrite_mult)
     call broadcast (gnostics%write_any)
+    call broadcast (gnostics%append_old)
     call broadcast (gnostics%enable_parallel)
     call broadcast (gnostics%serial_netcdf4)
     call broadcast (gnostics%igomega)
