@@ -11,6 +11,11 @@ input_variables_for_diagnostics_config = [
   ['integer', 'nwrite_mult', '10'],
   ['logical', 'write_any', '.true.'],
 
+  # If true, and a copy of the .out.nc already exists,
+  # open it and append to it. Obviously grid sizes must be
+  # unchanged.
+  ['logical', 'append_old', '.false.'],
+
   # If built with parallel IO capability 
   # enable parallel IO. Currently disabled by 
   # default because of problems on Helios:
