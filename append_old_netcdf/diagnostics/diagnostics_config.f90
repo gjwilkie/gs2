@@ -67,6 +67,7 @@ module diagnostics_config
      integer :: rtype
      integer :: itype
      integer :: istep
+     integer :: verbosity = 3
      logical :: create
      logical :: wryte
      logical :: distributed
@@ -75,6 +76,7 @@ module diagnostics_config
      logical :: vary_vnew_only
      logical :: calculate_fluxes
      logical :: is_trinity_run
+     logical :: appending
      real :: user_time
      real :: user_time_old
      real :: start_time

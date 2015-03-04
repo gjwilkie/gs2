@@ -146,8 +146,6 @@ done
 
 # Define combined make flags
 MAKEFLAGSALL="$MAKEFLAGS $DBGFLAG $VERBSET GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND" 
-#echo $MAKEFLAGSALL
-#exit 0
 
 #Now perform operation
 case $COMMAND in 

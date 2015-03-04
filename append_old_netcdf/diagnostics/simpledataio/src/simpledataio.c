@@ -1040,7 +1040,7 @@ void sdatio_open_file(struct sdatio_file * sfile )  {
       /* We choose the first write to unlimited variables to be a new
        * record, so we set the length to be 1 greater than the current
        * final record.*/
-      sdim->start = lengthp;
+      sdim->start = lengthp-1;
     }
     else {
       sdim->size = lengthp;
