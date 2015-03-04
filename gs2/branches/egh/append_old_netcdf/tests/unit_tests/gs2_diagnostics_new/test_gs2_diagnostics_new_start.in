@@ -17,7 +17,6 @@
 !
 !==============================================================================
 
-
 !==============================
 !GENERAL PARAMETERS  
 !==============================
@@ -29,6 +28,7 @@
 &kt_grids_knobs
  grid_option = "box" ! The general layout of the perpendicular grid.
 /
+
 
 !==============================
 !  
@@ -106,7 +106,6 @@
  fbpar = 1.0
  delt = 0.05 ! Time step
  nstep = 100 ! Maximum number of timesteps
- delt_option="check_restart"
 /
 
 !==============================
@@ -197,8 +196,7 @@
 &init_g_knobs
  chop_side = .false. ! Rarely needed. Forces asymmetry into initial condition.
  phiinit = 0.001 ! Average amplitude of initial perturbation of each Fourier mode.
- ginit_option = "many" ! Sets the way that the distribution function is initialized.
- restart_file="test_gs2_diagnostics_new_start.nc"
+ ginit_option = "noise" ! Sets the way that the distribution function is initialized.
  constant_random_flag = .true.
 /
 
@@ -206,7 +204,6 @@
 !DIAGNOSTICS  
 !==============================
 &gs2_diagnostics_knobs
- append_old = .true.
  print_flux_line = .F. ! Instantaneous fluxes output to screen
  write_nl_flux = .true. ! Write nonlinear fluxes as a function of time.
  print_line = .false. ! Estimated frequencies and growth rates to the screen/stdout
@@ -229,7 +226,7 @@
  navg = 10 ! Any time averages performed over navg
  omegatol = -0.001 ! The convergence has to be better than one part in 1/omegatol
  omegatinst = 500.0 ! Recommended value: 500.
- save_for_restart = .false. ! Write restart files.
+ save_for_restart = .true. ! Write restart files.
   ! write_flux_line not specified --- 
   ! write_ascii not specified --- 
   ! write_kpar not specified --- 

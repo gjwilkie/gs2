@@ -53,9 +53,10 @@ contains
     use netcdf, only: NF90_CLOBBER
     use simpledataio, only: SDATIO_DOUBLE, SDATIO_FLOAT, SDATIO_INT
     use simpledataio, only: sdatio_init, simpledataio_functional
-    use simpledataio, only: set_parallel, create_file
+    use simpledataio, only: set_parallel, create_file, open_file
     use diagnostics_metadata, only: write_metadata
     use diagnostics_metadata, only: read_input_file_and_get_size
+    use unit_tests, only: debug_message
     implicit none
     type(diagnostics_init_options_type), intent(in) :: init_options
     
@@ -86,8 +87,8 @@ contains
 
     ! For the moment, hardwire these so as not to 
     ! conflict with the old module. 
-    gnostics%save_for_restart = .false.
-    gnostics%save_distfn = .false.
+    !gnostics%save_for_restart = .false.
+    !gnostics%save_distfn = .false.
     
     ! Set whether this is a Trinity run.. enforces certain 
     ! calculations
@@ -149,14 +150,24 @@ contains
           gnostics%sfile%mode = NF90_CLOBBER
        end if
     end if
+
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new opening file')
     if (gnostics%parallel.or.proc0) then 
-       call create_file(gnostics%sfile)
+       if (gnostics%append_old) then
+         gnostics%appending=.true.
+         call open_file(gnostics%sfile)
+       else
+         gnostics%appending=.false.
+         call create_file(gnostics%sfile)
+       end if
        call write_metadata(gnostics)
     end if
 
     !All procs initialise dimension data but if not parallel IO
     !only proc0 has to add them to file.
-    call create_dimensions(gnostics%parallel.or.proc0)
+    call create_dimensions(&
+      (gnostics%parallel.or.proc0).and..not.gnostics%appending)
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
 
@@ -373,7 +384,7 @@ contains
     ! otherwise, only proc0. Also, creation of variables
     ! happens when istep == -1
     if (gnostics%parallel .or. proc0) then
-       gnostics%create = (istep==-1)
+       gnostics%create = (istep==-1).and..not.gnostics%appending
        gnostics%wryte = (istep>-1)
     else
        gnostics%create=.false.
