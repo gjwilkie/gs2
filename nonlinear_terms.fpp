@@ -627,18 +627,21 @@ contains
 
       use dist_fn_arrays, only: vpa, aj0
       use gs2_layouts, only: is_idx
+      complex :: fac
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
+!AJ Optimisatin
          do ig = -ntgrid, ntgrid
-            g1(ig,1,iglo) = g1(ig,1,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
-         end do
-         do ig = -ntgrid, ntgrid
-            g1(ig,2,iglo) = g1(ig,2,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+	    fac = zi*akx(it)*aj0(ig,iglo)*spec(is)%stm*apar(ig,it,ik)*fapar
+            g1(ig,1,iglo) = g1(ig,1,iglo) - fac*vpa(ig,1,iglo)
+!         end do
+!         do ig = -ntgrid, ntgrid
+!            g1(ig,2,iglo) = g1(ig,2,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
+!                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+ 	    g1(ig,2,iglo) = g1(ig,2,iglo) - fac*vpa(ig,2,iglo)
          end do
       end do
 
@@ -648,18 +651,23 @@ contains
 
       use dist_fn_arrays, only: vpa, aj0
       use gs2_layouts, only: is_idx
+      complex :: fac
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
+!AJ Optimisation
          do ig = -ntgrid, ntgrid
-            g1(ig,1,iglo) = g1(ig,1,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
-         end do
-         do ig = -ntgrid, ntgrid
-            g1(ig,2,iglo) = g1(ig,2,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+	    fac = zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm*apar(ig,it,ik)*fapar
+	    g1(ig,1,iglo) = g1(ig,1,iglo) - fac*vpa(ig,1,iglo)
+!            g1(ig,1,iglo) = g1(ig,1,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
+!                 *vpa(ig,1,iglo)*apar(ig,it,ik)*fapar 
+!         end do
+!         do ig = -ntgrid, ntgrid
+!            g1(ig,2,iglo) = g1(ig,2,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
+!                 *vpa(ig,2,iglo)*apar(ig,it,ik)*fapar 
+	     g1(ig,2,iglo) = g1(ig,2,iglo) - fac*vpa(ig,2,iglo)
          end do
       end do
 

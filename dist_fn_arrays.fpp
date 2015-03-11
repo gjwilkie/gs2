@@ -10,6 +10,8 @@ module dist_fn_arrays
 
   public :: g, gnew, g_restart_tmp, kx_shift, theta0_shift, vpa, vpac
   public :: vperp2, vpar, ittp, aj0, aj1
+!AJ
+  public :: vpa_gf, vperp2_gf, aj0_gf, aj1_gf
   public :: c_rate
   public :: g_adjust, check_g_bouncepoints
 #ifdef LOWFLOW
@@ -24,10 +26,16 @@ module dist_fn_arrays
   ! (naky)
 
   real, dimension (:,:,:), allocatable :: vpa, vpac, vpar
+!AJ
+  real, dimension (:,:,:,:), allocatable :: vpa_gf
+  real, dimension (:,:,:), allocatable :: vperp2_gf
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   real, dimension (:,:), allocatable :: vperp2, aj0, aj1
   ! (-ntgrid:ntgrid, -g-layout-)
+
+!AJ
+  real, dimension (:,:,:,:,:), allocatable :: aj0_gf, aj1_gf
 
   integer, dimension (:), allocatable :: ittp
   ! (-ntgrid:ntgrid)

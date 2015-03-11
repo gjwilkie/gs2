@@ -1919,7 +1919,7 @@ contains
           call self%init_next_field_points(bparnew,pts_remain,kwork_filter,ifl)
        enddo
     endif
-    
+
     !Reset the filter array
     kwork_filter=.false.
   end subroutine fm_populate

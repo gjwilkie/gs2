@@ -78,6 +78,17 @@ module layouts_type
      logical :: x_local, y_local, t_local, s_local !Used to record if various dimensions are entirely local
   end type le_layout_type
 
+  type :: gf_layout_type
+     sequence
+     integer :: iproc, nproc
+     integer :: ntgrid, naky, ntheta0, nspec, ntgridtotal, npsec, nlambda, negrid
+     integer :: xypoints
+     integer :: llim_world, ulim_world, llim_proc, ulim_proc, ulim_alloc, blocksize
+     integer :: smallblocksize, largeblocksize, largeblocklimit, divisionblock
+     integer :: largeregionlimit, smallgapsize, largegapsize
+  end type gf_layout_type
+
+
   type :: p_layout_type
      sequence
      integer :: iproc

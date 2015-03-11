@@ -84,7 +84,7 @@ module le_grids
   public :: eint_error, lint_error, trap_error, wdim
   public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
-  public :: lambda_map, energy_map, g2le, init_map
+  public :: lambda_map, energy_map, g2le, g2gf, init_map
   public :: integrate_species_sub !<DD>
 
   !> Unit tests
@@ -102,6 +102,7 @@ module le_grids
 
   interface integrate_species
      module procedure integrate_species_master
+     module procedure integrate_species_gf_nogather
      module procedure integrate_species_le
      module procedure integrate_species_lz 
      module procedure integrate_species_e
@@ -161,6 +162,7 @@ module le_grids
   logical :: eintinit = .false.
   logical :: initialized = .false.
   logical :: leinit = .false.
+  logical :: gfinit = .false.
   logical :: lzinit = .false.
   logical :: einit = .false.
   logical :: init_weights_init = .false.
@@ -173,6 +175,7 @@ module le_grids
   type (redist_type), save :: lambda_map
   type (redist_type), save :: energy_map
   type (redist_type), save :: g2le
+  type (redist_type), save :: g2gf
 
 contains
 
@@ -625,7 +628,7 @@ contains
     use gs2_layouts, only: g_lo
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
     use kt_grids, only: kwork_filter
-    use mp, only: sum_allreduce
+    use mp, only: sum_allreduce, iproc
 
     implicit none
 
@@ -662,6 +665,7 @@ contains
 
           !Sum up weighted g
           total(:, it, ik) = total(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+!          write(*,*) iproc,'tot',total(-ntgrid,it,ik),it,ik,iglo
        end do
     endif
     !Reduce sum across all procs to make integral over all velocity space and species
@@ -674,7 +678,7 @@ contains
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, intspec_sub
     use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
-    use mp, only: sum_allreduce_sub, sum_allreduce
+    use mp, only: sum_allreduce_sub, sum_allreduce, iproc
     use kt_grids, only: kwork_filter
     implicit none
 
@@ -707,6 +711,9 @@ contains
           
           !Sum up weighted g
           total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
+          if(it.eq.1.and.ik.eq.1) then
+             write(*,*) 'sub',iproc,total(-ntgrid,it,ik)
+          end if
        end do
     else
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -732,7 +739,7 @@ contains
     !Copy data into output array
     !Note: When not using sub-comms this is an added expense which will mean
     !this routine is more expensive than original version just using total.
-    !In practice we should have two integrate_moment_c34 routines, one for sub-comms
+    !In practice we should have two integrate_species routines, one for sub-comms
     !and one for world-comms.
     if(intspec_sub)then
        total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max)=total_small
@@ -745,9 +752,109 @@ contains
 
   end subroutine integrate_species_sub
 
+
+  !AJ>Integrate species using gf_lo data format
+  subroutine integrate_species_gf (g, weights, total)
+    use species, only : nspec
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: gf_lo, g_lo
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use mp, only: sum_allreduce_sub, sum_allreduce, iproc
+    use kt_grids, only: kwork_filter
+    use redistribute, only: gather
+    implicit none
+
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:ntgrid,2,nspec,negrid,nlambda,gf_lo%llim_proc:gf_lo%ulim_alloc) :: gf
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:ntgrid,gf_lo%ntheta0,gf_lo%naky), intent (out) :: total
+    integer :: is, il, ie, igf, it, ik
+
+    total =0.
+
+    call gather(g2gf, g, gf)
+
+    !Performed integral (weighted sum) over local velocity space and species
+    if(any(kwork_filter)) then
+       do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+          it = it_idx(gf_lo,igf)
+          ik = ik_idx(gf_lo,igf)
+          if(kwork_filter(it,ik)) cycle
+          do il = 1,gf_lo%nlambda
+             do ie = 1,gf_lo%negrid
+                do is = 1,gf_lo%nspec
+                   total(:,it,ik) = total(:,it,ik) + weights(is)*w(ie)*wl(:,il)*(gf(:,1,is,ie,il,igf)+gf(:,2,is,ie,il,igf))
+                end do
+             end do
+          end do
+       end do
+    else
+       do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+          it = it_idx(gf_lo,igf)
+          ik = ik_idx(gf_lo,igf)
+          do il = 1,gf_lo%nlambda
+             do ie = 1,gf_lo%negrid
+                do is = 1,gf_lo%nspec
+                   total(:,it,ik) = total(:,it,ik) + weights(is)*w(ie)*wl(:,il)*(gf(:,1,is,ie,il,igf)+gf(:,2,is,ie,il,igf))
+                end do
+             end do
+          end do
+       end do
+    end if
+    
+  end subroutine integrate_species_gf
+
+  !<AJ>Integrate species using gf_lo data format assuming that gf has already been gathered prior to being 
+  !<AJ> passed to this routine.
+  subroutine integrate_species_gf_nogather (gf, weights, total)
+    use species, only : nspec
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: gf_lo, g_lo
+    use gs2_layouts, only: is_idx, ik_idx, it_idx, ie_idx, il_idx
+    use mp, only: sum_allreduce_sub, sum_allreduce, iproc
+    use kt_grids, only: kwork_filter
+    implicit none
+
+    complex, dimension (-ntgrid:ntgrid,2,nspec,negrid,nlambda,gf_lo%llim_proc:gf_lo%ulim_alloc), intent (in) :: gf
+    real, dimension (:), intent (in) :: weights
+    complex, dimension (-ntgrid:ntgrid,gf_lo%ntheta0,gf_lo%naky), intent (out) :: total
+    integer :: is, il, ie, igf, it, ik
+
+    total =0.
+
+    !Performed integral (weighted sum) over local velocity space and species
+    if(any(kwork_filter)) then
+       do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+          it = it_idx(gf_lo,igf)
+          ik = ik_idx(gf_lo,igf)
+          if(kwork_filter(it,ik)) cycle
+          do is = 1,gf_lo%nspec
+             do il = 1,gf_lo%nlambda
+                do ie = 1,gf_lo%negrid
+                   total(:,it,ik) = total(:,it,ik) + weights(is)*w(ie)*wl(:,il)*(gf(:,1,is,ie,il,igf)+gf(:,2,is,ie,il,igf))
+                end do
+             end do
+          end do
+       end do
+    else
+       do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+          it = it_idx(gf_lo,igf)
+          ik = ik_idx(gf_lo,igf)
+          do is = 1,gf_lo%nspec
+             do il = 1,gf_lo%nlambda
+                do ie = 1,gf_lo%negrid
+                   total(:,it,ik) = total(:,it,ik) + weights(is)*w(ie)*wl(:,il)*(gf(:,1,is,ie,il,igf)+gf(:,2,is,ie,il,igf))
+                end do
+             end do
+          end do
+       end do
+    end if
+    
+  end subroutine integrate_species_gf_nogather
+  
   !<DD>integrate_species on subcommunicator with gather
   !Falls back to original method if not using xyblock sub comm
-  subroutine integrate_species_master (g, weights, total,nogath)
+  subroutine integrate_species_master (g, weights, total, nogath, gf_lo)
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use gs2_layouts, only: g_lo, intspec_sub
@@ -759,13 +866,21 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (0:,:,:), intent (out) :: total
-    logical, intent(in), optional:: nogath
+    logical, intent(in), optional :: nogath
+    logical, intent(in), optional :: gf_lo
     complex, dimension (:), allocatable :: total_flat
     complex, dimension (:,:,:), allocatable :: total_transp
     integer :: nl,nr, ik, it, iglo, ip, ie,is,il, ig
     integer, dimension(:),allocatable,save :: recvcnts,displs
     integer, save :: sz, local_rank
 
+
+    if(present(gf_lo)) then
+       if(gf_lo) then
+          call integrate_species_gf(g,weights,total)
+          return
+       end if
+    end if
     !If not using sub-communicators then just use original method
     !Note that if x and y are entirely local then we force intspec_sub=.false.
     if(.not.intspec_sub) then
@@ -2527,8 +2642,13 @@ contains
           call init_g2le_redistribute
        endif
        if (test) call check_g2le
+
     end if
+
+    call init_g2gf_redistribute
     
+    call check_g2gf
+
     if (test) then
        if (proc0) print *, 'init_map done'
 !!$    call finish_mp
@@ -3062,6 +3182,290 @@ contains
     end function rule
 
   end subroutine check_g2le
+
+  subroutine init_g2gf_redistribute
+
+    use mp, only: nproc, iproc
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use gs2_layouts, only: init_gf_layouts
+    use gs2_layouts, only: g_lo, gf_lo
+    use gs2_layouts, only: idx_local, proc_id
+    use gs2_layouts, only: ig_idx, isign_idx
+    use gs2_layouts, only: ik_idx, it_idx, ie_idx, is_idx, il_idx, idx
+    use redistribute, only: index_list_type, init_redist, delete_list
+    use sorting, only: quicksort
+
+    implicit none
+
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, sort_list, bak_sort_list
+    integer, dimension (0:nproc-1) :: nn_to, nn_from
+    integer, dimension (3) :: from_low, from_high
+    integer, dimension (6) :: to_low, to_high
+    integer :: iglo, il, igf
+    integer :: ie, is
+    integer :: n, ip
+
+    !Early exit if possible
+    if (gfinit) return
+    gfinit = .true.
+
+    !Setup the le layout object (gf_lo)
+    call init_gf_layouts (ntgrid, naky, ntheta0, negrid, nlambda, nspec)
+
+    !Initialise the data counters
+    nn_to = 0
+    nn_from = 0
+
+    !First count the data to be sent | g_lo-->gf_lo
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo = g_lo%llim_proc,g_lo%ulim_alloc
+          
+          igf = idx(gf_lo, ik_idx(g_lo, iglo), it_idx(g_lo, iglo))
+          nn_from(proc_id(gf_lo,igf))=nn_from(proc_id(gf_lo,igf))+1
+       enddo
+    endif
+
+    !Now count how much data to receive | gf_lo<--g_lo
+    !Protect against procs with no data
+    if(gf_lo%ulim_proc.ge.gf_lo%llim_proc)then
+       do igf=gf_lo%llim_proc,gf_lo%ulim_alloc
+          !Loop over local dimensions, adding 2 to account for each sign
+          do is=1,g_lo%nspec
+             do ie=1,g_lo%negrid
+                do il=1,g_lo%nlambda
+                   iglo = idx(g_lo, ik_idx(gf_lo, igf), it_idx(gf_lo, igf), il, ie, is)
+                   !Increment the data to receive counter
+                   nn_to(proc_id(g_lo,iglo))=nn_to(proc_id(g_lo,iglo))+1
+                enddo
+             enddo
+          enddo
+       enddo
+    endif
+
+
+    !Now allocate storage for index arrays
+    do ip = 0, nproc-1
+       if (nn_from(ip) > 0) then
+          allocate (from_list(ip)%first (nn_from(ip)))
+          allocate (from_list(ip)%second(nn_from(ip)))
+          allocate (from_list(ip)%third (nn_from(ip)))
+       end if
+       if (nn_to(ip) > 0) then
+          allocate (to_list(ip)%first (nn_to(ip)))
+          allocate (to_list(ip)%second(nn_to(ip)))
+          allocate (to_list(ip)%third (nn_to(ip)))
+          allocate (to_list(ip)%fourth (nn_to(ip)))
+          allocate (to_list(ip)%fifth (nn_to(ip)))
+          allocate (to_list(ip)%sixth (nn_to(ip)))
+          allocate (sort_list(ip)%first (nn_to(ip)))
+          allocate (bak_sort_list(ip)%first (nn_to(ip)))
+       end if
+    end do
+
+    !Reinitialise counters
+    nn_to = 0
+    nn_from = 0
+
+    !First fill in sending indices, these define the message order
+    !Protect against procs with no data
+    if(g_lo%ulim_proc.ge.g_lo%llim_proc)then
+       do iglo=g_lo%llim_proc,g_lo%ulim_alloc
+          igf=idx(gf_lo,ik_idx(g_lo,iglo),it_idx(g_lo,iglo))
+
+          !Get proc id
+          ip=proc_id(gf_lo,igf)
+
+          n=nn_from(ip)+1
+          nn_from(ip)=n
+          
+          !Store indices (we are sending ntgridtotal*isign sized messages each time at a time)
+!          if(n .gt. size(from_list(ip)%third)) then
+!             write(*,*) iproc,ip,n,size(from_list(ip)%third),igf
+!          end if
+          from_list(ip)%first(n)=-gf_lo%ntgrid
+          from_list(ip)%second(n)=1
+          from_list(ip)%third(n)=iglo
+          
+       enddo
+    endif
+
+    !Now fill in the receiving indices, these must match message data order
+    !Protect against procs with no data
+    if(gf_lo%ulim_proc.ge.gf_lo%llim_proc)then
+       do igf=gf_lo%llim_proc,gf_lo%ulim_alloc
+          do il=1,g_lo%nlambda
+             do ie=1,g_lo%negrid
+                do is=1,g_lo%nspec
+                   !Get iglo value
+                   iglo = idx(g_lo,ik_idx(gf_lo,igf),it_idx(gf_lo,igf),il,ie,is)
+                   !Get proc_id
+                   ip=proc_id(g_lo,iglo)
+                                         
+                   !Increment counter
+                   n=nn_to(ip)+1
+                   nn_to(ip)=n
+                   
+                   !Store indices
+                   !We are sending messages of size ntgridtotal*isign
+                   to_list(ip)%first(n)=-gf_lo%ntgrid
+                   to_list(ip)%second(n)=1
+                   to_list(ip)%third(n)=is
+                   to_list(ip)%fourth(n)=ie
+                   to_list(ip)%fifth(n)=il
+                   to_list(ip)%sixth(n)=igf
+
+                   sort_list(ip)%first(n) = iglo-g_lo%llim_world
+                enddo
+             enddo
+          enddo
+       enddo
+    endif
+
+    do ip=0,nproc-1
+       if(associated(sort_list(ip)%first)) then
+          bak_sort_list(ip)%first(:) = sort_list(ip)%first(:)
+       end if
+    end do
+
+    !Now sort receive indices into message order
+    do ip=0,nproc-1
+       if(nn_to(ip)>0) then
+          !Apply quicksort
+          !AJ I'm calling quicksort twice to save me writing a six array version of quicksort and insertsort.
+          !AJ This is just lazyness and probably should be corrected at some point.
+          call quicksort(nn_to(ip),sort_list(ip)%first,to_list(ip)%first,to_list(ip)%second,to_list(ip)%third)
+          call quicksort(nn_to(ip),bak_sort_list(ip)%first,to_list(ip)%fourth,to_list(ip)%fifth,to_list(ip)%sixth)
+       endif
+    enddo
+
+
+    !Now setup array range values
+    from_low (1) = -ntgrid
+    from_low (2) = 1
+    from_low (3) = g_lo%llim_proc
+
+    from_high(1) = ntgrid
+    from_high(2) = 2
+    from_high(3) = g_lo%ulim_alloc
+
+    to_low(1) = -ntgrid
+    to_low(2) = 1
+    to_low(3) = 1
+    to_low(4) = 1
+    to_low(5) = 1
+    to_low(6) = gf_lo%llim_proc
+
+    to_high(1) = ntgrid
+    to_high(2) = 2
+    to_high(3) = nspec
+    to_high(4) = negrid
+    to_high(5) = nlambda
+    to_high(6) = gf_lo%ulim_alloc
+
+    !Create g2le redist object
+    call init_redist (g2gf, 'c', to_low, to_high, to_list, from_low, from_high, from_list)
+
+    !Deallocate lists
+    call delete_list (to_list)
+    call delete_list (from_list)
+    call delete_list (sort_list)
+    call delete_list (bak_sort_list)
+
+  end subroutine init_g2gf_redistribute
+
+  subroutine check_g2gf
+
+    use file_utils, only: error_unit
+    use mp, only: finish_mp, iproc, proc0
+    use species, only : nspec
+    use theta_grid, only: ntgrid
+    use gs2_layouts, only: g_lo, gf_lo
+    use gs2_layouts, only: ig_idx, ik_idx, it_idx, il_idx, ie_idx, is_idx
+    use redistribute, only: gather, scatter, report_map_property
+
+    implicit none
+
+    integer :: iglo, ig, isgn, ik, it, il, ie, igf, is, ierr
+    complex, dimension (:,:,:), allocatable :: gtmp
+    complex, dimension (:,:,:,:,:,:), allocatable :: gftmp
+
+    if (proc0) then
+       ierr = error_unit()
+    else
+       ierr = 6
+    end if
+
+    allocate (gtmp(-ntgrid:ntgrid, 2, g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate (gftmp(-ntgrid:ntgrid, 2, nspec, negrid, nlambda, gf_lo%llim_proc:gf_lo%ulim_alloc))
+
+    ! gather check
+    gtmp = 0.0
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             gtmp(ig,isgn,iglo) = rule(ig,isgn,ik,it,il,ie,is)
+          end do
+       end do
+    end do
+    call gather (g2gf, gtmp, gftmp)
+    do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+       ik = ik_idx(gf_lo,igf)
+       it = it_idx(gf_lo,igf)
+       do is = 1, nspec
+          do il = 1,nlambda
+             do ie = 1,negrid
+                do isgn = 1,2
+                   do ig=-ntgrid,ntgrid
+                      if (int(real(gftmp(ig,isgn,is,ie,il,igf))) /= rule(ig,isgn,ik,it,il,ie,is)) &
+                           write (ierr,'(a,8i6)') 'ERROR: gather by g2gf broken!', iproc
+                   end do
+                end do
+             end do
+          end do
+       end do
+    end do
+    if (proc0) write (ierr,'(a)') 'g2gf gather check done'
+
+    ! scatter check
+    gtmp = 0.0
+    call scatter (g2gf, gftmp, gtmp)
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       ie = ie_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             if (gtmp(ig,isgn,iglo) /= rule(ig,isgn,ik,it,il,ie,is)) &
+                  write (ierr,'(a,i6)') 'ERROR: scatter by g2gf broken!', iproc
+          end do
+       end do
+    end do
+    if (proc0) write (ierr,'(a)') 'g2gf scatter check done'
+
+    deallocate (gtmp,gftmp)
+
+!    call finish_mp
+!    stop
+
+  contains
+
+    function rule (ig, isgn, ik, it, il, ie, is)
+      integer, intent (in) :: ig, isgn, ik, it, il, ie, is
+      integer :: rule
+      rule = ig + isgn + ik + it + il + ie + is  ! make whatever you want
+    end function rule
+
+  end subroutine check_g2gf
 
   subroutine init_lambda_redistribute
 
@@ -3871,6 +4275,7 @@ contains
     call delete_redist(lambda_map)
     call delete_redist(energy_map)
     call delete_redist(g2le)
+    call delete_redist(g2gf)
 
     !Free internal saved arrays
     call get_flux_vs_theta_vs_vpa(tmpf,tmpvflx,.true.)
@@ -3882,6 +4287,7 @@ contains
     intinit = .false. ; slintinit = .false. ; lintinit = .false. ; eintinit = .false.
 
     leinit = .false.
+    gfinit = .false.
     lzinit = .false.
     einit = .false.
     initialized = .false.

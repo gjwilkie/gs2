@@ -1136,9 +1136,18 @@ contains
     use redistribute, only: time_redist
     use fields_arrays, only: time_field
     use gs2_reinit, only: time_reinit
+!AJ
+    use dist_fn, only: time_orig, time_gf, time_gf_v2, time_gf_gather, time_orig_moment_mult, time_new_moment_mult, time_new_array_moment_mult
     implicit none
     type(gs2_program_state_type), intent(in) :: state
     type(gs2_timers_type), intent(in) :: timers
+
+!AJ
+    real :: temptime_gf_v2, min_temptime_gf_v2, max_temptime_gf_v2, av_temptime_gf_v2
+!AJ
+    real :: min_time_orig, max_time_orig, av_time_orig
+!AJ
+    real :: min_time_gf, max_time_gf, av_time_gf
 
     if (proc0) then
        if (state%is_external_job) then
@@ -1170,6 +1179,46 @@ contains
                timers%finish(1)/60.,timers%finish(1)/timers%total(1),timers%total(1)/60.
        endif
     end if
+
+!AJ start
+    if(time_new_array_moment_mult(1) .lt. time_new_moment_mult(1)) then
+       temptime_gf_v2 = time_new_array_moment_mult(1) + time_gf_v2(1) + time_gf_gather(1)
+    else
+       temptime_gf_v2 = time_new_moment_mult(1) + time_gf_v2(1) + time_gf_gather(1)
+    end if
+
+    min_temptime_gf_v2 = temptime_gf_v2
+    call min_reduce(min_temptime_gf_v2, 0)
+    max_temptime_gf_v2 = temptime_gf_v2
+    call max_reduce(max_temptime_gf_v2, 0)
+    av_temptime_gf_v2 = temptime_gf_v2
+    call sum_reduce(av_temptime_gf_v2, 0)
+    av_temptime_gf_v2 = av_temptime_gf_v2/nproc
+
+    min_time_orig = time_orig(1)
+    call min_reduce(min_time_orig, 0)
+    max_time_orig = time_orig(1)
+    call max_reduce(max_time_orig, 0)
+    av_time_orig = time_orig(1)
+    call sum_reduce(av_time_orig, 0)
+    av_time_orig = av_time_orig/nproc
+
+    min_time_gf = time_gf(1)
+    call min_reduce(min_time_gf, 0)
+    max_time_gf = time_gf(1)
+    call max_reduce(max_time_gf, 0)
+    av_time_gf = time_gf(1)
+    call sum_reduce(av_time_gf, 0)
+    av_time_gf = av_time_gf/(nproc*1.)
+
+    if (proc0) then
+       write(*,*) 'Original integrate',time_orig(1)/60.,'min',min_time_orig/60.,'max',max_time_orig/60.,'av',av_time_orig/60.
+       write(*,*) 'Gf integrate',time_gf(1)/60.,'min',min_time_gf/60.,'max',max_time_gf/60.,'av',av_time_gf/60.
+       write(*,*) 'Gf v2 integrate',temptime_gf_v2/60.,'min',min_temptime_gf_v2/60.,'max',max_temptime_gf_v2/60.,'av',av_temptime_gf_v2/60.
+       write(*,*) 'Original integrate moment multiply',time_orig_moment_mult(1)/60.,'New integrate moment multiply',time_new_moment_mult(1)/60.,'New integrate array moment multiply',time_new_array_moment_mult(1)/60.
+    end if
+!AJ end
+
   end subroutine print_times
 
   subroutine allocate_outputs(state)
