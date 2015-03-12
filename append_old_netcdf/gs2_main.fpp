@@ -218,6 +218,11 @@ module gs2_main
     !! to true
     logical :: is_trinity_job = .false.
 
+    !> If true, and is_external_job is true,
+    !! print full timing breakdown. (If is_external_job is
+    !! false, full timing breakdown is always printed)
+    logical :: print_full_timers = .false.
+
 
     !> Parameters to be used when passing in an external communicator
     logical :: mp_comm_external = .false.
@@ -1133,7 +1138,7 @@ contains
     type(gs2_timers_type), intent(in) :: timers
 
     if (proc0) then
-       if (state%is_external_job) then
+       if (state%is_external_job .and. .not. state%print_full_timers) then
           print '(/,'' Job ID:'', i4,'', total from timer is:'', 0pf9.2,'' min'',/)', &
                state%external_job_id, state%timers%total(1)/60.
        else
