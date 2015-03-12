@@ -204,6 +204,7 @@
 !DIAGNOSTICS  
 !==============================
 &gs2_diagnostics_knobs
+ append_old = .true.
  print_flux_line = .F. ! Instantaneous fluxes output to screen
  write_nl_flux = .true. ! Write nonlinear fluxes as a function of time.
  print_line = .false. ! Estimated frequencies and growth rates to the screen/stdout
