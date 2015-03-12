@@ -196,7 +196,7 @@ program test_gs2_diagnostics_new
             trim(n_lines(i))), &
             "value of "//trim(new_variables(i)))
         end do
-      else if (gnostics%append_old) then 
+      else if (gnostics%appending) then 
         do i = 1,n_vars
           ! omega and omega_average won't work because the 
           ! history is not stored in the restart file

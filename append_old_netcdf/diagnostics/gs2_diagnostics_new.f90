@@ -59,6 +59,7 @@ contains
     use unit_tests, only: debug_message
     implicit none
     type(diagnostics_init_options_type), intent(in) :: init_options
+    logical :: ex
     
     if(proc0.and.debug) write (*,*) 'initializing new diagnostics'
     call init_diagnostics_config(gnostics)
@@ -154,7 +155,8 @@ contains
     call debug_message(gnostics%verbosity, &
       'gs2_diagnostics_new::init_gs2_diagnostics_new opening file')
     if (gnostics%parallel.or.proc0) then 
-       if (gnostics%append_old) then
+       inquire(file=trim(run_name)//'.out.nc', exist=ex)
+       if (gnostics%append_old .and. ex) then
          gnostics%appending=.true.
          call open_file(gnostics%sfile)
        else

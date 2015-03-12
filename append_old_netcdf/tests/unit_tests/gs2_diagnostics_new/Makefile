@@ -20,8 +20,9 @@ else
 all: test_gs2_diagnostics_new 
 	$(call RUNCOMMAND,test_gs2_diagnostics_new,old_diagnostics/test_gs2_diagnostics_new.in)
 	$(call RUNCOMMAND,test_gs2_diagnostics_new,test_gs2_diagnostics_new.in)
+	rm -f test_gs2_diagnostics_new_start.out.nc
 	$(call RUNCOMMAND,test_gs2_diagnostics_new,test_gs2_diagnostics_new_start.in)
-	cp test_gs2_diagnostics_new_start.out.nc test_gs2_diagnostics_new_append.out.nc
+	cp test_gs2_diagnostics_new_start.out.nc test_gs2_diagnostics_new_append.out.nc; echo
 	$(call RUNCOMMAND,test_gs2_diagnostics_new,test_gs2_diagnostics_new_append.in)
 
 endif
