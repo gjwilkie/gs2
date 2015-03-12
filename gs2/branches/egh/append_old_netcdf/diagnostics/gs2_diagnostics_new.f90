@@ -45,7 +45,7 @@ contains
     use nonlinear_terms, only: nonlin
     use gs2_save, only: save_many
     use file_utils, only: run_name, error_unit
-    use mp, only: mp_comm, proc0
+    use mp, only: mp_comm, proc0, broadcast
     use kt_grids, only: naky, aky
     !This reference needs removing to allow compilation on systems without netcdf
     !It should probably be moved to simpledataio as the rest of the diagnostics
@@ -165,6 +165,7 @@ contains
        end if
        call write_metadata(gnostics)
     end if
+    call broadcast(gnostics%appending)
 
     !All procs initialise dimension data but if not parallel IO
     !only proc0 has to add them to file.
