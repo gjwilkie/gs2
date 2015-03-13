@@ -258,6 +258,7 @@ module fields_local
      procedure :: decomp_own_serial_local => pc_decomp_own_serial_local
      procedure :: decomp_owncells_serial_local => pc_decomp_owncells_serial_local
      procedure :: decomp_owncells_simplempi => pc_decomp_owncells_simplempi
+     procedure :: decomp_owncells_balancedmpi => pc_decomp_owncells_balancedmpi
   end type pc_type
 
   !//////////////////////////////
@@ -840,6 +841,7 @@ contains
 
   !>A routine to reset the object
   subroutine sc_reset(self)
+    use mp, only: free_comm
     implicit none
     class(supercell_type), intent(inout) :: self
     integer :: ic
@@ -848,6 +850,17 @@ contains
     do ic=1,self%ncell
        call self%cells(ic)%reset
     enddo
+
+!AJ Free up communicators created for this supercell
+    if(self%sc_sub_not_full%nproc.gt.0) then
+       call free_comm(self%sc_sub_not_full)
+    end if
+    if(self%sc_sub_all%nproc.gt.0 .and. self%sc_sub_all%id.ne.self%parent_sub%id) then
+       call free_comm(self%sc_sub_all)
+    end if
+    if(self%sc_sub_pd%nproc.gt.0) then
+       call free_comm(self%sc_sub_pd)
+    end if
 
     !deallocate
     call self%deallocate
@@ -1482,6 +1495,7 @@ contains
 
   !>A routine to reset the object
   subroutine ky_reset(self)
+    use mp, only: free_comm
     implicit none
     class(ky_type), intent(inout) :: self
     integer :: is
@@ -1490,6 +1504,13 @@ contains
     do is=1,self%nsupercell
        call self%supercells(is)%reset
     enddo
+
+
+    !AJ Free communicators associated with this ky block
+    if(self%ky_sub_all%id .ne. self%parent_sub%id) then
+       write(*,*) 'free comm ky',self%ky_sub_all%id
+!       call free_comm(self%ky_sub_all)
+    end if
 
     !deallocate
     call self%deallocate
@@ -1590,6 +1611,54 @@ contains
   end subroutine ky_make_subcom_2
 
 !------------------------------------------------------------------------
+
+  !AJ Autotune MinNRow size to obtain optimal row size
+  subroutine tuneMinNRow()
+    use job_manage, only: timer_local
+    use mp, only: nproc, max_reduce, min_reduce, sum_reduce, broadcast, proc0, iproc
+    implicit none
+    integer :: i, rowsize, current_best_size
+    real :: start_time, end_time, current_best, temp_best
+    real :: min_best, max_best, av_best
+    current_best = -1
+    rowsize = 8
+    current_best_size = rowsize
+    do i = 1,10
+       MinNRow=rowsize
+       call init_fields_matrixlocal()
+       start_time = timer_local()
+       call fieldmat%populate
+       end_time = timer_local()
+       call finish_fields_local()
+       temp_best = end_time - start_time
+       max_best = temp_best
+       call max_reduce(max_best, 0)
+       min_best = temp_best
+       call min_reduce(min_best, 0)
+       av_best = temp_best
+       call sum_reduce(av_best, 0)
+       if(iproc .eq. 0) then
+          av_best = av_best/nproc
+          write(*,'(A7,X,I5,X,F8.3,X,F8.3,X,F8.3)') 'MinNRow',MinNRow,min_best,max_best,av_best
+          if(current_best .lt. 0) then
+             current_best = max_best
+             current_best_size = rowsize
+          else
+             if(max_best .lt. current_best) then
+                current_best = max_best
+                current_best_size = rowsize
+             end if
+          end if
+       end if
+       rowsize = rowsize*2
+    end do
+    call broadcast(current_best_size)
+    MinNRow = current_best_size
+    if(proc0) then
+       write(*,*) 'Best',MinNRow,current_best
+    end if
+  end subroutine tuneMinNRow
+
 
 !================
 !FIELDMAT
@@ -1919,7 +1988,7 @@ contains
           call self%init_next_field_points(bparnew,pts_remain,kwork_filter,ifl)
        enddo
     endif
-
+    
     !Reset the filter array
     kwork_filter=.false.
   end subroutine fm_populate
@@ -2266,6 +2335,7 @@ contains
 
   !>A routine to reset the object
   subroutine fm_reset(self)
+    use mp, only: free_comm
     implicit none
     class(fieldmat_type), intent(inout) :: self
     integer :: ik
@@ -2277,7 +2347,11 @@ contains
 
     !deallocate
     call self%deallocate
-
+!AJ Free the communicators associated with this field matrix object.
+    if(self%fm_sub_headsc_p0%nproc.gt.0) then
+!       write(*,*) 'free comm fm',self%fm_sub_headsc_p0%id
+       call free_comm(self%fm_sub_headsc_p0)
+    end if
     !Could zero out variables but no real need
   end subroutine fm_reset
 
@@ -3062,7 +3136,7 @@ contains
     case(4)
        !Simple mpi with no attempt at load balance
        !but we attempt to avoid splitting small blocks
-       call mp_abort(trim(errmesg))
+       call self%decomp_owncells_balancedmpi
     case default
        !Invalid decomp_type
        write(errmesg,'("Invalid decomp_type : ",I0)') self%decomp_type
@@ -3343,6 +3417,119 @@ contains
     enddo
   end subroutine pc_decomp_owncells_simplempi
 
+
+  !>Cells are decomposed based on proc but blocks are aggregated if processes have small blocks || Decomp_type=4
+  subroutine pc_decomp_owncells_balancedmpi(self)
+    use mp, only: split, comm_type, free_comm
+    implicit none
+    class(pc_type), intent(inout) :: self
+    integer :: ik, is, ic, ifq, it, ip, llim, ulim
+    integer :: nrow_tmp, nrow_loc, remainder,np
+    integer :: colour, key
+    type(comm_type) :: tmp
+
+    !/Don't need to change pc%is_local as this is already correct
+
+    !Make sure we do the invert locally as mpi based version not implemented!
+    pc%force_local_invert=.true.
+
+    !Now we say that we can use no gather based getfieldeq
+    self%has_to_gather=.false.
+
+    !Now we (re)calculate how much data is available
+    call self%count_avail
+
+    !Initialise the number of rows responsible
+    self%nresp_per_cell=0
+
+    !Now loop over all cells, setting the row_llim of
+    !their row blocks
+    do ik=1,fieldmat%naky
+       do is=1,fieldmat%kyb(ik)%nsupercell
+          nrow_tmp=fieldmat%kyb(ik)%supercells(is)%nrow
+          do ic=1,fieldmat%kyb(ik)%supercells(is)%ncell
+             !Make subcommunicator if we have this supercell
+             !<DD>TAGGED: By passing a key to split we can arrange for the procs to
+             !be arranged in any particular order. This allows some form of load balancing.
+             if(fieldmat%kyb(ik)%supercells(is)%is_local)then
+                colour=0
+                key=self%current_nresp()
+                if(fieldmat%kyb(ik)%supercells(is)%cells(ic)%is_local) colour=1
+                call split(colour,key,tmp,fieldmat%kyb(ik)%supercells(is)%cells(ic)%parent_sub%id)
+             endif
+             !NOTE: By sorting the procs as done above we end up with lots of different procs
+             !which are proc0 for at least one supercell. This means that later when we assign
+             !the supercell heads we have lots of members, whilst if we try to minimise the number
+             !of unique procs which are proc0 for 1 or more supercells then there will be fewer
+             !members and the subsequent allreduce will be cheaper.
+
+             !Store it index
+             it=fieldmat%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             !If local work out limits, if not just set to 0
+             if(fieldmat%kyb(ik)%supercells(is)%cells(ic)%is_local)then
+                
+                !Store info about subcom
+                np=tmp%nproc 
+                ip=tmp%iproc
+               
+                !Calculate row limits based on cell size, nprocs and
+                !proc rank
+                !/Simple block size
+                nrow_loc=max(ceiling(nrow_tmp*1.0/np),MinNrow)
+                !By enforcing a minimum value of nrow_loc we can ensure
+                !that blocks don't get too small. Note it's easy to work
+                !out the limits for any of the other procs *without* comms.
+                !Hence should be quite cheap to check how many empty procs
+                !we have, how small the smallest block is etc. So shouldn't
+                !be too expensive to work out if we should do an extra row
+                !or two if it will remove procs with little work.
+                remainder=nrow_tmp-nrow_loc*np !Note this should be -ve due to use of ceiling
+                
+                !Now work out limits
+                llim=1+ip*(nrow_loc)
+                ulim=llim+nrow_loc-1
+
+                !Now make sure that we don't overstep the cell limits
+                if(llim.gt.nrow_tmp) then
+                   !If the lower limit is too big then this proc should
+                   !be made empty
+                   llim=0
+                   ulim=0
+                else if(ulim.gt.nrow_tmp) then
+                   !If just the upper limit is too big then
+                   !lower it
+                   ulim=nrow_tmp
+                endif
+
+                !Now loop over row blocks to set index
+                do ifq=1,fieldmat%kyb(ik)%supercells(is)%cells(ic)%nrb
+                   fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(ifq)%row_llim=llim
+                   fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(ifq)%row_ulim=ulim
+                   call fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(ifq)%set_nrow
+                enddo
+             else
+                do ifq=1,fieldmat%kyb(ik)%supercells(is)%cells(ic)%nrb
+                   fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(ifq)%row_llim=0
+                   fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(ifq)%row_ulim=0
+                   call fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(ifq)%set_nrow
+                enddo
+             endif
+
+             !Now free subcommunicator if we have this supercell
+             if(fieldmat%kyb(ik)%supercells(is)%is_local) call free_comm(tmp)
+
+             !Record the number of responsible rows, note we assume all rb have same size
+             if(size(fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb).gt.0)then
+                self%nresp_per_cell(it,ik)=fieldmat%kyb(ik)%supercells(is)%cells(ic)%rb(1)%nrow
+             else
+                self%nresp_per_cell(it,ik)=0
+             endif
+          enddo
+       enddo
+    enddo
+  end subroutine pc_decomp_owncells_balancedmpi
+
 !------------------------------------------------------------------------ 
 
 !//////////////////////////////
@@ -3374,6 +3561,7 @@ contains
     if (debug.and.proc0) write(6,*) "init_fields_local: kt_grids"
     call init_kt_grids
     if (debug.and.proc0) write(6,*) "init_fields_local: init_fields_matrixlocal"
+    call tuneMinNRow()
     call init_fields_matrixlocal
     if (debug.and.proc0) write(6,*) "init_fields_local: antenna"
     call init_antenna

@@ -1132,7 +1132,7 @@ contains
   end subroutine reset_timers
 
   subroutine print_times(state, timers)
-    use mp, only: proc0
+    use mp, only: proc0, nproc, min_reduce, max_reduce, sum_reduce
     use redistribute, only: time_redist
     use fields_arrays, only: time_field
     use gs2_reinit, only: time_reinit
