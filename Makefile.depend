@@ -180,6 +180,7 @@ ffttester_mod = \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
+	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -187,6 +188,7 @@ ffttester_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_init.o \
 	 gs2_io.o \
@@ -230,7 +232,8 @@ ffttester_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o 
+	 unit_tests.o \
+	 volume_averages.o 
 
 generate_fftw_wisdom_mod = \
 	 antenna_data.o \
@@ -315,6 +318,7 @@ gs2_mod = \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
+	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -323,6 +327,7 @@ gs2_mod = \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_init.o \
 	 gs2_io.o \
@@ -366,7 +371,8 @@ gs2_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o 
+	 unit_tests.o \
+	 volume_averages.o 
 
 hrate_mod = \
 	 command_line.o \
@@ -867,6 +873,7 @@ file_utils.o: \
 	 command_line.o 
 functional_tests.o: \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_main.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -1031,6 +1038,7 @@ gs2_main.o: \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
+	 gs2_diagnostics_new.o \
 	 gs2_init.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
@@ -1091,7 +1099,9 @@ gs2_transforms.o: \
 	 sorting.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
-	 constants.o 
+	 constants.o \
+	 convert.o \
+	 file_utils.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \

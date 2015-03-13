@@ -94,7 +94,6 @@ module dist_fn
 
 !AJ
   public :: time_orig, time_gf, time_gf_v2, time_gf_gather, time_orig_moment_mult, time_new_moment_mult, time_new_array_moment_mult
-  private
 
   ! knobs
   complex, dimension (:), allocatable :: fexp ! (nspec)
@@ -839,7 +838,7 @@ contains
   end subroutine finish_dist_fn_level_1
 
   subroutine finish_dist_fn_level_2
-    use dist_fn_arrays, only: aj0, aj1
+    use dist_fn_arrays, only: aj0, aj1, aj0_gf, aj1_gf
 
     if (.not. initialized_dist_fn_level_2) return
     initialized_dist_fn_level_2 = .false.

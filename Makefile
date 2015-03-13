@@ -107,10 +107,10 @@ MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
 # Compile with PETSC/SLEPC support for determining eigensystem (bin).
-WITH_EIG ?= 
+WITH_EIG ?=
 
 # Compile with the new simplified diagnostics module
-USE_NEW_DIAG ?= 
+USE_NEW_DIAG ?=on
 
 # Use autotools to configure the code (currently only affects the new diagnostics module)
 # Possible values... on, off
