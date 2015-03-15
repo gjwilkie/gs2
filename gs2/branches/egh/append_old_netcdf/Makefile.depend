@@ -211,6 +211,7 @@ ffttester_mod = \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
+	 optimisation_config.o \
 	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -331,6 +332,7 @@ gs2_mod = \
 	 gs2_io.o \
 	 gs2_layouts.o \
 	 gs2_main.o \
+	 gs2_optimisation.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
 	 gs2_time.o \
@@ -349,6 +351,7 @@ gs2_mod = \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
+	 optimisation_config.o \
 	 overrides.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -903,7 +906,8 @@ gridgen4mod.o: \
 	 mp.o \
 	 spl.o 
 gs2.o: \
-	 gs2_main.o 
+	 gs2_main.o \
+	 gs2_optimisation.o 
 gs2_diagnostics.o: \
 	 antenna.o \
 	 collisions.o \
@@ -1045,6 +1049,7 @@ gs2_main.o: \
 	 mp.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
+	 optimisation_config.o \
 	 overrides.o \
 	 parameter_scan.o \
 	 redistribute.o \
@@ -1054,6 +1059,10 @@ gs2_main.o: \
 	 theta_grid.o \
 	 theta_grid_params.o \
 	 unit_tests.o 
+gs2_optimisation.o: \
+	 gs2_main.o \
+	 mp.o \
+	 optimisation_config.o 
 gs2_reinit.o: \
 	 dist_fn_arrays.o \
 	 file_utils.o \
@@ -1236,6 +1245,10 @@ normalisations.o: \
 	 runtime_tests.o 
 om.o: \
 	 command_line.o 
+optimisation_config.o: \
+	 file_utils.o \
+	 mp.o \
+	 text_options.o 
 overrides.o: \
 	 file_utils.o 
 parameter_scan.o: \

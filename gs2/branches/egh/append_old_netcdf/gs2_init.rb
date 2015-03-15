@@ -50,7 +50,7 @@ class GenerateInit
     ['nonlinear_terms' ,
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 'le_grids',
         'dist_fn_layouts']],
-    ['gs2_layouts' , []],
+    ['gs2_layouts' , ['override_optimisations']],
     ['set_initial_values', ['fields', 'init_g', 'override_initial_values']],
     ['le_grids' ,
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid']],
@@ -74,6 +74,7 @@ class GenerateInit
 
     ['dist_fn_level_2' , ['dist_fn_level_1', 'override_profiles']], 
     
+    ['override_optimisations' , []],
     ['override_miller_geometry' , ['theta_grid_params']],
     # Override tprim, fprim, vnewk, temp and dens in species
     ['override_profiles' , ['species']],
@@ -157,6 +158,12 @@ class GenerateInit
         case @level_name
         when 'full', 'override_timestep', 'override_initial_values'
           str = "\n"
+        when /override_optimisations/
+          str = <<EOF2
+          use gs2_layouts, only: lso=>set_overrides
+          if (up() .and. current%opt_ov%init) call lso(current%opt_ov)
+
+EOF2
         when /override_miller_geometry/
           str = <<EOF2
           use theta_grid_params, only: tgpso=>set_overrides

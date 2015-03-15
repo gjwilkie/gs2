@@ -299,14 +299,14 @@ module diagnostics_config
 contains
   subroutine init_diagnostics_config(gnostics)
     implicit none
-    type(diagnostics_type), intent(out) :: gnostics
+    type(diagnostics_type), intent(inout) :: gnostics
     call read_parameters(gnostics)
     call allocate_current_results(gnostics)
   end subroutine init_diagnostics_config
 
   subroutine finish_diagnostics_config(gnostics)
     implicit none
-    type(diagnostics_type), intent(out) :: gnostics
+    type(diagnostics_type), intent(inout) :: gnostics
     call deallocate_current_results(gnostics)
   end subroutine finish_diagnostics_config
 

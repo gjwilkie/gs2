@@ -557,7 +557,7 @@ help: helplocal
 
 .PHONY: depend clean distclean tar test_make diagnostics simpledataio
 
-depend: $(FORTFROMRUBY)
+depend: $(FORTFROMRUBY) $(F90FROMFPP)
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=1 $(VPATH)
 
 # Make sure template dependencies are specified

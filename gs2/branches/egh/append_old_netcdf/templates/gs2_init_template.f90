@@ -32,6 +32,7 @@ module gs2_init
   use overrides, only: miller_geometry_overrides_type
   use overrides, only: profiles_overrides_type
   use overrides, only: initial_values_overrides_type
+  use overrides, only: optimisations_overrides_type
   public :: init_type
   !> A list of possible intialization levels.
   public :: init_level_list
@@ -109,6 +110,12 @@ module gs2_init
     !! documentation for the overrides::initial_values_overrides_type
     !! for more information.
     type(initial_values_overrides_type) :: initval_ov
+
+    !> An object for overriding non physics parameters which
+    !! may alter run time and efficiency. You must call
+    !! gs2_main::prepare_optimisations_overrides 
+    !! before setting these overrides. 
+    type(optimisations_overrides_type) :: opt_ov
 
 
     !> A list of possible init levels

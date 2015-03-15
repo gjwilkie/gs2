@@ -115,6 +115,10 @@ parameter_list_profs = [
 ['real', 'mach'],
 ].compact.map{|p| Generator.new(p)}
 
+parameter_list_optimisations = [
+['character(len=6)', 'layout'],
+].compact.map{|p| Generator.new(p)}
+
 
 
 string = <<EOF
@@ -138,6 +142,10 @@ module overrides
 !! size nspec and you must set the override switches 
 !! individually for each species.
 #{Generator.generate_type('profiles', parameter_list_profs)}
+
+!> A type for containing overrides to the processor layout
+!! and optimisation flags for gs2. 
+#{Generator.generate_type('optimisations', parameter_list_optimisations)}
 
 !> A type for storing overrides of the intial
 !! values of the fields and distribution function.
@@ -191,6 +199,8 @@ contains
 #{Generator.generate_finish('miller_geometry', parameter_list_geo)}
 #{Generator.generate_initialize('profiles', parameter_list_profs)}
 #{Generator.generate_finish('profiles', parameter_list_profs)}
+#{Generator.generate_initialize('optimisations', parameter_list_optimisations)}
+#{Generator.generate_finish('optimisations', parameter_list_optimisations)}
 
 !> Warning: You can't change the value of overrides%force_maxwell_reinit 
 !! or overrides%in_memory after calling this function

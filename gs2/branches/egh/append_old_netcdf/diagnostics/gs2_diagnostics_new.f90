@@ -429,7 +429,7 @@ contains
       !call save_restart_dist_fn
     !end if
 
-    if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
+    if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.gnostics%exit) then
        gnostics%vary_vnew_only = .false.
        if (gnostics%write_omega)  call write_omega (gnostics)
        if (gnostics%write_fields) call write_fields(gnostics)
