@@ -38,7 +38,8 @@ export TEST_LEVEL
 # make can't resolve dependencies
 # UPDATE: Tests link against libgs2 now, so you can't choose 
 # which dependencies to build any more. EGH 04/03/2015
-TEST_DEPS=libgs2.a functional_tests.o benchmarks.o
+# UPDATE: we now build and test the gs2 exec as well. EGH 14/03/15
+TEST_DEPS=libgs2.a functional_tests.o benchmarks.o gs2
 TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD)  -L$(SIMPLEDATAIO_LIB_DIR_ABS)" LIBS=" -lgs2 -lsimpledataio $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
 
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)

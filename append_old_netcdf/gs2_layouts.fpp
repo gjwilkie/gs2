@@ -35,6 +35,10 @@ module gs2_layouts
 ! HJL>
   public :: finish_layouts
 ! <HJL
+
+! EGH
+  public :: set_overrides
+
   public :: finish_fields_layouts, finish_jfields_layouts
 
   public :: init_fields_layouts
@@ -474,6 +478,13 @@ contains
     opt_redist_persist_overlap=opt_redist_persist_overlap.and.opt_redist_persist
     call get_wisdom_file(fft_wisdom_file)
   end subroutine read_parameters
+
+  subroutine set_overrides(opt_ov)
+    use overrides, only: optimisations_overrides_type
+    type(optimisations_overrides_type), intent(in) :: opt_ov
+    if (opt_ov%override_layout) layout = opt_ov%layout
+  end subroutine set_overrides
+
     
 
   !> Set the fft_wisdom_file based on the value set in the namelist (if any)

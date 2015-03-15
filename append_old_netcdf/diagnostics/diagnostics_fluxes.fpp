@@ -343,20 +343,24 @@ contains
     if (gnostics%write_fluxes) then
        call create_and_write_variable(gnostics, gnostics%rtype, "es_heat_flux_diff_max", &
             dim_string([gnostics%dims%species,gnostics%dims%time]), &
-            " A turbulent estimate of the heat flux, as a function of species and time", &
+            " A linear estimate of the heat flux, as a function of species and time", &
             "Q_gB", heat_flux_max_by_spec)
        call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_diff_max", &
             dim_string([gnostics%dims%time]), &
-            " A turbulent estimate of the heat flux, as a function of  time", &
+            " A linear estimate of the heat flux, as a function of  time", &
             "Q_gB", heat_flux_max)
        call create_and_write_variable(gnostics, gnostics%rtype, "es_particle_flux_diff_max", &
             dim_string([gnostics%dims%species,gnostics%dims%time]), &
-            " A turbulent estimate of the particle flux, as a function of species and time", &
+            " A linear estimate of the particle flux, as a function of species and time", &
             "Q_gB", particle_flux_max_by_spec)
        call create_and_write_variable(gnostics, gnostics%rtype, "particle_flux_diff_max", &
             dim_string([gnostics%dims%time]), &
-            " A turbulent estimate of the particle flux, as a function of  time", &
+            " A linear estimate of the particle flux, as a function of  time", &
             "Q_gB", particle_flux_max)
+       call create_and_write_variable(gnostics, gnostics%rtype, "diffusivity", &
+            dim_string([gnostics%dims%time]), &
+            " A linear estimate of the diffusivity", &
+            "TBC", gnostics%current_results%diffusivity)
     end if
   end subroutine write_diffusive_estimates
 

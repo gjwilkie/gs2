@@ -59,6 +59,10 @@ program gs2
 ! MAKE_LIB is now deprecated.
 
 # ifndef MAKE_LIB 
+  !use optimisation_config, only: optimisation_type
+  use gs2_optimisation, only: initialize_gs2_optimisation
+  use gs2_optimisation, only: finalize_gs2_optimisation
+  use gs2_optimisation, only: optimise_gs2
   use gs2_main, only: gs2_program_state_type
   use gs2_main, only: initialize_gs2
   use gs2_main, only: initialize_equations
@@ -71,6 +75,15 @@ program gs2
 
   implicit none
   type(gs2_program_state_type) :: state
+  !type(optimisation_type) :: optim
+  call initialize_gs2_optimisation(state)
+
+  if (state%optim%on) then
+    call optimise_gs2(state)
+    if (state%optim%auto) then
+      
+    end if
+  end if
   call initialize_gs2(state)
   call initialize_equations(state)
   call initialize_diagnostics(state)
@@ -81,7 +94,10 @@ program gs2
   end if
   call finalize_diagnostics(state)
   call finalize_equations(state)
+  state%print_full_timers = .true.
   call finalize_gs2(state)
+
+  call finalize_gs2_optimisation(state)
 
 # else
 

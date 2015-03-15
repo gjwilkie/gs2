@@ -67,6 +67,18 @@ module overrides
 
 
 
+!> A type for containing overrides to the processor layout
+!! and optimisation flags for gs2. 
+  type optimisations_overrides_type
+    !> DO NOT manually set the value of init.
+    !! Nasty things may happen.
+    logical :: init = .false.
+    logical :: override_layout
+    character(len=6) :: layout
+  end type optimisations_overrides_type
+
+
+
 !> A type for storing overrides of the intial
 !! values of the fields and distribution function.
 !! This override is different to all the others, 
@@ -194,6 +206,25 @@ contains
     overrides_obj%override_g_exb = .false.
     overrides_obj%override_mach = .false.
   end subroutine finish_profiles_overrides
+
+
+  subroutine init_optimisations_overrides(overrides_obj)
+    type(optimisations_overrides_type), intent(inout) :: overrides_obj
+    if (overrides_obj%init) return 
+    overrides_obj%init = .true.
+    overrides_obj%override_layout = .false.
+  end subroutine init_optimisations_overrides
+
+
+  subroutine finish_optimisations_overrides(overrides_obj)
+    type(optimisations_overrides_type), intent(inout) :: overrides_obj
+    if (.not. overrides_obj%init) then
+      write (*,*) "ERROR: Called finish_optimisations_overrides on an uninitialized object"
+      return
+    end if
+    overrides_obj%init = .false.
+    overrides_obj%override_layout = .false.
+  end subroutine finish_optimisations_overrides
 
 
 

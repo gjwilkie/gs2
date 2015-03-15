@@ -78,6 +78,7 @@ end module old_interface_store
 
 module gs2_main
   use gs2_init, only: init_type, init_level_list
+  use optimisation_config, only: optimisation_type
   implicit none
   public :: run_gs2, finish_gs2, reset_gs2, trin_finish_gs2
 
@@ -97,6 +98,7 @@ module gs2_main
 
   public :: prepare_miller_geometry_overrides
   public :: prepare_profiles_overrides
+  public :: prepare_optimisations_overrides
   public :: prepare_initial_values_overrides
   public :: set_initval_overrides_to_current_vals
   public :: finalize_overrides
@@ -218,9 +220,8 @@ module gs2_main
     !! to true
     logical :: is_trinity_job = .false.
 
-    !> If true, and is_external_job is true,
-    !! print full timing breakdown. (If is_external_job is
-    !! false, full timing breakdown is always printed)
+    !> If true, 
+    !! print full timing breakdown. 
     logical :: print_full_timers = .false.
 
 
@@ -240,6 +241,9 @@ module gs2_main
 
     ! Outputs (e.g. for Trinity)
     type(gs2_outputs_type) :: outputs
+
+    ! Optimisation configuration
+    type(optimisation_type) :: optim
 
    
   end type gs2_program_state_type
@@ -933,6 +937,15 @@ contains
     !if (.not. present(mpi_comm) .and. .not. nofin) call finish_mp
   end subroutine finalize_gs2
 
+  subroutine prepare_optimisations_overrides(state)
+    use overrides, only: init_optimisations_overrides
+    use gs2_init, only: init, init_level_list
+    type(gs2_program_state_type), intent(inout) :: state
+    ! Initialize to the level below so that overrides are triggered
+    !call init(state%init, init_level_list%override_optimisations-1)
+    call init_optimisations_overrides(state%init%opt_ov)
+  end subroutine prepare_optimisations_overrides
+
   subroutine prepare_miller_geometry_overrides(state)
     use overrides, only: init_miller_geometry_overrides
     use gs2_init, only: init, init_level_list
@@ -1138,7 +1151,7 @@ contains
     type(gs2_timers_type), intent(in) :: timers
 
     if (proc0) then
-       if (state%is_external_job .and. .not. state%print_full_timers) then
+       if (.not. state%print_full_timers) then
           print '(/,'' Job ID:'', i4,'', total from timer is:'', 0pf9.2,'' min'',/)', &
                state%external_job_id, state%timers%total(1)/60.
        else

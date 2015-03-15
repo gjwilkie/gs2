@@ -29,6 +29,7 @@ program test_gs2_diagnostics_new
     use mp, only: broadcast
     use gs2_diagnostics, only: finish_gs2_diagnostics
     use gs2_diagnostics, only: pflux_avg, qflux_avg, heat_avg, vflux_avg
+    use gs2_diagnostics, only: diffusivity
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
     use gs2_diagnostics_new, only: gnostics
@@ -40,6 +41,7 @@ program test_gs2_diagnostics_new
     integer :: i
     real :: eps
     real, dimension(:), allocatable :: pfluxav, qfluxav, heatav, vfluxav
+    real :: diff
     !real :: vfluxav
 
     character(len=40), dimension(200) :: variables, new_variables, n_lines, file_names, n_lines_files
@@ -155,6 +157,7 @@ program test_gs2_diagnostics_new
         write(120349, *) pflux_avg
         write(120349, *) vflux_avg
         write(120349, *) heat_avg
+        write(120349, *) diffusivity()
         close(120349)
       else
         if (nstep.eq.200) then
@@ -164,6 +167,7 @@ program test_gs2_diagnostics_new
           read(120349, *) pfluxav
           read(120349, *) vfluxav
           read(120349, *) heatav
+          read(120349, *) diff
           close(120349)
           call announce_test("average heat flux")
           call process_test( &
@@ -177,6 +181,10 @@ program test_gs2_diagnostics_new
           call process_test( &
             agrees_with(gnostics%current_results%species_particle_flux_avg, pfluxav, eps), &
             "average particle flux")
+          call announce_test("diffusivity")
+          call process_test( &
+            agrees_with(gnostics%current_results%diffusivity, diff, eps), &
+            "diffusivity")
         else
           call announce_test("Size of t array")
         end if
