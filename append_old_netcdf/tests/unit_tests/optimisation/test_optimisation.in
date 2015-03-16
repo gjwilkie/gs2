@@ -17,21 +17,9 @@
 !
 !==============================================================================
 
-
-&diagnostics_config
-      nwrite = 10
-      write_any = .true.
-      write_fields = .true.
-      write_phi_over_time = .false.
-      write_apar_over_time = .false.
-      write_bpar_over_time = .false.
-      write_fluxes = .true.
-      write_fluxes_by_mode = .true.
-      write_verr = .false.
-
-      omegatol = -0.001
+&optimisation_config
+ nstep_measure = 10
 /
-
 !==============================
 !GENERAL PARAMETERS  
 !==============================
@@ -117,7 +105,7 @@
  fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
  delt = 0.05 ! Time step
- nstep = 400 ! Maximum number of timesteps
+ nstep = 10000000 ! Maximum number of timesteps
  avail_cpu_time = 302
 /
 
@@ -257,4 +245,5 @@
  alpha_f0 = "analytic" ! Form of the alpha equilibrium distribution function: "maxwellian", "analytic" or "external"
  energy_0 = 0.01 ! Lower limit of F_alpha for : F_alpha(energy_0)=0.
 /
+
 

@@ -23,7 +23,7 @@ program test_optimisation
 
   call initialize_gs2_optimisation(state)
 
-  call measure_timestep(state)
+  !call measure_timestep(state)
 
   call announce_test('optimise gs2')
   call optimise_gs2(state)
