@@ -784,7 +784,9 @@ contains
   subroutine reset_equations (state)
 
     use gs2_diagnostics, only: gd_reset => reset_init
+#ifdef NEW_DIAG
     use gs2_diagnostics_new, only: reset_averages_and_counters
+#endif
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use run_parameters, only: trinity_linear_fluxes, use_old_diagnostics
     use dist_fn_arrays, only: gnew
@@ -809,7 +811,9 @@ contains
     if (use_old_diagnostics) then
       call gd_reset
     else 
+#ifdef NEW_DIAG
       call reset_averages_and_counters
+#endif
     end if
 
     if (trinity_linear_fluxes .and. &
