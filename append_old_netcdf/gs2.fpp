@@ -87,6 +87,7 @@ program gs2
   call initialize_gs2(state)
   call initialize_equations(state)
   call initialize_diagnostics(state)
+  state%print_times = .false.
   if (state%do_eigsolve) then 
     call run_eigensolver(state)
   else
@@ -94,6 +95,7 @@ program gs2
   end if
   call finalize_diagnostics(state)
   call finalize_equations(state)
+  state%print_times = .true.
   state%print_full_timers = .true.
   call finalize_gs2(state)
 

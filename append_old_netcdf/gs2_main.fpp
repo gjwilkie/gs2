@@ -224,6 +224,11 @@ module gs2_main
     !! print full timing breakdown. 
     logical :: print_full_timers = .false.
 
+    !> If true, print run time or
+    !! full timing breakdown, depending
+    !! on the value of print_full_timers
+    logical :: print_times = .true.
+
 
     !> Parameters to be used when passing in an external communicator
     logical :: mp_comm_external = .false.
@@ -701,7 +706,7 @@ contains
     
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
-    if (state%is_external_job) call print_times(state, state%timers)
+    if (state%print_times) call print_times(state, state%timers)
 
     ilast_step = state%istep_end
 
@@ -923,7 +928,7 @@ contains
     
     call debug_message(state%verb, 'gs2_main::finalize_gs2 calling print_times')
 
-    call print_times(state, state%timers)
+    if (state%print_times) call print_times(state, state%timers)
 
     call debug_message(state%verb, 'gs2_main::finalize_gs2 calling finish_mp')
 
