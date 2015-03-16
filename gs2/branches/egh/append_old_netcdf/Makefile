@@ -465,7 +465,9 @@ FORTFROMRUBY+= gs2_init.f90 overrides.f90
 F90FROMFPP = $(patsubst %.fpp,%.f90,$(notdir $(wildcard *.fpp */*.fpp)))
 F90FROMFPP += tests/unit_tests/nonlinear_terms/test_nonlinear_terms.f90
 F90FROMFPP += tests/unit_tests/gs2_diagnostics_new/test_gs2_diagnostics_new.f90
+ifdef USE_NEW_DIAG
 F90FROMFPP += simpledataiof.f90 simpledataio_write.f90
+endif
 ifdef SCAL
    FC:= scalasca -instrument $(FC)
 endif
