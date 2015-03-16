@@ -5,7 +5,7 @@
 !> A module for handling the configuration of the diagnostics
 !! module via the namelist diagnostics_config.
 module diagnostics_config
-  use simpledataio, only: sdatio_file
+  use simpledataio, only: sdf=>sdatio_file
   use diagnostics_ascii, only: diagnostics_ascii_type
   use diagnostics_dimensions, only: diagnostics_dimension_list_type
   implicit none
@@ -58,7 +58,7 @@ module diagnostics_config
   !! a reference to the output file, and current 
   !! results of the simulation
   type diagnostics_type
-     type(sdatio_file) :: sfile
+     type(sdf) :: sfile
      type(diagnostics_ascii_type) :: ascii_files
      type(results_summary_type) :: current_results
      type(diagnostics_dimension_list_type) :: dims
