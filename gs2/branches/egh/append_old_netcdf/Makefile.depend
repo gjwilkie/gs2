@@ -1023,6 +1023,7 @@ gs2_layouts.o: \
 	 file_utils.o \
 	 layouts_type.o \
 	 mp.o \
+	 overrides.o \
 	 redistribute.o 
 gs2_main.o: \
 	 antenna.o \
@@ -1062,7 +1063,8 @@ gs2_main.o: \
 gs2_optimisation.o: \
 	 gs2_main.o \
 	 mp.o \
-	 optimisation_config.o 
+	 optimisation_config.o \
+	 overrides.o 
 gs2_reinit.o: \
 	 dist_fn_arrays.o \
 	 file_utils.o \
@@ -1248,6 +1250,7 @@ om.o: \
 optimisation_config.o: \
 	 file_utils.o \
 	 mp.o \
+	 overrides.o \
 	 text_options.o 
 overrides.o: \
 	 file_utils.o 
