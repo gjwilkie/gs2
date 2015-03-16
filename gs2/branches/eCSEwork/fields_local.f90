@@ -1616,10 +1616,16 @@ contains
   subroutine tuneMinNRow()
     use job_manage, only: timer_local
     use mp, only: nproc, max_reduce, min_reduce, sum_reduce, broadcast, proc0, iproc
+    use fields_arrays, only: phinew, aparnew, bparnew
+    use gs2_layouts, only: g_lo
     implicit none
     integer :: i, rowsize, current_best_size
     real :: start_time, end_time, current_best, temp_best
     real :: min_best, max_best, av_best
+    logical :: do_update, do_gather
+    do_gather = .true.
+    do_update=do_smart_update
+    if(g_lo%x_local.and.g_lo%y_local) do_update=.false.
     current_best = -1
     rowsize = 8
     current_best_size = rowsize
@@ -1627,7 +1633,9 @@ contains
        MinNRow=rowsize
        call init_fields_matrixlocal()
        start_time = timer_local()
-       call fieldmat%populate
+       !AJ Replace with getfield_local and the setup of parameters as in advance_local
+!       call fieldmat%populate
+       call getfield_local(phinew,aparnew,bparnew,do_gather,do_update)
        end_time = timer_local()
        call finish_fields_local()
        temp_best = end_time - start_time
@@ -3484,6 +3492,7 @@ contains
                 !we have, how small the smallest block is etc. So shouldn't
                 !be too expensive to work out if we should do an extra row
                 !or two if it will remove procs with little work.
+                !AJ WORK TO DO HERE
                 remainder=nrow_tmp-nrow_loc*np !Note this should be -ve due to use of ceiling
                 
                 !Now work out limits
