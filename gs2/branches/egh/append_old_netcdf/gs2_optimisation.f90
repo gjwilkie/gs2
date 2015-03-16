@@ -122,12 +122,18 @@ module gs2_optimisation
       call initialize_gs2(state)
       call initialize_equations(state)
       call initialize_diagnostics(state)
-      call evolve_equations(state, 200)
+      call evolve_equations(state, state%optim%nstep_measure)
       call finalize_diagnostics(state)
       call finalize_equations(state)
       call finalize_gs2(state)
 
-      t = state%timers%advance(1)/200.0
+      if (state%optim%measure_all) then 
+        t = state%timers%advance(1)/real(state%optim%nstep_measure)
+      else
+        t = state%timers%timestep(1)/real(state%optim%nstep_measure)
+        !t = state%timers%timestep(1)
+      endif
+
       state%optim%results%time = t
       if (t .lt.  state%optim%results%optimal_time .or. &
         state%optim%results%optimal_time .lt. 0.0) then

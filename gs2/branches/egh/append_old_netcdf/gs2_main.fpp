@@ -114,6 +114,7 @@ module gs2_main
   type gs2_timers_type
     real :: init(2) 
     real :: advance(2) = 0.
+    real :: timestep(2) = 0.
     real :: finish(2) = 0.
     real :: total(2) = 0. 
     real :: diagnostics(2)=0.
@@ -637,7 +638,9 @@ contains
 
        do while(reset)
           reset=.false. !So that we only do this once unless something triggers a reset
+          if (proc0) call time_message(.false.,state%timers%timestep,' Timestep')
           call advance (istep)
+          if (proc0) call time_message(.false.,state%timers%timestep,' Timestep')
 
           !If we've triggered a reset then actually reset
           if (reset) then
@@ -1139,6 +1142,7 @@ contains
     type(gs2_timers_type), intent(inout) :: timers
     timers%init = 0.
     timers%advance = 0.
+    timers%timestep = 0.
     timers%finish = 0.
     timers%total = 0. 
     timers%diagnostics=0.
