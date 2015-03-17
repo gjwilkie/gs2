@@ -16,6 +16,7 @@ class Generator
     logical :: init = .false.
     #{parameter_list.map{|p| p.switch}.join("\n    ")}
     #{parameter_list.map{|p| p.value}.join("\n    ")}
+    #{name == 'optimisations' ? "integer :: old_comm" : ""}
   end type #{name}_overrides_type
 
 EOF
@@ -116,6 +117,7 @@ parameter_list_profs = [
 ].compact.map{|p| Generator.new(p)}
 
 parameter_list_optimisations = [
+['integer', 'nproc'],
 ['character(len=6)', 'layout'],
 ].compact.map{|p| Generator.new(p)}
 

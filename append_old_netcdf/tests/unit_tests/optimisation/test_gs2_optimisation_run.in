@@ -18,12 +18,13 @@
 !==============================================================================
 
 &optimisation_config
+ on = .true.
  auto = .true.
  nstep_measure = 1
  warm_up = .false.
- max_unused_procs = -1
+ max_unused_procs = 4
  max_imbalance = -1.0
- min_efficiency = 0.3
+ !min_efficiency = 0.3
 /
 !==============================
 !GENERAL PARAMETERS  
@@ -43,7 +44,7 @@
 !==============================
 &kt_grids_box_parameters
  y0 = 2
- naky = 4
+ naky = 2
  jtwist = 6
  nx = 4
 /
@@ -111,7 +112,7 @@
  fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
  delt = 0.05 ! Time step
- nstep = 10000000 ! Maximum number of timesteps
+ nstep = 10
  avail_cpu_time = 50000
 /
 

@@ -5,6 +5,7 @@ CLEANCOMMAND+= test_optimisation
 
 all: test_optimisation 
 	$(call RUNCOMMAND,test_optimisation,test_optimisation.in)
+	$(call RUNCOMMAND,../../../gs2,test_gs2_optimisation_run.in)
 
 #$(info "TEST_MODS=$(TEST_MODS)")
 

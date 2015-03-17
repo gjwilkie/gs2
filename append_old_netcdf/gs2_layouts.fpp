@@ -406,6 +406,8 @@ contains
 
     if (initialized_layouts) return
     initialized_layouts = .true.
+
+    !write(*,*) 'INITGS2', initialized_x_transform
     
     if (proc0) call read_parameters
     call broadcast_results
@@ -413,6 +415,7 @@ contains
   end subroutine init_gs2_layouts
 
   subroutine finish_gs2_layouts
+    call finish_layouts
     initialized_layouts = .false.
   end subroutine finish_gs2_layouts
 
@@ -3479,6 +3482,7 @@ contains
     integer :: nprocset, ngroup, nblock, ntgridtotal, nsign
     real :: unbalanced_amount
 
+    !write (*,*) 'INIT_X_TR', initialized_x_transform
     if (initialized_x_transform) return
     initialized_x_transform = .true.
 
@@ -3501,6 +3505,8 @@ contains
     xxf_lo%nspec = nspec
     xxf_lo%llim_world = 0
     xxf_lo%ulim_world = naky*(2*ntgrid+1)*2*nlambda*negrid*nspec - 1
+
+    !write (*,*) 'XXF_LO%ulim_world', xxf_lo%ulim_world
 
 !<DD>See g_lo init
     select case (layout)
@@ -3640,6 +3646,7 @@ contains
        ! decomposition.
        if (.not. unbalanced_xxf) then
 
+          !write (*,*) 'XXF_LO%ulim_world', xxf_lo%ulim_world, nproc
           xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
           xxf_lo%llim_proc = xxf_lo%blocksize*iproc
           xxf_lo%ulim_proc &

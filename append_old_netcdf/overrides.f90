@@ -36,6 +36,7 @@ module overrides
     real :: tripri
     real :: shift
     real :: betaprim
+    
   end type miller_geometry_overrides_type
 
 
@@ -63,6 +64,7 @@ module overrides
     real, dimension(:), pointer :: vnewk
     real :: g_exb
     real :: mach
+    
   end type profiles_overrides_type
 
 
@@ -73,8 +75,11 @@ module overrides
     !> DO NOT manually set the value of init.
     !! Nasty things may happen.
     logical :: init = .false.
+    logical :: override_nproc
     logical :: override_layout
+    integer :: nproc
     character(len=6) :: layout
+    integer :: old_comm
   end type optimisations_overrides_type
 
 
@@ -212,6 +217,7 @@ contains
     type(optimisations_overrides_type), intent(inout) :: overrides_obj
     if (overrides_obj%init) return 
     overrides_obj%init = .true.
+    overrides_obj%override_nproc = .false.
     overrides_obj%override_layout = .false.
   end subroutine init_optimisations_overrides
 
@@ -223,6 +229,7 @@ contains
       return
     end if
     overrides_obj%init = .false.
+    overrides_obj%override_nproc = .false.
     overrides_obj%override_layout = .false.
   end subroutine finish_optimisations_overrides
 

@@ -162,6 +162,13 @@ module gs2_main
     type(init_type) :: init
 
 
+    !> Do not set manually. If fewer than the 
+    !! available number of processors are being
+    !! used, this is true for the processors
+    !! that are active and false for those that
+    !! lie idle.
+    logical :: included = .true.
+
 
     ! Timers
     type(gs2_timers_type) :: timers
@@ -235,6 +242,10 @@ module gs2_main
     logical :: mp_comm_external = .false.
     integer :: mp_comm
 
+    !> This is set in initialize_gs2 to the number
+    !! of procs actually used
+    integer :: nproc_actual
+
     logical :: run_name_external = .false.
     character(2000) :: run_name
 
@@ -295,16 +306,18 @@ contains
     use mp, only: init_mp, broadcast
     use mp, only: iproc, nproc, proc0
     use mp, only: trin_flag, job
+    use mp, only: use_nproc, included, mp_comm
     use redistribute, only: using_measure_scatter
     use run_parameters, only: avail_cpu_time
     use runtime_tests, only: verbosity
     use unit_tests, only: debug_message, set_job_id
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
+    integer :: oldrank
 
     if (state%init%level .ge. init_level_list%basic) then
       write  (*,*) "ERROR: Called initialize_gs2 twice &
-        without calling finalize_gs2"
+        & without calling finalize_gs2"
       stop 1
     end if
 
@@ -317,6 +330,16 @@ contains
     else
        call init_mp
     end if
+
+    oldrank = iproc
+    if (state%init%opt_ov%override_nproc) then
+      state%init%opt_ov%old_comm = mp_comm
+      call use_nproc(state%init%opt_ov%nproc)
+    end if
+    state%included = included
+    state%nproc_actual = nproc
+    if (.not. state%included) return
+    !write (*,*) 'I am included and my rank is ', iproc, 'and my old rank is', oldrank
 
     if (state%is_trinity_job) state%is_external_job = .true.
     if (state%is_external_job) then 
@@ -402,6 +425,8 @@ contains
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
+    call debug_message(state%verb, 'gs2_main::initialize_gs2 finished')
+
   end subroutine initialize_gs2
 
   !> Initialize all the modules which are used to evolve the 
@@ -418,12 +443,18 @@ contains
     use parameter_scan, only: init_parameter_scan
     use run_parameters, only: nstep, do_eigsolve
     use unit_tests, only: debug_message
+    use gs2_reinit, only: init_gs2_reinit
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
+
+    if (.not. state%included) return
+    call debug_message(state%verb, 'gs2_main::initialize_equations starting')
        !call time_message(.false., time_init,' Initialization')
     !call init_parameter_scan
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
+    call debug_message(state%verb, &
+      'gs2_main::initialize_equations calling init_parameter_scan')
     call init_parameter_scan
 
     if (proc0) call time_message(.false., state%timers%init,' Initialization')
@@ -465,6 +496,8 @@ contains
     end if
     call allocate_outputs(state)
 
+    call init_gs2_reinit
+
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
   end subroutine initialize_equations
@@ -495,6 +528,7 @@ contains
     type(diagnostics_init_options_type) :: diagnostics_init_options
     real :: precision_test
 #endif
+    if (.not. state%included) return
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
@@ -519,6 +553,9 @@ contains
       ! fluxes
       diagnostics_init_options%is_trinity_run = state%is_trinity_job
       call init_gs2_diagnostics_new(diagnostics_init_options)
+
+      call debug_message(state%verb, &
+        'gs2_main::initialize_diagnostics calling run_diagnostics')
       ! Create variables and write constants
       call run_diagnostics(-1,state%exit)
       ! Write initial values
@@ -539,6 +576,9 @@ contains
     state%init%diagnostics_initialized = .true.
 
     if (proc0) call time_message(.false.,state%timers%total,' Total')
+
+    call debug_message(state%verb, &
+        'gs2_main::initialize_diagnostics finished')
 
   end subroutine initialize_diagnostics
 
@@ -601,6 +641,11 @@ contains
     integer :: istep, istatus
     integer, intent(in) :: nstep_run
     logical :: temp_initval_override_store
+
+    if (.not. state%included) return
+
+    call debug_message(state%verb, &
+        'gs2_main::evolve_equations starting')
     
     temp_initval_override_store = state%init%initval_ov%override
     
@@ -619,6 +664,8 @@ contains
 
     !if (proc0) write (*,*) 'istep_end', state%istep_end
 
+    call debug_message(state%verb, &
+        'gs2_main::evolve_equations starting loop')
     ! We run for nstep_run iterations, starting from whatever istep we got
     ! to in previous calls to this function. Note that calling
     ! finalize_diagnostics resets state%istep_end
@@ -632,19 +679,26 @@ contains
 
 
        if (proc0) call time_message(.false.,state%timers%advance,' Advance time step')
+       !if (proc0) write (*,*) 'advance 1', state%timers%advance
 
        !Initialise reset to true
        reset=.true.
 
+       call debug_message(state%verb+1, &
+          'gs2_main::evolve_equations calling advance')
        do while(reset)
           reset=.false. !So that we only do this once unless something triggers a reset
           if (proc0) call time_message(.false.,state%timers%timestep,' Timestep')
           call advance (istep)
           if (proc0) call time_message(.false.,state%timers%timestep,' Timestep')
+          call debug_message(state%verb+1, &
+            'gs2_main::evolve_equations called advance')
 
           !If we've triggered a reset then actually reset
           if (reset) then
              call prepare_initial_values_overrides(state)
+             call debug_message(state%verb+1, &
+                'gs2_main::evolve_equations resetting timestep')
              call set_initval_overrides_to_current_vals(state%init%initval_ov)
              state%init%initval_ov%override = .true.
              if (state%is_external_job) then
@@ -655,11 +709,16 @@ contains
           end if
           if(state%exit) exit
        enddo
+       call debug_message(state%verb+1, &
+          'gs2_main::evolve_equations calling gs2_save_for_restart')
        
        if (nsave > 0 .and. mod(istep, nsave) == 0) &
             call gs2_save_for_restart (gnew, user_time, user_dt, vnmult, istatus, fphi, fapar, fbpar)
        call update_time
        if(proc0) call time_message(.false.,state%timers%diagnostics,' Diagnostics')
+
+       call debug_message(state%verb+1, &
+          'gs2_main::evolve_equations calling diagnostics')
        if (use_old_diagnostics) then 
          call loop_diagnostics (istep, state%exit)
 #ifdef NEW_DIAG
@@ -668,16 +727,23 @@ contains
 #endif
        end if
        if(state%exit) state%converged = .true.
+       if (state%exit) call debug_message(state%verb-1, &
+         'gs2_main::evolve_equations exit true after diagnostics')
 
        if(proc0) call time_message(.false.,state%timers%diagnostics,' Diagnostics')
+
        if (proc0) call time_message(.false.,state%timers%advance,' Advance time step')
 
        if(.not.state%exit)then
+          call debug_message(state%verb+1, &
+            'gs2_main::evolve_equations checking time step')
 
           !Note this should only trigger a reset for timesteps too small
           !as timesteps too large are already handled
           call check_time_step(reset,state%exit)
-          call update_scan_parameter_value(istep, reset, state%exit)
+          !call update_scan_parameter_value(istep, reset, state%exit)
+          call debug_message(state%verb-1, &
+            'gs2_main::evolve_equations checked time step')
 
           !If something has triggered a reset then reset here
           if (reset) then
@@ -693,12 +759,19 @@ contains
           end if
 
           if ((mod(istep,5) == 0).and.(.not.state%exit)) call checkstop(state%exit)
+          if (state%exit) call debug_message(state%verb-1, &
+            'gs2_main::evolve_equations exit true after checkstop')
           if (.not.state%exit) call checktime(avail_cpu_time,state%exit,margin_cpu_time)
+          if (state%exit) call debug_message(state%verb-1, &
+            'gs2_main::evolve_equations exit true after checktime')
        endif
 
        state%istep_end = istep
+       !if (proc0) write (*,*) 'advance 2', state%timers%advance, state%exit
 
        if (state%exit) then
+           call debug_message(state%verb, &
+                'gs2_main::evolve_equations exiting loop')
           exit
        end if
     end do
@@ -744,6 +817,7 @@ contains
     use job_manage, only: time_message
     use mp, only: mp_abort, proc0
     type(gs2_program_state_type), intent(inout) :: state
+    if (.not. state%included) return
 #ifdef WITH_EIG
    if (proc0) call time_message(.false.,state%timers%total,' Total')
 
@@ -798,6 +872,8 @@ contains
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
+    if (.not. state%included) return
+
 
     if (state%nensembles > 1) call scope (subprocs)
 
@@ -844,6 +920,8 @@ contains
     use unit_tests, only: debug_message
     type(gs2_program_state_type), intent(inout) :: state
 
+    if (.not. state%included) return
+
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
@@ -879,13 +957,18 @@ contains
     use mp, only: proc0
     use parameter_scan, only: finish_parameter_scan
     use unit_tests, only: debug_message
+    use gs2_reinit, only: finish_gs2_reinit
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
+
+    if (.not. state%included) return
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
     if (proc0) call time_message(.false.,state%timers%total,' Total')
 
     call debug_message(state%verb, 'gs2_main::finalize_equations starting')
+
+    call finish_gs2_reinit
 
     call deallocate_outputs(state)
     call finish_parameter_scan
@@ -899,43 +982,54 @@ contains
     use file_utils, only: finish_file_utils
     use gs2_init, only: finish_gs2_init
     use job_manage, only: time_message
-    use mp, only: finish_mp, proc0
-    use mp, only: mp_abort
+    use mp, only: finish_mp, proc0, barrier
+    use mp, only: mp_abort, unsplit_all, included, nproc, iproc
     use unit_tests, only: debug_message
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
-    if (state%init%level .ne. init_level_list%basic) then
-      write  (*,*) "ERROR: Called finalize_gs2 at the &
-        & wrong init_level (perhaps you have called finalize_gs2 &
-        & without calling initialize_gs2, or without calling &
-        & finalize_equations"
-      stop 1
+    if (state%included) then
+
+      if (state%init%level .ne. init_level_list%basic) then
+        write  (*,*) "ERROR: Called finalize_gs2 at the &
+          & wrong init_level (perhaps you have called finalize_gs2 &
+          & without calling initialize_gs2, or without calling &
+          & finalize_equations"
+        stop 1
+      end if
+
+      !if ((.not. state%gs2_initialized) .or. &
+          !state%equations_initialized .or. &
+          !state%diagnostics_initialized) then
+          !write (*,*) 'ERROR: initialize_gs2 can only be called when &
+          !& gs2_initialized is true, and equations_initialized &
+          !& and diagnostics_initialized, &
+          !& are all false. '
+         !stop 1
+       !end if
+
+      if (proc0) call time_message(.false.,state%timers%total,' Total')
+
+      call finish_gs2_init(state%init)
+
+      if (proc0) call finish_file_utils
+
+      if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
+
+      if (proc0) call time_message(.false.,state%timers%total,' Total')
+      
+      call debug_message(state%verb, 'gs2_main::finalize_gs2 calling print_times')
+
+      if (state%print_times) call print_times(state, state%timers)
+
     end if
 
-    !if ((.not. state%gs2_initialized) .or. &
-        !state%equations_initialized .or. &
-        !state%diagnostics_initialized) then
-        !write (*,*) 'ERROR: initialize_gs2 can only be called when &
-        !& gs2_initialized is true, and equations_initialized &
-        !& and diagnostics_initialized, &
-        !& are all false. '
-       !stop 1
-     !end if
-
-    if (proc0) call time_message(.false.,state%timers%total,' Total')
-
-    call finish_gs2_init(state%init)
-
-    if (proc0) call finish_file_utils
-
-    if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
-
-    if (proc0) call time_message(.false.,state%timers%total,' Total')
-    
-    call debug_message(state%verb, 'gs2_main::finalize_gs2 calling print_times')
-
-    if (state%print_times) call print_times(state, state%timers)
+    !write (*,*) 'I AM iproc ', iproc, 'and nproc = ', nproc
+    if (state%init%opt_ov%override_nproc) &
+      call unsplit_all(state%init%opt_ov%old_comm)
+    call barrier
+    state%included = included
+    !write (*,*) 'I am iproc ', iproc, 'and nproc = ', nproc
 
     call debug_message(state%verb, 'gs2_main::finalize_gs2 calling finish_mp')
 
@@ -953,6 +1047,7 @@ contains
     use overrides, only: init_optimisations_overrides
     use gs2_init, only: init, init_level_list
     type(gs2_program_state_type), intent(inout) :: state
+    if (.not. state%included) return
     ! Initialize to the level below so that overrides are triggered
     !call init(state%init, init_level_list%override_optimisations-1)
     call init_optimisations_overrides(state%init%opt_ov)
@@ -962,6 +1057,7 @@ contains
     use overrides, only: init_miller_geometry_overrides
     use gs2_init, only: init, init_level_list
     type(gs2_program_state_type), intent(inout) :: state
+    if (.not. state%included) return
     ! Initialize to the level below so that overrides are triggered
     call init(state%init, init_level_list%override_miller_geometry-1)
     call init_miller_geometry_overrides(state%init%mgeo_ov)
@@ -972,6 +1068,8 @@ contains
     use gs2_init, only: init, init_level_list
     use species, only: nspec
     type(gs2_program_state_type), intent(inout) :: state
+
+    if (.not. state%included) return
     ! Initialize to the level below so that overrides are triggered
     call init(state%init, init_level_list%override_profiles-1)
     call init_profiles_overrides(state%init%prof_ov, nspec)
@@ -988,6 +1086,7 @@ contains
     use species, only: nspec
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
+    if (.not. state%included) return
     ! Initialize to the level below so that overrides are triggered
     call init(state%init, init_level_list%override_initial_values-1)
     call init_initial_values_overrides(state%init%initval_ov,&
@@ -1015,6 +1114,7 @@ contains
     type(initial_values_overrides_type), intent(inout) :: initval_ov
     integer :: iostat
     integer :: istatus
+    !if (.not. state%included) return
 
     if (.not.initval_ov%init) &
       call mp_abort("Trying to set initial value overrides &
@@ -1079,6 +1179,8 @@ contains
     real :: diff
     real, dimension(nspec) :: qf, pf, ht, vf
     integer :: is
+
+    if (.not. state%included) return
 
     time_interval = user_time-start_time
     !write (*,*) 'GETTING FLUXES', 'user_time', user_time, start_time, 'DIFF', time_interval

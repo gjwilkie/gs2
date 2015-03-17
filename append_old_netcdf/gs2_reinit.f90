@@ -7,6 +7,7 @@ module gs2_reinit
   public :: check_time_step, time_reinit
   public :: init_reinit, wnml_gs2_reinit
   public :: reduce_time_step, increase_time_step
+  public :: init_gs2_reinit, finish_gs2_reinit
 
 
 
@@ -184,6 +185,15 @@ contains
     if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
 
   end subroutine check_time_step
+
+
+  subroutine init_gs2_reinit
+    call init_reinit
+  end subroutine init_gs2_reinit
+
+  subroutine finish_gs2_reinit
+    first = .true.
+  end subroutine finish_gs2_reinit
 
   subroutine init_reinit
     use run_parameters, only: code_delt_max

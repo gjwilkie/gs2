@@ -61,12 +61,20 @@ contains
     type(diagnostics_init_options_type), intent(in) :: init_options
     logical :: ex
     
-    if(proc0.and.debug) write (*,*) 'initializing new diagnostics'
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new starting')
     call init_diagnostics_config(gnostics)
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new initialized config')
     call check_parameters
     call check_restart_file_writeable
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new  checked restart file')
     
     call init_volume_averages
+
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new inialized vol avgs')
     
     ! Eventually we will remove this as we want the new diagnostics
     ! module to be built even if netCDF is not available.
@@ -165,6 +173,8 @@ contains
        end if
        call write_metadata(gnostics)
     end if
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new opened file')
     call broadcast(gnostics%appending)
 
     !All procs initialise dimension data but if not parallel IO
@@ -172,8 +182,13 @@ contains
     call create_dimensions(&
       (gnostics%parallel.or.proc0).and..not.gnostics%appending)
 
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new created dimensions')
+
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
 
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new finished')
     
     if(proc0.and.debug) write (*,*) 'finished initializing new diagnostics'
   end subroutine init_gs2_diagnostics_new
@@ -374,11 +389,15 @@ contains
     use species, only: spec, has_electron_species
     use simpledataio, only: increment_start, syncfile, closefile, set_parallel, create_file
     use diagnostics_metadata, only: write_input_file
+    use unit_tests, only: debug_message
     implicit none
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
+    integer, parameter :: verb=3
     
     if (.not. gnostics%write_any) return
+
+    call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics starting')
     
     gnostics%istep = istep
     gnostics%exit = exit
@@ -423,6 +442,9 @@ contains
        call calculate_omega(gnostics)
        if (gnostics%write_heating) call calculate_heating (gnostics)
     end if
+
+    call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics calculated &
+      & omega and heating')
 
     ! EGH to be reinstated when old diagnostics removed.
     !if (mod(istep, gnostics%nsave).eq.0.or.exit) then
@@ -476,6 +498,7 @@ contains
        if (gnostics%write_verr .and. vary_vnew) call write_velocity_space_checks(gnostics)
     end if
     
+    call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics finished')
     exit = gnostics%exit
   end subroutine run_diagnostics
 
