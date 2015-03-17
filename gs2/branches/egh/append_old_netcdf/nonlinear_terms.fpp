@@ -16,6 +16,7 @@ module nonlinear_terms
   public :: nonlinear_terms_unit_test_time_add_nl, cfl
   public :: nonlinear_mode_none, nonlinear_mode_on
 
+  integer :: istep_last = 0
   ! knobs
   integer :: nonlinear_mode_switch
   integer :: flow_mode_switch !THIS IS NOT SUPPORTED, SHOULD BE REMOVED?
@@ -229,6 +230,8 @@ contains
     call broadcast (nl_forbid_force_zero)
     call broadcast (zip)
 
+    istep_last = 0
+
     if (flow_mode_switch == flow_mode_on) then
        if (proc0) write(*,*) 'Forcing flow_mode = off'
        flow_mode_switch = flow_mode_off
@@ -274,6 +277,7 @@ contains
     use dist_fn_arrays, only: g
     use gs2_time, only: save_dt_cfl
     use run_parameters, only: reset
+    use unit_tests, only: debug_message
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
@@ -282,10 +286,12 @@ contains
     real, intent (in) :: bd
     logical, intent (in), optional :: nl
 
-    integer :: istep_last = 0
+    integer, parameter :: verb = 4
     integer :: iglo, ik, it
     real :: zero
     real :: dt_cfl
+
+    call debug_message(verb, 'nonlinear_terms::add_explicit starting')
 
     if (initializing) then
        if (present(nl)) then
@@ -295,9 +301,12 @@ contains
        return
     endif
 
+
 !
 ! Currently not self-starting.  Need to fix this.
 !
+
+    call debug_message(verb, 'nonlinear_terms::add_explicit copying old terms')
 
     if (istep /= istep_last) then
 
@@ -305,9 +314,12 @@ contains
        g3 = g2
        g2 = g1
 
+       call debug_message(verb, 'nonlinear_terms::add_explicit copied old terms')
+
        ! if running nonlinearly, then compute the nonlinear term at grid points
        ! and store it in g1
        if (present(nl)) then
+          call debug_message(verb, 'nonlinear_terms::add_explicit calling add_nl')
           call add_nl (g1, phi, apar, bpar)
           if(reset) return !Return if resetting
           ! takes g1 at grid points and returns 2*g1 at cell centers
@@ -439,15 +451,19 @@ contains
     use kt_grids, only: aky, akx
     use gs2_time, only: save_dt_cfl, check_time_step_too_large
     use constants, only: zi
+    use unit_tests, only: debug_message
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer :: i, j, k
     real :: max_vel, zero
     real :: dt_cfl
+    integer, parameter :: verb = 4
 
     integer :: iglo, ik, it, is, ig, ia
     
+    call debug_message(verb, 'nonlinear_terms::add_nl starting')
+
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)
 
@@ -461,12 +477,15 @@ contains
     if (fbpar > zero) call load_kx_bpar
     if (fapar  > zero) call load_kx_apar
 
+    call debug_message(verb, 'nonlinear_terms::add_nl calling transform2')
     !Transform to real space
     if (accelerated) then
        call transform2 (g1, aba, ia)
     else
        call transform2 (g1, ba)
     end if
+
+    call debug_message(verb, 'nonlinear_terms::add_nl calculated dphi/dx')
     
     !Form g1=i*ky*g_wesson
     g1=g
@@ -482,6 +501,8 @@ contains
     else
        call transform2 (g1, gb)
     end if
+
+    call debug_message(verb, 'nonlinear_terms::add_nl calculated dg/dy')
     
     !It should be possible to write the following with vector notation
     !To find max_vel we'd then use MAXVAL rather than MAX
@@ -509,6 +530,8 @@ contains
        max_vel = max_vel*cfly
 !       max_vel = maxval(abs(ba)*cfly)
     endif
+
+    call debug_message(verb, 'nonlinear_terms::add_nl calculated dphi/dx.dg/dy')
 
     !Form g1=i*ky*chi
     if (fphi > zero) then

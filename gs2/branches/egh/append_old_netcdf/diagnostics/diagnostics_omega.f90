@@ -100,6 +100,7 @@ contains
     use gs2_time, only: code_dt
     use constants, only: zi
     use diagnostics_config, only: diagnostics_type
+    use mp, only: proc0
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     real :: fac
@@ -143,7 +144,7 @@ contains
        if (all(sqrt(sum(abs(domega)**2/real(gnostics%navg),dim=1)) &
             .le. min(abs(omega_average),1.0)*gnostics%omegatol)) &
        then
-          write (*, "('*** omega converged')")
+          if (proc0) write (gnostics%ascii_files%out, "('*** omega converged')")
           gnostics%exit = gnostics%exit_when_converged
        end if
        

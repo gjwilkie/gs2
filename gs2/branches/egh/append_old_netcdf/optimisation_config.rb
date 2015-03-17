@@ -10,9 +10,11 @@ input_variables_for_optimisation_config = [
   ['logical', 'on', '.false.'],
   ['logical', 'auto', '.true.'],
   ['logical', 'measure_all', '.false.'],
+  ['logical', 'warm_up', '.false.'],
   ['integer', 'nstep_measure', '5'],
   ['real', 'max_imbalance', '-1'],
   ['integer', 'max_unused_procs', '0'],
+  ['real', 'min_efficiency', '-1.0'],
 
 ]
 
@@ -89,6 +91,10 @@ module optimisation_config
     ! Results
     real :: time
     real :: optimal_time
+    real :: cost
+    real :: optimal_cost
+    real :: efficiency
+    integer :: nproc
     logical :: optimal = .true.
 
   end type optimisation_results_type
@@ -97,6 +103,7 @@ module optimisation_config
   !> A type for storing the optimisation configuration,
   !! the results
   type optimisation_type
+    integer :: nproc_max
     type(optimisation_results_type) :: results
     type(optimisations_overrides_type), &
       dimension(:), pointer :: sorted_optimisations
@@ -108,10 +115,12 @@ module optimisation_config
 contains
   subroutine init_optimisation_config(optim)
     use file_utils, only: open_output_file
+    use mp, only: nproc
     implicit none
     type(optimisation_type), intent(inout) :: optim
     call read_parameters(optim)
     call open_output_file(optim%outunit, '.optim')
+    optim%nproc_max = nproc
   end subroutine init_optimisation_config
 
   subroutine finish_optimisation_config(optim)

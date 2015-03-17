@@ -339,6 +339,7 @@ gs2_mod = \
 	 gs2_transforms.o \
 	 hyper.o \
 	 ideq.o \
+	 ingen_mod.o \
 	 init_g.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -441,6 +442,7 @@ ingen_mod = \
 	 hyper.o \
 	 ideq.o \
 	 ingen.o \
+	 ingen_mod.o \
 	 init_g.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -565,7 +567,8 @@ diagnostics_config.o: \
 	 mp.o \
 	 simpledataiof.o \
 	 species.o \
-	 text_options.o 
+	 text_options.o \
+	 unit_tests.o 
 diagnostics_create_and_write.o: \
 	 diagnostics_config.o \
 	 diagnostics_dimensions.o \
@@ -1062,6 +1065,7 @@ gs2_main.o: \
 	 unit_tests.o 
 gs2_optimisation.o: \
 	 gs2_main.o \
+	 ingen_mod.o \
 	 mp.o \
 	 optimisation_config.o \
 	 overrides.o 
@@ -1100,7 +1104,8 @@ gs2_transforms.o: \
 	 prof.o \
 	 redistribute.o \
 	 sorting.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 unit_tests.o 
 hdf_wrapper.o: \
 	 constants.o \
 	 convert.o \
@@ -1126,6 +1131,8 @@ ideq.o: \
 	 mp.o \
 	 spl.o 
 ingen.o: \
+	 ingen_mod.o 
+ingen_mod.o: \
 	 antenna.o \
 	 collisions.o \
 	 constants.o \
@@ -1240,7 +1247,8 @@ nonlinear_terms.o: \
 	 run_parameters.o \
 	 species.o \
 	 text_options.o \
-	 theta_grid.o 
+	 theta_grid.o \
+	 unit_tests.o 
 normalisations.o: \
 	 file_utils.o \
 	 mp.o \

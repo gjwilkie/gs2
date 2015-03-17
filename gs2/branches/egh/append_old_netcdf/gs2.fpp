@@ -64,6 +64,7 @@ program gs2
   use gs2_optimisation, only: finalize_gs2_optimisation
   use gs2_optimisation, only: optimise_gs2
   use gs2_main, only: gs2_program_state_type
+  use gs2_main, only: initialize_wall_clock_timer
   use gs2_main, only: initialize_gs2
   use gs2_main, only: initialize_equations
   use gs2_main, only: initialize_diagnostics
@@ -76,28 +77,28 @@ program gs2
   implicit none
   type(gs2_program_state_type) :: state
   !type(optimisation_type) :: optim
+  call initialize_wall_clock_timer
   call initialize_gs2_optimisation(state)
 
   if (state%optim%on) then
     call optimise_gs2(state)
-    if (state%optim%auto) then
-      
+  end if
+  if (state%optim%auto .or. .not. state%optim%on) then
+    call initialize_gs2(state)
+    call initialize_equations(state)
+    call initialize_diagnostics(state)
+    state%print_times = .false.
+    if (state%do_eigsolve) then 
+      call run_eigensolver(state)
+    else
+      call evolve_equations(state, state%nstep)
     end if
+    call finalize_diagnostics(state)
+    call finalize_equations(state)
+    state%print_times = .true.
+    state%print_full_timers = .true.
+    call finalize_gs2(state)
   end if
-  call initialize_gs2(state)
-  call initialize_equations(state)
-  call initialize_diagnostics(state)
-  state%print_times = .false.
-  if (state%do_eigsolve) then 
-    call run_eigensolver(state)
-  else
-    call evolve_equations(state, state%nstep)
-  end if
-  call finalize_diagnostics(state)
-  call finalize_equations(state)
-  state%print_times = .true.
-  state%print_full_timers = .true.
-  call finalize_gs2(state)
 
   call finalize_gs2_optimisation(state)
 
