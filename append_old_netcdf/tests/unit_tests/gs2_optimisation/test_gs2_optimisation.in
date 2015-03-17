@@ -18,12 +18,8 @@
 !==============================================================================
 
 &optimisation_config
- auto = .true.
- nstep_measure = 1
- warm_up = .false.
- max_unused_procs = -1
- max_imbalance = -1.0
- min_efficiency = 0.3
+ nstep_measure = 2
+ max_unused_procs = 8
 /
 !==============================
 !GENERAL PARAMETERS  
@@ -31,7 +27,6 @@
 &parameters
  beta = 0.0 ! Ratio of particle to magnetic pressure (reference Beta, not total beta):  beta=n_0 T_0 /( B^2 / (8 pi))
  zeff = 1.0 ! Effective ionic charge.
- user_comments = 'This is a test of the gs2_optimisation module'
 /
 
 &kt_grids_knobs
@@ -43,7 +38,7 @@
 !==============================
 &kt_grids_box_parameters
  y0 = 2
- naky = 4
+ naky = 2
  jtwist = 6
  nx = 4
 /
@@ -112,7 +107,7 @@
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
  delt = 0.05 ! Time step
  nstep = 10000000 ! Maximum number of timesteps
- avail_cpu_time = 50000
+ avail_cpu_time = 302
 /
 
 !==============================
@@ -128,7 +123,6 @@
 !==============================
 &layouts_knobs
  layout = "lexys" ! 'yxles', 'lxyes', 'lyxes', 'lexys' Determines the way the grids are laid out in memory.
- fft_use_wisdom = .true.
 /
 
 !==============================
@@ -191,7 +185,6 @@
 !DIAGNOSTICS  
 !==============================
 &gs2_diagnostics_knobs
- append_old = .false.
  print_flux_line = .F. ! Instantaneous fluxes output to screen
  write_nl_flux = .true. ! Write nonlinear fluxes as a function of time.
  print_line = .false. ! Estimated frequencies and growth rates to the screen/stdout
@@ -210,7 +203,7 @@
  write_final_moments = .true. ! write final n, T
   ! write_parity not specified --- Writes parities in dist fn and particle fluxes
  nsave = 100 ! Write restart files every nsave timesteps
- nwrite = 5 ! Output diagnostic data every nwrite
+ nwrite = 10 ! Output diagnostic data every nwrite
  navg = 10 ! Any time averages performed over navg
  omegatol = -0.001 ! The convergence has to be better than one part in 1/omegatol
  omegatinst = 1.0e6 ! Recommended value: 500.
@@ -227,7 +220,7 @@
   ! write_max_verr not specified --- 
   ! nmovie not specified --- 
   ! igomega not specified --- 
-   exit_when_converged = .false. ! not specified --- 
+  ! exit_when_converged not specified --- 
   ! write_full_moments_notgc not specified --- 
   ! write_cross_phase not specified --- 
   ! dump_check1 not specified --- 
