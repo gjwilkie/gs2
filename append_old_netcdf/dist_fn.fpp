@@ -4459,6 +4459,7 @@ endif
     use species, only: spec, nspec
     use run_parameters, only: fphi, fapar, fbpar, wunits
     use gs2_time, only: code_dt
+    use gs2_time, only: dt0 => code_dt, dt1 => code_dt_prev1, dt2 => code_dt_prev2
     use nonlinear_terms, only: nonlin
     use hyper, only: D_res
     use constants, only: zi
@@ -4472,7 +4473,19 @@ endif
 
     integer :: ig
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
+    real :: c0, c1, c2
 
+
+    ! NRM, 3/18/2015 
+    ! calculate AB3 coefficients generalized to changing timestep
+    ! see Tatsuno & Dorland, Physics of Plasmas 13, 092107 (2006)
+    ! http://www.cscamm.umd.edu/publications/TatsunoDorland-PoP06_CS-06-11.pdf
+    ! if dt0 = dt1 = dt2, this reduces to usual AB3 coefficients
+    c0 = (1. / (dt1 + dt2)) * ( &
+         ((dt0 + dt1)**2./dt1)*( (dt0+dt1)/3. + dt2/2. ) &
+         - dt1*(dt1/3. + dt2/2.) )
+    c1 = - dt0**2. * ( dt0/3. + (dt1+dt2)/2. ) / (dt1*dt2)
+    c2 = dt0**2. * ( dt0/3. + dt1/2. ) / ( dt2*(dt1+dt2) )
 
 !CMR, 4/8/2011
 ! apargavg and phigavg combine to give the GK EM potential chi. 
@@ -4593,10 +4606,16 @@ endif
           case default
              do ig = -ntgrid, ntgrid-1
                 if (il < ittp(ig)) cycle
-                source(ig) = source(ig) + 0.5*code_dt*( &
-                     (23./12.)*gexp_1(ig,isgn,iglo) &
-                     - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                     + (5./12.) *gexp_3(ig,isgn,iglo))
+             !   source(ig) = source(ig) + 0.5*code_dt*( &
+             !        (23./12.)*gexp_1(ig,isgn,iglo) &
+             !        - (4./3.)  *gexp_2(ig,isgn,iglo) &
+             !        + (5./12.) *gexp_3(ig,isgn,iglo))
+    ! NRM, 3/18/2015 
+    ! use AB3 generalized to changing timestep
+                 source(ig) = source(ig) + 0.5*( &
+                          c0*gexp_1(ig,isgn,iglo) &
+                        + c1*gexp_2(ig,isgn,iglo) &
+                        + c2*gexp_3(ig,isgn,iglo))
              end do
           end select
 #else
@@ -4619,10 +4638,16 @@ endif
              case default
                 do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
-                   source(ig) = source(ig) + 0.5*code_dt*( &
-                          (23./12.)*gexp_1(ig,isgn,iglo) &
-                        - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                        + (5./12.) *gexp_3(ig,isgn,iglo))
+              !    source(ig) = source(ig) + 0.5*code_dt*( &
+              !           (23./12.)*gexp_1(ig,isgn,iglo) &
+              !         - (4./3.)  *gexp_2(ig,isgn,iglo) &
+              !         + (5./12.) *gexp_3(ig,isgn,iglo))
+    ! NRM, 3/18/2015 
+    ! use AB3 generalized to changing timestep
+                 source(ig) = source(ig) + 0.5*( &
+                          c0*gexp_1(ig,isgn,iglo) &
+                        + c1*gexp_2(ig,isgn,iglo) &
+                        + c2*gexp_3(ig,isgn,iglo))
                 end do
              end select
           end if
@@ -4738,10 +4763,16 @@ endif
          end do
       case default
          do ig = -ntgrid, ntgrid-1
-            source(ig) = source(ig) + 0.5*code_dt*( &
-                 (23./12.)*gexp_1(ig,isgn,iglo) &
-                 - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                 + (5./12.) *gexp_3(ig,isgn,iglo))
+          !  source(ig) = source(ig) + 0.5*code_dt*( &
+          !       (23./12.)*gexp_1(ig,isgn,iglo) &
+          !       - (4./3.)  *gexp_2(ig,isgn,iglo) &
+          !       + (5./12.) *gexp_3(ig,isgn,iglo))
+    ! NRM, 3/18/2015 
+    ! use AB3 generalized to changing timestep
+                 source(ig) = source(ig) + 0.5*( &
+                          c0*gexp_1(ig,isgn,iglo) &
+                        + c1*gexp_2(ig,isgn,iglo) &
+                        + c2*gexp_3(ig,isgn,iglo))
          end do
       end select
 #else
@@ -4761,10 +4792,16 @@ endif
             end do
          case default
             do ig = -ntgrid, ntgrid-1
-               source(ig) = source(ig) + 0.5*code_dt*( &
-                      (23./12.)*gexp_1(ig,isgn,iglo) &
-                    - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                    + (5./12.) *gexp_3(ig,isgn,iglo))
+             !  source(ig) = source(ig) + 0.5*code_dt*( &
+             !         (23./12.)*gexp_1(ig,isgn,iglo) &
+             !       - (4./3.)  *gexp_2(ig,isgn,iglo) &
+             !       + (5./12.) *gexp_3(ig,isgn,iglo))
+    ! NRM, 3/18/2015 
+    ! use AB3 generalized to changing timestep
+                 source(ig) = source(ig) + 0.5*( &
+                          c0*gexp_1(ig,isgn,iglo) &
+                        + c1*gexp_2(ig,isgn,iglo) &
+                        + c2*gexp_3(ig,isgn,iglo))
             end do
          end select
       end if
@@ -4790,6 +4827,7 @@ endif
     use species, only: spec
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_time, only: code_dt
+    use gs2_time, only: dt0 => code_dt, dt1 => code_dt_prev1, dt2 => code_dt_prev2
     use nonlinear_terms, only: nonlin
     use constants, only: zi
     implicit none
@@ -4801,6 +4839,20 @@ endif
     complex, dimension (-ntgrid:,:), intent (out) :: source
     integer :: ig, isgn
     complex, dimension (-ntgrid:ntgrid) :: phigavg, apargavg
+
+    real :: c0, c1, c2
+
+    ! NRM, 3/18/2015 
+    ! calculate AB3 coefficients generalized to changing timestep
+    ! see Tatsuno & Dorland, Physics of Plasmas 13, 092107 (2006)
+    ! http://www.cscamm.umd.edu/publications/TatsunoDorland-PoP06_CS-06-11.pdf
+    ! if dt0 = dt1 = dt2, this reduces to usual AB3 coefficients
+    c0 = (1. / (dt1 + dt2)) * ( &
+         ((dt0 + dt1)**2./dt1)*( (dt0+dt1)/3. + dt2/2. ) &
+         - dt1*(dt1/3. + dt2/2.) )
+    c1 = - dt0**2. * ( dt0/3. + (dt1+dt2)/2. ) / (dt1*dt2)
+    c2 = dt0**2. * ( dt0/3. + dt1/2. ) / ( dt2*(dt1+dt2) )
+
 
     !Temporally weighted fields
     phigavg  = (fexp(is)*phi(:,it,ik)   + (1.0-fexp(is))*phinew(:,it,ik)) &
@@ -4914,10 +4966,16 @@ endif
              case default
                 do ig = -ntgrid, ntgrid-1
                    if (il < ittp(ig)) cycle
-                   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
-                        (23./12.)*gexp_1(ig,isgn,iglo) &
-                        - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                        + (5./12.) *gexp_3(ig,isgn,iglo))
+                !   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+                !        (23./12.)*gexp_1(ig,isgn,iglo) &
+                !        - (4./3.)  *gexp_2(ig,isgn,iglo) &
+                !        + (5./12.) *gexp_3(ig,isgn,iglo))
+    ! NRM, 3/18/2015 
+    ! use AB3 generalized to changing timestep
+                 source(ig,isgn) = source(ig,isgn) + 0.5*( &
+                          c0*gexp_1(ig,isgn,iglo) &
+                        + c1*gexp_2(ig,isgn,iglo) &
+                        + c2*gexp_3(ig,isgn,iglo))
                 end do
              end select
           end if
@@ -4977,10 +5035,16 @@ endif
             end do
          case default
             do ig = -ntgrid, ntgrid-1
-               source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
-                      (23./12.)*gexp_1(ig,isgn,iglo) &
-                    - (4./3.)  *gexp_2(ig,isgn,iglo) &
-                    + (5./12.) *gexp_3(ig,isgn,iglo))
+            !   source(ig,isgn) = source(ig,isgn) + 0.5*code_dt*( &
+            !          (23./12.)*gexp_1(ig,isgn,iglo) &
+            !        - (4./3.)  *gexp_2(ig,isgn,iglo) &
+            !        + (5./12.) *gexp_3(ig,isgn,iglo))
+    ! NRM, 3/18/2015 
+    ! use AB3 generalized to changing timestep
+                 source(ig,isgn) = source(ig,isgn) + 0.5*( &
+                          c0*gexp_1(ig,isgn,iglo) &
+                        + c1*gexp_2(ig,isgn,iglo) &
+                        + c2*gexp_3(ig,isgn,iglo))
             end do
          end select
       end if
