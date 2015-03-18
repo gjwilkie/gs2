@@ -204,7 +204,7 @@ module gs2_main
     !! further. A call to finalize_diagnostics
     !! will set it back to 1. Note that setting
     !! this manually is NOT advised. 
-    integer :: istep_end = 1
+    integer :: istep_end = 0
 
     !> Whether to print out debug messages
     !logical :: debug = .false.
@@ -674,7 +674,7 @@ contains
     ! We run for nstep_run iterations, starting from whatever istep we got
     ! to in previous calls to this function. Note that calling
     ! finalize_diagnostics resets state%istep_end
-    do istep = state%istep_end, state%istep_end + nstep_run - 1
+    do istep = state%istep_end+1, state%istep_end + nstep_run 
 
        if (istep .gt. nstep) then
          if (proc0) write (*,*) 'Reached maximum number of steps allowed &
@@ -908,7 +908,7 @@ contains
        nonlinear_mode_switch .eq. nonlinear_mode_none) &
         call reset_linear_magnitude
 
-    state%istep_end = 1
+    state%istep_end = 0
 
     call debug_message(state%verb, 'gs2_main::reset_equations finished')
 
