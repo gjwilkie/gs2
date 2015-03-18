@@ -167,22 +167,35 @@ contains
 
   subroutine check_time_step (reset, exit)
     use gs2_time, only: code_dt_cfl, code_dt
+    use nonlinear_terms, only: gryfx_zonal
+    use mp, only: broadcast
     implicit none
     logical, intent(in) :: exit
     logical, intent(out) :: reset
+
+    real :: fac = 1.0
 
     if (first) call init_reinit
     first = .false.
     reset = .false.
 
+    if(gryfx_zonal%on) then
+      !code_dt_cfl is only set on proc 0 by gryfx in nlps.cu
+      call broadcast(code_dt_cfl)
+!both code_dt = dt_gs2 and code_dt_cfl = dt_cfl_gryfx are in gs2 units
+!we want to check if dt_gryfx = 2*dt_gs2 is too big/small when compared to
+!dt_cfl_gryfx
+      fac = 2.0
+    endif
+
 ! nothing to do if exiting in this iteration
     if (exit) return
 
 ! If timestep is too big, make it smaller
-    if (code_dt > code_dt_cfl) reset = .true. !Note this logic is repeated in gs2_time::check_time_step_too_large
+    if (code_dt*fac > code_dt_cfl) reset = .true. !Note this logic is repeated in gs2_time::check_time_step_too_large
        
 ! If timestep is too small, make it bigger
-    if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
+    if (code_dt*fac < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
 
   end subroutine check_time_step
 
