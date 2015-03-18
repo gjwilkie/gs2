@@ -49,8 +49,8 @@ class GenerateInit
         'dist_fn_layouts', 'run_parameters', 'dist_fn_level_3']],
     ['nonlinear_terms' ,
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 'le_grids',
-        'dist_fn_layouts']],
-    ['gs2_layouts' , ['override_optimisations']],
+        'dist_fn_layouts', 'override_optimisations']],
+    ['gs2_layouts' , []],
     ['set_initial_values', ['fields', 'init_g', 'override_initial_values']],
     ['le_grids' ,
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid']],
@@ -74,7 +74,7 @@ class GenerateInit
 
     ['dist_fn_level_2' , ['dist_fn_level_1', 'override_profiles']], 
     
-    ['override_optimisations' , []],
+    ['override_optimisations' , ['gs2_layouts']],
     ['override_miller_geometry' , ['theta_grid_params']],
     # Override tprim, fprim, vnewk, temp and dens in species
     ['override_profiles' , ['species']],
