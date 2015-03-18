@@ -63,7 +63,7 @@ module dist_fn
   public :: g_exb_error_limit
   public :: g_exb_start_timestep, g_exb_start_time
   public :: init_bessel, init_fieldeq
-  public :: getfieldeq, getan, getmoms, getemoms
+  public :: getfieldeq, getan, getmoms, getemoms, getmoms_gryfx
   public :: getfieldeq_nogath
   public :: flux, lf_flux, eexchange
   public :: get_epar, get_heat
@@ -5873,6 +5873,198 @@ endif
 
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
+
+  subroutine getmoms_gryfx (density_gryfx, upar_gryfx, tpar_gryfx, tperp_gryfx, qpar_gryfx, qperp_gryfx, phi_gryfx)
+    use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew, g_adjust
+    use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
+    use species, only: nspec, spec
+    use theta_grid, only: ntgrid
+    use le_grids, only: integrate_moment, anon, energy
+    use prof, only: prof_entering, prof_leaving
+    use run_parameters, only: fphi, fbpar
+    use fields_arrays, only: phinew, bparnew, phi
+    use kt_grids, only: ntheta0, naky
+    use mp, only: proc0, iproc
+
+    implicit none
+    integer :: ik, it, isgn, ie, is, iglo, ig, iz, index_gryfx
+    complex*8, dimension(naky*ntheta0*2*ntgrid*nspec), intent(out) :: density_gryfx, upar_gryfx, &
+         tpar_gryfx, tperp_gryfx, qpar_gryfx, qperp_gryfx
+    complex*8, dimension(naky*ntheta0*2*ntgrid), intent(out) :: phi_gryfx       
+    complex, dimension(:,:,:,:), allocatable :: total
+
+    real :: densfac_lin, uparfac_lin, tparfac_lin, tprpfac_lin, qparfac_lin, qprpfac_lin, phifac_lin
+
+    allocate(total(-ntgrid:ntgrid,ntheta0,naky,nspec))
+
+    ! DENS
+    g0 = gnew 
+    call integrate_moment (g0, total)
+    if(proc0) then
+    do ig = -ntgrid, ntgrid-1
+      iz = ig + ntgrid + 1
+      do it = 1,g_lo%ntheta0
+        do ik = 1, g_lo%naky
+          do is = 1,g_lo%nspec
+            index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
+                            g_lo%naky*g_lo%ntheta0*(iz-1) + &
+                            2*ntgrid*g_lo%naky*g_lo%ntheta0*(is-1)
+            density_gryfx(index_gryfx) = total(ig, it, ik, is)
+          end do
+        end do
+      end do
+    end do
+    end if
+
+    ! UPAR
+    g0 = vpa*g0
+    call integrate_moment (g0, total)
+    if(proc0) then
+    do ig = -ntgrid, ntgrid-1
+      iz = ig + ntgrid + 1
+      do it = 1,g_lo%ntheta0
+        do ik = 1, g_lo%naky
+          do is = 1,g_lo%nspec
+            index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
+                            g_lo%naky*g_lo%ntheta0*(iz-1) + &
+                            2*ntgrid*g_lo%naky*g_lo%ntheta0*(is-1)
+            upar_gryfx(index_gryfx) = total(ig, it, ik, is)
+          end do
+        end do
+      end do
+    end do
+    end if
+
+    ! TPAR
+    g0 = 2*vpa*g0
+    call integrate_moment (g0, total)
+    ! this returns ppar
+    if(proc0) then
+    do ig = -ntgrid, ntgrid-1
+      iz = ig + ntgrid + 1
+      do it = 1,g_lo%ntheta0
+        do ik = 1, g_lo%naky
+          do is = 1,g_lo%nspec
+            index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
+                            g_lo%naky*g_lo%ntheta0*(iz-1) + &
+                            2*ntgrid*g_lo%naky*g_lo%ntheta0*(is-1)
+            tpar_gryfx(index_gryfx) = total(ig, it, ik, is)
+          end do
+        end do
+      end do
+    end do
+    end if
+    ! subtract dens to get tpar
+    if(proc0) tpar_gryfx = tpar_gryfx - density_gryfx
+
+    ! QPAR
+    g0 = vpa*g0
+    call integrate_moment (g0, total)
+    if(proc0) then
+    do ig = -ntgrid, ntgrid-1
+      iz = ig + ntgrid + 1
+      do it = 1,g_lo%ntheta0
+        do ik = 1, g_lo%naky
+          do is = 1,g_lo%nspec
+            index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
+                            g_lo%naky*g_lo%ntheta0*(iz-1) + &
+                            2*ntgrid*g_lo%naky*g_lo%ntheta0*(is-1)
+            qpar_gryfx(index_gryfx) = total(ig, it, ik, is)
+          end do
+        end do
+      end do
+    end do
+    end if
+
+    ! TPRP
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do isgn = 1, 2
+          g0(:,isgn,iglo) = 2.*.5*vperp2(:,iglo)*gnew(:,isgn,iglo)
+       end do
+    end do
+    call integrate_moment (g0, total)
+    ! this returns pprp 
+    if(proc0) then
+    do ig = -ntgrid, ntgrid-1
+      iz = ig + ntgrid + 1
+      do it = 1,g_lo%ntheta0
+        do ik = 1, g_lo%naky
+          do is = 1,g_lo%nspec
+            index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
+                            g_lo%naky*g_lo%ntheta0*(iz-1) + &
+                            2*ntgrid*g_lo%naky*g_lo%ntheta0*(is-1)
+            tperp_gryfx(index_gryfx) = total(ig, it, ik, is)
+          end do
+        end do
+      end do
+    end do
+    end if
+    ! subtract dens to get tprp
+    if(proc0) tperp_gryfx = (tperp_gryfx - density_gryfx)
+
+    ! QPRP
+    g0 = vpa*g0
+    call integrate_moment (g0, total)
+    if(proc0) then
+    do ig = -ntgrid, ntgrid-1
+      iz = ig + ntgrid + 1
+      do it = 1,g_lo%ntheta0
+        do ik = 1, g_lo%naky
+          do is = 1,g_lo%nspec
+            index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
+                            g_lo%naky*g_lo%ntheta0*(iz-1) + &
+                            2*ntgrid*g_lo%naky*g_lo%ntheta0*(is-1)
+            qperp_gryfx(index_gryfx) = total(ig, it, ik, is)
+          end do
+        end do
+      end do
+    end do
+    end if
+ 
+       densfac_lin = sqrt(2.)
+       uparfac_lin = 2.
+       tparfac_lin = sqrt(2.)
+       tprpfac_lin = sqrt(2.)
+       qparfac_lin = 2.
+       qprpfac_lin = 2.
+       phifac_lin = densfac_lin
+
+    if(proc0) then 
+      density_gryfx = densfac_lin*density_gryfx
+      upar_gryfx = uparfac_lin*upar_gryfx
+      tpar_gryfx = tparfac_lin*tpar_gryfx
+      tperp_gryfx = tprpfac_lin*tperp_gryfx
+      qpar_gryfx = qparfac_lin*qpar_gryfx
+      qperp_gryfx = qprpfac_lin*qperp_gryfx
+    end if
+
+    if(proc0) then
+    do ig = -ntgrid, ntgrid-1
+      iz = ig + ntgrid + 1
+      do it = 1, g_lo%ntheta0
+        do ik = 1, g_lo%naky
+          index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + g_lo%naky*g_lo%ntheta0*(iz-1)
+          phi_gryfx(index_gryfx) = phinew(ig, it, ik)*phifac_lin
+        end do
+      end do
+    end do
+    end if
+
+    deallocate(total)
+
+    !change to left-handed coordinates
+    !if(proc0) then
+    !  density_gryfx = cmplx(-real(density_gryfx), aimag(density_gryfx))
+    !  upar_gryfx = cmplx(-real(upar_gryfx), aimag(upar_gryfx))
+    !  tpar_gryfx = cmplx(-real(tpar_gryfx), aimag(tpar_gryfx))
+    !  tperp_gryfx = cmplx(-real(tperp_gryfx), aimag(tperp_gryfx))
+    !  qpar_gryfx = cmplx(-real(qpar_gryfx), aimag(qpar_gryfx))
+    !  qperp_gryfx = cmplx(-real(qperp_gryfx), aimag(qperp_gryfx))
+    !  phi_gryfx = cmplx(-real(phi_gryfx), aimag(phi_gryfx))
+    !end if
+
+  end subroutine getmoms_gryfx
+
 
   subroutine getemoms (phinew, bparnew, ntot, tperp)
     use dist_fn_arrays, only: vperp2, aj0, gnew, g_adjust

@@ -328,6 +328,11 @@ contains
 !!$       end if
 
     end if
+    
+    ! FOR GRYFX 
+    delt = sqrt(2.0)*delt/2.0
+    nstep = nstep*2
+
 
     call broadcast (delt_option_switch)
     call broadcast (delt)
