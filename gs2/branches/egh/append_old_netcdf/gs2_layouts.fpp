@@ -414,6 +414,7 @@ contains
 
   end subroutine init_gs2_layouts
 
+
   subroutine finish_gs2_layouts
     call finish_layouts
     initialized_layouts = .false.
@@ -484,8 +485,16 @@ contains
 
   subroutine set_overrides(opt_ov)
     use overrides, only: optimisations_overrides_type
+    use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
     type(optimisations_overrides_type), intent(in) :: opt_ov
     if (opt_ov%override_layout) layout = opt_ov%layout
+    if (opt_ov%override_opt_redist_nbk) &
+      opt_redist_nbk = opt_ov%opt_redist_nbk
+    if (opt_ov%override_opt_redist_persist) &
+      opt_redist_persist = opt_ov%opt_redist_persist
+    !Disable settings if dependent settings not set
+    opt_redist_persist=opt_redist_persist.and.opt_redist_nbk
+    opt_redist_persist_overlap=opt_redist_persist_overlap.and.opt_redist_persist
   end subroutine set_overrides
 
     

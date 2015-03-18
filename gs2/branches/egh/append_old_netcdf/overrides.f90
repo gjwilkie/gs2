@@ -76,9 +76,13 @@ module overrides
     !! Nasty things may happen.
     logical :: init = .false.
     logical :: override_nproc
+    logical :: override_opt_redist_nbk
+    logical :: override_opt_redist_persist
     logical :: override_layout
     integer :: nproc
-    character(len=6) :: layout
+    logical :: opt_redist_nbk
+    logical :: opt_redist_persist
+    character(len=5) :: layout
     integer :: old_comm
   end type optimisations_overrides_type
 
@@ -218,6 +222,8 @@ contains
     if (overrides_obj%init) return 
     overrides_obj%init = .true.
     overrides_obj%override_nproc = .false.
+    overrides_obj%override_opt_redist_nbk = .false.
+    overrides_obj%override_opt_redist_persist = .false.
     overrides_obj%override_layout = .false.
   end subroutine init_optimisations_overrides
 
@@ -230,6 +236,8 @@ contains
     end if
     overrides_obj%init = .false.
     overrides_obj%override_nproc = .false.
+    overrides_obj%override_opt_redist_nbk = .false.
+    overrides_obj%override_opt_redist_persist = .false.
     overrides_obj%override_layout = .false.
   end subroutine finish_optimisations_overrides
 

@@ -74,13 +74,13 @@ module gs2_init
     !> The init_level reaches basic
     !! when initialize_gs2 has been called.
     integer :: basic = 1
-    integer :: normalisations = 2
-    integer :: theta_grid_params = 3
-    integer :: gs2_save = 4
-    integer :: species = 5
-    integer :: override_optimisations = 6
-    integer :: gs2_layouts = 7
-    integer :: init_g = 8
+    integer :: gs2_layouts = 2
+    integer :: normalisations = 3
+    integer :: theta_grid_params = 4
+    integer :: gs2_save = 5
+    integer :: init_g = 6
+    integer :: species = 7
+    integer :: override_optimisations = 8
     integer :: override_miller_geometry = 9
     integer :: theta_grid = 10
     integer :: kt_grids = 11
@@ -176,13 +176,13 @@ contains
       return
     else
       if (up()) then 
+        if (up() .and. current%level .lt. init_level_list%gs2_layouts) call gs2_layouts_subroutine
         if (up() .and. current%level .lt. init_level_list%normalisations) call normalisations_subroutine
         if (up() .and. current%level .lt. init_level_list%theta_grid_params) call theta_grid_params_subroutine
         if (up() .and. current%level .lt. init_level_list%gs2_save) call gs2_save_subroutine
+        if (up() .and. current%level .lt. init_level_list%init_g) call init_g_subroutine
         if (up() .and. current%level .lt. init_level_list%species) call species_subroutine
         if (up() .and. current%level .lt. init_level_list%override_optimisations) call override_optimisations_subroutine
-        if (up() .and. current%level .lt. init_level_list%gs2_layouts) call gs2_layouts_subroutine
-        if (up() .and. current%level .lt. init_level_list%init_g) call init_g_subroutine
         if (up() .and. current%level .lt. init_level_list%override_miller_geometry) call override_miller_geometry_subroutine
         if (up() .and. current%level .lt. init_level_list%theta_grid) call theta_grid_subroutine
         if (up() .and. current%level .lt. init_level_list%kt_grids) call kt_grids_subroutine
@@ -226,13 +226,13 @@ contains
         if (down () .and. current%level .le. init_level_list%kt_grids) call kt_grids_subroutine
         if (down () .and. current%level .le. init_level_list%theta_grid) call theta_grid_subroutine
         if (down () .and. current%level .le. init_level_list%override_miller_geometry) call override_miller_geometry_subroutine
-        if (down () .and. current%level .le. init_level_list%init_g) call init_g_subroutine
-        if (down () .and. current%level .le. init_level_list%gs2_layouts) call gs2_layouts_subroutine
         if (down () .and. current%level .le. init_level_list%override_optimisations) call override_optimisations_subroutine
         if (down () .and. current%level .le. init_level_list%species) call species_subroutine
+        if (down () .and. current%level .le. init_level_list%init_g) call init_g_subroutine
         if (down () .and. current%level .le. init_level_list%gs2_save) call gs2_save_subroutine
         if (down () .and. current%level .le. init_level_list%theta_grid_params) call theta_grid_params_subroutine
         if (down () .and. current%level .le. init_level_list%normalisations) call normalisations_subroutine
+        if (down () .and. current%level .le. init_level_list%gs2_layouts) call gs2_layouts_subroutine
       end if
     end if
   contains
@@ -244,6 +244,22 @@ contains
       logical :: down
       down = (target_level<current%level) 
     end function down
+      subroutine gs2_layouts_subroutine
+        use unit_tests, only: debug_message
+        use gs2_layouts, only: init_gs2_layouts
+        use gs2_layouts, only: finish_gs2_layouts
+        if (up()) call init_gs2_layouts
+        if (down()) call finish_gs2_layouts
+       
+        if (up()) then
+          call debug_message(1, 'gs2_init::init reached init level... gs2_layouts   ')
+          current%level = 2
+        else if (down()) then  ! (down)
+          call debug_message(1, 'gs2_init::init left init level... gs2_layouts   ')
+          current%level = 2 - 1
+        end if
+      end subroutine gs2_layouts_subroutine
+
       subroutine normalisations_subroutine
         use unit_tests, only: debug_message
         use normalisations, only: init_normalisations
@@ -253,10 +269,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... normalisations   ')
-          current%level = 2
+          current%level = 3
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... normalisations   ')
-          current%level = 2 - 1
+          current%level = 3 - 1
         end if
       end subroutine normalisations_subroutine
 
@@ -269,10 +285,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... theta_grid_params   ')
-          current%level = 3
+          current%level = 4
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... theta_grid_params   ')
-          current%level = 3 - 1
+          current%level = 4 - 1
         end if
       end subroutine theta_grid_params_subroutine
 
@@ -285,12 +301,28 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... gs2_save   ')
-          current%level = 4
+          current%level = 5
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... gs2_save   ')
-          current%level = 4 - 1
+          current%level = 5 - 1
         end if
       end subroutine gs2_save_subroutine
+
+      subroutine init_g_subroutine
+        use unit_tests, only: debug_message
+        use init_g, only: init_init_g
+        use init_g, only: finish_init_g
+        if (up()) call init_init_g
+        if (down()) call finish_init_g
+       
+        if (up()) then
+          call debug_message(1, 'gs2_init::init reached init level... init_g   ')
+          current%level = 6
+        else if (down()) then  ! (down)
+          call debug_message(1, 'gs2_init::init left init level... init_g   ')
+          current%level = 6 - 1
+        end if
+      end subroutine init_g_subroutine
 
       subroutine species_subroutine
         use unit_tests, only: debug_message
@@ -301,10 +333,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... species   ')
-          current%level = 5
+          current%level = 7
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... species   ')
-          current%level = 5 - 1
+          current%level = 7 - 1
         end if
       end subroutine species_subroutine
 
@@ -316,44 +348,12 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... override_optimisations   ')
-          current%level = 6
-        else if (down()) then  ! (down)
-          call debug_message(1, 'gs2_init::init left init level... override_optimisations   ')
-          current%level = 6 - 1
-        end if
-      end subroutine override_optimisations_subroutine
-
-      subroutine gs2_layouts_subroutine
-        use unit_tests, only: debug_message
-        use gs2_layouts, only: init_gs2_layouts
-        use gs2_layouts, only: finish_gs2_layouts
-        if (up()) call init_gs2_layouts
-        if (down()) call finish_gs2_layouts
-       
-        if (up()) then
-          call debug_message(1, 'gs2_init::init reached init level... gs2_layouts   ')
-          current%level = 7
-        else if (down()) then  ! (down)
-          call debug_message(1, 'gs2_init::init left init level... gs2_layouts   ')
-          current%level = 7 - 1
-        end if
-      end subroutine gs2_layouts_subroutine
-
-      subroutine init_g_subroutine
-        use unit_tests, only: debug_message
-        use init_g, only: init_init_g
-        use init_g, only: finish_init_g
-        if (up()) call init_init_g
-        if (down()) call finish_init_g
-       
-        if (up()) then
-          call debug_message(1, 'gs2_init::init reached init level... init_g   ')
           current%level = 8
         else if (down()) then  ! (down)
-          call debug_message(1, 'gs2_init::init left init level... init_g   ')
+          call debug_message(1, 'gs2_init::init left init level... override_optimisations   ')
           current%level = 8 - 1
         end if
-      end subroutine init_g_subroutine
+      end subroutine override_optimisations_subroutine
 
       subroutine override_miller_geometry_subroutine
         use unit_tests, only: debug_message

@@ -118,7 +118,9 @@ parameter_list_profs = [
 
 parameter_list_optimisations = [
 ['integer', 'nproc'],
-['character(len=6)', 'layout'],
+['logical', 'opt_redist_nbk'],
+['logical', 'opt_redist_persist'],
+['character(len=5)', 'layout'],
 ].compact.map{|p| Generator.new(p)}
 
 
