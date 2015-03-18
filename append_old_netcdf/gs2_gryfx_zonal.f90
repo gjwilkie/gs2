@@ -156,6 +156,13 @@ contains
     gryfx_zonal%NLqpar_ky0 = qpar_ky0
     gryfx_zonal%NLqprp_ky0 = qprp_ky0
 
+    if(first_half_step) then
+      state%dont_change_timestep = .true.
+      state%skip_diagnostics = .true.
+    else 
+      state%dont_change_timestep = .false.
+      state%skip_diagnostics = .false.
+    endif
     ! only advance one timestep
     call evolve_equations(state, 1)
     ! getmoms_gryfx takes moments of g and puts results into arguments.
