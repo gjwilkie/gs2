@@ -88,6 +88,7 @@ contains
     use mp, only: proc0
     use file_utils, only: error_unit
     use job_manage, only: time_message
+    use nonlinear_terms, only: gryfx_zonal
     implicit none
     integer, intent(in) :: istep 
     logical, intent(inout) :: my_exit
@@ -97,6 +98,7 @@ contains
     integer, save :: nconsec=0
     type(init_type), intent(inout) :: current_init
 
+    real :: fac = 1.0
 
     if (first) call init_reinit
     first = .false.
@@ -138,11 +140,18 @@ contains
     call init(current_init, init_level_list%override_timestep)
 ! change timestep 
 
+    if(gryfx_zonal%on) then
+!both code_dt = dt_gs2 and code_dt_cfl = dt_cfl_gryfx are in gs2 units
+!we want to check if dt_gryfx = 2*dt_gs2 is too big/small when compared to
+!dt_cfl_gryfx
+      fac = 2.0
+    endif
+
 ! If timestep is too big, make it smaller
-    if (code_dt > code_dt_cfl) then
+    if (code_dt*fac > code_dt_cfl) then
        call reduce_time_step
 ! If timestep is too small, make it bigger
-    else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
+    else if (code_dt*fac < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
        call increase_time_step
     endif
     
