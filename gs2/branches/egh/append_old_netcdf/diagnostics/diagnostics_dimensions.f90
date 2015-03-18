@@ -64,6 +64,7 @@ contains
   !> Populate the dimension type
   subroutine dimension_type_init(self,dim_name_in,length_in,description_in,units_in,is_unlimited_in)
     use simpledataio, only: SDATIO_UNLIMITED
+    use unit_tests, only: debug_message
     implicit none
     class(diagnostics_dimension_type), intent(inout) :: self
     character(len=*), intent(in) :: dim_name_in
@@ -71,6 +72,7 @@ contains
     logical, intent(in), optional :: is_unlimited_in
     integer, intent(in) :: length_in
 
+    call debug_message(4, 'initializing dimension '//dim_name_in)
     if(self%initialised) return
 
     self%dim_name=trim(dim_name_in)
