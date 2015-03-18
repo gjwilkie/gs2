@@ -488,6 +488,19 @@ contains
 
     if (rhostar_box .gt. 0.0 .and. n0 .gt. 0) y0=1.0/(n0*rhostar_box*drhodpsi)
 
+    !WHEN RUNNING IN GRYFX, ONLY EVOLVE ky=0 MODES.
+    naky = 1
+    ny = 1
+
+    !NEED TO ACCOUNT FOR SQRT(2) DIFFERENCE BETWEEN rho_GS2 and rho_GryfX, so
+    !change x0 and y0
+    y0 = y0/sqrt(2.)  
+    !this still needs to be renormalized even though only ky=0
+    !is running because sometimes x0 is set from y0 and jtwist later.
+    x0 = x0/sqrt(2.) 
+    !this is in case x0 is not set from y0 and jtwist later.
+
+
     if (y0 < 0) y0 = -1./y0
 
     if (ly == 0.) ly = 2.0*pi*y0
@@ -506,7 +519,7 @@ contains
       ny = (naky - 1)*  3 + 1
     else if (naky /= (ny-1)/3 + 1) then
       if (proc0) write (error_unit(), *) "ERROR: naky and ny both set and inconsistent... set one or the other"
-      call mp_abort("")
+      call mp_abort("ERROR: naky and ny both set and inconsistent... set one or the other")
     end if
     if (nx == 0) then 
       if (proc0) write (error_unit(), *) "INFO: nx set from ntheta0"

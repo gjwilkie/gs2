@@ -978,6 +978,12 @@ gs2_diagnostics_new.o: \
 	 theta_grid.o \
 	 unit_tests.o \
 	 volume_averages.o 
+gs2_gryfx_zonal.o: \
+	 gs2_main.o \
+	 kt_grids.o \
+	 nonlinear_terms.o \
+	 species.o \
+	 theta_grid.o 
 gs2_heating.o: \
 	 mp.o \
 	 species.o 
@@ -1107,9 +1113,7 @@ gs2_transforms.o: \
 	 theta_grid.o \
 	 unit_tests.o 
 hdf_wrapper.o: \
-	 constants.o \
-	 convert.o \
-	 file_utils.o 
+	 constants.o 
 hrate.o: \
 	 command_line.o 
 hyper.o: \

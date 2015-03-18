@@ -142,6 +142,7 @@ module gs2_main
     real :: vflux
   end type gs2_outputs_type
 
+
   !> The object which specifies and records the gs2 program state.
   !! Some attributes of the object, like mp_comm_external, are
   !! designed to directly manipulated by the user, and some are
@@ -172,6 +173,7 @@ module gs2_main
 
     ! Timers
     type(gs2_timers_type) :: timers
+
 
     !> The exit flag is set to true by any 
     !! part of the main timestep loop that 
@@ -581,6 +583,8 @@ contains
         'gs2_main::initialize_diagnostics finished')
 
   end subroutine initialize_diagnostics
+
+
 
   !> Run the initial value solver. nstep_run must
   !! be less than or equal to state\%nstep, which is 

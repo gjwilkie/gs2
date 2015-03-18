@@ -15,8 +15,21 @@ module nonlinear_terms
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
   public :: nonlinear_terms_unit_test_time_add_nl, cfl
   public :: nonlinear_mode_none, nonlinear_mode_on
+  public :: gryfx_zonal
+
+  type gs2_gryfx_zonal_type
+
+    logical :: on = .false.
+    complex*8, dimension (:), pointer :: NLdens_ky0, NLupar_ky0, NLtpar_ky0, &
+                                         NLtprp_ky0, NLqpar_ky0, NLqprp_ky0
+    logical :: first_half_step = .false.
+
+  end type gs2_gryfx_zonal_type
+
+  type(gs2_gryfx_zonal_type) gryfx_zonal
 
   integer :: istep_last = 0
+
   ! knobs
   integer :: nonlinear_mode_switch
   integer :: flow_mode_switch !THIS IS NOT SUPPORTED, SHOULD BE REMOVED?
@@ -267,7 +280,9 @@ contains
 #endif
     case (nonlinear_mode_on)
 !       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, nl)
+       if (istep /= 0) then
+         call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, nl)
+       endif
     end select
   end subroutine add_explicit_terms
 
@@ -320,6 +335,11 @@ contains
        ! and store it in g1
        if (present(nl)) then
           call debug_message(verb, 'nonlinear_terms::add_explicit calling add_nl')
+          if(gryfx_zonal%on) then
+            call add_nl_gryfx (g1) 
+          else 
+            call add_nl (g1, phi, apar, bpar)
+          endif
           call add_nl (g1, phi, apar, bpar)
           if(reset) return !Return if resetting
           ! takes g1 at grid points and returns 2*g1 at cell centers
@@ -733,6 +753,71 @@ contains
     end subroutine load_ky_bpar
 
   end subroutine add_nl
+
+  subroutine add_nl_gryfx (g1)
+    use mp, only: max_allreduce
+    use theta_grid, only: ntgrid, kxfac
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use gs2_layouts, only: accelx_lo, yxf_lo
+    use dist_fn_arrays, only: g, g_adjust, vpa, vperp2
+    use species, only: spec
+    use gs2_transforms, only: transform2, inverse2
+    use run_parameters, only: fapar, fbpar, fphi, reset, immediate_reset
+    use kt_grids, only: aky, akx
+    use gs2_time, only: save_dt_cfl, check_time_step_too_large
+    use constants, only: zi
+    use mp, only: broadcast
+    implicit none
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g1
+    integer :: i, j, k
+    real :: max_vel, zero
+    real :: dt_cfl
+
+    integer :: iglo, ik, it, ig, iz, is, isgn, index_gryfx
+
+    real :: densfac, uparfac, tparfac, tprpfac, qparfac, qprpfac
+    densfac = 1.
+    uparfac = 1./sqrt(2.)
+    tparfac = 1.
+    tprpfac = 1.
+    qparfac = 1./sqrt(2.)
+    qprpfac = 1./sqrt(2.)
+
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+    ik = ik_idx(g_lo,iglo)
+    it = it_idx(g_lo,iglo)
+    is = is_idx(g_lo,iglo)
+    do isgn = 1, 2
+      do ig = -ntgrid, ntgrid
+      iz = ig + ntgrid + 1
+      if(ig==ntgrid) iz = 1 ! periodic point not included in gryfx arrays
+        index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
+                      g_lo%naky*g_lo%ntheta0*(iz-1) + &
+                      2*ntgrid*g_lo%naky*g_lo%ntheta0*(is-1)
+        g1(ig,isgn,iglo) =  densfac*gryfx_zonal%NLdens_ky0(index_gryfx) + &
+                 (vpa(ig,isgn,iglo)*vpa(ig,isgn,iglo) - 0.5)* &
+                     tparfac*gryfx_zonal%NLtpar_ky0(index_gryfx) + &
+                 (vperp2(ig,iglo) - 1.0)* &
+                     tprpfac*gryfx_zonal%NLtprp_ky0(index_gryfx) + &
+                 2.*vpa(ig,isgn,iglo)* &
+                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) + &
+                 (2./3.*vpa(ig,isgn,iglo)**3. - vpa(ig,isgn,iglo))* &
+                     (qparfac*gryfx_zonal%NLqpar_ky0(index_gryfx) - &
+                     3.*uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) ) + &
+                 2*vpa(ig,isgn,iglo)*(vperp2(ig,iglo) - 1.)* &
+                     (qprpfac*gryfx_zonal%NLqprp_ky0(index_gryfx) - &
+                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) )
+         end do
+       end do
+    end do
+    g1 = -g1 !left-handed / right-handed conversion
+
+
+    
+  end subroutine add_nl_gryfx
+
+  
 
   subroutine reset_init
     
