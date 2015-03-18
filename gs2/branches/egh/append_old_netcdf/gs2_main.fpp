@@ -702,8 +702,9 @@ contains
           call debug_message(state%verb+1, &
             'gs2_main::evolve_equations called advance')
 
+          if(state%dont_change_timestep) reset = .false.
           !If we've triggered a reset then actually reset
-          if (reset .and. .not. state%dont_change_timestep) then
+          if (reset) then
              call prepare_initial_values_overrides(state)
              call debug_message(state%verb+1, &
                 'gs2_main::evolve_equations resetting timestep')
@@ -763,7 +764,8 @@ contains
             'gs2_main::evolve_equations checked time step')
 
           !If something has triggered a reset then reset here
-          if (reset .and. .not. state%dont_change_timestep) then
+          if(state%dont_change_timestep) reset = .false.
+          if (reset) then
              call prepare_initial_values_overrides(state)
              call set_initval_overrides_to_current_vals(state%init%initval_ov)
              state%init%initval_ov%override = .true.
