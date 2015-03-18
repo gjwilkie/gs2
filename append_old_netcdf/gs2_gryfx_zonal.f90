@@ -70,6 +70,8 @@ contains
 
     state%run_name_external = .true.
     state%run_name = file_name
+
+    gryfx_zonal%on = .true.
  
 
     call initialize_gs2(state)
@@ -133,7 +135,7 @@ contains
     logical, intent (in) :: first_half_step
     integer, intent (in) :: istep
 
-    state%istep_end = istep
+    !state%istep_end = istep
     state%print_times = .false.
 
     ! only proc0 knows values of arrays, so broadcast

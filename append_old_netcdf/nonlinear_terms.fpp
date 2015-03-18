@@ -340,7 +340,6 @@ contains
           else 
             call add_nl (g1, phi, apar, bpar)
           endif
-          call add_nl (g1, phi, apar, bpar)
           if(reset) return !Return if resetting
           ! takes g1 at grid points and returns 2*g1 at cell centers
           call center (g1)
