@@ -579,7 +579,8 @@ diagnostics_create_and_write.o: \
 	 simpledataio_write.o \
 	 simpledataiof.o 
 diagnostics_dimensions.o: \
-	 simpledataiof.o 
+	 simpledataiof.o \
+	 unit_tests.o 
 diagnostics_fields.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
@@ -692,6 +693,7 @@ diagnostics_omega.o: \
 	 fields_parallelization.o \
 	 gs2_time.o \
 	 kt_grids.o \
+	 mp.o \
 	 run_parameters.o 
 diagnostics_screen_printout.o: \
 	 diagnostics_config.o \
@@ -736,6 +738,7 @@ dist_fn.o: \
 	 collisions.o \
 	 constants.o \
 	 dist_fn_arrays.o \
+	 fields_arrays.o \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_heating.o \
@@ -979,8 +982,11 @@ gs2_diagnostics_new.o: \
 	 unit_tests.o \
 	 volume_averages.o 
 gs2_gryfx_zonal.o: \
+	 dist_fn.o \
+	 file_utils.o \
 	 gs2_main.o \
 	 kt_grids.o \
+	 mp.o \
 	 nonlinear_terms.o \
 	 species.o \
 	 theta_grid.o 
@@ -1070,6 +1076,7 @@ gs2_main.o: \
 	 theta_grid_params.o \
 	 unit_tests.o 
 gs2_optimisation.o: \
+	 fields_implicit.o \
 	 gs2_main.o \
 	 ingen_mod.o \
 	 mp.o \
@@ -1082,6 +1089,7 @@ gs2_reinit.o: \
 	 gs2_time.o \
 	 job_manage.o \
 	 mp.o \
+	 nonlinear_terms.o \
 	 run_parameters.o 
 gs2_save.o: \
 	 antenna_data.o \
@@ -1190,6 +1198,7 @@ kt_grids.o: \
 	 constants.o \
 	 file_utils.o \
 	 mp.o \
+	 overrides.o \
 	 text_options.o \
 	 theta_grid.o 
 layouts_type.o: 
@@ -1313,6 +1322,7 @@ simpledataiof.o:
 sorting.o: 
 species.o: \
 	 file_utils.o \
+	 kt_grids.o \
 	 mp.o \
 	 overrides.o \
 	 text_options.o 
