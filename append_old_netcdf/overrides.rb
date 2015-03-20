@@ -123,6 +123,17 @@ parameter_list_optimisations = [
 ['character(len=5)', 'layout'],
 ].compact.map{|p| Generator.new(p)}
 
+parameter_list_kt_grids = [
+['integer', 'ny'],
+['integer', 'naky'],
+['integer', 'nx'],
+['integer', 'ntheta0'],
+['real', 'y0'],
+['real', 'x0'],
+['integer', 'jtwist'],
+['logical', 'gryfx'],
+].compact.map{|p| Generator.new(p)}
+
 
 
 string = <<EOF
@@ -150,6 +161,9 @@ module overrides
 !> A type for containing overrides to the processor layout
 !! and optimisation flags for gs2. 
 #{Generator.generate_type('optimisations', parameter_list_optimisations)}
+
+!> A type for containing overrides to the perpendicular grids (x and y). 
+#{Generator.generate_type('kt_grids', parameter_list_kt_grids)}
 
 !> A type for storing overrides of the intial
 !! values of the fields and distribution function.
@@ -205,6 +219,8 @@ contains
 #{Generator.generate_finish('profiles', parameter_list_profs)}
 #{Generator.generate_initialize('optimisations', parameter_list_optimisations)}
 #{Generator.generate_finish('optimisations', parameter_list_optimisations)}
+#{Generator.generate_initialize('kt_grids', parameter_list_kt_grids)}
+#{Generator.generate_finish('kt_grids', parameter_list_kt_grids)}
 
 !> Warning: You can't change the value of overrides%force_maxwell_reinit 
 !! or overrides%in_memory after calling this function

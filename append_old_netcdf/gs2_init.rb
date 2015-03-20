@@ -58,12 +58,13 @@ class GenerateInit
     ['theta_grid' , ['theta_grid_params', 'override_miller_geometry']],
     ['normalisations', []],
     ['theta_grid_params' , []],
-    ['kt_grids' , ['theta_grid']],
+    ['kt_grids_parameters' , ['theta_grid']],
+    ['kt_grids' , ['theta_grid', 'kt_grids_parameters', 'override_kt_grids']],
     ['gs2_save' , []],
     ['run_parameters' , ['kt_grids']],
     ['hyper' , ['kt_grids', 'gs2_layouts']],
     ['init_g' , ['gs2_layouts']],
-    ['species' , []],
+    ['species' , ['kt_grids']],
     ['dist_fn_parameters' , 
       ['gs2_layouts', 'species', 'theta_grid', 'kt_grids', 'le_grids'   ]],
     ['dist_fn_arrays' , 
@@ -74,6 +75,7 @@ class GenerateInit
 
     ['dist_fn_level_2' , ['dist_fn_level_1', 'override_profiles']], 
     
+    ['override_kt_grids' , ['kt_grids_parameters']],
     ['override_optimisations' , ['gs2_layouts']],
     ['override_miller_geometry' , ['theta_grid_params']],
     # Override tprim, fprim, vnewk, temp and dens in species
@@ -129,6 +131,8 @@ class GenerateInit
                      'gs2_layouts' 
                    when /^dist_fn_*/
                      'dist_fn'
+                   when /^kt_grids*/
+                     'kt_grids'
                    else
                      @level_name
                    end
@@ -158,6 +162,12 @@ class GenerateInit
         case @level_name
         when 'full', 'override_timestep', 'override_initial_values'
           str = "\n"
+        when /override_kt_grids/
+          str = <<EOF2
+          use kt_grids, only: ktso=>set_overrides
+          if (up() .and. current%kt_ov%init) call ktso(current%kt_ov)
+
+EOF2
         when /override_optimisations/
           str = <<EOF2
           use gs2_layouts, only: lso=>set_overrides

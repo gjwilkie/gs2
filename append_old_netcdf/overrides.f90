@@ -88,6 +88,32 @@ module overrides
 
 
 
+!> A type for containing overrides to the perpendicular grids (x and y). 
+  type kt_grids_overrides_type
+    !> DO NOT manually set the value of init.
+    !! Nasty things may happen.
+    logical :: init = .false.
+    logical :: override_ny
+    logical :: override_naky
+    logical :: override_nx
+    logical :: override_ntheta0
+    logical :: override_y0
+    logical :: override_x0
+    logical :: override_jtwist
+    logical :: override_gryfx
+    integer :: ny
+    integer :: naky
+    integer :: nx
+    integer :: ntheta0
+    real :: y0
+    real :: x0
+    integer :: jtwist
+    logical :: gryfx
+    
+  end type kt_grids_overrides_type
+
+
+
 !> A type for storing overrides of the intial
 !! values of the fields and distribution function.
 !! This override is different to all the others, 
@@ -240,6 +266,39 @@ contains
     overrides_obj%override_opt_redist_persist = .false.
     overrides_obj%override_layout = .false.
   end subroutine finish_optimisations_overrides
+
+
+  subroutine init_kt_grids_overrides(overrides_obj)
+    type(kt_grids_overrides_type), intent(inout) :: overrides_obj
+    if (overrides_obj%init) return 
+    overrides_obj%init = .true.
+    overrides_obj%override_ny = .false.
+    overrides_obj%override_naky = .false.
+    overrides_obj%override_nx = .false.
+    overrides_obj%override_ntheta0 = .false.
+    overrides_obj%override_y0 = .false.
+    overrides_obj%override_x0 = .false.
+    overrides_obj%override_jtwist = .false.
+    overrides_obj%override_gryfx = .false.
+  end subroutine init_kt_grids_overrides
+
+
+  subroutine finish_kt_grids_overrides(overrides_obj)
+    type(kt_grids_overrides_type), intent(inout) :: overrides_obj
+    if (.not. overrides_obj%init) then
+      write (*,*) "ERROR: Called finish_kt_grids_overrides on an uninitialized object"
+      return
+    end if
+    overrides_obj%init = .false.
+    overrides_obj%override_ny = .false.
+    overrides_obj%override_naky = .false.
+    overrides_obj%override_nx = .false.
+    overrides_obj%override_ntheta0 = .false.
+    overrides_obj%override_y0 = .false.
+    overrides_obj%override_x0 = .false.
+    overrides_obj%override_jtwist = .false.
+    overrides_obj%override_gryfx = .false.
+  end subroutine finish_kt_grids_overrides
 
 
 

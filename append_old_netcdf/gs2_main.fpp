@@ -98,6 +98,7 @@ module gs2_main
 
   public :: prepare_miller_geometry_overrides
   public :: prepare_profiles_overrides
+  public :: prepare_kt_grids_overrides
   public :: prepare_optimisations_overrides
   public :: prepare_initial_values_overrides
   public :: set_initval_overrides_to_current_vals
@@ -961,7 +962,7 @@ contains
 
     call deallocate_target_arrays
 
-    state%istep_end = 1
+    state%istep_end = 0
 
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
 
@@ -1093,6 +1094,17 @@ contains
     call init(state%init, init_level_list%override_profiles-1)
     call init_profiles_overrides(state%init%prof_ov, nspec)
   end subroutine prepare_profiles_overrides
+
+  subroutine prepare_kt_grids_overrides(state)
+    use overrides, only: init_kt_grids_overrides
+    use gs2_init, only: init, init_level_list
+    type(gs2_program_state_type), intent(inout) :: state
+
+    if (.not. state%included) return
+    ! Initialize to the level below so that overrides are triggered
+    call init(state%init, init_level_list%override_kt_grids-1)
+    call init_kt_grids_overrides(state%init%kt_ov)
+  end subroutine prepare_kt_grids_overrides
 
   subroutine prepare_initial_values_overrides(state)
     use overrides, only: init_initial_values_overrides

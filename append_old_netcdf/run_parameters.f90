@@ -210,6 +210,7 @@ contains
     use mp, only: proc0, broadcast
     use gs2_save, only: init_dt, init_vnm
     use text_options, only: text_option, get_option_value
+    use kt_grids, only: gryfx
     implicit none
     type (text_option), dimension (4), parameter :: eqzipopts = &
          (/ text_option('none', eqzip_option_none), &
@@ -330,8 +331,10 @@ contains
     end if
     
     ! FOR GRYFX 
-    delt = sqrt(2.0)*delt/2.0
-    nstep = nstep*2
+    if (gryfx()) then
+      delt = sqrt(2.0)*delt/2.0
+      nstep = nstep*2
+    end if
 
 
     call broadcast (delt_option_switch)

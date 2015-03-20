@@ -31,6 +31,7 @@
 module gs2_init
   use overrides, only: miller_geometry_overrides_type
   use overrides, only: profiles_overrides_type
+  use overrides, only: kt_grids_overrides_type
   use overrides, only: initial_values_overrides_type
   use overrides, only: optimisations_overrides_type
   public :: init_type
@@ -100,6 +101,14 @@ module gs2_init
     !! gs2_main::prepare_profiles_overrides 
     !! before setting these overrides. See 
     !! documentation for the overrides::profiles_overrides_type
+    !! for more information.
+    type(kt_grids_overrides_type) :: kt_ov
+    !> An object for overriding all or selected
+    !! kt_grids parameters such as ny, nx, y0, jtwist etc.
+    !! You must call
+    !! gs2_main::prepare_kt_grids_overrides 
+    !! before setting these overrides. See 
+    !! documentation for the overrides::kt_grids_overrides_type
     !! for more information.
     type(profiles_overrides_type) :: prof_ov
     !> An object for overriding the initial values of 
