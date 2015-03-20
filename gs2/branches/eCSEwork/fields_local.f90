@@ -2926,12 +2926,19 @@ contains
   end subroutine fm_getfieldeq_nogath
 
   subroutine fm_reduce_an (self,antot, antota, antotp)
+    use mp, only: sum_allreduce_sub
+    use theta_grid, only: ntgrid
+    use run_parameters, only: fphi, fapar, fbpar
     implicit none
     class(fieldmat_type), intent(in) :: self
-    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: antot, antota, antotp
 
     integer :: ik, it, is, ic
 
+    !AJ We are using an allreduce using a sum here, but this is not strictly necessary, no 
+    !AJ reduction is needed, it could be done with an allgather but that would involve manipulating the 
+    !AJ data layout to make the gather work properly.  In the future we could optimise the code to use 
+    !AJ an allgather instead of an allreduce if this is an expensive part of the functionality.
     do ik=1,self%naky
        !Skip empty cells, note this is slightly different to skipping
        !.not.is_local. Skipping empty is probably faster but may be more dangerous
@@ -2939,15 +2946,15 @@ contains
        do is=1,self%kyb(ik)%nsupercell
           if(self%kyb(ik)%supercells(is)%is_empty) cycle
           if(fphi>epsilon(0.0)) then
-             call sum_allreduce_sub(antot,self%sc_sub_pd)
+             call sum_allreduce_sub(antot,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
           endif
              
           if(fapar>epsilon(0.0)) then
-             call sum_allreduce_sub(antota,self%sc_sub_pd)
+             call sum_allreduce_sub(antota,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
           endif
           
           if(fbpar>epsilon(0.0))then
-             call sum_allreduce_sub(antotp,self%sc_sub_pd)
+             call sum_allreduce_sub(antotp,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
           end if
        enddo
     enddo
