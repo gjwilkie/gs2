@@ -207,6 +207,7 @@ module fields_local
      procedure :: set_is_local => fm_set_is_local
      procedure :: count_subcom => fm_count_subcom
      procedure :: getfieldeq_nogath => fm_getfieldeq_nogath
+     procedure :: reduce_an => fm_reduce_an
      procedure :: getfieldeq1_nogath => fm_getfieldeq1_nogath
      procedure :: update_fields => fm_update_fields
      procedure :: update_fields_newstep => fm_update_fields_newstep
@@ -239,7 +240,7 @@ module fields_local
      !1  : Force local/serial but only for the supercells we would have anyway
      !2  : Force local/serial but only for the cells we would have anyway
      !3  : Simple mpi, minimal attempt to load balance or avoid splitting small blocks
-     !4  : As above but with attempts to avoid splitting small blocks **NOT IMPLEMENTED**
+     !4  : As above but with attempts to avoid splitting small blocks 
    contains
      private
      procedure :: deallocate => pc_deallocate
@@ -563,6 +564,7 @@ contains
     !in order to do everything. This may require a new class of subcommunicators
 
     !Now we need to reduce across cells
+    !AJ Nonblocking could be done here
     call self%reduce_tmpsum
 
   end subroutine sc_get_field_update
@@ -589,7 +591,7 @@ contains
     !than allreduce_sub as we're going to broadcast the result later anyway.
     !if(self%sc_sub_pd%nproc.gt.0) call sum_allreduce_sub(self%tmp_sum,self%sc_sub_pd%id)
     if(.not.(self%is_empty.or.self%is_all_local)) call sum_reduce_sub(self%tmp_sum,0,self%sc_sub_pd)
-    
+!AJ Can we do nonblocking stuff here?    
     !<DD> At this point the head of the supercell has the field update stored in self%tmp_sum
     !all other procs have partial/no data
 
@@ -1627,7 +1629,7 @@ contains
     do_update=do_smart_update
     if(g_lo%x_local.and.g_lo%y_local) do_update=.false.
     current_best = -1
-    rowsize = 8
+    rowsize = 2
     current_best_size = rowsize
     do i = 1,10
        MinNRow=rowsize
@@ -1647,7 +1649,7 @@ contains
        call sum_reduce(av_best, 0)
        if(iproc .eq. 0) then
           av_best = av_best/nproc
-          write(*,'(A7,X,I5,X,F8.3,X,F8.3,X,F8.3)') 'MinNRow',MinNRow,min_best,max_best,av_best
+          write(*,'(A7,X,I8,X,F8.3,X,F8.3,X,F8.3)') 'MinNRow',MinNRow,min_best,max_best,av_best
           if(current_best .lt. 0) then
              current_best = max_best
              current_best_size = rowsize
@@ -2230,8 +2232,11 @@ contains
        if(.not.self%kyb(ik)%is_local) cycle
 
        !Trigger the supercell field updates
+       !AJ Non-blocking can be done here
        call self%kyb(ik)%get_field_update(fq(:,:,ik),fqa(:,:,ik),fqp(:,:,ik))
     enddo
+
+!AJ Wait for collective comms here
 
     !Free memory
     deallocate(fq,fqa,fqp)
@@ -2898,7 +2903,7 @@ contains
 
   subroutine fm_getfieldeq_nogath (self,phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
     use theta_grid, only: ntgrid
-    use dist_fn, only: getan_nogath
+    use dist_fn, only: getan_nogath, gf_lo_integrate
     use kt_grids, only: naky, ntheta0
     implicit none
     class(fieldmat_type), intent(in) :: self
@@ -2911,11 +2916,45 @@ contains
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
 
     call getan_nogath (antot, antota, antotp)
+    if(gf_lo_integrate) then
+       call self%reduce_an(antot, antota, antotp)
+    end if
     call self%getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
 
     deallocate (antot, antota, antotp)
   end subroutine fm_getfieldeq_nogath
+
+  subroutine fm_reduce_an (self,antot, antota, antotp)
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
+
+    integer :: ik, it, is, ic
+
+    do ik=1,self%naky
+       !Skip empty cells, note this is slightly different to skipping
+       !.not.is_local. Skipping empty is probably faster but may be more dangerous
+       if(self%kyb(ik)%is_empty) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(self%kyb(ik)%supercells(is)%is_empty) cycle
+          if(fphi>epsilon(0.0)) then
+             call sum_allreduce_sub(antot,self%sc_sub_pd)
+          endif
+             
+          if(fapar>epsilon(0.0)) then
+             call sum_allreduce_sub(antota,self%sc_sub_pd)
+          endif
+          
+          if(fbpar>epsilon(0.0))then
+             call sum_allreduce_sub(antotp,self%sc_sub_pd)
+          end if
+       enddo
+    enddo
+
+
+  end subroutine fm_reduce_an
+  
 
   subroutine fm_getfieldeq1_nogath (self,phi, apar, bpar, antot, antota, antotp, &
        fieldeq, fieldeqa, fieldeqp)
@@ -2951,6 +2990,7 @@ contains
              end do
           endif
            
+!AJ Can this be reduced given we don't necessarily work on all ik,it points?  Or is this unnecessary optimisation?
           do ik = 1, naky
              do it = 1, ntheta0
                 if(kwork_filter(it,ik)) cycle
@@ -3495,6 +3535,7 @@ contains
                 !AJ WORK TO DO HERE
                 remainder=nrow_tmp-nrow_loc*np !Note this should be -ve due to use of ceiling
                 
+
                 !Now work out limits
                 llim=1+ip*(nrow_loc)
                 ulim=llim+nrow_loc-1
