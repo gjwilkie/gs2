@@ -17,7 +17,8 @@ program test_gs2_gryfx_zonal
   implicit none
   real :: eps
   integer :: i, gs2_counter
-  type(gs2_program_state_type) :: state
+  type(gs2_program_state_type) :: gs2_state
+  type(gryfx_parameters_type) :: gryfx_parameters
   logical :: first_half_step
   character (1000) :: file_name
   complex*8, dimension (:), allocatable :: dens_ky0, upar_ky0, tpar_ky0, &
@@ -31,58 +32,61 @@ program test_gs2_gryfx_zonal
   call announce_module_test("gs2_gryfx_zonal")
 
 
-  state%mp_comm_external = .true.
-  state%mp_comm = mp_comm  !this will come from GryfX
+  gs2_state%mp_comm_external = .true.
+  gs2_state%mp_comm = mp_comm  !this will come from GryfX
+  test_flag = .true.
 
-  call initialize_gs2(state)
-  call finalize_gs2(state)
+  call initialize_gs2(gs2_state)
+  call finalize_gs2(gs2_state)
 
-  call initialize_gs2(state)
-  call finalize_gs2(state)
+  call initialize_gs2(gs2_state)
+  call finalize_gs2(gs2_state)
 
-  call initialize_gs2(state)
-  call finalize_gs2(state)
+  call initialize_gs2(gs2_state)
+  call finalize_gs2(gs2_state)
 
-  call initialize_gs2(state)
-  call initialize_equations(state)
-  call finalize_equations(state)
-  call finalize_gs2(state)
+  call initialize_gs2(gs2_state)
+  call initialize_equations(gs2_state)
+  call finalize_equations(gs2_state)
+  call finalize_gs2(gs2_state)
 
-  call initialize_gs2(state)
-  call initialize_equations(state)
+  call initialize_gs2(gs2_state)
+  call initialize_equations(gs2_state)
   file_name = trim(run_name) // '.in'  !this will come from GryfX
   if(proc0) write (*,*) 'run_name is ', file_name
-  call finalize_equations(state)
-  call finalize_gs2(state)
+  call finalize_equations(gs2_state)
+  call finalize_gs2(gs2_state)
 
-  call init_gs2_gryfx(len_trim(file_name), file_name, state%mp_comm)
+  call init_gs2_gryfx(len_trim(file_name), file_name, gs2_state%mp_comm, &
+                                gryfx_parameters)
   call finish_gs2_gryfx
 
   !!program gs2
-    !!type(gs2_program_state_type) :: state
-    call initialize_gs2(state)
-    call initialize_equations(state)
-    call initialize_diagnostics(state)
-    !if (state%eigsolve) then 
+    !!type(gs2_program_gs2_state_type) :: gs2_state
+    call initialize_gs2(gs2_state)
+    call initialize_equations(gs2_state)
+    call initialize_diagnostics(gs2_state)
+    !if (gs2_state%eigsolve) then 
       !call solve_eigenproblem
     !else
-    call evolve_equations(state, state%nstep/2)
-    call evolve_equations(state, state%nstep/2)
+    call evolve_equations(gs2_state, gs2_state%nstep/2)
+    call evolve_equations(gs2_state, gs2_state%nstep/2)
     !! This call should do nothing and print a warning
-    call evolve_equations(state, state%nstep/2)
-    call evolve_equations(state, state%nstep/2)
+    call evolve_equations(gs2_state, gs2_state%nstep/2)
+    call evolve_equations(gs2_state, gs2_state%nstep/2)
 
-    call calculate_outputs(state)
+    call calculate_outputs(gs2_state)
 
 
-    call finalize_diagnostics(state)
-    call finalize_equations(state)
-    call finalize_gs2(state)
+    call finalize_diagnostics(gs2_state)
+    call finalize_equations(gs2_state)
+    call finalize_gs2(gs2_state)
   !!end program gs2
 
 
   !begin hybrid gs2_gryfx_zonal algorithm
-  call init_gs2_gryfx(len_trim(file_name), file_name, state%mp_comm)
+  call init_gs2_gryfx(len_trim(file_name), file_name, gs2_state%mp_comm, &
+                                gryfx_parameters)
   if(proc0) write (*,*) 'naky = ', naky
   ! dens_ky0, upar_ky0, etc will come from gryfx. 
   ! in this test, we need to allocate and initialize them
@@ -120,7 +124,8 @@ program test_gs2_gryfx_zonal
   call finish_gs2_gryfx
 
 
-  call init_gs2_gryfx(len_trim(file_name), file_name, state%mp_comm)
+  call init_gs2_gryfx(len_trim(file_name), file_name, gs2_state%mp_comm, &
+                                gryfx_parameters)
     if(proc0) then
       dens_ky0 = 1.e-10
       upar_ky0 = 1.e-10
@@ -134,7 +139,7 @@ program test_gs2_gryfx_zonal
 
   ! if nsteps is set by input file, this will produce a warning for last two
   ! calls to advance. need to overwrite nsteps -> 2*nsteps for use with gryfx
-  do i=1,state%nstep/2 + 1 
+  do i=1,gs2_state%nstep/2 + 1 
   first_half_step = .true.
   call advance_gs2_gryfx(gs2_counter, dens_ky0, upar_ky0, tpar_ky0, tprp_ky0, qpar_ky0, &
                         qprp_ky0, phi_ky0, first_half_step)
@@ -180,7 +185,7 @@ program test_gs2_gryfx_zonal
 
 
 
-  call finalize_overrides(state)
+  call finalize_overrides(gs2_state)
   call close_module_test("gs2_gryfx_zonal")
 
   !call finish_gs2

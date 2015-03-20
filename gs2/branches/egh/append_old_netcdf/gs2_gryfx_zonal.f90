@@ -1,14 +1,69 @@
 module gs2_gryfx_zonal
 
   use gs2_main, only: gs2_program_state_type
+  use iso_c_binding
 
   implicit none
   private
-  type(gs2_program_state_type) :: state
 
+  type(gs2_program_state_type) :: state
+  public :: state
   public :: init_gs2_gryfx, advance_gs2_gryfx, finish_gs2_gryfx
   public :: allocate_gryfx_zonal_arrays
   public :: deallocate_gryfx_zonal_arrays
+  public :: gryfx_parameters_type
+ 
+  public :: test_flag
+
+  logical :: test_flag = .false.
+
+  type, bind(c) :: gryfx_parameters_type
+      integer(c_int) :: mpirank
+
+       ! Name of gryfx/gryfx input file
+       !character(len=1000) :: input_file
+      !Base geometry parameters - not currently set by trinity 
+      !See geometry.f90
+       integer(c_int) :: equilibrium_type
+       !character(len=800) :: eqfile
+       integer(c_int) :: irho
+       real(c_double) :: rhoc
+       integer(c_int) :: bishop
+       integer(c_int) :: nperiod
+       integer(c_int) :: ntheta
+
+      ! Miller parameters
+       real(c_double) :: rgeo_lcfs
+       real(c_double) :: rgeo_local
+       real(c_double) :: akappa
+       real(c_double) :: akappri
+       real(c_double) :: tri
+       real(c_double) :: tripri
+       real(c_double) :: shift
+       real(c_double) :: qinp
+       real(c_double) :: shat
+       real(c_double) :: asym
+       real(c_double) :: asympri
+
+       ! Other geometry parameters - Bishop/Greene & Chance
+       real(c_double) :: beta_prime_input
+       real(c_double) :: s_hat_input
+
+       ! Flow shear
+       real(c_double) :: g_exb
+       ! Species parameters... I think allowing 20 species should be enough!
+       ! Allocating the structs and arrays is tedious and prone to segfaults
+       ! and is unnecessary given the tiny memory usage of this data object
+       integer(c_int) :: ntspec
+       real(c_double):: dens(20)
+       real(c_double):: temp(20)
+       real(c_double):: fprim(20)
+       real(c_double):: tprim(20)
+       real(c_double):: nu(20)
+
+       type(c_ptr) :: everything_struct_address
+
+     end type gryfx_parameters_type
 
 contains
   subroutine allocate_gryfx_zonal_arrays
@@ -40,21 +95,24 @@ contains
     deallocate(gryfx_zonal%NLqprp_ky0)
   end subroutine deallocate_gryfx_zonal_arrays    
 
-  subroutine init_gs2_gryfx_c(strlen, run_name, mp_comm) &
+  subroutine init_gs2_gryfx_c(strlen, run_name, mp_comm, gryfx_parameters) &
                             bind(c, name='init_gs2')
     use iso_c_binding
     implicit none
     integer(c_int), intent(in) :: strlen
     character(kind=c_char), intent(in) :: run_name
     integer(c_int), intent(in) :: mp_comm
-    call init_gs2_gryfx(strlen, run_name, mp_comm)
+    type(gryfx_parameters_type), intent(in) :: gryfx_parameters
+    call init_gs2_gryfx(strlen, run_name, mp_comm, gryfx_parameters)
 
   end subroutine init_gs2_gryfx_c
 
-  subroutine init_gs2_gryfx(strlen, file_name, mp_comm)
+  subroutine init_gs2_gryfx(strlen, file_name, mp_comm, gryfx_parameters )
     use gs2_main, only: initialize_gs2
     use gs2_main, only: initialize_equations
     use gs2_main, only: initialize_diagnostics
+    use gs2_main, only: prepare_miller_geometry_overrides
+    use gs2_main, only: prepare_profiles_overrides
     use gs2_main, only: prepare_kt_grids_overrides
     use nonlinear_terms, only: gryfx_zonal
     use file_utils, only: run_name
@@ -64,6 +122,7 @@ contains
     integer, intent(in) :: strlen
     character (len=strlen), intent (in) :: file_name
     integer, intent(in) :: mp_comm
+    type(gryfx_parameters_type), intent(in) :: gryfx_parameters
 
     !gryfx_zonal%on = .true.
     state%mp_comm_external = .true.
@@ -84,12 +143,83 @@ contains
     state%init%kt_ov%gryfx = .true.
     !currently this is hard-coded in kt_grids.f90 and run_parameters.f90
     !just search for "GRYFX"
+    if(.not. test_flag) then 
+    call prepare_miller_geometry_overrides(state)
+    call set_miller_geometry_overrides
+    call prepare_profiles_overrides(state)
+    call set_profiles_overrides
+    endif
     call initialize_equations(state)
     if(proc0) write(*,*) 'initialize_equations complete.'
     call initialize_diagnostics(state)
     if(proc0) write(*,*) 'initialize_diagnostics complete.'
     
     call allocate_gryfx_zonal_arrays
+
+contains
+
+      subroutine set_miller_geometry_overrides
+        state%init%mgeo_ov%override_rhoc = .true.
+        state%init%mgeo_ov%rhoc = gryfx_parameters%rhoc
+
+        state%init%mgeo_ov%override_qinp = .true.
+        state%init%mgeo_ov%qinp = gryfx_parameters%qinp ! qval_gs2
+
+        state%init%mgeo_ov%override_shat = .true.
+        state%init%mgeo_ov%shat = gryfx_parameters%shat ! shat_gs2
+
+        state%init%mgeo_ov%override_rgeo_lcfs = .true.
+        state%init%mgeo_ov%rgeo_lcfs = gryfx_parameters%rgeo_lcfs
+
+        state%init%mgeo_ov%override_rgeo_local = .true.
+        state%init%mgeo_ov%rgeo_local = gryfx_parameters%rgeo_local
+
+        state%init%mgeo_ov%override_akappa = .true.
+        state%init%mgeo_ov%akappa = gryfx_parameters%akappa
+
+        state%init%mgeo_ov%override_akappri = .true.
+        state%init%mgeo_ov%akappri = gryfx_parameters%akappri
+
+        state%init%mgeo_ov%override_tri = .true.
+        state%init%mgeo_ov%tri = gryfx_parameters%tri
+
+        state%init%mgeo_ov%override_tripri = .true.
+        state%init%mgeo_ov%tripri = gryfx_parameters%tripri
+
+        state%init%mgeo_ov%override_shift = .true.
+        state%init%mgeo_ov%shift = gryfx_parameters%shift
+
+        state%init%mgeo_ov%override_betaprim = .true.
+        state%init%mgeo_ov%betaprim = gryfx_parameters%beta_prime_input
+      end subroutine set_miller_geometry_overrides
+
+      subroutine set_profiles_overrides
+        use species, only: nspec
+        integer :: is, isg, idens
+        !write (*,*) 'SET_PROFILES_OVERRIDES'
+        do is = 1,nspec
+            isg = is
+          state%init%prof_ov%override_dens(isg) = .true.
+          state%init%prof_ov%dens(isg) = gryfx_parameters%dens(is) ! dens_ms(1,is)/dens_ms(1,idens)
+
+          state%init%prof_ov%override_temp(isg) = .true.
+          state%init%prof_ov%temp(isg) = gryfx_parameters%temp(is) ! temp_ms(1,is)/temp_ms(1,1)
+
+          state%init%prof_ov%override_fprim(isg) = .true.
+          state%init%prof_ov%fprim(isg) = gryfx_parameters%fprim(is) ! fprim_gs2(is)
+
+          state%init%prof_ov%override_tprim(isg) = .true.
+          state%init%prof_ov%tprim(isg) = gryfx_parameters%tprim(is) ! tprim_gs2(is)
+
+          state%init%prof_ov%override_vnewk(isg) = .true.
+          state%init%prof_ov%vnewk(isg) = gryfx_parameters%nu(is) ! nu_gs2(is)
+        end do
+        !gs2_state%init%prof_ov%override_g_exb = .true.
+        !gs2_state%init%prof_ov%g_exb = gexb_gs2
+        !gs2_state%init%prof_ov%override_mach = .true.
+        !gs2_state%init%prof_ov%mach = mach_gs2
+
+      end subroutine set_profiles_overrides
 
   end subroutine init_gs2_gryfx
 
@@ -201,6 +331,8 @@ contains
     call deallocate_gryfx_zonal_arrays
     call finalize_diagnostics(state)
     call finalize_equations(state)
+    state%print_times = .true.
+    state%print_full_timers = .true.
     call finalize_gs2(state)
     gryfx_zonal%on = .false.
 
