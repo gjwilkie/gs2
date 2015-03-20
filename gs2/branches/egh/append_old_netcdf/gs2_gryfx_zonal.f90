@@ -55,6 +55,7 @@ contains
     use gs2_main, only: initialize_gs2
     use gs2_main, only: initialize_equations
     use gs2_main, only: initialize_diagnostics
+    use gs2_main, only: prepare_kt_grids_overrides
     use nonlinear_terms, only: gryfx_zonal
     use file_utils, only: run_name
     use mp, only: proc0
@@ -77,6 +78,10 @@ contains
     call initialize_gs2(state)
     if(proc0) write(*,*) 'initialize_gs2 complete. gs2 thinks run_name is ', run_name
     !set overrides of naky, x0, y0, dt, vnewk here. 
+    call prepare_kt_grids_overrides(state)
+    if(proc0) write(*,*) 'setting overrides'
+    state%init%kt_ov%override_gryfx = .true.
+    state%init%kt_ov%gryfx = .true.
     !currently this is hard-coded in kt_grids.f90 and run_parameters.f90
     !just search for "GRYFX"
     call initialize_equations(state)
@@ -109,10 +114,15 @@ contains
     complex (c_float_complex), intent (inout) :: & 
                                 qprp_ky0(naky*ntheta0*2*ntgrid*nspec)
     complex (c_float_complex), intent (out) :: phi_ky0(naky*ntheta0*2*ntgrid)
-    logical(c_int), intent (in) :: first_half_step
+    integer(c_int), intent (in) :: first_half_step
     integer(c_int), intent (in) :: istep
+    logical :: first_half_step_l
+
+    first_half_step_l = .false.
+    if (first_half_step.eq.1) first_half_step_l = .true.
+
     call advance_gs2_gryfx(istep, dens_ky0, upar_ky0, tpar_ky0, tprp_ky0, &
-                               qpar_ky0, qprp_ky0, phi_ky0, first_half_step)
+                               qpar_ky0, qprp_ky0, phi_ky0, first_half_step_l)
 
 
   end subroutine advance_gs2_gryfx_c
@@ -173,7 +183,7 @@ contains
 
   end subroutine advance_gs2_gryfx
 
-  subroutine finish_gs2_gryfx_c bind(c, name='finish_gs2')
+  subroutine finish_gs2_gryfx_c() bind(c, name='finish_gs2')
 
     use iso_c_binding
     implicit none
@@ -185,12 +195,15 @@ contains
     use gs2_main, only: finalize_diagnostics
     use gs2_main, only: finalize_equations
     use gs2_main, only: finalize_gs2
+    use nonlinear_terms, only: gryfx_zonal
     implicit none
 
     call deallocate_gryfx_zonal_arrays
     call finalize_diagnostics(state)
     call finalize_equations(state)
     call finalize_gs2(state)
+    gryfx_zonal%on = .false.
+
   end subroutine finish_gs2_gryfx
 
   subroutine getmoms_gryfx_c (dens_ky0, upar_ky0, tpar_ky0, tprp_ky0, &

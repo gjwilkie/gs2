@@ -790,6 +790,7 @@ contains
     do isgn = 1, 2
       do ig = -ntgrid, ntgrid
       iz = ig + ntgrid + 1
+      !write (*,*) 'ik', ik, 'it', it, 'is', is, 'isgn', isgn, 'ig',ig
       if(ig==ntgrid) iz = 1 ! periodic point not included in gryfx arrays
         index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
                       g_lo%naky*g_lo%ntheta0*(iz-1) + &
