@@ -486,6 +486,17 @@ contains
     if (state%init%diagnostics_initialized) &
       call mp_abort('Calling initialize_diagnostics twice', .true.)
 
+#ifndef NEW_DIAG
+    if (.not. use_old_diagnostics)then
+       if(proc0)then
+          write(*,'("  WARNING: Compiled without new diagnostics and runnning with use_old_diagnostics=.false. will lead to no output --> Forcing use_old_diagnostics=.true.")')
+          write(*,'("           Please consider recompiling with the new diagnostics enabled.")')
+          write(*,*)
+       endif
+       use_old_diagnostics=.true.
+    endif
+#endif
+
     if (.not. use_old_diagnostics) then
 #ifdef NEW_DIAG
       call debug_message(state%verb, &
@@ -602,8 +613,6 @@ contains
     ! Make sure exit is false before entering
     ! timestep loop
     state%exit = .false.
-
-    !if (proc0) write (*,*) 'istep_end', state%istep_end
 
     ! We run for nstep_run iterations, starting from whatever istep we got
     ! to in previous calls to this function. Note that calling
@@ -775,7 +784,9 @@ contains
   subroutine reset_equations (state)
 
     use gs2_diagnostics, only: gd_reset => reset_init
+#ifdef NEW_DIAG
     use gs2_diagnostics_new, only: reset_averages_and_counters
+#endif
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     use run_parameters, only: trinity_linear_fluxes, use_old_diagnostics
     use dist_fn_arrays, only: gnew
@@ -799,8 +810,10 @@ contains
     ! and counters to zero... used mainly for trinity convergence checks.
     if (use_old_diagnostics) then
       call gd_reset
+#ifdef NEW_DIAG
     else 
       call reset_averages_and_counters
+#endif
     end if
 
     if (trinity_linear_fluxes .and. &
@@ -811,11 +824,7 @@ contains
 
     call debug_message(state%verb, 'gs2_main::reset_equations finished')
 
-    !write (*,*) 'nensembles = ', state%nensembles
-
     if (state%nensembles > 1) call scope (allprocs)
-
-    !write (*,*) 'here at the close....'
 
   end subroutine reset_equations
 
@@ -1310,7 +1319,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (present(dvdrho)) dvdrho = old_iface_state%outputs%dvdrho
     if (present(grho)) grho = old_iface_state%outputs%grho
     if (present(pflux)) then
-      !write (*,*) 'SETTING FLUXES'
       pflux = old_iface_state%outputs%pflux
       qflux = old_iface_state%outputs%qflux
       vflux = old_iface_state%outputs%vflux
@@ -1395,8 +1403,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     if (nspec.ne.2)  & 
       call mp_abort("gs2_main_unit_test_reset_gs2 only works with 2 species", .true.)
 
-    !write (*,*) 'HEREEEE'
-
     call reset_gs2(nspec, &
       ! Deliberately leave fac off the next 2 lines
       ! so QN is unaffected
@@ -1407,7 +1413,6 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
       g_exb, 0.0, &
       (/spec(1)%vnewk, spec(2)%vnewk/), &
       1)
-    !write (*,*) 'HERAAAA'
 
     gs2_main_unit_test_reset_gs2 = .true.
 

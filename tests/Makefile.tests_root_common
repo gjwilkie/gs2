@@ -36,4 +36,4 @@ clean upload:
 
 
 $(TESTS_ACTUAL): 
-	$(MAKE) all -C $@ TEST_FOLD=$@
+	@$(MAKE) all -C $@ TEST_FOLD=$@
