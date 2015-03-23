@@ -117,6 +117,7 @@ contains
     use nonlinear_terms, only: gryfx_zonal
     use file_utils, only: run_name
     use mp, only: proc0
+    use unit_tests, only: debug_message
 
     implicit none
     integer, intent(in) :: strlen
@@ -135,7 +136,7 @@ contains
  
 
     call initialize_gs2(state)
-    if(proc0) write(*,*) 'initialize_gs2 complete. gs2 thinks run_name is ', run_name
+    !if(proc0) write(*,*) 'initialize_gs2 complete. gs2 thinks run_name is ', run_name
     !set overrides of naky, x0, y0, dt, vnewk here. 
     !currently this is hard-coded in kt_grids.f90 and run_parameters.f90
     !just search for "GRYFX"
@@ -143,16 +144,16 @@ contains
     call prepare_miller_geometry_overrides(state)
     call set_miller_geometry_overrides
     call prepare_kt_grids_overrides(state)
-    if(proc0) write(*,*) 'setting overrides'
+    call debug_message(4, 'setting overrides')
     state%init%kt_ov%override_gryfx = .true.
     state%init%kt_ov%gryfx = .true.
     call prepare_profiles_overrides(state)
     call set_profiles_overrides
     endif
     call initialize_equations(state)
-    if(proc0) write(*,*) 'initialize_equations complete.'
+    call debug_message(4, 'initialize_equations complete.')
     call initialize_diagnostics(state)
-    if(proc0) write(*,*) 'initialize_diagnostics complete.'
+    call debug_message(4, 'initialize_diagnostics complete.')
     
     call allocate_gryfx_zonal_arrays
 
