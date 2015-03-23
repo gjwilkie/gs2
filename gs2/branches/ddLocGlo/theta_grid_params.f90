@@ -51,7 +51,6 @@ contains
     implicit none
     integer, parameter :: verb=3
     integer :: in_file
-    character(4) :: ntheta_char
 
 !CMR,2/2/2011: add btor_slab
 ! btor_slab = btor/bpol defines direction of a flow relative to B in slab 
