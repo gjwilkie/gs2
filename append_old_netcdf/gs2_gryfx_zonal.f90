@@ -45,6 +45,9 @@ module gs2_gryfx_zonal
        real(c_double) :: asym
        real(c_double) :: asympri
 
+       ! Circular parameters
+       real(c_double) :: eps
+
        ! Other geometry parameters - Bishop/Greene & Chance
        real(c_double) :: beta_prime_input
        real(c_double) :: s_hat_input
@@ -175,6 +178,7 @@ contains
         state%init%mgeo_ov%override_rgeo_local = .true.
         state%init%mgeo_ov%rgeo_local = gryfx_parameters%rgeo_local
 
+        ! OK
         state%init%mgeo_ov%override_akappa = .true.
         state%init%mgeo_ov%akappa = gryfx_parameters%akappa
 
