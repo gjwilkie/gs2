@@ -54,9 +54,9 @@
 
 program gs2
 
-! make_lib is a compiler flag used if running with 
-! an old version of trinity (coupled flux tube code)
-! MAKE_LIB is now deprecated.
+  ! make_lib is a compiler flag used if running with 
+  ! an old version of trinity (coupled flux tube code)
+  ! MAKE_LIB is now deprecated.
 
 # ifndef MAKE_LIB 
   use gs2_main, only: gs2_program_state_type
@@ -75,9 +75,9 @@ program gs2
   call initialize_equations(state)
   call initialize_diagnostics(state)
   if (state%do_eigsolve) then 
-    call run_eigensolver(state)
+     call run_eigensolver(state)
   else
-    call evolve_equations(state, state%nstep)
+     call evolve_equations(state, state%nstep)
   end if
   call finalize_diagnostics(state)
   call finalize_equations(state)

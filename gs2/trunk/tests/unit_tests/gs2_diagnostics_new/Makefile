@@ -1,7 +1,7 @@
 
 sinclude ../Makefile.tests_common
 
-CLEANCOMMAND+= test_gs2_diagnostics_new
+CLEANCOMMAND+= test_gs2_diagnostics_new old_diagnostics/.test_* old_diagnostics/*.{o,error,out*,vres,*mom*,eigenfunc,fields,g,heat*,jext,lpc,parity,phase} averages.dat tmpdata.dat
 
 #Define this tests level
 MY_TEST_LEVEL=1
