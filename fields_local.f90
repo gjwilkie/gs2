@@ -12,6 +12,7 @@ module fields_local
   public :: advance_local, reset_fields_local, dump_response_to_file_local
   public :: fields_local_functional, read_response_from_file_local, minNrow
   public :: do_smart_update, field_local_allreduce, field_local_allreduce_sub
+  public :: field_local_tuneminnrow
 
   !> Unit tests
   public :: fields_local_unit_test_init_fields_matrixlocal
@@ -277,6 +278,7 @@ module fields_local
   logical :: read_response=.false. !Do we read the response matrix from dump?
   logical :: field_local_allreduce = .false. !If true use an allreduce to gather field else use reduce+broadcast
   logical :: field_local_allreduce_sub = .false. !If true and field_local_allreduce true then do two sub comm all reduces rather than 1
+  logical :: field_local_tuneminnrow = .false. !Are auto-tuning minnrow
   integer :: nfield !How many fields
   integer :: nfq !How many field equations (always equal to nfield)
   type(pc_type),save :: pc !This is the parallel control object
@@ -2926,14 +2928,15 @@ contains
   end subroutine fm_getfieldeq_nogath
 
   subroutine fm_reduce_an (self,antot, antota, antotp)
-    use mp, only: sum_allreduce_sub
+    use mp, only: broadcast_sub, iproc, sum_allreduce_sub
     use theta_grid, only: ntgrid
     use run_parameters, only: fphi, fapar, fbpar
+    use gs2_layouts, only: gf_lo, proc_id, idx
     implicit none
     class(fieldmat_type), intent(in) :: self
     complex, dimension (-ntgrid:,:,:), intent (in out) :: antot, antota, antotp
 
-    integer :: ik, it, is, ic
+    integer :: ik, it, is, ic, root
 
     !AJ We are using an allreduce using a sum here, but this is not strictly necessary, no 
     !AJ reduction is needed, it could be done with an allgather but that would involve manipulating the 
@@ -2944,18 +2947,35 @@ contains
        !.not.is_local. Skipping empty is probably faster but may be more dangerous
        if(self%kyb(ik)%is_empty) cycle
        do is=1,self%kyb(ik)%nsupercell
-          if(self%kyb(ik)%supercells(is)%is_empty) cycle
-          if(fphi>epsilon(0.0)) then
-             call sum_allreduce_sub(antot,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
-          endif
+          if(self%kyb(ik)%supercells(is)%is_empty .or. self%kyb(ik)%supercells(is)%is_all_local) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             root = proc_id(gf_lo,idx(gf_lo,ik,it))
+             if(root .eq. iproc) then
+                root = self%kyb(ik)%supercells(is)%sc_sub_pd%iproc
+             else
+                root = 0
+             end if
+
+             call sum_allreduce_sub(root,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+
+             if(fphi>epsilon(0.0)) then
+                call broadcast_sub(antot(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+!AJ                call sum_allreduce_sub(antot,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+             endif
              
-          if(fapar>epsilon(0.0)) then
-             call sum_allreduce_sub(antota,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
-          endif
-          
-          if(fbpar>epsilon(0.0))then
-             call sum_allreduce_sub(antotp,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
-          end if
+             if(fapar>epsilon(0.0)) then
+                call broadcast_sub(antota(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+!AJ                call sum_allreduce_sub(antota,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+             endif
+             
+             if(fbpar>epsilon(0.0))then
+                call broadcast_sub(antotp(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+!AJ                call sum_allreduce_sub(antotp,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+             end if
+          end do
        enddo
     enddo
 
@@ -3618,7 +3638,9 @@ contains
     if (debug.and.proc0) write(6,*) "init_fields_local: kt_grids"
     call init_kt_grids
     if (debug.and.proc0) write(6,*) "init_fields_local: init_fields_matrixlocal"
-    call tuneMinNRow()
+    if(field_local_tuneminnrow) then
+       call tuneMinNRow()
+    end if
     call init_fields_matrixlocal
     if (debug.and.proc0) write(6,*) "init_fields_local: antenna"
     call init_antenna

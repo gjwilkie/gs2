@@ -6608,9 +6608,6 @@ endif
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
 #endif
-          !AJ This needs to be zero initialised here as later we are currently doing a sum_allreduce to combine data across
-          !AJ processes and we don't want spurious results.  We could get rid of this if not doing an all_reduce later.
-          antot = (0.,0.)
           call integrate_species (gfg0, wgt, antot)
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
@@ -6811,9 +6808,6 @@ endif
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
 #endif
-          !AJ This needs to be zero initialised here as later we are currently doing a sum_allreduce to combine data across
-          !AJ processes and we don't want spurious results.  We could get rid of this if not doing an all_reduce later.
-          antota = (0.,0.)
           call integrate_species (gfg0, wgt, antota)
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate f2')
@@ -6995,9 +6989,6 @@ endif
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
 #endif
-          !AJ This needs to be zero initialised here as later we are currently doing a sum_allreduce to combine data across
-          !AJ processes and we don't want spurious results.  We could get rid of this if not doing an all_reduce later.
-          antotp = (0.,0.)
           call integrate_species (gfg0, wgt, antotp)
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
