@@ -223,7 +223,7 @@ contains
     use mp, only: proc0, broadcast
     use fields_implicit, only: field_subgath
     use fields_local, only: minNrow
-    use fields_local, only: do_smart_update, field_local_allreduce, field_local_allreduce_sub
+    use fields_local, only: do_smart_update, field_local_allreduce, field_local_allreduce_sub, field_local_tuneminnrow
     use fields_arrays, only: response_file
     use file_utils, only: run_name
     implicit none
@@ -236,7 +236,8 @@ contains
     character(20) :: field_option
     character(len=256) :: response_dir
     namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit,&
-         dump_response, read_response, minNrow, do_smart_update, field_local_allreduce, field_local_allreduce_sub, response_dir
+         dump_response, read_response, minNrow, do_smart_update, field_local_allreduce, field_local_allreduce_sub,&
+         response_dir, field_local_tuneminnrow
     integer :: ierr, in_file
 
     if (proc0) then
@@ -250,6 +251,7 @@ contains
        do_smart_update=.false.
        field_local_allreduce=.false.
        field_local_allreduce_sub=.false.
+       field_local_tuneminnrow=.false.
        response_dir=''
        in_file = input_unit_exist ("fields_knobs", exist)
        if (exist) read (unit=in_file, nml=fields_knobs)
@@ -287,6 +289,7 @@ contains
        call broadcast (minNrow)
        call broadcast (do_smart_update)
        call broadcast (field_local_allreduce)
+       call broadcast (field_local_tuneminnrow)
        call broadcast (field_local_allreduce_sub)
     end select
   end subroutine read_parameters
