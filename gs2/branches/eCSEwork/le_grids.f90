@@ -2647,7 +2647,7 @@ contains
 
     call init_g2gf_redistribute
     
-    call check_g2gf
+    if (test) call check_g2gf
 
     if (test) then
        if (proc0) print *, 'init_map done'
