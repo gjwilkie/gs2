@@ -209,6 +209,7 @@ module fields_local
      procedure :: count_subcom => fm_count_subcom
      procedure :: getfieldeq_nogath => fm_getfieldeq_nogath
      procedure :: reduce_an => fm_reduce_an
+     procedure :: check_an => fm_check_an
      procedure :: getfieldeq1_nogath => fm_getfieldeq1_nogath
      procedure :: update_fields => fm_update_fields
      procedure :: update_fields_newstep => fm_update_fields_newstep
@@ -2912,22 +2913,37 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
     complex, dimension (:,:,:), allocatable :: antot, antota, antotp
+    complex, dimension (:,:,:), allocatable :: tempantot, tempantota, tempantotp
 
     allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
     allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (tempantot (-ntgrid:ntgrid,ntheta0,naky))
+    allocate (tempantota(-ntgrid:ntgrid,ntheta0,naky))
+    allocate (tempantotp(-ntgrid:ntgrid,ntheta0,naky))
 
+
+    gf_lo_integrate = .false.
     call getan_nogath (antot, antota, antotp)
+    gf_lo_integrate = .true.
+    call getan_nogath (tempantot, tempantota, tempantotp)
     if(gf_lo_integrate) then
-       call self%reduce_an(antot, antota, antotp)
+       call self%reduce_an(tempantot, tempantota, tempantotp)
     end if
+    call self%check_an(antot, tempantot, antota, tempantota, antotp, tempantotp)
     call self%getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
 
     deallocate (antot, antota, antotp)
+    deallocate (tempantot, tempantota, tempantotp)
   end subroutine fm_getfieldeq_nogath
 
-  subroutine fm_reduce_an (self,antot, antota, antotp)
+!AJ This is designed to reduce data within a supercell communicator.
+!AJ However, the gf_lo decomposition does not currently ensure that the 
+!AJ process that owns the cell in gf_lo is actually part of the supercell that
+!AJ contains the cell in fields_local so this does not currently produce the 
+!AJ correct results.
+ subroutine fm_reduce_supercell_an (self,antot, antota, antotp)
     use mp, only: broadcast_sub, iproc, sum_allreduce_sub
     use theta_grid, only: ntgrid
     use run_parameters, only: fphi, fapar, fbpar
@@ -2980,7 +2996,111 @@ contains
     enddo
 
 
+  end subroutine fm_reduce_supercell_an
+
+  subroutine fm_reduce_an (self,antot, antota, antotp)
+    use mp, only: broadcast, iproc, sum_allreduce
+    use theta_grid, only: ntgrid
+    use run_parameters, only: fphi, fapar, fbpar
+    use gs2_layouts, only: gf_lo, proc_id, idx
+    use kt_grids, only: naky, ntheta0
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: antot, antota, antotp
+
+    integer :: ik, it, is, ic, root
+
+!!$    do ik=1,naky
+!!$       do it=1,ntheta0
+!!$
+!!$          root = proc_id(gf_lo,idx(gf_lo,ik,it))
+!!$
+!!$          if(fphi>epsilon(0.0)) then
+!!$             call broadcast(antot(:,it,ik),root)
+!!$          endif
+!!$             
+!!$          if(fapar>epsilon(0.0)) then
+!!$             call broadcast(antota(:,it,ik),root)
+!!$          endif
+!!$             
+!!$          if(fbpar>epsilon(0.0))then
+!!$             call broadcast(antotp(:,it,ik),root)
+!!$          end if
+!!$       enddo
+!!$    enddo
+
+    if(fphi>epsilon(0.0)) then
+       call sum_allreduce(antot)
+    end if
+
+    if(fapar>epsilon(0.0)) then
+       call sum_allreduce(antota)
+    end if
+
+    if(fbpar>epsilon(0.0)) then
+       call sum_allreduce(antotp)
+    end if
+
   end subroutine fm_reduce_an
+
+  subroutine fm_check_an (self,antot, tempantot, antota, tempantota, antotp, tempantotp)
+    use mp, only: broadcast_sub, iproc, sum_allreduce_sub, mp_abort
+    use theta_grid, only: ntgrid
+    use run_parameters, only: fphi, fapar, fbpar
+    use gs2_layouts, only: gf_lo, proc_id, idx
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp, tempantot, tempantota, tempantotp
+    complex :: tol = (1e-13,1e-13)
+    integer :: ik, it, is, ic, ig
+
+    do ik=1,self%naky
+       !Skip empty cells, note this is slightly different to skipping
+       !.not.is_local. Skipping empty is probably faster but may be more dangerous
+       if(self%kyb(ik)%is_empty) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(self%kyb(ik)%supercells(is)%is_empty .or. self%kyb(ik)%supercells(is)%is_all_local) cycle
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+
+             it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+
+             if(fphi>epsilon(0.0)) then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antot(ig,it,ik)-tempantot(ig,it,ik))).gt.aimag(tol) .or. abs(real(antot(ig,it,ik)-tempantot(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antot',it,ik,antot(ig,it,ik),tempantot(ig,it,ik)
+                      call mp_abort('Problem with antot')
+                      exit
+                   end if
+                end do
+             endif
+             
+             if(fapar>epsilon(0.0)) then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antota(ig,it,ik)-tempantota(ig,it,ik))).gt.aimag(tol) .or. abs(real(antota(ig,it,ik)-tempantota(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antota',it,ik,antota(ig,it,ik),tempantota(ig,it,ik)
+                      call mp_abort('Problem with antota')
+                      exit
+                   end if
+                end do
+             endif
+             
+             if(fbpar>epsilon(0.0))then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antotp(ig,it,ik)-tempantotp(ig,it,ik))).gt.aimag(tol) .or. abs(real(antotp(ig,it,ik)-tempantotp(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antotp',it,ik,antotp(ig,it,ik),tempantotp(ig,it,ik)
+                      call mp_abort('Problem with antotp')
+                      exit
+                   end if
+                end do
+             end if
+          end do
+       enddo
+    enddo
+
+
+  end subroutine fm_check_an
+
   
 
   subroutine fm_getfieldeq1_nogath (self,phi, apar, bpar, antot, antota, antotp, &

@@ -247,7 +247,7 @@ contains
        force_maxwell_reinit=.true.
        dump_response=.false.
        read_response=.false.
-       minnrow=64 !Tuning this can influence both init and advance times
+       minnrow=16 !Tuning this can influence both init and advance times
        do_smart_update=.false.
        field_local_allreduce=.false.
        field_local_allreduce_sub=.false.
