@@ -31,6 +31,7 @@ module gs2_init
   use overrides, only: miller_geometry_overrides_type
   use overrides, only: profiles_overrides_type
   use overrides, only: kt_grids_overrides_type
+  use overrides, only: timestep_overrides_type
   use overrides, only: initial_values_overrides_type
   use overrides, only: optimisations_overrides_type
   public :: init_type
@@ -140,6 +141,9 @@ module gs2_init
     !! documentation for the overrides::kt_grids_overrides_type
     !! for more information.
     type(profiles_overrides_type) :: prof_ov
+    !> An object for overriding parameters connected
+    !! to the timestep and cfl condition
+    type(timestep_overrides_type) :: tstep_ov
     !> An object for overriding the initial values of 
     !! the fields and distribution function. You must call
     !! gs2_main::prepare_initial_values_overrides 
@@ -654,6 +658,8 @@ contains
 
       subroutine override_timestep_subroutine
         use unit_tests, only: debug_message
+          use run_parameters, only: rso=>set_overrides
+          if (up() .and. current%tstep_ov%init) call rso(current%tstep_ov)
 
        
         if (up()) then

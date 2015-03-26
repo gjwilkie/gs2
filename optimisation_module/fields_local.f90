@@ -3599,10 +3599,12 @@ contains
     use fields_arrays, only: time_field
     use mp, only: proc0 !, barrier
     use job_manage, only: time_message
+    use unit_tests, only: debug_message
     implicit none
     complex, dimension(:,:,:), intent(out) :: phi,apar,bpar !Note, these are actually phinew,... in typical usage
     logical, optional, intent(in) :: do_gather_in, do_update_in
     logical :: do_gather, do_update
+    integer, parameter :: verb = 4
 
     !Set gather flag, this currently always needs to be true for
     !correct operation.
@@ -3615,9 +3617,14 @@ contains
     !if(debug)call barrier !!/These barriers influence the reported time
     if (proc0) call time_message(.false.,time_field,' Field Solver')
 
+    call debug_message(verb, &
+        'fields_local::getfield_local calling get_field_update')
     !Use fieldmat routine to calculate the field update
     call fieldmat%get_field_update(phi,apar,bpar)
 
+
+    call debug_message(verb, &
+        'fields_local::getfield_local calling gather_fields')
     !Gather to proc0 if requested
     !NOTE: We currently calculate omega at every time step so we
     !actually need to gather everytime, which is a pain!
@@ -3625,9 +3632,13 @@ contains
     if(do_gather) call fieldmat%gather_fields(phi,apar,bpar,&
          to_all_in=.false.,do_allreduce_in=field_local_allreduce)
 
+    call debug_message(verb, &
+        'fields_local::getfield_local calling update_fields')
     !This routine updates *new fields using gathered update
     if(do_update) call fieldmat%update_fields(phi,apar,bpar)
 
+    call debug_message(verb, &
+        'fields_local::getfield_local finished')
     !For timing
     !Barrier usage ensures that proc0 measures the longest time taken on
     !any proc.
@@ -3657,12 +3668,14 @@ contains
     use dist_fn_arrays, only: g, gnew
     use antenna, only: antenna_amplitudes, no_driver
     use gs2_layouts, only: g_lo
+    use unit_tests, only: debug_message
     implicit none
     integer, intent(in) :: istep
     logical, intent(in) :: remove_zonal_flows_switch
     integer :: diagnostics = 1
     logical, parameter :: do_gather=.true.
     logical :: do_update
+    integer, parameter :: verb = 4
     !do_gather=.true. => fields are collected from all procs and distributed to everyone (required)
     !do_update=.true. => "Smart" update routines are used which only update the local parts of the
     !field arrays. This could help when xy are strongly parallelised but is likely to be slower
@@ -3673,6 +3686,8 @@ contains
     !GGH NOTE: apar_ext is initialized in this call
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
 
+    call debug_message(verb, &
+      'fields_local::advance_local calling g_exb')
     !Apply flow shear if active
     if(abs(g_exb*g_exbfac).gt.epsilon(0.)) call exb_shear(gnew,phinew,aparnew,bparnew,istep,field_local_allreduce_sub)
 
@@ -3686,6 +3701,9 @@ contains
        if(fbpar.gt.0) bpar=bparnew
     endif
 
+    call debug_message(verb, &
+      'fields_local::advance_local calling timeadv 1')
+
     !Find gnew given fields at time step midpoint
     call timeadv (phi, apar, bpar, phinew, &
          aparnew, bparnew, istep)
@@ -3695,6 +3713,8 @@ contains
     !<DD>TAGGED: Should we only this is fapar>0 as well?
     if(.not.no_driver) aparnew=aparnew+apar_ext
 
+    call debug_message(verb, &
+      'fields_local::advance_local calling getfield_local')
     !Calculate the fields at the next time point
     call getfield_local(phinew,aparnew,bparnew,do_gather,do_update)
 
@@ -3708,6 +3728,8 @@ contains
     !Remove zonal component if requested
     if(remove_zonal_flows_switch) call remove_zonal_flows
 
+    call debug_message(verb, &
+      'fields_local::advance_local calling timeadv 2')
     !Evolve gnew to next half time point
     call timeadv (phi, apar, bpar, phinew, &
          aparnew, bparnew, istep, diagnostics) 

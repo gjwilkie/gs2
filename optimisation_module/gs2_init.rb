@@ -163,7 +163,7 @@ class GenerateInit
         use unit_tests, only: debug_message
 #{
         case @level_name
-        when 'full', 'override_timestep', 'override_initial_values'
+        when 'full', 'override_initial_values'
           str = "\n"
         when /override_kt_grids/
           str = <<EOF2
@@ -185,6 +185,12 @@ EOF2
           str = <<EOF2
           use theta_grid_params, only: tgpso=>set_overrides
           if (up() .and. current%mgeo_ov%init) call tgpso(current%mgeo_ov)
+
+EOF2
+			  when /override_timestep/
+          str = <<EOF2
+          use run_parameters, only: rso=>set_overrides
+          if (up() .and. current%tstep_ov%init) call rso(current%tstep_ov)
 
 EOF2
         when /override_profiles/
