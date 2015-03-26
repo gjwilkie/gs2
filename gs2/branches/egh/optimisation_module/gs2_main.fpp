@@ -773,6 +773,8 @@ contains
           !If something has triggered a reset then reset here
           if(state%dont_change_timestep) reset = .false.
           if (reset) then
+            call debug_message(state%verb-1, &
+              'gs2_main::evolve_equations resetting time step loc 2')
              call prepare_initial_values_overrides(state)
              call set_initval_overrides_to_current_vals(state%init%initval_ov)
              state%init%initval_ov%override = .true.
@@ -785,12 +787,14 @@ contains
           end if
 
           if ((mod(istep,5) == 0).and.(.not.state%exit)) call checkstop(state%exit)
-          if (state%exit) call debug_message(state%verb-1, &
+          if (state%exit) call debug_message(state%verb+1, &
             'gs2_main::evolve_equations exit true after checkstop')
           if (.not.state%exit) call checktime(avail_cpu_time,state%exit,margin_cpu_time)
-          if (state%exit) call debug_message(state%verb-1, &
+          if (state%exit) call debug_message(state%verb+1, &
             'gs2_main::evolve_equations exit true after checktime')
        endif
+       call debug_message(state%verb+1, &
+        'gs2_main::evolve_equations after reset and checks')
 
        state%istep_end = istep
        !if (proc0) write (*,*) 'advance 2', state%timers%advance, state%exit

@@ -46,7 +46,7 @@ module gs2_optimisation
       !real :: optcost, opttime
 
 
-      state%report_nprocs = .false.
+      !state%report_nprocs = .false.
       state%print_times = .false.
       state%print_full_timers = .false.
       state%is_external_job = .true.
@@ -60,6 +60,10 @@ module gs2_optimisation
       fieldmat%no_prepare = .true.
       fieldmat%no_populate = .true.
       state%dont_change_timestep = .true.
+
+      state%init%tstep_ov%init = .true.
+      state%init%tstep_ov%override_immediate_reset = .true.
+      state%init%tstep_ov%immediate_reset = .false.
 
       if (state%optim%estimate_timing_error) then
         do i = 1,10
@@ -297,6 +301,10 @@ module gs2_optimisation
       type(gs2_program_state_type), intent(inout) :: state
 
       logical :: l1, l2, l3
+
+      l1=.false.
+      l2=.false.
+      l3=.false.
       state%init%opt_ov%override_opt_redist_nbk = .true.
       state%init%opt_ov%opt_redist_nbk = .false.
       state%init%opt_ov%override_opt_redist_persist = .true.
@@ -314,12 +322,12 @@ module gs2_optimisation
       state%init%opt_ov%opt_redist_nbk = .true.
       call measure_timestep(state)
       l1 = state%optim%results%optimal
-      state%init%opt_ov%opt_redist_persist = .true.
-      call measure_timestep(state)
-      l2 = state%optim%results%optimal
-      state%init%opt_ov%opt_redist_persist_overlap = .true.
-      call measure_timestep(state)
-      l3 = state%optim%results%optimal
+      !state%init%opt_ov%opt_redist_persist = .true.
+      !call measure_timestep(state)
+      !l2 = state%optim%results%optimal
+      !state%init%opt_ov%opt_redist_persist_overlap = .true.
+      !call measure_timestep(state)
+      !l3 = state%optim%results%optimal
 
       ! Here we pick the optimal solution
       if (.not. l3) then
@@ -364,8 +372,8 @@ module gs2_optimisation
       call optimise_flags(state)
       !state%init%opt_ov%minnrow = 256
       !call measure_timestep(state)
-      state%init%opt_ov%minnrow = 512
-      call optimise_flags(state)
+      !state%init%opt_ov%minnrow = 512
+      !call optimise_flags(state)
     end subroutine optimise_fields
 
     subroutine measure_timestep(state)

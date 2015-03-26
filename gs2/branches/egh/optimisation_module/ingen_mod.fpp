@@ -1542,7 +1542,7 @@ if (debug) write(6,*) 'get_namelists: returning'
        case ('lxyes')
 
 !          write (report_unit, fmt="('Recommended numbers of processors, time on SP2')") 
-          allocate (facs(max(nspec,negrid,naky,ntheta0)/2+1,5))
+          allocate (facs(max(nspec,negrid,naky,ntheta0,nlambda)/2+1,5))
           call factors (nspec, nspfacs, facs(:,1))
           call factors (negrid, nefacs, facs(:,2))
           call factors (naky, nkyfacs, facs(:,3))

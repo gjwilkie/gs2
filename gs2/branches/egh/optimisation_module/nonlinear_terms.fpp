@@ -459,7 +459,7 @@ contains
   end subroutine nonlinear_terms_unit_test_time_add_nl
 
   subroutine add_nl (g1, phi, apar, bpar)
-    use mp, only: max_allreduce
+    use mp, only: max_allreduce, iproc
     use theta_grid, only: ntgrid, kxfac
     use gs2_layouts, only: g_lo, ik_idx, it_idx
     use gs2_layouts, only: accelx_lo, yxf_lo
@@ -562,6 +562,8 @@ contains
     if (fbpar > zero) call load_ky_bpar
     if (fapar  > zero) call load_ky_apar
 
+    call debug_message(verb, 'nonlinear_terms::add_nl calculated dphi/dy')
+
     !Transform to real space    
     if (accelerated) then
        call transform2 (g1, aba, ia)
@@ -584,6 +586,8 @@ contains
        call transform2 (g1, gb)
     end if
 
+    call debug_message(verb, 'nonlinear_terms::add_nl calculated dg/dx')
+
     !It should be possible to write the following with vector notation
     !To find max_vel we'd then use MAXVAL rather than MAX   
     !Calculate (d Chi /dy).(d g_wesson/dx) and subtract from (d Chi /dx).(d g_wesson/dy)
@@ -604,8 +608,11 @@ contains
           end do
        end do
     end if
+    call debug_message(verb, &
+      'nonlinear_terms::add_nl calculated dphi/dx.dg/dy.dphi/dy.dg/dx')
 
     !Estimate the global cfl limit based on max_vel
+    !write (*,*) 'Calling max_allreduce', iproc, immediate_reset
     call max_allreduce(max_vel)    
     dt_cfl = 1./max_vel
     call save_dt_cfl (dt_cfl)
@@ -618,6 +625,7 @@ contains
        !If we have violated cfl then return immediately
        if(reset)return
     endif
+    !write (*,*) 'didnt return', iproc
 
     !Transform NL source back to spectral space
     if (accelerated) then
@@ -625,6 +633,9 @@ contains
     else
        call inverse2 (bracket, g1)
     end if
+
+    call debug_message(verb, &
+      'nonlinear_terms::add_nl calculated nonlinear term')
     
   contains
     !NOTE: These routines don't contain anon(ie) factor which may be desired to

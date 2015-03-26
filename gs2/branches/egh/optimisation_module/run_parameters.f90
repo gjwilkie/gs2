@@ -29,6 +29,8 @@ module run_parameters
   public :: use_old_diagnostics
 
 
+  public :: set_overrides
+
   real :: beta, zeff, tite
   real :: fphi, fapar, fbpar, faperp
   real :: delt, code_delt_max, user_delt_max, margin
@@ -384,6 +386,12 @@ contains
     write (trinpars_unit, "(A1)") '/'
 
   end subroutine write_trinity_parameters
+
+  subroutine set_overrides(tstep_ov)
+    use overrides, only: timestep_overrides_type
+    type(timestep_overrides_type), intent(in) :: tstep_ov
+    if (tstep_ov%override_immediate_reset) immediate_reset=tstep_ov%immediate_reset
+  end subroutine set_overrides
 
   subroutine adjust_time_norm
     use file_utils, only: error_unit
