@@ -792,9 +792,12 @@ contains
       iz = ig + ntgrid + 1
       !write (*,*) 'ik', ik, 'it', it, 'is', is, 'isgn', isgn, 'ig',ig
       if(ig==ntgrid) iz = 1 ! periodic point not included in gryfx arrays
+        ! max is 1 + naky-1 + naky*(ntheta0-1) + naky*ntheta0*(ntheta-1),
+        ! * 
         index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
                       g_lo%naky*g_lo%ntheta0*(iz-1) + &
-                      2*ntgrid*g_lo%naky*g_lo%ntheta0*(is-1)
+                      (2*ntgrid)*g_lo%naky*g_lo%ntheta0*(is-1)
+        index_gryfx = 1
         g1(ig,isgn,iglo) =  densfac*gryfx_zonal%NLdens_ky0(index_gryfx) + &
                  (vpa(ig,isgn,iglo)*vpa(ig,isgn,iglo) - 0.5)* &
                      tparfac*gryfx_zonal%NLtpar_ky0(index_gryfx) + &

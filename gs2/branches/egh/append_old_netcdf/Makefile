@@ -693,6 +693,8 @@ revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
 
+geometry_c_interface.o: geometry_c_interface.h
+
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 
 #This is the location of the individual test suites

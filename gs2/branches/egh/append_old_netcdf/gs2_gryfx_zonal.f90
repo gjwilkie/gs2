@@ -12,6 +12,10 @@ module gs2_gryfx_zonal
   public :: allocate_gryfx_zonal_arrays
   public :: deallocate_gryfx_zonal_arrays
   public :: gryfx_parameters_type
+
+  public :: interpolate_theta ! for testing
+  public :: gs2_2_gryfx_grid
+
  
   public :: test_flag
 
@@ -57,6 +61,7 @@ module gs2_gryfx_zonal
        ! Species parameters... I think allowing 20 species should be enough!
        ! Allocating the structs and arrays is tedious and prone to segfaults
        ! and is unnecessary given the tiny memory usage of this data object
+       ! Most importantly it is not interoperable with C!
        integer(c_int) :: ntspec
        real(c_double):: dens(20)
        real(c_double):: temp(20)
@@ -68,7 +73,84 @@ module gs2_gryfx_zonal
 
      end type gryfx_parameters_type
 
+    integer, parameter :: verb = 2
+
+    real, dimension(:,:), allocatable :: gs2_2_gryfx_grid, gryfx_2_gs2_grid
+
 contains
+
+  subroutine create_interp_matrices(gryfx_theta)
+    use theta_grid, only: ntgrid, theta
+    use splines, only: inter_cspl
+    real*8, intent(in), dimension(1:2*ntgrid) :: gryfx_theta
+    real, dimension(1:2*ntgrid) :: delta_array, gryfx_theta_real
+    integer ::iz
+
+    ! NB Gryfx grid has one less theta point
+    gryfx_theta_real = gryfx_theta
+
+    write (*,*) 'theta', theta, 'gryfx_theta_real', gryfx_theta_real
+
+    do iz = 1,2*ntgrid
+      delta_array = 0.
+      delta_array(iz) = 1.
+      call inter_cspl(2*ntgrid, gryfx_theta_real, delta_array, &
+                      2*ntgrid, theta(-ntgrid:ntgrid-1), gryfx_2_gs2_grid(:,iz))
+      call inter_cspl(2*ntgrid, theta(-ntgrid:ntgrid-1), delta_array, &
+                      2*ntgrid, gryfx_theta_real, gs2_2_gryfx_grid(:,iz))
+    end do
+
+  end subroutine create_interp_matrices
+
+  subroutine interpolate_theta(matrix, array, is_field)
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use species, only: nspec
+    real, dimension(:,:), intent(in) :: matrix
+    complex*8, dimension (:), intent (inout) :: &
+                    array
+    logical, intent(in) :: is_field
+    complex*8, dimension (:), allocatable :: array_temp
+    integer :: iz_row, iz_col, is, it, ik, index_gryfx_row, index_gryfx_col
+    integer :: spec_max
+
+    allocate(array_temp(naky*ntheta0*2*ntgrid*nspec))
+
+    array_temp = array
+
+    spec_max = nspec
+    if (is_field) spec_max = 1
+
+    do is = 1,nspec
+      do ik = 1,naky
+        do it = 1,ntheta0
+          do iz_row = 1,2*ntgrid
+            index_gryfx_row = 1 + &
+                             (ik-1) + &
+                             naky*(it-1) + &
+                             naky*ntheta0*(iz_row-1) + &
+                             (2*ntgrid)*naky*ntheta0*(is-1)
+            array(index_gryfx_row) = 0.0
+            do iz_col = 1,2*ntgrid
+              index_gryfx_col = 1 + &
+                               (ik-1) +  &
+                               naky*(it-1) + &
+                               naky*ntheta0*(iz_col-1) + &
+                               (2*ntgrid)*naky*ntheta0*(is-1)
+
+              array(index_gryfx_row) = array(index_gryfx_row) + &
+                 matrix(iz_row, iz_col) * &
+                 array_temp(index_gryfx_col)
+                
+            end do
+          end do
+        end do
+      end do
+    end do
+
+  end subroutine interpolate_theta
+
+
   subroutine allocate_gryfx_zonal_arrays
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
@@ -76,56 +158,85 @@ contains
     use nonlinear_terms, only: gryfx_zonal
     
     implicit none
+    integer :: tot_size
 
-    allocate(gryfx_zonal%NLdens_ky0(naky*ntheta0*2*ntgrid*nspec))
-    allocate(gryfx_zonal%NLupar_ky0(naky*ntheta0*2*ntgrid*nspec))
-    allocate(gryfx_zonal%NLtpar_ky0(naky*ntheta0*2*ntgrid*nspec))
-    allocate(gryfx_zonal%NLtprp_ky0(naky*ntheta0*2*ntgrid*nspec))
-    allocate(gryfx_zonal%NLqpar_ky0(naky*ntheta0*2*ntgrid*nspec))
-    allocate(gryfx_zonal%NLqprp_ky0(naky*ntheta0*2*ntgrid*nspec))
+    tot_size = naky*ntheta0*2*ntgrid*nspec
+
+    allocate(gs2_2_gryfx_grid(2*ntgrid, 2*ntgrid))
+    allocate(gryfx_2_gs2_grid(2*ntgrid, 2*ntgrid))
+    allocate(gryfx_zonal%NLdens_ky0(tot_size))
+    allocate(gryfx_zonal%NLupar_ky0(tot_size))
+    allocate(gryfx_zonal%NLtpar_ky0(tot_size))
+    allocate(gryfx_zonal%NLtprp_ky0(tot_size))
+    allocate(gryfx_zonal%NLqpar_ky0(tot_size))
+    allocate(gryfx_zonal%NLqprp_ky0(tot_size))
   end subroutine allocate_gryfx_zonal_arrays    
 
   subroutine deallocate_gryfx_zonal_arrays
+    use mp, only: mp_abort
     use nonlinear_terms, only: gryfx_zonal
+    use unit_tests, only: debug_message
     
     implicit none
+    
+    if(.not. associated(gryfx_zonal%NLqprp_ky0)) &
+      call mp_abort("Attempting to deallocated unassociated pointers&
+     & in deallocate_gryfx_zonal_arrays", .true.) 
+
+    deallocate(gs2_2_gryfx_grid, gryfx_2_gs2_grid)
 
     deallocate(gryfx_zonal%NLdens_ky0)
     deallocate(gryfx_zonal%NLupar_ky0)
     deallocate(gryfx_zonal%NLtpar_ky0)
+    call debug_message(verb, &
+      'gs2_gryfx_zonal::deallocate_gryfx_zonal_arrays 50% done')
     deallocate(gryfx_zonal%NLtprp_ky0)
+    call debug_message(verb, &
+      'gs2_gryfx_zonal::deallocate_gryfx_zonal_arrays 65% done')
     deallocate(gryfx_zonal%NLqpar_ky0)
+    call debug_message(verb, &
+      'gs2_gryfx_zonal::deallocate_gryfx_zonal_arrays 85% done')
     deallocate(gryfx_zonal%NLqprp_ky0)
+    call debug_message(verb, &
+      'gs2_gryfx_zonal::deallocate_gryfx_zonal_arrays finished')
   end subroutine deallocate_gryfx_zonal_arrays    
 
-  subroutine init_gs2_gryfx_c(strlen, run_name, mp_comm, gryfx_parameters) &
+  subroutine init_gs2_gryfx_c(strlen, run_name, mp_comm, &
+                            gryfx_theta, &
+                            gryfx_parameters) &
                             bind(c, name='init_gs2')
     use iso_c_binding
+    use theta_grid, only: ntgrid
     implicit none
     integer(c_int), intent(in) :: strlen
     character(kind=c_char), intent(in) :: run_name
     integer(c_int), intent(in) :: mp_comm
+    real*8, intent(in), dimension(2*ntgrid) :: gryfx_theta
     type(gryfx_parameters_type), intent(in) :: gryfx_parameters
-    call init_gs2_gryfx(strlen, run_name, mp_comm, gryfx_parameters)
+    call init_gs2_gryfx(strlen, run_name, mp_comm, gryfx_theta,gryfx_parameters)
 
   end subroutine init_gs2_gryfx_c
 
-  subroutine init_gs2_gryfx(strlen, file_name, mp_comm, gryfx_parameters )
+  subroutine init_gs2_gryfx(strlen, file_name, mp_comm, &
+                            gryfx_theta, gryfx_parameters )
     use gs2_main, only: initialize_gs2
     use gs2_main, only: initialize_equations
     use gs2_main, only: initialize_diagnostics
     use gs2_main, only: prepare_miller_geometry_overrides
     use gs2_main, only: prepare_profiles_overrides
     use gs2_main, only: prepare_kt_grids_overrides
+    use theta_grid, only: ntgrid
     use nonlinear_terms, only: gryfx_zonal
     use file_utils, only: run_name
-    use mp, only: proc0
+    use mp, only: proc0, mp_abort
     use unit_tests, only: debug_message
+    use geometry, only: equal_arc
 
     implicit none
     integer, intent(in) :: strlen
     character (len=strlen), intent (in) :: file_name
     integer, intent(in) :: mp_comm
+    real*8, intent(in), dimension(2*ntgrid) :: gryfx_theta
     type(gryfx_parameters_type), intent(in) :: gryfx_parameters
 
     !gryfx_zonal%on = .true.
@@ -144,21 +255,27 @@ contains
     !currently this is hard-coded in kt_grids.f90 and run_parameters.f90
     !just search for "GRYFX"
     if(.not. test_flag) then 
-    call prepare_miller_geometry_overrides(state)
-    call set_miller_geometry_overrides
+      call prepare_miller_geometry_overrides(state)
+      call set_miller_geometry_overrides
+    end if
     call prepare_kt_grids_overrides(state)
-    call debug_message(4, 'setting overrides')
+    call debug_message(verb, 'setting overrides')
     state%init%kt_ov%override_gryfx = .true.
     state%init%kt_ov%gryfx = .true.
-    call prepare_profiles_overrides(state)
-    call set_profiles_overrides
+    if(.not. test_flag) then 
+      call prepare_profiles_overrides(state)
+      call set_profiles_overrides
     endif
     call initialize_equations(state)
-    call debug_message(4, 'initialize_equations complete.')
+    call debug_message(verb, 'initialize_equations complete.')
     call initialize_diagnostics(state)
-    call debug_message(4, 'initialize_diagnostics complete.')
+    call debug_message(verb, 'initialize_diagnostics complete.')
+
+    if (equal_arc) call mp_abort(&
+      "gs2_gryfx_zonal doesn't work with equal_arc yet", .true.)
     
     call allocate_gryfx_zonal_arrays
+    call create_interp_matrices(gryfx_theta)
 
 contains
 
@@ -292,6 +409,13 @@ contains
     call broadcast(qprp_ky0)
     ! all procs know value of first_half_step already
 
+    call interpolate_theta(gryfx_2_gs2_grid, dens_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, upar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, tpar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, tprp_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, qpar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, qprp_ky0, .false.)
+
     ! now that all procs know values, copy into gryfx_zonal structure
     gryfx_zonal%first_half_step = first_half_step 
     gryfx_zonal%NLdens_ky0 = dens_ky0
@@ -316,6 +440,13 @@ contains
     call getmoms_gryfx(dens_ky0, upar_ky0, tpar_ky0, &
                  tprp_ky0, qpar_ky0, qprp_ky0, phi_ky0)
 
+    call interpolate_theta(gryfx_2_gs2_grid, dens_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, upar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, tpar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, tprp_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, qpar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, qprp_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, phi_ky0, .true.)
   end subroutine advance_gs2_gryfx
 
   subroutine finish_gs2_gryfx_c() bind(c, name='finish_gs2')
@@ -331,14 +462,20 @@ contains
     use gs2_main, only: finalize_equations
     use gs2_main, only: finalize_gs2
     use nonlinear_terms, only: gryfx_zonal
+    use unit_tests, only: debug_message
     implicit none
 
+    call debug_message(verb, 'gs2_gryfx_zonal::finish_gs2_gryfx starting')
     call deallocate_gryfx_zonal_arrays
+    call debug_message(verb, 'gs2_gryfx_zonal::finish_gs2_gryfx deallocated arrays')
     call finalize_diagnostics(state)
+    call debug_message(verb, 'gs2_gryfx_zonal::finish_gs2_gryfx finalized diagnostics')
     call finalize_equations(state)
+    call debug_message(verb, 'gs2_gryfx_zonal::finish_gs2_gryfx finalized equations')
     state%print_times = .true.
     state%print_full_timers = .true.
     call finalize_gs2(state)
+    call debug_message(verb, 'gs2_gryfx_zonal::finish_gs2_gryfx finalized gs2')
     gryfx_zonal%on = .false.
 
   end subroutine finish_gs2_gryfx
@@ -368,6 +505,14 @@ contains
     
     call getmoms_gryfx(dens_ky0, upar_ky0, tpar_ky0, &
             tprp_ky0, qpar_ky0, qprp_ky0, phi_ky0)
+
+    call interpolate_theta(gryfx_2_gs2_grid, dens_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, upar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, tpar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, tprp_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, qpar_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, qprp_ky0, .false.)
+    call interpolate_theta(gryfx_2_gs2_grid, phi_ky0, .true.)
   end subroutine getmoms_gryfx_c
 
   subroutine broadcast_integer_c(a) bind(c, name='broadcast_integer')
