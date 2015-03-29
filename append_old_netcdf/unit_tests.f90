@@ -228,10 +228,10 @@ contains
     integer, intent(in) :: verbosity_level
     character(*), intent(in) :: message
     if (mp_initialized) then 
-      if (should_print(verbosity_level)) write (*,*) message, " jid=", job_id, &
+      if (should_print(verbosity_level)) write (*,"(A,A5,I6,A7,I6)") message, " jid=", job_id, &
         " iproc=", iproc
     else
-      if (should_print(verbosity_level)) write (*,*) message, " jid=", job_id
+      if (should_print(verbosity_level)) write (*,"(A,A5,I6,A7,I6)") message, " jid=", job_id
     end if
   end subroutine debug_message
 
