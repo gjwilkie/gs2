@@ -114,6 +114,8 @@ contains
     integer :: iz_row, iz_col, is, it, ik, index_gryfx_row, index_gryfx_col
     integer :: spec_max
 
+    return
+
     allocate(array_temp(naky*ntheta0*2*ntgrid*nspec))
 
     array_temp = array
@@ -202,18 +204,28 @@ contains
   end subroutine deallocate_gryfx_zonal_arrays    
 
   subroutine init_gs2_gryfx_c(strlen, run_name, mp_comm, &
+                            nz, &
                             gryfx_theta, &
                             gryfx_parameters) &
                             bind(c, name='init_gs2')
     use iso_c_binding
     use theta_grid, only: ntgrid
+    use mp, only: proc0, broadcast
     implicit none
     integer(c_int), intent(in) :: strlen
     character(kind=c_char), intent(in) :: run_name
     integer(c_int), intent(in) :: mp_comm
-    real*8, intent(in), dimension(2*ntgrid) :: gryfx_theta
+    real(c_float), intent(in), dimension(nz) :: gryfx_theta
     type(gryfx_parameters_type), intent(in) :: gryfx_parameters
-    call init_gs2_gryfx(strlen, run_name, mp_comm, gryfx_theta,gryfx_parameters)
+    integer(c_int), intent(in) :: nz
+    real*8, dimension(nz) :: gryfx_theta_real
+
+
+    gryfx_theta_real = gryfx_theta
+    !call broadcast(gryfx_theta_real)
+
+    write (*,*) 'gryfx_theta_real is ', gryfx_theta_real
+    call init_gs2_gryfx(strlen, run_name, mp_comm, gryfx_theta_real ,gryfx_parameters)
 
   end subroutine init_gs2_gryfx_c
 
@@ -228,7 +240,7 @@ contains
     use theta_grid, only: ntgrid
     use nonlinear_terms, only: gryfx_zonal
     use file_utils, only: run_name
-    use mp, only: proc0, mp_abort
+    use mp, only: proc0, mp_abort, broadcast
     use unit_tests, only: debug_message
     use geometry, only: equal_arc
 
@@ -236,7 +248,7 @@ contains
     integer, intent(in) :: strlen
     character (len=strlen), intent (in) :: file_name
     integer, intent(in) :: mp_comm
-    real*8, intent(in), dimension(2*ntgrid) :: gryfx_theta
+    real*8, intent(inout), dimension(2*ntgrid) :: gryfx_theta
     type(gryfx_parameters_type), intent(in) :: gryfx_parameters
 
     !gryfx_zonal%on = .true.
@@ -271,10 +283,16 @@ contains
     call initialize_diagnostics(state)
     call debug_message(verb, 'initialize_diagnostics complete.')
 
-    if (equal_arc) call mp_abort(&
+    call broadcast(equal_arc)
+    if (equal_arc) then
+      write (*,*) 'equal_arc true'
+      call mp_abort(&
       "gs2_gryfx_zonal doesn't work with equal_arc yet", .true.)
+    end if
     
     call allocate_gryfx_zonal_arrays
+
+    call broadcast(gryfx_theta)
     call create_interp_matrices(gryfx_theta)
 
 contains
