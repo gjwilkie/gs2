@@ -1508,7 +1508,7 @@ contains
 
 
     !AJ Free communicators associated with this ky block
-    if(self%ky_sub_all%id .ne. self%parent_sub%id) then
+    if((self%ky_sub_all%id .ne. self%parent_sub%id).and.self%ky_sub_all%nproc.gt.0) then
 !       write(*,*) 'free comm ky',self%ky_sub_all%id
        call free_comm(self%ky_sub_all)
     end if
