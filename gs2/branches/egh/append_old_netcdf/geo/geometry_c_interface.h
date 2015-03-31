@@ -108,4 +108,5 @@ struct constant_coefficients_struct {
     double kxfac;
     double aminor;
     double drhodpsin;
+    double bi;
 };
