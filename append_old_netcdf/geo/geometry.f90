@@ -4,7 +4,7 @@ module geometry
 
   private
 
-  public :: beta_a_fun, eikcoefs, geofax, iofrho, pbarofrho
+  public :: beta_a_fun, eikcoefs, geofax, iofrho, pbarofrho, bi_out
   public :: qfun, rpofrho, rcenter, init_theta, nth_get, f_trap  !procedures
   public :: psi, cvdrift, theta, dvdrhon, surfarea
   public :: rhoc, nperiod, eqfile, irho, iflux, local_eq, gen_eq
@@ -38,7 +38,7 @@ module geometry
 
   real :: rhoc, rmaj, r_geo, shift, dbetadrho, kxfac
   real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho, asym, asympri
-  real :: delrho, rmin, rmax, qsf, aminor
+  real :: delrho, rmin, rmax, qsf, aminor, bi_out
   
   real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input
   real :: alpha_input, dp_mult
@@ -187,6 +187,7 @@ module geometry
     real :: kxfac
     real :: aminor
     real :: drhodpsin
+    real :: bi
   end type constant_coefficients_type
 
   type(coefficients_type) :: output_coefficients
@@ -1016,6 +1017,10 @@ if (debug) write(6,*) "eikcoefs: end gradients"
     end if
 
     if(isym == 1) call sym(gradpar, 0, ntgrid)
+     
+    
+    ! EGH added this for GRYFX
+    bi_out = btori(rgrid(0),theta(0))
 
     ! In the GK equation we have dg/dl.
     ! Our parallel coordinate is theta, so the term is 
@@ -3740,6 +3745,7 @@ end subroutine geometry_get_coefficients
 
 subroutine geometry_get_constant_coefficients(constant_coefficients_out)
   use geometry, only: qsf, rmaj, shat, kxfac, aminor, drhodpsin, gradpar
+  use geometry, only: bi_out
   use geometry, only: constant_coefficients_type, constant_coefficients
   implicit none
   type(constant_coefficients_type), intent(out) :: constant_coefficients_out
@@ -3750,6 +3756,7 @@ subroutine geometry_get_constant_coefficients(constant_coefficients_out)
   constant_coefficients%kxfac = kxfac
   constant_coefficients%aminor = aminor
   constant_coefficients%drhodpsin = drhodpsin
+  constant_coefficients%bi = bi_out
   constant_coefficients_out = constant_coefficients
   
 end subroutine geometry_get_constant_coefficients
