@@ -18,8 +18,9 @@
 !==============================================================================
 
 &optimisation_config
- nstep_measure = 6
- max_unused_procs = 0
+ nstep_measure = 5
+ max_unused_procs = -1
+
 /
 !==============================
 !GENERAL PARAMETERS  
