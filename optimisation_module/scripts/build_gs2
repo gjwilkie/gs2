@@ -17,6 +17,7 @@ OPTIONS:
    -t <VAL>    Run a particular test (automatically implies -o tests)
    -v <VAL>    Set the verbosity for tests (0-5)
    -d          Build with DEBUG=on
+	 -n          When used with tests, build but don't run the tests.
    -o <VAL>    Specify operation to perform, can be one of:
                      ls              : List the supported systems 
                      help            : Prints the long help
@@ -109,7 +110,7 @@ MAKE_OPTIONAL_COMMAND=""
 COMMAND="build"
 
 #Parse arguments
-while getopts "hds:c:o:t:v:" OPTIONS
+while getopts "hdns:c:o:t:v:" OPTIONS
 do
   case ${OPTIONS} in
     h)
@@ -124,6 +125,9 @@ do
       ;;
     d)
       DBGFLAG=DEBUG=on
+      ;;
+    n)
+      TESTNORUNFLAG=TESTNORUN=true
       ;;
     o)
       COMMAND=${OPTARG}
@@ -145,7 +149,7 @@ do
 done
 
 # Define combined make flags
-MAKEFLAGSALL="$MAKEFLAGS $DBGFLAG $VERBSET GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND" 
+MAKEFLAGSALL="$MAKEFLAGS $DBGFLAG $TESTNORUNFLAG $VERBSET GK_SYSTEM=$GK_SYSTEM $MAKE_OPTIONAL_COMMAND" 
 
 #Now perform operation
 case $COMMAND in 
