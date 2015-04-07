@@ -149,6 +149,7 @@ contains
     call init_diagnostics_velocity_space(gnostics)
     call init_diagnostics_antenna(gnostics)
     if (gnostics%write_heating) call init_diagnostics_heating(gnostics)
+    if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
     call read_input_file_and_get_size(gnostics)
     
     call sdatio_init(gnostics%sfile, trim(run_name)//'.out.nc')
@@ -175,6 +176,8 @@ contains
     end if
     call debug_message(gnostics%verbosity, &
       'gs2_diagnostics_new::init_gs2_diagnostics_new opened file')
+
+    ! Vital that other procs know we are appending
     call broadcast(gnostics%appending)
 
     !All procs initialise dimension data but if not parallel IO
@@ -185,29 +188,28 @@ contains
     call debug_message(gnostics%verbosity, &
       'gs2_diagnostics_new::init_gs2_diagnostics_new created dimensions')
 
-    if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
 
     call debug_message(gnostics%verbosity, &
       'gs2_diagnostics_new::init_gs2_diagnostics_new finished')
     
-    if(proc0.and.debug) write (*,*) 'finished initializing new diagnostics'
   end subroutine init_gs2_diagnostics_new
   
   subroutine check_parameters
     use run_parameters, only: fapar
     use file_utils, only: error_unit
+    use mp, only: proc0
     implicit none
     if ((gnostics%print_line .or. gnostics%write_line) .and. .not.(gnostics%write_fields.and.gnostics%write_omega)) then 
-       write (error_unit(), *) 'print_line and write_line require both write_fields and write_omega... enabling'
+      if (proc0) write (error_unit(), *) 'print_line and write_line require both write_fields and write_omega... enabling'
        gnostics%write_fields = .true.
        gnostics%write_omega = .true.
     end if
     if ((gnostics%print_flux_line .or. gnostics%write_flux_line) .and. .not.gnostics%write_fields) then 
-       write (error_unit(), *) 'print_flux_line and write_flux_line require both write_fields ... enabling'
+      if (proc0) write (error_unit(), *) 'print_flux_line and write_flux_line require both write_fields ... enabling'
        gnostics%write_fields = .true.
     end if
     if (gnostics%write_jext .and. .not. fapar .gt. epsilon(0.0)) then
-       write (*,*) "ERROR: it doesn't make sense to switch on write_jext without apar"
+      if (proc0) write (*,*) "ERROR: it doesn't make sense to switch on write_jext without apar"
        !SHOULD THIS BE MP_ABORT? COULD WE NOT JUST DISABLE THE DIAGNOSTIC?
        stop 1
     end if
