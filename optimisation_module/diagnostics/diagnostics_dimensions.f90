@@ -86,6 +86,7 @@ contains
     endif
     self%is_unlimited=(self%length.eq.SDATIO_UNLIMITED)
     self%initialised=.true.
+    call debug_message(4, 'finished initializing dimension '//dim_name_in)
   end subroutine dimension_type_init
   
   !>Attach the dimension to file

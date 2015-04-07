@@ -1287,7 +1287,7 @@ if (debug) write(6,*) 'get_namelists: returning'
 
     if (.not.nonlin) return
     write (report_unit, fmt="('yxf sweetspot #proc up to:',i8)") npmax 
-    maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky)/2+1
+    maxfacs=max(nspec,negrid,nlambda,2,2*ntgrid+1,naky,nx)/2+1
     allocate (spfacs(maxfacs),efacs(maxfacs),lfacs(maxfacs),sgfacs(maxfacs),tgfacs(maxfacs),kxfacs(maxfacs),facs(maxfacs,6))
     call factors (nspec, nspfacs, spfacs)
     call factors (negrid, nefacs, efacs)

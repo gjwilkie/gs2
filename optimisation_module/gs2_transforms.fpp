@@ -1141,8 +1141,11 @@ contains
        g(:,:,iglo) = g(:,:,iglo) / 2.0
     end do
 
+    call debug_message(4, 'gs2_transforms::transform2_5d calling transform_x')
     call transform_x (g, xxf)
+    call debug_message(4, 'gs2_transforms::transform2_5d calling transform_y')
     call transform_y (xxf, yxf)
+    call debug_message(4, 'gs2_transforms::transform2_5d calling finished')
   end subroutine transform2_5d
 
   subroutine inverse2_5d (yxf, g)

@@ -95,9 +95,10 @@
 !ALGORITHMIC CHOICES  
 !==============================
 &fields_knobs
- field_local_allreduce = .true.
-  field_subgath = .true. ! Set to TRUE to use allgatherv to fetch part of the
-   do_smart_update = .true. !
+ field_subgath = .true. ! Set to TRUE to use allgatherv to fetch part of the field update calculated on other procs. FALSE uses a sum_allreduce instead.
+ do_smart_update = .true. ! 
+ field_local_allreduce = .true. ! 
+ field_local_allreduce_sub = .true. ! 
  field_option = "implicit" ! Controls which time-advance algorithm is used for the linear terms.
 /
 

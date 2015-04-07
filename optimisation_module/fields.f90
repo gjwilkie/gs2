@@ -317,15 +317,18 @@ contains
 
     !Set the solve type specific flags
     call set_dump_and_read_response(dump_response, read_response)
-    select case (fieldopt_switch)
-    case (fieldopt_implicit)
-    case (fieldopt_test)
-    case (fieldopt_local)
+    !select case (fieldopt_switch)
+    !case (fieldopt_implicit)
+    !case (fieldopt_test)
+    !case (fieldopt_local)
+    ! EGH commented it out as we want to be able to 
+    ! change field option dynamically and so we want
+    ! these parameters to be broadcast in all circumstances.
        call broadcast (minNrow)
        call broadcast (do_smart_update)
        call broadcast (field_local_allreduce)
        call broadcast (field_local_allreduce_sub)
-    end select
+    !end select
   end subroutine read_parameters
 
   subroutine set_dump_and_read_response(dump_flag, read_flag)
