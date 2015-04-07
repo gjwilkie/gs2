@@ -3,7 +3,6 @@
 module unit_tests
   use runtime_tests, only: verbosity
 
-
   implicit none 
 
   private
@@ -33,13 +32,6 @@ module unit_tests
 
   !> Returns true when the verbosity is greater than or equal to the argument
   public :: should_print
-  
-  !> Print a debug message if verbosity is higher than given verbosity_level.
-  !! Also print list mode/trinity job id if appropriate
-  public :: debug_message
-
-  !> Set job id, for running in list mode or within trinity
-  public :: set_job_id
 
   public :: announce_module_test
   public :: close_module_test
@@ -48,17 +40,13 @@ module unit_tests
 
   public :: verbosity
 
-  !> Trinity or list mode job id
-  public :: job_id
-
-! HJL Moved here from gs2_main
+  ! HJL Moved here from gs2_main
   public :: functional_test_flag
   public :: ilast_step
 
   logical :: functional_test_flag = .false.
   integer :: ilast_step
-  integer :: job_id
- 
+
   interface agrees_with
      module procedure agrees_with_real
      module procedure agrees_with_real_1d_array
@@ -137,14 +125,9 @@ contains
 
   function should_print(verbosity_level)
     use mp, only: proc0
-    use mp, only: mp_initialized
     integer, intent(in) :: verbosity_level
     logical :: should_print
-    if (mp_initialized) then 
-      should_print = (proc0 .and. verbosity() .ge. verbosity_level) .or. verbosity() .gt. 3
-    else
-      should_print = (verbosity() .ge. verbosity_level)
-    end if
+    should_print = (proc0 .and. verbosity() .ge. verbosity_level) .or. verbosity() .gt. 3
   end function should_print
 
   subroutine should_be_int(val, rslt)
@@ -163,16 +146,11 @@ contains
   end subroutine announce_test
 
   subroutine process_test(rslt, test_name)
-    use mp, only: mp_abort, mp_initialized
     logical, intent (in) :: rslt
     character(*), intent(in) :: test_name
     if (.not. rslt) then 
-      write(*,*) '--> ', test_name, ' failed', proc_message()
-      if (mp_initialized) then 
-        call mp_abort('Failed test', .true.)
-      else
-        stop 1
-      end if
+       write(*,*) '--> ', test_name, ' failed', proc_message()
+       stop 1
     end if
 
     if (should_print(1)) write (*,*) '--> ', test_name, ' passed', proc_message()
@@ -221,23 +199,6 @@ contains
     write (*,*) stars
     write (*,*) str1, str2, proc_message()
     write (*,*) stars
+
   end subroutine print_with_stars
-
-  subroutine debug_message(verbosity_level, message)
-    use mp, only: iproc, mp_initialized
-    integer, intent(in) :: verbosity_level
-    character(*), intent(in) :: message
-    if (mp_initialized) then 
-      if (should_print(verbosity_level)) write (*,*) message, " jid=", job_id, &
-        " iproc=", iproc
-    else
-      if (should_print(verbosity_level)) write (*,*) message, " jid=", job_id
-    end if
-  end subroutine debug_message
-
-  subroutine set_job_id(jid)
-    integer, intent(in) :: jid
-    job_id = jid
-  end subroutine set_job_id
-
 end module unit_tests

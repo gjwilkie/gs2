@@ -12,11 +12,7 @@ module init_g
   public :: tstart
   public :: reset_init
   public :: init_vnmult
-  public :: new_field_init
-  public :: ginitopt_restart_many
-  public :: ginitopt_restart_memory
-  private :: single_initial_kx
-  public :: restart_file
+  public :: new_field_init, restart_file
 
   ! knobs
   integer :: ginitopt_switch
@@ -586,7 +582,7 @@ contains
   end subroutine check_init_g
 
   subroutine init_init_g
-    use gs2_save, only: set_restart_file, read_many
+    use gs2_save, only: init_save, read_many
     use gs2_layouts, only: init_gs2_layouts
     use mp, only: proc0, broadcast, job
     implicit none
@@ -676,28 +672,19 @@ contains
     call broadcast (restart_eig_id)
     call broadcast (constant_random_flag)
     ! <RN
-    call set_restart_file (restart_file)
-    call broadcast(constant_random_flag)
+    call init_save (restart_file)
     
   end subroutine init_init_g
 
-  subroutine ginit (restarted, override_ginitopt_switch)
+  subroutine ginit (restarted)
     use gs2_save, only: init_tstart
     implicit none
     logical, intent (out) :: restarted
-    integer, intent(in), optional :: override_ginitopt_switch
     real :: t0
     integer :: istatus
-    integer :: ginitopt_actual
-
-    if (present(override_ginitopt_switch)) then
-      ginitopt_actual = override_ginitopt_switch
-    else
-      ginitopt_actual = ginitopt_switch
-    end if
 
     restarted = .false.
-    select case (ginitopt_actual)
+    select case (ginitopt_switch)
     case (ginitopt_default)
        call ginit_default
     case (ginitopt_default_odd)
@@ -1196,16 +1183,13 @@ contains
     use dist_fn, only: pass_right, init_pass_ends
     use redistribute, only: fill, delete_redist
     use ran, only: ranf
-    use mp, only: proc0
     use constant_random, only: init_constant_random
     use constant_random, only: finish_constant_random
     use constant_random, only: constant_ranf=>ranf
-    use unit_tests, only: job_id
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, phit
     real :: a, b
     integer :: iglo, ig, ik, it, il, is, nn
-
 
     !CMR: need to document tracer phit parameter   ;-)
     phit = 0.
@@ -1214,7 +1198,6 @@ contains
 ! extra factor of 4 to reduce the high k wiggles for now
        phit (:, it, 1) = (-1)**nn*exp(-8.*(real(nn)/ntheta0)**2)
     end do
-
     
     ! keep old (it, ik) loop order to get old results exactly: 
 
@@ -1350,15 +1333,6 @@ contains
        g(:,2,:) = g(:,1,:)
        gnew = g
     endif
-
-    ! EGH Leave below until bug #36 is closed.
-    !iglo = (g_lo%ulim_proc - g_lo%llim_proc)/4 + g_lo%llim_proc
-    !if (.not. proc0) write (*,*) 'iglo jjj', iglo
-    !if (.not. proc0) write (*,*) 'it, ik jjj', it_idx(g_lo, iglo), ik_idx(g_lo, iglo)
-!
-    !if (.not. proc0) write (*,*) 'gvalue in init jjjj 2', g(-5,1,iglo), job_id
-    !if (.not. proc0) write (*,*) 'gnewvalue in init jjjj 2', gnew(-5,1,iglo), job_id
-    !if (.not. proc0) write (*,*) 'gnewvalue sum kkkk', sum(real(conjg(gnew)*gnew)), job_id
   end subroutine ginit_noise
 
   !> Initialize with a single parallel mode. Only makes sense in a linear 
@@ -3533,15 +3507,13 @@ contains
     use dist_fn_arrays, only: g, gnew
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use gs2_save, only: gs2_restore
-    use mp, only: proc0, job
+    use mp, only: proc0
     use file_utils, only: error_unit
     use run_parameters, only: fphi, fapar, fbpar
     implicit none
     integer :: istatus, ierr
 
     call gs2_restore (g, scale, istatus, fphi, fapar, fbpar)
-
-    !write (*,*) 'RESTARTING ON JOB', job
 
     if (istatus /= 0) then
        ierr = error_unit()

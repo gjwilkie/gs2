@@ -44,7 +44,6 @@ module gs2_transforms
 
   logical :: initialized=.false., initialized_x=.false., initialized_y_fft=.false.
   logical :: initialized_x_redist=.false., initialized_y_redist=.false., initialized_3d=.false.
-  logical :: initialized_zf = .false.
 
   interface transform_x
      module procedure transform_x5d
@@ -1654,9 +1653,10 @@ contains
     use fft_work, only: init_z
     implicit none
     integer, intent (in) :: ntgrid, howmany
+    logical :: done = .false.
 
-    if (initialized_zf) return
-    initialized_zf = .true.
+    if (done) return
+    done = .true.
 
     call init_z (zf_fft, 1, 2*ntgrid, howmany)
     
@@ -1715,7 +1715,6 @@ contains
     initialized_y_redist = .false.
     initialized_3d = .false.
     xfft_initted = .false.
-    initialized_zf = .false.
     
     !Tidy up fft internals (FFTW3 only)
     call finish_fft_work

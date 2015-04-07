@@ -27,7 +27,6 @@ module diagnostics_config
      real :: total_momentum_flux
      real :: total_particle_flux
      real :: max_growth_rate
-     real :: diffusivity
 
      ! Individual heat fluxes
      real, dimension(:), allocatable :: species_es_heat_flux
@@ -48,10 +47,6 @@ module diagnostics_config
      ! Heating
      real, dimension(:), allocatable :: species_heating
      real, dimension(:), allocatable :: species_heating_avg
-
-     ! Growth rates
-     complex, dimension(:,:), allocatable :: omega_average
-
   end type results_summary_type
 
   !> A type for storing the diagnostics configuration,
@@ -77,10 +72,9 @@ module diagnostics_config
      logical :: is_trinity_run
      real :: user_time
      real :: user_time_old
-     real :: start_time
      real, dimension(:), allocatable :: fluxfac
      integer :: nwrite
-     integer :: nwrite_mult
+     integer :: nwrite_large
      logical :: write_any
      logical :: enable_parallel
      logical :: serial_netcdf4
@@ -93,7 +87,7 @@ module diagnostics_config
      logical :: write_phi_over_time
      logical :: write_apar_over_time
      logical :: write_bpar_over_time
-     logical :: make_movie
+     logical :: write_movie
      logical :: dump_fields_periodically
      logical :: write_moments
      logical :: write_full_moments_notgc
@@ -111,7 +105,6 @@ module diagnostics_config
      real :: omegatol
      logical :: exit_when_converged
      logical :: write_verr
-     logical :: write_cerr
      logical :: write_max_verr
      integer :: ncheck
      logical :: write_heating
@@ -119,6 +112,7 @@ module diagnostics_config
      logical :: write_gyx
      logical :: write_g
      logical :: write_lpoly
+     logical :: write_cerr
      integer :: conv_nstep_av
      real :: conv_test_multiplier
      integer :: conv_min_step
@@ -140,18 +134,8 @@ module diagnostics_config
      logical :: write_gs
      integer :: nsave
      logical :: save_for_restart
-     logical :: save_many
      logical :: file_safety_check
      logical :: save_distfn
-     logical :: write_omavg
-     logical :: write_gg
-     logical :: ob_midplane
-     logical :: write_nl_flux
-     logical :: write_hrate
-     logical :: write_avg_moments
-     logical :: dump_check1
-     logical :: dump_check2
-     integer :: nmovie
   end type diagnostics_type
 
   !> Used for testing... causes screen printout to be 
@@ -175,7 +159,6 @@ contains
 
   subroutine allocate_current_results(gnostics)
     use species, only: nspec
-    use kt_grids, only: naky, ntheta0
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
 
@@ -192,7 +175,6 @@ contains
     allocate(gnostics%current_results%species_particle_flux_avg(nspec))
     allocate(gnostics%current_results%species_heating(nspec))
     allocate(gnostics%current_results%species_heating_avg(nspec))
-    allocate(gnostics%current_results%omega_average(ntheta0, naky))
   end subroutine allocate_current_results
 
   subroutine deallocate_current_results(gnostics)
@@ -202,9 +184,6 @@ contains
     ! how to correctly deallocate the derived type
     !<DD>What's written below should work fine, just need to
     !deallocate anything explicitly allocated.
-    ! EGH: I know what the problem is, the results should be pointers
-    ! and not allocatable because they are in a derived type. Will
-    ! fix shortly.
     return
     
     ! One call deallocates gnostics and all allocatable arrays 
@@ -229,7 +208,7 @@ contains
     implicit none
     type(diagnostics_type), intent(out) :: gnostics
     integer :: nwrite
-    integer :: nwrite_mult
+    integer :: nwrite_large
     logical :: write_any
     logical :: enable_parallel
     logical :: serial_netcdf4
@@ -242,7 +221,7 @@ contains
     logical :: write_phi_over_time
     logical :: write_apar_over_time
     logical :: write_bpar_over_time
-    logical :: make_movie
+    logical :: write_movie
     logical :: dump_fields_periodically
     logical :: write_moments
     logical :: write_full_moments_notgc
@@ -260,7 +239,6 @@ contains
     real :: omegatol
     logical :: exit_when_converged
     logical :: write_verr
-    logical :: write_cerr
     logical :: write_max_verr
     integer :: ncheck
     logical :: write_heating
@@ -268,6 +246,7 @@ contains
     logical :: write_gyx
     logical :: write_g
     logical :: write_lpoly
+    logical :: write_cerr
     integer :: conv_nstep_av
     real :: conv_test_multiplier
     integer :: conv_min_step
@@ -289,21 +268,11 @@ contains
     logical :: write_gs
     integer :: nsave
     logical :: save_for_restart
-    logical :: save_many
     logical :: file_safety_check
     logical :: save_distfn
-    logical :: write_omavg
-    logical :: write_gg
-    logical :: ob_midplane
-    logical :: write_nl_flux
-    logical :: write_hrate
-    logical :: write_avg_moments
-    logical :: dump_check1
-    logical :: dump_check2
-    integer :: nmovie
-    namelist /gs2_diagnostics_knobs/ &
+    namelist /diagnostics_config/ &
          nwrite, &
-         nwrite_mult, &
+         nwrite_large, &
          write_any, &
          enable_parallel, &
          serial_netcdf4, &
@@ -316,7 +285,7 @@ contains
          write_phi_over_time, &
          write_apar_over_time, &
          write_bpar_over_time, &
-         make_movie, &
+         write_movie, &
          dump_fields_periodically, &
          write_moments, &
          write_full_moments_notgc, &
@@ -334,7 +303,6 @@ contains
          omegatol, &
          exit_when_converged, &
          write_verr, &
-         write_cerr, &
          write_max_verr, &
          ncheck, &
          write_heating, &
@@ -342,6 +310,7 @@ contains
          write_gyx, &
          write_g, &
          write_lpoly, &
+         write_cerr, &
          conv_nstep_av, &
          conv_test_multiplier, &
          conv_min_step, &
@@ -363,25 +332,15 @@ contains
          write_gs, &
          nsave, &
          save_for_restart, &
-         save_many, &
          file_safety_check, &
-         save_distfn, &
-         write_omavg, &
-         write_gg, &
-         ob_midplane, &
-         write_nl_flux, &
-         write_hrate, &
-         write_avg_moments, &
-         dump_check1, &
-         dump_check2, &
-         nmovie
+         save_distfn
 
     integer :: in_file
     logical :: exist
 
     if (proc0) then
        nwrite = 10
-       nwrite_mult = 10
+       nwrite_large = 100
        write_any = .true.
        enable_parallel = .false.
        serial_netcdf4 = .false.
@@ -394,7 +353,7 @@ contains
        write_phi_over_time = .false.
        write_apar_over_time = .false.
        write_bpar_over_time = .false.
-       make_movie = .false.
+       write_movie = .false.
        dump_fields_periodically = .false.
        write_moments = .true.
        write_full_moments_notgc = .false.
@@ -403,7 +362,7 @@ contains
        write_upar_over_time = .false.
        write_tperp_over_time = .false.
        write_fluxes = .true.
-       write_fluxes_by_mode = .true.
+       write_fluxes_by_mode = .false.
        write_symmetry = .false.
        write_parity = .false.
        write_omega = .true.
@@ -412,7 +371,6 @@ contains
        omegatol = -0.001
        exit_when_converged = .true.
        write_verr = .true.
-       write_cerr = .false.
        write_max_verr = .false.
        ncheck = 10
        write_heating = .false.
@@ -420,6 +378,7 @@ contains
        write_gyx = .false.
        write_g = .false.
        write_lpoly = .false.
+       write_cerr = .false.
        conv_nstep_av = 4000
        conv_test_multiplier = 4e-1
        conv_min_step = 4000
@@ -441,24 +400,14 @@ contains
        write_gs = .false.
        nsave = 1000
        save_for_restart = .false.
-       save_many = .false.
        file_safety_check = .true.
        save_distfn = .false.
-       write_omavg = .true.
-       write_gg = .false.
-       ob_midplane = .false.
-       write_nl_flux = .true.
-       write_hrate = .false.
-       write_avg_moments = .false.
-       dump_check1 = .false.
-       dump_check2 = .false.
-       nmovie = -1
 
-       in_file = input_unit_exist ("gs2_diagnostics_knobs", exist)
-       if (exist) read (unit=in_file, nml=gs2_diagnostics_knobs)
+       in_file = input_unit_exist ("diagnostics_config", exist)
+       if (exist) read (unit=in_file, nml=diagnostics_config)
 
        gnostics%nwrite = nwrite
-       gnostics%nwrite_mult = nwrite_mult
+       gnostics%nwrite_large = nwrite_large
        gnostics%write_any = write_any
        gnostics%enable_parallel = enable_parallel
        gnostics%serial_netcdf4 = serial_netcdf4
@@ -471,7 +420,7 @@ contains
        gnostics%write_phi_over_time = write_phi_over_time
        gnostics%write_apar_over_time = write_apar_over_time
        gnostics%write_bpar_over_time = write_bpar_over_time
-       gnostics%make_movie = make_movie
+       gnostics%write_movie = write_movie
        gnostics%dump_fields_periodically = dump_fields_periodically
        gnostics%write_moments = write_moments
        gnostics%write_full_moments_notgc = write_full_moments_notgc
@@ -489,7 +438,6 @@ contains
        gnostics%omegatol = omegatol
        gnostics%exit_when_converged = exit_when_converged
        gnostics%write_verr = write_verr
-       gnostics%write_cerr = write_cerr
        gnostics%write_max_verr = write_max_verr
        gnostics%ncheck = ncheck
        gnostics%write_heating = write_heating
@@ -497,6 +445,7 @@ contains
        gnostics%write_gyx = write_gyx
        gnostics%write_g = write_g
        gnostics%write_lpoly = write_lpoly
+       gnostics%write_cerr = write_cerr
        gnostics%conv_nstep_av = conv_nstep_av
        gnostics%conv_test_multiplier = conv_test_multiplier
        gnostics%conv_min_step = conv_min_step
@@ -518,23 +467,13 @@ contains
        gnostics%write_gs = write_gs
        gnostics%nsave = nsave
        gnostics%save_for_restart = save_for_restart
-       gnostics%save_many = save_many
        gnostics%file_safety_check = file_safety_check
        gnostics%save_distfn = save_distfn
-       gnostics%write_omavg = write_omavg
-       gnostics%write_gg = write_gg
-       gnostics%ob_midplane = ob_midplane
-       gnostics%write_nl_flux = write_nl_flux
-       gnostics%write_hrate = write_hrate
-       gnostics%write_avg_moments = write_avg_moments
-       gnostics%dump_check1 = dump_check1
-       gnostics%dump_check2 = dump_check2
-       gnostics%nmovie = nmovie
 
     end if
 
     call broadcast (gnostics%nwrite)
-    call broadcast (gnostics%nwrite_mult)
+    call broadcast (gnostics%nwrite_large)
     call broadcast (gnostics%write_any)
     call broadcast (gnostics%enable_parallel)
     call broadcast (gnostics%serial_netcdf4)
@@ -547,7 +486,7 @@ contains
     call broadcast (gnostics%write_phi_over_time)
     call broadcast (gnostics%write_apar_over_time)
     call broadcast (gnostics%write_bpar_over_time)
-    call broadcast (gnostics%make_movie)
+    call broadcast (gnostics%write_movie)
     call broadcast (gnostics%dump_fields_periodically)
     call broadcast (gnostics%write_moments)
     call broadcast (gnostics%write_full_moments_notgc)
@@ -565,7 +504,6 @@ contains
     call broadcast (gnostics%omegatol)
     call broadcast (gnostics%exit_when_converged)
     call broadcast (gnostics%write_verr)
-    call broadcast (gnostics%write_cerr)
     call broadcast (gnostics%write_max_verr)
     call broadcast (gnostics%ncheck)
     call broadcast (gnostics%write_heating)
@@ -573,6 +511,7 @@ contains
     call broadcast (gnostics%write_gyx)
     call broadcast (gnostics%write_g)
     call broadcast (gnostics%write_lpoly)
+    call broadcast (gnostics%write_cerr)
     call broadcast (gnostics%conv_nstep_av)
     call broadcast (gnostics%conv_test_multiplier)
     call broadcast (gnostics%conv_min_step)
@@ -594,18 +533,8 @@ contains
     call broadcast (gnostics%write_gs)
     call broadcast (gnostics%nsave)
     call broadcast (gnostics%save_for_restart)
-    call broadcast (gnostics%save_many)
     call broadcast (gnostics%file_safety_check)
     call broadcast (gnostics%save_distfn)
-    call broadcast (gnostics%write_omavg)
-    call broadcast (gnostics%write_gg)
-    call broadcast (gnostics%ob_midplane)
-    call broadcast (gnostics%write_nl_flux)
-    call broadcast (gnostics%write_hrate)
-    call broadcast (gnostics%write_avg_moments)
-    call broadcast (gnostics%dump_check1)
-    call broadcast (gnostics%dump_check2)
-    call broadcast (gnostics%nmovie)
     
     if (override_screen_printout_options) then 
        gnostics%print_line = .true.

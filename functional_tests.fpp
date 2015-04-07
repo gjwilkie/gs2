@@ -42,10 +42,6 @@ contains
     use gs2_diagnostics, only: get_omegaavg
     use kt_grids, only: ntheta0, naky
     use mp, only: proc0
-    use run_parameters, only: use_old_diagnostics
-#ifdef NEW_DIAG
-    use gs2_diagnostics_new, only: gnostics
-#endif
     real, dimension(naky), intent(in) :: rslt
     real, intent(in) :: err
     logical :: check_growth_rate
@@ -58,13 +54,7 @@ contains
 
     if (proc0) then
        call announce_check('growth rate')
-       if (use_old_diagnostics) then
-         call get_omegaavg(ilast_step-1, dummy, omegaavg)
-       else
-#ifdef NEW_DIAG
-         omegaavg = gnostics%current_results%omega_average
-#endif
-       end if
+       call get_omegaavg(ilast_step-1, dummy, omegaavg)
        check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
        call process_check(check_growth_rate, check_result, 'growth rate')
     end if
@@ -79,10 +69,6 @@ contains
     use kt_grids, only: aky
     use run_parameters, only: wstar_units
     use job_manage, only: njobs
-    use run_parameters, only: use_old_diagnostics
-#ifdef NEW_DIAG
-    use gs2_diagnostics_new, only: gnostics
-#endif
     implicit none
     real, intent(in) :: err
     real, dimension(naky, njobs) :: omegas
@@ -100,13 +86,7 @@ contains
 
     if (proc0) then
        !call announce_check('growth rate')
-       if (use_old_diagnostics) then
-         call get_omegaavg(ilast_step-1, dummy, omegaavg)
-       else
-#ifdef NEW_DIAG
-         omegaavg = gnostics%current_results%omega_average
-#endif
-       end if
+       call get_omegaavg(ilast_step-1, dummy, omegaavg)
        !check_result =  agrees_with(aimag(omegaavg(1,:)), rslt, err)
        !call process_check(check_growth_rate, check_result, 'growth rate')
        call scope(allprocs)
@@ -136,12 +116,10 @@ contains
   end function check_growth_rates_equal_in_list
 
   subroutine test_gs2(test_name, test_function)
-    use gs2_main, only: run_gs2, finish_gs2, old_iface_state
-    use gs2_main, only: finalize_diagnostics, finalize_equations, finalize_gs2
+    use gs2_main, only: run_gs2, finish_gs2
     use unit_tests, only: functional_test_flag, ilast_step
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use gs2_diagnostics, only: finish_gs2_diagnostics
-    use run_parameters, only: use_old_diagnostics
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
 #endif
@@ -161,17 +139,11 @@ contains
     call announce_test('results')
     call process_test(test_function(), 'results')
 
-!    if (use_old_diagnostics) then
-!      call finish_gs2_diagnostics(ilast_step)
-!#ifdef NEW_DIAG
-!    else
-!      call finish_gs2_diagnostics_new
-!#endif
-!    end if
-    !call finish_gs2
-    call finalize_diagnostics(old_iface_state)
-    call finalize_equations(old_iface_state)
-    call finalize_gs2(old_iface_state)
+    call finish_gs2_diagnostics(ilast_step)
+#ifdef NEW_DIAG
+    call finish_gs2_diagnostics_new
+#endif
+    call finish_gs2
 
     if (proc0) call close_functional_test(test_name)
 

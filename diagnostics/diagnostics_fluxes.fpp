@@ -12,9 +12,6 @@ module diagnostics_fluxes
   !> Deallocate arrays
   public :: finish_diagnostics_fluxes
 
-  !> Set averages in gnostics\%current_results to 0.
-  public :: reset_averages_and_counters
-
   !> Calculate and possibly write fluxes.  The fluxes are actually calculated
   !!  in the module dist_fn. They are returned as a function of
   !!  x, y and species. This function writes the whole array,
@@ -70,17 +67,6 @@ contains
     deallocate (pflux, pflux_tormom, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange, exchange1)
   end subroutine finish_diagnostics_fluxes
-
-
-  subroutine reset_averages_and_counters(gnostics)
-    use diagnostics_config, only: diagnostics_type
-    use mp, only: proc0
-    implicit none
-    type(diagnostics_type), intent(inout) :: gnostics
-    gnostics%current_results%species_heat_flux_avg = 0.0
-    gnostics%current_results%species_particle_flux_avg = 0.0
-    gnostics%current_results%species_momentum_flux_avg = 0.0
-  end subroutine reset_averages_and_counters
 
   subroutine calculate_fluxes(gnostics)
     use dist_fn, only: flux, lf_flux, eexchange
@@ -272,7 +258,6 @@ contains
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_dimensions, only: dim_string
     use diagnostics_config, only: diagnostics_type
-    use mp, only: sum_allreduce
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     real, dimension(ntheta0, naky) :: diffusivity_by_k
@@ -317,11 +302,6 @@ contains
           end if
        end do
     end do
-    
-    if (gnostics%distributed) call sum_allreduce(diffusivity_by_k)
-
-    gnostics%current_results%diffusivity = &
-      maxval(diffusivity_by_k) * grho(gnostics%igomega)
 
     call calculate_standard_flux_properties(gnostics, &
          'heat_flux_diff',  'Diffusive estimate of turbulent flux of heat', &

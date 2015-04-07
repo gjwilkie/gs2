@@ -33,18 +33,13 @@ ifndef TEST_LEVEL
 endif
 export TEST_LEVEL
 
-ifdef SIMPLEDATAIO_LIB_DIR_ABS
-      SDATIO_LINK=-L$(SIMPLEDATAIO_LIB_DIR_ABS)
-      SDATIO_LIB=-lsimpledataio
-endif
-
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
 #TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
 TEST_DEPS?=libgs2.a functional_tests.o benchmarks.o
 #export
-TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD) $(SDATIO_LINK)" LIBS=" -lgs2 $(SDATIO_LIB) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
+TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD)  -L$(SIMPLEDATAIO_LIB_DIR_ABS)" LIBS=" -lgs2 -lsimpledataio $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 #MAKETESTS = $(MAKE)
 
@@ -80,7 +75,7 @@ endef
 
 define RUN_TESTS
 	@find $(TEST_DIR)/$(1) -name results_of_test.txt | xargs rm -f
-	@cd $(TEST_DIR)/$(1) && time ${MAKETESTS} 
+	cd $(TEST_DIR)/$(1) && time ${MAKETESTS} 
 endef
 
 clean_tests:

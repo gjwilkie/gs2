@@ -131,8 +131,6 @@ contains
     
     ! Calculate omega_average
     omega_average = sum(omegahist/real(gnostics%navg),dim=1)
-    ! Copy the results to gnostics
-    gnostics%current_results%omega_average = omega_average
     
     if (debug) write(6,*) "calculate_omega: omega_average=",omega_average
     

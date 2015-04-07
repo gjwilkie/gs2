@@ -19,9 +19,6 @@ module fields_local
   !> User set parameters
   public :: dump_response, read_response
 
-  !> Made public for testing
-  public :: fieldmat
-
   !//////////////////////////////
   !// CUSTOM TYPES
   !//////////////////////////////
@@ -188,8 +185,6 @@ module fields_local
      !0   : Invert the field matrix
      !In the future may wish to do things like LU decomposition etc.
      !Could also do things like eigenvalue analysis etc.
-     logical :: no_populate=.false. !Advanced usage only, if true then don't populate response
-     logical :: no_prepare=.false. !Advanced usage only, if true then don't prepare (invert) response
    contains
      private
      procedure :: deallocate => fm_deallocate
@@ -1832,8 +1827,6 @@ contains
     class(fieldmat_type), intent(inout) :: self
     integer :: ifl, pts_remain, ik, is
 
-    if(self%no_populate) return
-
     !First initialise everything to 0
     g=0
     phi=0.0
@@ -2103,7 +2096,6 @@ contains
     !Exit early if we're empty
     if(self%is_empty) return
     if(.not.self%is_local) return
-    if(self%no_prepare) return
 
     !Tell each ky to prepare
     do ik=1,self%naky
@@ -3398,11 +3390,6 @@ contains
 
     call init_fields_local
 
-    ! check that we can finish and then init
-    call finish_fields_local
-
-    call init_fields_local
-
     fields_local_unit_test_init_fields_matrixlocal = .true.
 
   end function fields_local_unit_test_init_fields_matrixlocal
@@ -3590,7 +3577,6 @@ contains
 !!NOTE: Don't currently free the sub-communicators which is bad
     call pc%reset
     call fieldmat%reset
-    !reinit = .true.
     initialised=.false.
   end subroutine finish_fields_local
 

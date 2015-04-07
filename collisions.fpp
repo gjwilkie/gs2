@@ -3902,8 +3902,8 @@ contains
 !
 ! forces recalculation of coefficients in collision operator
 ! when timestep changes.
-    call finish_collisions
 !    
+    initialized = .false.  
 
   end subroutine reset_init
 
@@ -3916,7 +3916,7 @@ contains
     vnmult = 0.0
     accelerated_x = .false. ; accelerated_v = .false.
     ediffinit = .false. ; lzinit = .false. ; leinit = .false.
-    initialized = .false.  
+    call reset_init
 
     if (allocated(c_rate)) deallocate (c_rate)
     if (allocated(z0)) deallocate (z0, w0, s0)

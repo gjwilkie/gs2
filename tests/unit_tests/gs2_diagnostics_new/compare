@@ -1,5 +1,5 @@
 #!/bin/bash
-PREC="-p 4,8"
+PREC="-p 7,13"
 if [[ $1 != *"-p"* ]]
 then 
   PREC1=$PREC
@@ -10,7 +10,7 @@ then
 fi 
 if [ "$(./getncdat $1 $PREC1)" = "$(./getncdat $2 $PREC2)" ] 
 then
-	echo "T" > tmpdata.dat
+	echo "T" > test_tmp.txt
 else
-	echo "F" > tmpdata.dat
+	echo "F" > test_tmp.txt
 fi

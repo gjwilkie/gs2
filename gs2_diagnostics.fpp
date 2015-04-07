@@ -1,6 +1,6 @@
 !> The old module for calculating and writing gs2 outputs. THIS MODULE IS NOW DEPRECATED.
-!! It is scheduled to be disabled by default on 1st March 2015 and removed
-!! from the repository on 1st June 2015. Do not edit or extend this module
+!! It is scheduled to be disabled by default on 1st Jan 2015 and removed
+!! from the repository on 1st March 2015. Do not edit or extend this module
 !! in any way apart from vital fixes. Any changes you make may not be 
 !! transferred to the new diagnostics module... please use the new diagnostics 
 !! module contained in the diagnostics folder instead.
@@ -440,8 +440,8 @@ contains
 
     if (proc0) write (*,*) " WARNING: &
         & THE OLD DIAGNOSTICS MODULE IS NOW DEPRECATED.&
-        & It is scheduled to be disabled by default on 1st March 2015 and removed&
-        & from the repository on 1st June 2015. Do not edit or extend this module&
+        & It is scheduled to be disabled by default on 1st Jan 2015 and removed&
+        & from the repository on 1st March 2015. Do not edit or extend this module&
         & in any way apart from vital fixes. Any changes you make may not be &
         & transferred to the new diagnostics module... please use the new diagnostics &
         & module contained in the diagnostics folder instead. PLEASE AMEND YOUR &
@@ -828,8 +828,6 @@ contains
     use antenna, only: dump_ant_amp
     use kt_grids, only: naky, ntheta0
     use gs2_time, only: user_time, user_dt
-    use le_grids, only: finish_weights
-    use unit_tests, only: debug_message
 
     implicit none
     integer, intent (in) :: istep
@@ -837,14 +835,10 @@ contains
     complex, dimension (ntheta0, naky) :: phi0
     logical :: last = .true.
 
-    call debug_message(3, 'gs2_diagnostics::finish_gs2_diagnostics &
-      & starting')
-
     if (write_gyx) call write_fyx (phinew,bparnew,last)
     if (write_g) call write_f (last)
     if (write_lpoly) call write_poly (phinew, bparnew, last, istep)
     if (write_cerr) call collision_error (phinew, bparnew, last)
-    if (write_verr .and. proc0) call finish_weights
 
     !Close some of the open ascii output files
     call close_files

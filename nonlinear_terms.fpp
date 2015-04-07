@@ -725,7 +725,6 @@ contains
   end subroutine finish_init
 
   subroutine finish_nonlinear_terms
-    use gs2_transforms, only: finish_transforms
 
     implicit none
 
@@ -735,7 +734,6 @@ contains
     nonlin = .false. ; alloc = .true. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
 
-    call finish_transforms
   end subroutine finish_nonlinear_terms
 end module nonlinear_terms
 

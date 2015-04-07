@@ -24,9 +24,7 @@ program test_gs2_diagnostics_new
     use gs2_main, only: run_gs2, finish_gs2
     use unit_tests
     use unit_tests, only: should_print
-#ifdef NEW_DIAG
     use diagnostics_config, only: override_screen_printout_options
-#endif
     use mp, only: init_mp, mp_comm, proc0, test_driver_flag, finish_mp
     use mp, only: broadcast
     use gs2_diagnostics, only: finish_gs2_diagnostics
@@ -35,14 +33,10 @@ program test_gs2_diagnostics_new
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
     use gs2_diagnostics_new, only: gnostics
 #endif
-    use run_parameters, only: use_old_diagnostics
-    use species, only: nspec
     implicit none
     integer :: n_vars, n_file_names
     integer :: i
     real :: eps
-    real, dimension(:), allocatable :: pfluxav, qfluxav, heatav, vfluxav
-    !real :: vfluxav
 
     character(len=40), dimension(200) :: variables, new_variables, n_lines, file_names, n_lines_files
       !variables = (/'lambda', 'phi'/), &
@@ -93,8 +87,8 @@ program test_gs2_diagnostics_new
     new_variables(15) = 'omega_average'
     n_lines(15) = '4'
     
-    variables(16) = 'ntot00  -p 4,8'
-    new_variables(16) = 'ntot_flxsurf_avg  -p 4,8'
+    variables(16) = 'ntot00  -p 7,11'
+    new_variables(16) = 'ntot_flxsurf_avg  -p 7,11'
     n_lines(16) = '20'
 
     variables(17) = 'phi0'
@@ -108,11 +102,6 @@ program test_gs2_diagnostics_new
     n_vars = 18
 
 
-      ! Note that heat and heat2 no longer pass because the comparison
-      ! is no longer between files output from the same run but between
-      ! files output from two successive runs. This causes changes greater
-      ! than the precision of the heat and heat2 files. EGH
-      ! Thus they are skipped.
     file_names(1) = 'heat'
     n_lines_files(1) = '16'
     file_names(2) = 'heat2'
@@ -134,80 +123,55 @@ program test_gs2_diagnostics_new
 
   ! Here we switch on print_line and print_flux_line if we have 
   ! high verbosity... tests if they are working.
-
-#ifdef NEW_DIAG  
+  
   if (proc0) override_screen_printout_options = should_print(3)
   call broadcast(override_screen_printout_options)
-#endif
 
-  test_driver_flag = .true.
-  functional_test_flag = .true.
+    test_driver_flag = .true.
+    functional_test_flag = .true.
 
-  call announce_module_test("gs2_diagnostics_new")
+   call announce_module_test("gs2_diagnostics_new")
 
-  call run_gs2(mp_comm)
+    call run_gs2(mp_comm)
 
 
-  !call announce_test('results')
-  !call process_test(test_function(), 'results')
+    !call announce_test('results')
+    !call process_test(test_function(), 'results')
 
 #ifdef NEW_DIAG
     if (proc0) then
-      if (use_old_diagnostics) then 
-        open(120349, file='averages.dat', status="replace", action="write")
-        write(120349, *) qflux_avg
-        write(120349, *) pflux_avg
-        write(120349, *) vflux_avg
-        write(120349, *) heat_avg
-        close(120349)
-      else
-        allocate(qfluxav(nspec), pfluxav(nspec), heatav(nspec), vfluxav(nspec))
-        open(120349, file='averages.dat')
-        read(120349, *) qfluxav
-        read(120349, *) pfluxav
-        read(120349, *) vfluxav
-        read(120349, *) heatav
-        close(120349)
-        call announce_test("average heat flux")
-        call process_test( &
-          agrees_with(gnostics%current_results%species_heat_flux_avg, qfluxav, eps), &
-          "average heat flux")
-        call announce_test("average momentum flux")
-        call process_test( &
-          agrees_with(gnostics%current_results%species_momentum_flux_avg, vfluxav, eps), &
-          "average momentum flux")
-        call announce_test("average particle flux")
-        call process_test( &
-          agrees_with(gnostics%current_results%species_particle_flux_avg, pfluxav, eps), &
-          "average particle flux")
-      end if
+      call announce_test("average heat flux")
+      call process_test( &
+        agrees_with(gnostics%current_results%species_heat_flux_avg, qflux_avg, eps), &
+        "average heat flux")
+      call announce_test("average momentum flux")
+      call process_test( &
+        agrees_with(gnostics%current_results%species_momentum_flux_avg, vflux_avg, eps), &
+        "average momentum flux")
+      call announce_test("average particle flux")
+      call process_test( &
+        agrees_with(gnostics%current_results%species_particle_flux_avg, pflux_avg, eps), &
+        "average particle flux")
     end if
 #endif
 
 
 
-    if (use_old_diagnostics) then
-      call finish_gs2_diagnostics(ilast_step)
+    call finish_gs2_diagnostics(ilast_step)
 
 #ifdef NEW_DIAG
-    else
-      call finish_gs2_diagnostics_new
+    call finish_gs2_diagnostics_new
 #endif
-    end if
     call finish_gs2
 
-    if (proc0 .and. .not. use_old_diagnostics) then
+    if (proc0) then
       do i = 1,n_vars
         call announce_test("value of "//trim(new_variables(i)))
         call process_test(test_variable(trim(variables(i)), trim(new_variables(i)), &
           trim(n_lines(i))), &
           "value of "//trim(new_variables(i)))
       end do
-      ! Note that heat and heat2 no longer pass because the comparison
-      ! is no longer between files output from the same run but between
-      ! files output from two successive runs. This causes changes greater
-      ! than the precision of the heat and heat2 files. EGH
-      do i = 3,n_file_names
+      do i = 1,n_file_names
         call announce_test("content of "//trim(file_names(i)))
         call process_test(test_file(trim(file_names(i)), trim(n_lines_files(i))), &
           "content of "//trim(file_names(i)))
@@ -231,23 +195,23 @@ contains
 #ifdef NEW_DIAG
 !    command = "if [ ""`ncdump -v "//var_name//" test_gs2_diagnostics_new.out.nc  | tail -n "//n_lines//"`"" = &
 !     &  ""`ncdump -v "//new_var_name//" test_gs2_diagnostics_new.cdf | tail -n "//n_lines//" `"" ]; &
-!     & then echo ""T"" > tmpdata.dat; fi"
+!     & then echo ""T"" > test_tmp.txt; fi"
 !    write(command,'("if [ ",A,"$(./getncdat ",A," ",A,")",A," &
 !      & = ",A,"$(./getncdat ",A," ",A,")",A," ] ; &
-!      & then echo ",A," > tmpdata.dat ; fi")') &
+!      & then echo ",A," > test_tmp.txt ; fi")') &
 !         '"',"test_gs2_diagnostics_new.out.nc",var_name,'"',&
 !         '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"',"'T'"
     
     command = ''
     write(command,'("./compare ",A,A," ",A,A," ",A,A," ",A,A," ",A,A)') &
-         '"',"old_diagnostics/test_gs2_diagnostics_new.out.nc",var_name,'"',&
-         '"',"test_gs2_diagnostics_new.out.nc",new_var_name,'"'
+         '"',"test_gs2_diagnostics_new.out.nc",var_name,'"',&
+         '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"'
     
     if (should_print(3)) write(*,*) trim(command)
-    call system(" echo ""F"" > tmpdata.dat")
+    call system(" echo ""F"" > test_tmp.txt")
     call system(command)
     test_variable = .true.
-    open(120349, file='tmpdata.dat')
+    open(120349, file='test_tmp.txt')
     read(120349, '(L)') test_variable
     close(120349)
 #endif
@@ -260,16 +224,15 @@ contains
     
     test_file=.true.
 #ifdef NEW_DIAG
-    command = "if [ ""`cat old_diagnostics/test_gs2_diagnostics_new."//file_name//"  &
-     & | tail -n "//n_lines//"`"" = &
-     &  ""`cat test_gs2_diagnostics_new."//file_name//"   | tail -n "//n_lines//"`"" ]; &
-     & then echo ""T"" > tmpdata.dat; fi"
+    command = "if [ ""`cat test_gs2_diagnostics_new."//file_name//"  | tail -n "//n_lines//"`"" = &
+     &  ""`cat test_gs2_diagnostics_new.new."//file_name//"   | tail -n "//n_lines//"`"" ]; &
+     & then echo ""T"" > test_tmp.txt; fi"
     
     if (should_print(3)) write(*,*) trim(command)
-    call system(" echo ""F"" > tmpdata.dat")
+    call system(" echo ""F"" > test_tmp.txt")
     call system(command)
     !test_= .true.
-    open(120349, file='tmpdata.dat')
+    open(120349, file='test_tmp.txt')
     read(120349, '(L)') test_file
     close(120349)
 #endif

@@ -207,7 +207,7 @@
   ! write_final_epar not specified --- If (write_ascii = T) E_parallel(theta) written to runname.eigenfunc
  write_avg_moments = .F. ! Write flux surface averaged low-order moments of g to runname.out.nc and runname.moments (if write_ascii = T)
   ! write_lorentzian not specified --- Frequency Sweep Data
- write_omega = .true. ! If (write_ascii = T) instantaneous omega to output file. Very heavy output
+ write_omega = .false. ! If (write_ascii = T) instantaneous omega to output file. Very heavy output
  write_omavg = .false. ! If (write_ascii = T) time-averaged growth rate and frequency to the output file.
  write_eigenfunc = .true. ! If (write_ascii = T) Normalized phi written to runname.eigenfunc
  write_final_fields = .true. ! If (write_ascii = T) Phi(theta) written to '.fields'
@@ -217,7 +217,7 @@
  nwrite = 10 ! Output diagnostic data every nwrite
  navg = 10 ! Any time averages performed over navg
  omegatol = -0.001 ! The convergence has to be better than one part in 1/omegatol
- omegatinst = 1.0 ! Recommended value: 500.
+ omegatinst = -1.0 ! Recommended value: 500.
  save_for_restart = .false. ! Write restart files.
   ! write_flux_line not specified --- 
   ! write_ascii not specified --- 

@@ -29,12 +29,10 @@ module gs2_save
 
   private
 
-  public :: gs2_restore, gs2_save_for_restart, finish_gs2_save
-
+  public :: gs2_restore, gs2_save_for_restart, finish_save
   public :: read_many, save_many, gs2_save_response, gs2_restore_response
   public :: restore_current_scan_parameter_value
-  public :: init_gs2_save, init_dt, init_tstart, init_ant_amp
-  public :: set_restart_file
+  public :: init_save, init_dt, init_tstart, init_ant_amp
   public :: init_vnm, restart_writable, EigNetcdfID
   public :: init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
 !# ifdef NETCDF
@@ -119,7 +117,6 @@ contains
     use dist_fn_arrays, only: vpa, vperp2
     !</DD> Added for saving distribution function
     use parameter_scan_arrays, only: current_scan_parameter_value
-    use unit_tests, only: debug_message
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
@@ -140,15 +137,11 @@ contains
 # endif
     logical :: exit
     logical :: local_init !<DD> Added for saving distribution function
-    integer, parameter :: verb = 3
 
 
 !*********-----------------------_**********************
 
     istatus = 0
-    !ncid = -1 
-    !call broadcast(ncid)
-    !call broadcast(file_proc)
     
     if (present(exit_in)) then
        exit = exit_in
@@ -166,8 +159,6 @@ contains
     total_elements = g_lo%ulim_world+1
 
     if (n_elements <= 0) return
-    
-    call debug_message(verb, 'gs2_save::gs2_save_for_restart checking init')
 
     !<DD> Added for saving distribution function
     IF (PRESENT(distfn)) THEN
@@ -224,21 +215,13 @@ contains
 
        file_proc = trim(trim(file_proc)//adjustl(suffix))          
 
-       call debug_message(verb, 'gs2_save::gs2_save_for_restart opening file')
-       call debug_message(verb, 'file proc is')
-       call debug_message(verb, file_proc)
-
 # ifdef NETCDF_PARALLEL       
        if(save_many) then
 # endif
           istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
 # ifdef NETCDF_PARALLEL
        else
-          call debug_message(verb, &
-            'gs2_save::gs2_save_for_restart calling barrier before delete file')
           call barrier
-          call debug_message(verb, &
-            'gs2_save::gs2_save_for_restart called barrier before delete file')
           
           if(iproc .eq. 0) then
              open(unit=tmpunit, file=file_proc)
@@ -246,8 +229,6 @@ contains
           end if
 
           call barrier
-          call debug_message(verb, &
-            'gs2_save::gs2_save_for_restart called barrier before opening')
 ! If using netcdf version 4.1.2 or older replace NF90_MPIIO with NF90_CLOBBER
           istatus = nf90_create (file_proc, IOR(NF90_HDF5,NF90_MPIIO), ncid, comm=mp_comm, info=mp_info)
        end if
@@ -269,7 +250,6 @@ contains
           end if
        endif
 # endif
-       call debug_message(verb, 'gs2_save::gs2_save_for_restart defining dimensions')
        
        if (n_elements > 0) then
           istatus = nf90_def_dim (ncid, "theta", 2*ntgrid+1, thetaid)
@@ -357,8 +337,6 @@ contains
        !</DD> Added for saving distribution function
        
        if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
-
-       call debug_message(verb, 'gs2_save::gs2_save_for_restart defining variables')
 
        istatus = nf90_def_var (ncid, "t0", netcdf_real, t0id)
        if (istatus /= NF90_NOERR) then
@@ -602,7 +580,6 @@ contains
        end if
     end if
 
-    call debug_message(verb, 'gs2_save::gs2_save_for_restart writing scalars')
 # ifdef NETCDF_PARALLEL                    
     if(save_many .or. iproc == 0) then
 # endif
@@ -704,7 +681,6 @@ contains
             allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
        tmpr = real(g)
-      call debug_message(verb, 'gs2_save::gs2_save_for_restart writing dist fn')
 
 # ifdef NETCDF_PARALLEL
        if(save_many) then
@@ -824,14 +800,7 @@ contains
     end if
 # endif
        
-    ! EGH Why don't we just close the file every time? As things stand
-    ! if you reinitalise the timestep in a nonlinear run, but don't have
-    ! save_for_restart true in gs2_diagnostics, then the last call to
-    ! this function will leave the file open. This is highly non-intuitive
-    ! behaviour and causes nasty error messages when you run with parallel 
-    ! netcdf.
-    !if (exit) then
-    if (.true.) then
+    if (exit) then
        i = nf90_close (ncid)
        if (i /= NF90_NOERR) &
             call netcdf_error (istatus, message='nf90_close error')
@@ -1448,17 +1417,14 @@ contains
     restart_writable=writable
   end function restart_writable
 
-  subroutine init_gs2_save
-  end subroutine init_gs2_save
-
-  subroutine set_restart_file (file)
+  subroutine init_save (file)
     character(300), intent (in) :: file
     
     restart_file = file
 
-  end subroutine set_restart_file
+  end subroutine init_save
 
-  subroutine finish_gs2_save
+  subroutine finish_save
 #ifdef NETCDF    
     if (allocated(tmpr)) deallocate(tmpr)
     if (allocated(tmpi)) deallocate(tmpi)
@@ -1470,7 +1436,7 @@ contains
     initialized = .false.
     initialized_dfn = .false.
 #endif
-  end subroutine finish_gs2_save
+  end subroutine finish_save
 
   subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
 # ifdef NETCDF
