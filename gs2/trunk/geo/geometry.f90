@@ -22,7 +22,8 @@ module geometry
   public :: qsf, rmaj, shat, kxfac, aminor, finish_geometry, drhodpsin
   public :: p_prime_input, invLp_input, beta_prime_input, alpha_input, dp_mult
   public :: gs2d_eq, idfit_eq, dfit_eq, s_hat_new, beta_prime_new, debug
-  public :: job_id
+  public :: job_id, big, dbetadrho, eqinit, shotnum, xanthopoulos, rfun, tstar
+  public :: diameter, Hahm_Burrell 
 
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
