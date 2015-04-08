@@ -1143,10 +1143,10 @@ contains
 !        enddo
 !     endif
 
-    if (.not. (layout .eq. 'xyles' .or. layout .eq. 'yxles')) then
+    !if (.not. (layout .eq. 'xyles' .or. layout .eq. 'yxles')) then
       !intmom_sub = .false.
       !intspec_sub = .false.
-    end if
+    !end if
 
     !Now use the dimension splitting to work out if the various subcommunicators are
     !allowed.

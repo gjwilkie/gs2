@@ -174,6 +174,9 @@ module le_grids
   type (redist_type), save :: energy_map
   type (redist_type), save :: g2le
 
+  integer, dimension(:),allocatable :: recvcnts_intspec,displs_intspec
+  integer :: sz_intspec, local_rank_intspec
+
 contains
 
   subroutine wnml_le_grids(unit)
@@ -763,8 +766,6 @@ contains
     complex, dimension (:), allocatable :: total_flat
     complex, dimension (:,:,:), allocatable :: total_transp
     integer :: nl,nr, ik, it, iglo, ip, ie,is,il, ig
-    integer, dimension(:),allocatable,save :: recvcnts,displs
-    integer, save :: sz, local_rank
 
     !If not using sub-communicators then just use original method
     !Note that if x and y are entirely local then we force intspec_sub=.false.
@@ -783,25 +784,25 @@ contains
 
     !->First intialise gather vars
     !Note: We only do this on the first call !!May be better to move this to some init routine?
-    if(.not.allocated(recvcnts)) then
+    if(.not.allocated(recvcnts_intspec)) then
        !Get subcomm size
-       call nproc_comm(g_lo%lesblock_comm,sz)
+       call nproc_comm(g_lo%lesblock_comm,sz_intspec)
 
        !Get local rank
-       call rank_comm(g_lo%lesblock_comm,local_rank)
+       call rank_comm(g_lo%lesblock_comm,local_rank_intspec)
 
        !Create displacement and receive count arrays
-       allocate(recvcnts(sz),displs(sz))
+       allocate(recvcnts_intspec(sz_intspec),displs_intspec(sz_intspec))
 
-       do ip=0,sz-1
-          displs(ip+1)=MIN(g_lo%les_kxky_range(1,ip)*(2*ntgrid+1),ntheta0*naky*(2*ntgrid+1)-1)
-          recvcnts(ip+1)=MAX((g_lo%les_kxky_range(2,ip)-g_lo%les_kxky_range(1,ip)+1)*(2*ntgrid+1),0)
+       do ip=0,sz_intspec-1
+          displs_intspec(ip+1)=MIN(g_lo%les_kxky_range(1,ip)*(2*ntgrid+1),ntheta0*naky*(2*ntgrid+1)-1)
+          recvcnts_intspec(ip+1)=MAX((g_lo%les_kxky_range(2,ip)-g_lo%les_kxky_range(1,ip)+1)*(2*ntgrid+1),0)
        enddo
     endif
 
     !Allocate array and ensure is zero
-    allocate(total_flat(g_lo%les_kxky_range(1,local_rank)*&
-         (2*ntgrid+1):(1+g_lo%les_kxky_range(2,local_rank))*(2*ntgrid+1)))
+    allocate(total_flat(g_lo%les_kxky_range(1,local_rank_intspec)*&
+         (2*ntgrid+1):(1+g_lo%les_kxky_range(2,local_rank_intspec))*(2*ntgrid+1)))
     total_flat=0.
 
     !Performed integral (weighted sum) over local velocity space and species
@@ -849,10 +850,10 @@ contains
 !    print*,"xyblock_comm = ",g_lo%xyblock_comm
 
     if(g_lo%x_before_y)then
-       call allgatherv(total_flat,recvcnts(local_rank+1),total,recvcnts,displs,g_lo%lesblock_comm)
+       call allgatherv(total_flat,recvcnts_intspec(local_rank_intspec+1),total,recvcnts_intspec,displs_intspec,g_lo%lesblock_comm)
     else
        allocate(total_transp(0:2*ntgrid,naky,ntheta0))
-       call allgatherv(total_flat,recvcnts(local_rank+1),total_transp,recvcnts,displs,g_lo%lesblock_comm)
+       call allgatherv(total_flat,recvcnts_intspec(local_rank_intspec+1),total_transp,recvcnts_intspec,displs_intspec,g_lo%lesblock_comm)
        do ig=0,2*ntgrid
           total(ig,:,:)=transpose(total_transp(ig,:,:))
        enddo
@@ -3866,6 +3867,8 @@ contains
     if (allocated(xi)) deallocate (xi)
     if (allocated(ixi_to_il)) deallocate (ixi_to_il)
     if (allocated(ixi_to_isgn)) deallocate (ixi_to_isgn)
+    if (allocated(recvcnts_intspec)) deallocate (recvcnts_intspec)
+    if (allocated(displs_intspec)) deallocate (displs_intspec)
 
     !Deallocate redistribute maps
     call delete_redist(lambda_map)
