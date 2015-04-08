@@ -129,7 +129,7 @@ module eigval
   logical, parameter :: allow_command_line_settings=.true.    
   character(len=12),parameter :: nml_name="eigval_knobs"
   real, save :: time_eigval(2)=0.
-
+  complex :: target_gs2 !Don't really want this here but is here for testing the EPSSetArbitrarySelection approach
 contains
 
   !>Returns true if GS2 was compiled with WITH_EIG defined
@@ -488,6 +488,8 @@ contains
     eps_settings%targ_re=targ_re
     eps_settings%targ_im=targ_im
     eps_settings%target=cmplx(targ_re,targ_im)
+    target_gs2=eps_settings%target
+
     !Convert GS2 eigenvalue to slepc eigenvalue
     eps_settings%target_slepc=Eig_Gs2ToSlepc(eps_settings%target)
     !Initialise the dimension attributes to -1 to indicate unset
@@ -604,6 +606,22 @@ contains
           WhichType=EPS_ALL
        case(WhichUser)
           WhichType=EPS_WHICH_USER
+          !Actually with slepc <= 3.4.4 I think there's a bug in the fortran based used
+          !of EPSSetEigenvalueComparison which would be used with EPS_WHICH_USER.
+          !To work around this we can use EPSSetArbitrarySelection instead.
+          !In effect this routine takes an eigenvalue and eigenvector and returns some
+          !measure of how much we like the eigenmode. This will then be used with the
+          !WhichEigenpairs selection routine instead of the eigenvalue. As such we can
+          !use EPS_SMALLEST_MAGNITUDE and register a routine with EPSSetArbitrarySelection
+          !which returns the distance from the target to the passed eigenvalue.
+          call EPSSetArbitrarySelection(eps_solver,ArbitrarySelectionClosestMagnitude,PETSC_NULL_OBJECT,ierr)
+          WhichType=EPS_SMALLEST_MAGNITUDE
+          
+          !When using a fixed version of slepc we should be able to replace the above with
+          !call EPSSetEigenvalueComparison(eps_solver,TargetClosestMagnitude,PETSC_NULL_OBJECT,ierr)
+
+          !Note, we could of course be more selective in the "scoring" routine in order to help
+          !rule out/mark down eigenmodes which aren't "nice" (e.g. highly oscillatory etc.)
        case default
           !Should never get here
           call mp_abort("Unknown value of which_option_switch")
@@ -716,8 +734,10 @@ contains
           call mp_abort("Unknown value of transform_option_switch")
        end select
 
-       !Set the shift
-       call STSetShift(st,eps_settings%target_slepc,ierr)
+       !Set the shift 
+       !<DD>Commented out as we shouldn't really set the shift now, using
+       !EpsSetTarget instead.
+       !call STSetShift(st,eps_settings%target_slepc,ierr)
 
        !Set the type
        call STSetType(st,TransformType,ierr)
@@ -737,6 +757,53 @@ contains
        call EPSSetFromOptions(eps_solver,ierr)
     endif
   end subroutine SetupEPS
+
+  !>A routine which takes an eigenvalue and eigenvector and returns a
+  !!measure of how far this eigenvalue is from the target
+  subroutine ArbitrarySelectionClosestMagnitude(er,ei,xr,xi,rr,ri,ctx,ierr)
+    use mp, only: broadcast
+    implicit none
+    PetscScalar, intent(in) :: er, ei !Note as PetscScalar=complex, ei is 0
+    Vec, intent(in) :: xr, xi
+    PetscScalar, intent(out) :: rr, ri
+    PetscInt, intent(inout):: ctx
+    PetscErrorCode, intent(out) :: ierr
+    real :: tmp
+
+    !Set error code
+    ierr = 0
+    
+    !Set "score" to be distance from target (lower=better)
+    rr = abs(target_gs2-Eig_SlepcToGs2(er))
+    ri = 0. !Don't use imaginary part
+  end subroutine ArbitrarySelectionClosestMagnitude
+
+  !>A routine which takes two eigenvalues and indicates a preference.
+  !!To be used with EPSSetEigenvalueComparison. Prefers eigenmodes closest
+  !!to target
+  subroutine TargetClosestMagnitude(ar,ai,br,bi,res,ctx,ierr)
+    implicit none
+    PetscScalar, intent(in) :: ar, ai, br, bi
+    PetscInt, intent(out) :: res
+    PetscInt, intent(inout):: ctx
+    PetscErrorCode, intent(out) :: ierr
+    real :: disA, disB
+
+    !Set error code
+    ierr = 0
+    
+    !Calculate distances
+    disA = abs(Eig_SlepcToGs2(ar)-target_gs2)
+    disB = abs(Eig_SlepcToGs2(br)-target_gs2)
+
+    if (disA.lt.disB) then
+       res = -1 !Prefer A
+    elseif (disB.lt.disA) then
+       res = 1  !Prefer B
+    else
+       res = 0  !No preference
+    endif
+  end subroutine TargetClosestMagnitude
 
   subroutine ReportSolverSettings(eps_solver,fext)
     use mp, only: proc0
