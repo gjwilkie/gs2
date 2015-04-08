@@ -123,7 +123,7 @@ contains
     spec_max = nspec
     if (is_field) spec_max = 1
 
-    do is = 1,nspec
+    do is = 1,spec_max
       do ik = 1,naky
         do it = 1,ntheta0
           do iz_row = 1,2*ntgrid
@@ -458,13 +458,13 @@ contains
     call getmoms_gryfx(dens_ky0, upar_ky0, tpar_ky0, &
                  tprp_ky0, qpar_ky0, qprp_ky0, phi_ky0)
 
-    call interpolate_theta(gryfx_2_gs2_grid, dens_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, upar_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, tpar_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, tprp_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, qpar_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, qprp_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, phi_ky0, .true.)
+    call interpolate_theta(gs2_2_gryfx_grid, dens_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, upar_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, tpar_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, tprp_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, qpar_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, qprp_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, phi_ky0, .true.)
   end subroutine advance_gs2_gryfx
 
   subroutine finish_gs2_gryfx_c() bind(c, name='finish_gs2')
@@ -524,13 +524,13 @@ contains
     call getmoms_gryfx(dens_ky0, upar_ky0, tpar_ky0, &
             tprp_ky0, qpar_ky0, qprp_ky0, phi_ky0)
 
-    call interpolate_theta(gryfx_2_gs2_grid, dens_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, upar_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, tpar_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, tprp_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, qpar_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, qprp_ky0, .false.)
-    call interpolate_theta(gryfx_2_gs2_grid, phi_ky0, .true.)
+    call interpolate_theta(gs2_2_gryfx_grid, dens_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, upar_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, tpar_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, tprp_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, qpar_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, qprp_ky0, .false.)
+    call interpolate_theta(gs2_2_gryfx_grid, phi_ky0, .true.)
   end subroutine getmoms_gryfx_c
 
   subroutine broadcast_integer_c(a) bind(c, name='broadcast_integer')
