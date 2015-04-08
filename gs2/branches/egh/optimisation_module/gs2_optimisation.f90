@@ -416,11 +416,11 @@ write(ou,formt)bk,bk,bk,bk,bk,'b','s','a','v','c','u','u','t','t','c','u','o',bk
 
 
       if (state%init%opt_ov%field_option .eq. "implicit") then
-        state%init%opt_ov%field_subgath = .true.
-        call measure_timestep(state)
-        if (.not. state%optim%results%optimal) then
-          state%init%opt_ov%field_subgath = .false.
-        end if
+        !state%init%opt_ov%field_subgath = .true.
+        !call measure_timestep(state)
+        !if (.not. state%optim%results%optimal) then
+          !state%init%opt_ov%field_subgath = .false.
+        !end if
       else if (state%init%opt_ov%field_option .eq. "local") then
         state%init%opt_ov%do_smart_update = .true.
         call measure_timestep(state)
