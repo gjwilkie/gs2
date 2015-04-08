@@ -79,6 +79,8 @@ module overrides
     logical :: override_opt_redist_nbk
     logical :: override_opt_redist_persist
     logical :: override_opt_redist_persist_overlap
+    logical :: override_intmom_sub
+    logical :: override_intspec_sub
     logical :: override_local_field_solve
     logical :: override_layout
     logical :: override_field_option
@@ -89,6 +91,8 @@ module overrides
     logical :: opt_redist_nbk
     logical :: opt_redist_persist
     logical :: opt_redist_persist_overlap
+    logical :: intmom_sub
+    logical :: intspec_sub
     logical :: local_field_solve
     character(len=5) :: layout
     character(len=8) :: field_option
@@ -275,6 +279,8 @@ contains
     overrides_obj%override_opt_redist_nbk = .false.
     overrides_obj%override_opt_redist_persist = .false.
     overrides_obj%override_opt_redist_persist_overlap = .false.
+    overrides_obj%override_intmom_sub = .false.
+    overrides_obj%override_intspec_sub = .false.
     overrides_obj%override_local_field_solve = .false.
     overrides_obj%override_layout = .false.
     overrides_obj%override_field_option = .false.
@@ -295,6 +301,8 @@ contains
     overrides_obj%override_opt_redist_nbk = .false.
     overrides_obj%override_opt_redist_persist = .false.
     overrides_obj%override_opt_redist_persist_overlap = .false.
+    overrides_obj%override_intmom_sub = .false.
+    overrides_obj%override_intspec_sub = .false.
     overrides_obj%override_local_field_solve = .false.
     overrides_obj%override_layout = .false.
     overrides_obj%override_field_option = .false.
