@@ -121,6 +121,8 @@ parameter_list_optimisations = [
 ['logical', 'opt_redist_nbk'],
 ['logical', 'opt_redist_persist'],
 ['logical', 'opt_redist_persist_overlap'],
+['logical', 'intmom_sub'],
+['logical', 'intspec_sub'],
 ['logical', 'local_field_solve'],
 ['character(len=5)', 'layout'],
 ['character(len=8)', 'field_option'],

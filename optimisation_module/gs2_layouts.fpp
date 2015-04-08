@@ -496,6 +496,10 @@ contains
       opt_redist_persist_overlap = opt_ov%opt_redist_persist_overlap
     if (opt_ov%override_local_field_solve) &
       local_field_solve = opt_ov%local_field_solve
+    if (opt_ov%override_intmom_sub) &
+      intmom_sub = opt_ov%intmom_sub
+    if (opt_ov%override_intspec_sub) &
+      intspec_sub = opt_ov%intspec_sub
     !Disable settings if dependent settings not set
     opt_redist_persist=opt_redist_persist.and.opt_redist_nbk
     opt_redist_persist_overlap=opt_redist_persist_overlap.and.opt_redist_persist
