@@ -127,6 +127,9 @@ parameter_list_optimisations = [
 ['character(len=5)', 'layout'],
 ['character(len=8)', 'field_option'],
 ['logical', 'field_subgath'],
+['logical', 'do_smart_update'],
+['logical', 'field_local_allreduce'],
+['logical', 'field_local_allreduce_sub'],
 ['logical', 'opt_source'],
 ['integer', 'minnrow'],
 ].compact.map{|p| Generator.new(p)}

@@ -85,6 +85,9 @@ module overrides
     logical :: override_layout
     logical :: override_field_option
     logical :: override_field_subgath
+    logical :: override_do_smart_update
+    logical :: override_field_local_allreduce
+    logical :: override_field_local_allreduce_sub
     logical :: override_opt_source
     logical :: override_minnrow
     integer :: nproc
@@ -97,6 +100,9 @@ module overrides
     character(len=5) :: layout
     character(len=8) :: field_option
     logical :: field_subgath
+    logical :: do_smart_update
+    logical :: field_local_allreduce
+    logical :: field_local_allreduce_sub
     logical :: opt_source
     integer :: minnrow
     integer :: old_comm
@@ -285,6 +291,9 @@ contains
     overrides_obj%override_layout = .false.
     overrides_obj%override_field_option = .false.
     overrides_obj%override_field_subgath = .false.
+    overrides_obj%override_do_smart_update = .false.
+    overrides_obj%override_field_local_allreduce = .false.
+    overrides_obj%override_field_local_allreduce_sub = .false.
     overrides_obj%override_opt_source = .false.
     overrides_obj%override_minnrow = .false.
   end subroutine init_optimisations_overrides
@@ -307,6 +316,9 @@ contains
     overrides_obj%override_layout = .false.
     overrides_obj%override_field_option = .false.
     overrides_obj%override_field_subgath = .false.
+    overrides_obj%override_do_smart_update = .false.
+    overrides_obj%override_field_local_allreduce = .false.
+    overrides_obj%override_field_local_allreduce_sub = .false.
     overrides_obj%override_opt_source = .false.
     overrides_obj%override_minnrow = .false.
   end subroutine finish_optimisations_overrides
