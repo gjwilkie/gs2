@@ -127,6 +127,8 @@
 !==============================
 &layouts_knobs
  layout = "lexys" ! 'yxles', 'lxyes', 'lyxes', 'lexys' Determines the way the grids are laid out in memory.
+ intmom_sub=.true.
+ intspec_sub=.true.
 /
 
 !==============================
