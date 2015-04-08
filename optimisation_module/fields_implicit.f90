@@ -59,6 +59,7 @@ module fields_implicit
   logical :: linked = .false.
   logical :: field_subgath
   logical :: dump_response=.false., read_response=.false.
+  integer, dimension(:), allocatable :: recvcnts, displs
 contains
 
   subroutine init_fields_implicit
@@ -241,7 +242,6 @@ contains
     complex, dimension (:), allocatable :: u
     complex, dimension (:), allocatable :: u_small
     integer :: jflo, ik, it, nl, nr, i, m, n, dc
-    integer, dimension(:), allocatable,save :: recvcnts, displs
 
     if (proc0) call time_message(.false.,time_field,' Field Solver')
 
@@ -446,6 +446,8 @@ contains
        if (associated (aminv(i)%dcell)) deallocate (aminv(i)%dcell)
     end do
     deallocate (aminv)
+
+    if (allocated(recvcnts)) deallocate(recvcnts, displs)
 
     call finish_fields_layouts
     call finish_jfields_layouts
