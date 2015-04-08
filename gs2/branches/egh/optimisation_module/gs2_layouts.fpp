@@ -719,7 +719,7 @@ contains
 
   subroutine init_dist_fn_layouts &
        (naky, ntheta0, nlambda, negrid, nspec)
-    use mp, only: iproc, nproc, proc0
+    use mp, only: iproc, nproc, proc0, mp_abort
     use mp, only: split, mp_comm, nproc_comm, rank_comm
     use mp, only: sum_allreduce_sub
 ! TT>
@@ -1144,8 +1144,8 @@ contains
 !     endif
 
     if (.not. (layout .eq. 'xyles' .or. layout .eq. 'yxles')) then
-      intmom_sub = .false.
-      intspec_sub = .false.
+      !intmom_sub = .false.
+      !intspec_sub = .false.
     end if
 
     !Now use the dimension splitting to work out if the various subcommunicators are
@@ -1267,9 +1267,11 @@ contains
     !Now allocate and fill various arrays
     ! EGH changed the line below. We assume that if this function
     ! has been called then g_lo%les_kxky_range has not been allocated.
-    ! Because it is now a pointer its allocation status is undefined
-    ! to begin with anyway.
     !if(intspec_sub.and.(.not.allocated(g_lo%les_kxky_range))) then
+    if (allocated(g_lo%les_kxky_range)) then
+       call mp_abort("g_lo%les_kxky_range should never be allocated&
+       &at this point", .true.)
+     end if
     if(intspec_sub) then
        !->Kx-Ky range for procs in lesblock_comm sub comm
        !Get number of procs in sub-comm
@@ -2057,7 +2059,7 @@ contains
 ! > HJL
 
   subroutine finish_dist_fn_layouts
-    if (associated(g_lo%les_kxky_range)) deallocate(g_lo%les_kxky_range)
+    if (allocated(g_lo%les_kxky_range)) deallocate(g_lo%les_kxky_range)
     initialized_dist_fn_layouts = .false.
   end subroutine finish_dist_fn_layouts
 

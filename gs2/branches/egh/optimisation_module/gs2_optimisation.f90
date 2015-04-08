@@ -381,8 +381,9 @@ write(ou,formt)bk,bk,bk,bk,bk,'b','s','a','v','c','u','u','t','t','c','u','o',bk
         state%init%opt_ov%local_field_solve = .false.
       end if
 
-      if (state%init%opt_ov%layout .eq. 'xyles' .or. &
-          state%init%opt_ov%layout .eq. 'yxles') then
+      !if (state%init%opt_ov%layout .eq. 'xyles' .or. &
+          !state%init%opt_ov%layout .eq. 'yxles') then
+      if (.true.) then
         state%init%opt_ov%intmom_sub = .true.
         call measure_timestep(state)
         if (.not. state%optim%results%optimal) then
