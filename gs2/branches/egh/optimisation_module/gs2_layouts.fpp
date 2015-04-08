@@ -1139,6 +1139,11 @@ contains
 !        enddo
 !     endif
 
+    if (.not. (layout .eq. 'xyles' .or. layout .eq. 'yxles')) then
+      intmom_sub = .false.
+      intspec_sub = .false.
+    end if
+
     !Now use the dimension splitting to work out if the various subcommunicators are
     !allowed.
     if(.not.(dim_divides(g_lo%is_ord).and.dim_divides(g_lo%it_ord).and.dim_divides(g_lo%ik_ord))) then
@@ -1256,7 +1261,12 @@ contains
     endif
 
     !Now allocate and fill various arrays
-    if(intspec_sub.and.(.not.allocated(g_lo%les_kxky_range))) then
+    ! EGH changed the line below. We assume that if this function
+    ! has been called then g_lo%les_kxky_range has not been allocated.
+    ! Because it is now a pointer its allocation status is undefined
+    ! to begin with anyway.
+    !if(intspec_sub.and.(.not.allocated(g_lo%les_kxky_range))) then
+    if(intspec_sub) then
        !->Kx-Ky range for procs in lesblock_comm sub comm
        !Get number of procs in sub-comm
        call nproc_comm(g_lo%lesblock_comm,nproc_subcomm)
@@ -2043,6 +2053,7 @@ contains
 ! > HJL
 
   subroutine finish_dist_fn_layouts
+    if (associated(g_lo%les_kxky_range)) deallocate(g_lo%les_kxky_range)
     initialized_dist_fn_layouts = .false.
   end subroutine finish_dist_fn_layouts
 
