@@ -383,37 +383,37 @@ write(ou,formt)bk,bk,bk,bk,bk,'b','s','a','v','c','u','u','t','t','c','u','o',bk
 
       !if (state%init%opt_ov%layout .eq. 'xyles' .or. &
           !state%init%opt_ov%layout .eq. 'yxles') then
-      if (.true.) then
-        state%init%opt_ov%intmom_sub = .true.
+      !if (.true.) then
+      state%init%opt_ov%intmom_sub = .true.
+      call measure_timestep(state)
+      if (.not. state%optim%results%optimal) then
+        state%init%opt_ov%intmom_sub = .false.
+      end if
+      state%init%opt_ov%intspec_sub = .true.
+      call measure_timestep(state)
+      l1 = state%optim%results%optimal
+      if (state%init%opt_ov%field_option .eq. "local") then
+        state%init%opt_ov%field_local_allreduce = .true.
         call measure_timestep(state)
-        if (.not. state%optim%results%optimal) then
-          state%init%opt_ov%intmom_sub = .false.
-        end if
-        state%init%opt_ov%intspec_sub = .true.
+        l2 = state%optim%results%optimal
+        state%init%opt_ov%field_local_allreduce_sub = .true.
         call measure_timestep(state)
-        l1 = state%optim%results%optimal
-        if (state%init%opt_ov%field_option .eq. "local") then
-          state%init%opt_ov%field_local_allreduce = .true.
-          call measure_timestep(state)
-          l2 = state%optim%results%optimal
-          state%init%opt_ov%field_local_allreduce_sub = .true.
-          call measure_timestep(state)
-          l3 = state%optim%results%optimal
-          if (.not. l3) then
-            state%init%opt_ov%field_local_allreduce_sub = .false.
-            if (.not. l2) then 
-              state%init%opt_ov%field_local_allreduce = .false.
-              if (.not. l1) then
-                state%init%opt_ov%intspec_sub = .false.
-              end if
+        l3 = state%optim%results%optimal
+        if (.not. l3) then
+          state%init%opt_ov%field_local_allreduce_sub = .false.
+          if (.not. l2) then 
+            state%init%opt_ov%field_local_allreduce = .false.
+            if (.not. l1) then
+              state%init%opt_ov%intspec_sub = .false.
             end if
           end if
-        else
-          if (.not. l1) then
-            state%init%opt_ov%intspec_sub = .false.
-          end if
+        end if
+      else
+        if (.not. l1) then
+          state%init%opt_ov%intspec_sub = .false.
         end if
       end if
+      !end if
 
 
       if (state%init%opt_ov%field_option .eq. "implicit") then
