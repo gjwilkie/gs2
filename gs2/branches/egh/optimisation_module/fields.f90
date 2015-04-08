@@ -109,6 +109,10 @@ contains
     use file_utils, only: error_unit
     use text_options, only: get_option_value
     use fields_local, only: minnrow
+    use fields_implicit, only: field_subgath
+    use fields_local, only: do_smart_update
+    use fields_local, only: field_local_allreduce
+    use fields_local, only: field_local_allreduce_sub
     type(optimisations_overrides_type), intent(in) :: opt_ov
     integer :: ierr
     if (opt_ov%override_field_option) then
@@ -118,6 +122,13 @@ contains
             ierr, "field_option in set_overrides",.true.)
     end if
     if (opt_ov%override_minnrow) minnrow = opt_ov%minnrow
+    if (opt_ov%override_field_subgath) field_subgath = opt_ov%field_subgath
+    if (opt_ov%override_do_smart_update) do_smart_update = & 
+      opt_ov%do_smart_update
+    if (opt_ov%override_field_local_allreduce) field_local_allreduce = & 
+      opt_ov%field_local_allreduce
+    if (opt_ov%override_field_local_allreduce_sub) field_local_allreduce_sub =& 
+      opt_ov%field_local_allreduce_sub
   end subroutine set_overrides
 
   !> Calls all initialisations required for init_fields_implicit/local, 
