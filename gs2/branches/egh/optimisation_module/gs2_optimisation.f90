@@ -156,7 +156,7 @@ module gs2_optimisation
       type(gs2_program_state_type), intent(inout) :: state
       character(len=*), parameter :: formt =  &
         '(A10," ",A10," ",A10," ",A6," ",A6," ",A1," ",A1," ",A1," ",A1," ",A1,&
-        &" ",A1," ",A1," ",A1," ",A1," ",A1," ",A7)'
+        &" ",A1," ",A1," ",A1," ",A1," ",A1," ",A1," ",A1," ",A7)'
       character(len=*), parameter :: bk = '               '
       character(len=*), parameter :: ul = '---------------'
       character(len=*), parameter :: h1 = "GS2 Timing"
@@ -177,25 +177,25 @@ module gs2_optimisation
 
       if (proc0) then
 
-      write(ou,formt)h1,h2,bk,bk,bk,'o', bk, bk, bk, bk, bk, bk, bk,'d', bk,bk
-      write(ou,formt)h3,h4,er,h5,bk,'p', bk, bk,'l', bk, bk, bk,'f','|', bk,bk
-      write(ou,formt)ha,h4,em,h5,bk,'t', bk, bk,'o', bk, bk, bk,'i','s','f',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'|', bk, bk,'c', bk, bk,'i','e','m','i',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'r', bk, bk,'a','o','i','n','l','a','e',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'e', bk, bk,'l','p','n','t','d','r','l',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'d','|','|','|','t','t','s','|','t','d',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'i','p','o','f','|','m','p','s','|','|',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'s','e','v','|','s','o','e','u','u','o',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'t','r','e','s','o','m','c','b','p','p',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'|','s','r','o','u','|','|','g','d','t',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'n','i','l','l','r','s','s','a','a','i',bk
-      write(ou,formt)bk,bk,bk,bk,bk,'b','s','a','v','c','u','u','t','t','o',bk
+write(ou,formt)h1,h2,bk,bk,bk,'o', bk, bk, bk, bk, bk, bk, bk,'d','f', bk, bk,bk
+write(ou,formt)h3,h4,er,h5,bk,'p', bk, bk,'l', bk, bk, bk,'f','|','l', bk, bk,bk
+write(ou,formt)ha,h4,em,h5,bk,'t', bk, bk,'o', bk, bk, bk,'i','s','o', bk,'f',bk
+write(ou,formt)bk,bk,bk,bk,bk,'|', bk, bk,'c', bk, bk,'i','e','m','c', bk,'i',bk
+write(ou,formt)bk,bk,bk,bk,bk,'r', bk, bk,'a','o','i','n','l','a','|', bk,'e',bk
+write(ou,formt)bk,bk,bk,bk,bk,'e', bk, bk,'l','p','n','t','d','r','a', bk,'l',bk
+write(ou,formt)bk,bk,bk,bk,bk,'d','|','|','|','t','t','s','|','t','l', bk,'d',bk
+write(ou,formt)bk,bk,bk,bk,bk,'i','p','o','f','|','m','p','s','|','l', bk,'|',bk
+write(ou,formt)bk,bk,bk,bk,bk,'s','e','v','|','s','o','e','u','u','r', bk,'o',bk
+write(ou,formt)bk,bk,bk,bk,bk,'t','r','e','s','o','m','c','b','p','e', bk,'p',bk
+write(ou,formt)bk,bk,bk,bk,bk,'|','s','r','o','u','|','|','g','d','d','|','t',bk
+write(ou,formt)bk,bk,bk,bk,bk,'n','i','l','l','r','s','s','a','a','u','s','i',bk
+write(ou,formt)bk,bk,bk,bk,bk,'b','s','a','v','c','u','u','t','t','c','u','o',bk
       write (ou, formt) &
         'wallclocktime', 'efficiency', 'cost', 'nproc', 'layout', &
-                                    'k','t','p','e','e','b','b','h','e','n',&
+                              'k','t','p','e','e','b','b','h','e','e','b','n',&
                                     'minnrow'
       write (ou,formt) ul, ul, ul, ul, ul, ul, ul, ul, ul, ul, ul, ul, ul, ul,&
-                       ul, ul
+                       ul, ul, ul, ul
                         
       n = size(state%optim%sorted_results)
       do i = 1,n
@@ -217,7 +217,7 @@ module gs2_optimisation
       write(unt, &
         '(E10.4," ",F10.6," ",E10.4," ",I6," ",A6," ",&
         &L1," ",L1," ",L1," ",L1," ",L1," ",L1," ",L1," ",&
-        &L1," ",L1," ",A1," ",I7)') &
+        &L1," ",L1," ",L1," ",L1," ",A1," ",I7)') &
       results%time, &
       results%efficiency, &
       results%cost, &
@@ -232,6 +232,8 @@ module gs2_optimisation
       optimisations%intspec_sub,&
       optimisations%field_subgath,&
       optimisations%do_smart_update,&
+      optimisations%field_local_allreduce,&
+      optimisations%field_local_allreduce_sub,&
       optimisations%field_option(1:1), &
       optimisations%minnrow
     end subroutine write_summary
@@ -330,15 +332,18 @@ module gs2_optimisation
 
       state%init%opt_ov%override_intmom_sub = .true.
       state%init%opt_ov%intmom_sub = .false.
-
       state%init%opt_ov%override_intspec_sub = .true.
       state%init%opt_ov%intspec_sub = .false.
 
       state%init%opt_ov%override_field_subgath = .true.
       state%init%opt_ov%field_subgath = .false.
-
       state%init%opt_ov%override_do_smart_update = .true.
       state%init%opt_ov%do_smart_update = .false.
+
+      state%init%opt_ov%override_field_local_allreduce = .true.
+      state%init%opt_ov%field_local_allreduce = .false.
+      state%init%opt_ov%override_field_local_allreduce_sub = .true.
+      state%init%opt_ov%field_local_allreduce_sub = .false.
 
       call measure_timestep(state)
       state%init%opt_ov%opt_redist_nbk = .true.
@@ -385,8 +390,27 @@ module gs2_optimisation
         end if
         state%init%opt_ov%intspec_sub = .true.
         call measure_timestep(state)
-        if (.not. state%optim%results%optimal) then
-          state%init%opt_ov%intspec_sub = .false.
+        l1 = state%optim%results%optimal
+        if (state%init%opt_ov%field_option .eq. "local") then
+          state%init%opt_ov%field_local_allreduce = .true.
+          call measure_timestep(state)
+          l2 = state%optim%results%optimal
+          state%init%opt_ov%field_local_allreduce_sub = .true.
+          call measure_timestep(state)
+          l3 = state%optim%results%optimal
+          if (.not. l3) then
+            state%init%opt_ov%field_local_allreduce_sub = .false.
+            if (.not. l2) then 
+              state%init%opt_ov%field_local_allreduce = .false.
+              if (.not. l1) then
+                state%init%opt_ov%intspec_sub = .false.
+              end if
+            end if
+          end if
+        else
+          if (.not. l1) then
+            state%init%opt_ov%intspec_sub = .false.
+          end if
         end if
       end if
 
