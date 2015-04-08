@@ -32,7 +32,7 @@ module layouts_type
      integer :: xyblock_comm !Sub comms for xy blocks (i.e. l-e-s integrals)
      integer :: xysblock_comm !Sub comms for xys blocks (i.e. l-e integrals)
      integer :: lesblock_comm !Sub comms for les blocks (i.e. x-y integrals)
-     integer,dimension(:,:),pointer :: les_kxky_range !Used in integrate species, holds start and stop indices for flattened kxky dimension
+     integer,dimension(:,:),allocatable :: les_kxky_range !Used in integrate species, holds start and stop indices for flattened kxky dimension
      logical :: x_before_y !Information about layout order
      logical :: x_local, y_local, l_local, e_local, s_local !Used to record if various dimensions are entirely local
   end type g_layout_type
