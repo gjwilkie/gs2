@@ -216,6 +216,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     subroutine gg4init
       use splines, only: fitp_curvp1
       use mp, only: mp_abort
+      use file_utils, only: open_output_file, get_unused_unit
       implicit none
       logical :: od
       real, dimension (2*nbmag) :: tmp
@@ -244,23 +245,8 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       nsetset = 0
 
       if (debug_output) then
-         debug_unit=0
-!CMR, August 2010:
-!  (i) modify inquire to use opened instead of read, write and readwrite
-!   needed for gfortran compiler: TT adopted same solution in file_utils
-!  (ii) terminate with error message if no free LUN found
-!CMRend
-         do i = 10,100
-            inquire (unit=i,opened=od)
-            if ( .not. od ) then
-               debug_unit=i
-               exit
-            end if
-         end do
-         if (debug_unit .eq. 0) then
-            call mp_abort("gg4init:  no free LUN between 10,100 => force quit",.true.)
-         endif
-         open (unit=debug_unit, file="gridgen.200", status="unknown")
+         call get_unused_unit(debug_unit)
+         call open_output_file(debug_unit,".gridgen.200")
          write (unit=debug_unit, fmt=*) "nbmag=", nbmag
          write (unit=debug_unit, fmt=*) "thetain,bmagin="
          do i=1,nbmag
@@ -280,10 +266,11 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 
     subroutine gg4finish
 !      use mp, only: mp_abort
+      use file_utils, only: close_output_file
       implicit none
       
       if (debug_output) then
-         close (unit=debug_unit)
+         call close_output_file(debug_unit)
       end if
       
       deallocate (bmagspl)
