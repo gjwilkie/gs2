@@ -115,6 +115,9 @@ module gs2_main
     real :: finish(2) = 0.
     real :: total(2) = 0. 
     real :: diagnostics(2)=0.
+#ifdef WITH_EIG
+    real :: eigval(2)=0.
+#endif
     !real :: interval
     real :: main_loop(2)
   end type gs2_timers_type

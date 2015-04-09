@@ -877,7 +877,7 @@ contains
     use fields, only: set_init_fields
     use fields_arrays, only: phinew, bparnew
     use gs2_save, only: EigNetcdfID, init_eigenfunc_file, finish_eigenfunc_file
-    use gs2_save, only: add_eigenpair_to_file, gs2_save_for_restart, finish_save
+    use gs2_save, only: add_eigenpair_to_file, gs2_save_for_restart, finish_gs2_save
     use file_utils, only: run_name
     use dist_fn_arrays, only: gnew, g_adjust
     use gs2_diagnostics, only: save_distfn
@@ -961,7 +961,7 @@ contains
              endif
 
              !Reset the status of save_for_restart
-             call finish_save
+             call finish_gs2_save
           endif
        enddo
 
