@@ -1175,12 +1175,14 @@ contains
   end function betafun
 
   subroutine Hahm_Burrell(irho, a) 
-
+    use file_utils, only: open_output_file, close_output_file, get_unused_unit
+    implicit none
     real, intent(in) :: a
     integer, intent(in) :: irho
     integer :: i
     real :: gradpsi, mag_B, rho_eq, rp1, rp2, rho1, rho2, drhodpsiq
     real, dimension(nr) :: gamma, pbar, dp, d2p, pres
+    integer :: fort24_unit
 
     gamma = 0.
 
@@ -1213,6 +1215,8 @@ contains
             *(-pres(i)/(dp(i)/drhodpsiq))            
     enddo
     
+    call get_unused_unit(fort24_unit)
+    call open_output_file(fort24_unit,".fort.24")
     do i=3,nr-2
        if(irho == 1) then
           rho_eq = eqpsi(i)
@@ -1221,12 +1225,14 @@ contains
        else if(irho == 3) then
           rho_eq = pbar(i)
        endif
-       write(24,1000) i, pbar(i), rho_eq, pres(i), gamma(i)
+       write(fort24_unit,1000) i, pbar(i), rho_eq, pres(i), gamma(i)
     enddo
 
 !    write(*,*) 1/(psi_a-psi_0)
 !    if(irho == 1) write(* ,*) '# irho = 1 produces psi instead of rho_eq'
-    if(irho == 1) write(24,*) '# irho = 1 produces psi instead of rho_eq'
+    if(irho == 1) write(fort24_unit,*) '# irho = 1 produces psi instead of rho_eq'
+
+    call close_output_file(fort24_unit)
 
 1000 format(i5,11(1x,e16.9))
 
