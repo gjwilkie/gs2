@@ -72,5 +72,5 @@ struct sdatio_file {
 };
 
 
-int sdatio_debug;
+extern int sdatio_debug;
 

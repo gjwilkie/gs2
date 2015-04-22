@@ -254,6 +254,7 @@ contains
     !gryfx_zonal%on = .true.
     state%mp_comm_external = .true.
     state%mp_comm = mp_comm  
+    state%is_trinity_job = .true.
 
     state%run_name_external = .true.
     state%run_name = file_name
