@@ -231,7 +231,7 @@ module dist_fn
 
   logical :: initialized = .false.
 
-  logical :: exb_first = .false.
+  logical :: exb_first = .true.
 
   logical :: initialized_dist_fn_parameters = .false.
   logical :: initialized_dist_fn_arrays = .false.
@@ -789,7 +789,7 @@ contains
     connectinit = .false.
     lpolinit = .false. ; fyxinit = .false. ; cerrinit = .false. ; mominit = .false.
     increase = .true. ; decrease = .false.
-    exb_first = .false.
+    exb_first = .true.
 
     call finish_dist_fn_level_2
 
