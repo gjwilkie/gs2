@@ -290,7 +290,7 @@ program eiktest
   write (21,fmt="('# shape: torus')")
   write (21,fmt="('# q = ',e10.4,' drhodpsi = ',e10.4)") qsf, drhodpsin
   write (21,fmt="('# theta1             R2                  Z3               alpha4      ', &
-            &   '       Rprime5              Zprime6           alpha_prime7  bpol8')")
+            &   '       Rprime5              Zprime6           alpha_prime7         bpol8')")
   do i=-ntgrid,ntgrid
      write (21,1000) theta(i),Rplot(i),Zplot(i),aplot(i), &
           Rprime(i),Zprime(i),aprime(i),Bpol(i)
