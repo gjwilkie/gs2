@@ -117,15 +117,11 @@ contains
 
     call calculate_f0_arrays(epts, wgts, vcut,.false.)
     
-    do is = 1,nspec
-!write(*,*) iproc, is, spec(is)%temp, spec(is)%fprim, spec(is)%tprim, spec(is)%stm
-       do ie = 1,negrid
-if (proc0) write(*,*) is, ie,epts(ie,is),f0_values(ie,is),df0dE(ie,is), f0prim(ie,is)
-!write(*,*) iproc, is,ie, zogtemp(ie,is)
-!          if (iproc .EQ. 3) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
-       end do
-!       write(*,*) sum(wgts(:,is))
-    end do
+!    do is = 1,nspec
+!       do ie = 1,negrid
+!          if (proc0) write(*,*) is, ie,epts(ie,is),f0_values(ie,is),df0dE(ie,is), f0prim(ie,is)
+!       end do
+!    end do
 
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))

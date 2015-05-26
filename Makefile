@@ -65,7 +65,7 @@ GK_PROJECT ?= gs2
 # Be careful that DEBUG=off means DEBUG=on.
 #
 # turns on debug mode (bin)
-DEBUG ?=on
+DEBUG ?=
 # turns on scalasca instrumentation mode (bin)
 SCAL ?= 
 # turns on test mode (bin)
@@ -141,7 +141,7 @@ export TESTCOMMAND
 
 MAKE		= make
 CPP		= cpp
-CPPFLAGS	= -C -P -traditional
+CPPFLAGS	= -P -traditional
 FC		= f90
 MPIFC		?= mpif90
 H5FC		?= h5fc
