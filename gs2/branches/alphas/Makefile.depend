@@ -13,7 +13,6 @@ ball_mod = \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
-	 mp.o \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
@@ -38,7 +37,6 @@ eiktest_mod = \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
-	 mp.o \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
@@ -88,7 +86,6 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -153,7 +150,6 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -221,7 +217,6 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -252,15 +247,6 @@ om_mod = \
 regressp_mod = \
 	 regress.o \
 	 regression.o 
-
-rungridgen_mod = \
-	 command_line.o \
-	 constants.o \
-	 file_utils.o \
-	 gridgen4mod.o \
-	 mp.o \
-	 rungridgen.o \
-	 spl.o 
 
 analytical_falpha.o: \
 	 constants.o \
@@ -418,7 +404,6 @@ general_f0.o: \
 	 semianalytic_falpha.o \
 	 species.o \
 	 spfunc.o \
-	 spl.o \
 	 split_falpha.o \
 	 text_options.o \
 	 unit_tests.o 
@@ -466,15 +451,6 @@ gs2_diagnostics.o: \
 	 species.o \
 	 spl.o \
 	 theta_grid.o 
-gs2_dist_io_hdf.o: \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 gs2_transforms.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
-	 species.o \
-	 theta_grid.o 
 gs2_heating.o: \
 	 mp.o \
 	 species.o 
@@ -491,21 +467,6 @@ gs2_io.o: \
 	 le_grids.o \
 	 mp.o \
 	 netcdf_utils.o \
-	 nonlinear_terms.o \
-	 parameter_scan_arrays.o \
-	 run_parameters.o \
-	 species.o \
-	 theta_grid.o 
-gs2_io_hdf5.o: \
-	 constants.o \
-	 convert.o \
-	 fields_arrays.o \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 gs2_transforms.o \
-	 kt_grids.o \
-	 le_grids.o \
-	 mp.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 run_parameters.o \
@@ -573,14 +534,6 @@ gs2_save.o: \
 	 netcdf_utils.o \
 	 parameter_scan_arrays.o \
 	 species.o \
-	 theta_grid.o 
-gs2_save_hdf5.o: \
-	 fields_arrays.o \
-	 file_utils.o \
-	 gs2_layouts.o \
-	 kt_grids.o \
-	 mp.o \
-	 parameter_scan_arrays.o \
 	 theta_grid.o 
 gs2_time.o: 
 gs2_transforms.o: \
@@ -702,11 +655,9 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
-	 file_utils.o \
-	 mp.o 
+	 file_utils.o 
 nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
@@ -743,8 +694,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -759,11 +709,6 @@ run_parameters.o: \
 	 kt_grids.o \
 	 mp.o \
 	 text_options.o 
-rungridgen.o: \
-	 constants.o \
-	 file_utils.o \
-	 gridgen4mod.o \
-	 spl.o 
 semianalytic_falpha.o: \
 	 constants.o \
 	 mp.o \
@@ -773,18 +718,19 @@ species.o: \
 	 file_utils.o \
 	 mp.o \
 	 text_options.o 
+specnew.o: \
+	 constants.o \
+	 file_utils.o \
+	 mp.o \
+	 text_options.o 
 spfunc.o: \
 	 constants.o 
-spl.o: \
-	 mp.o 
+spl.o: 
 split_falpha.o: \
 	 constants.o \
 	 mp.o \
 	 unit_tests.o 
-test_layouts.o: \
-	 mp.o 
-text_options.o: \
-	 mp.o 
+text_options.o: 
 theta_grid.o: \
 	 constants.o \
 	 file_utils.o \
