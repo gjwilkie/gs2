@@ -3253,42 +3253,6 @@ contains
 
     call time_message(.false.,time_gf_reduce_an_sendrecv,' Gf_lo reduce an sendrecv')
 
-!!$    if(iproc .eq. 0) then
-!!$       inquire(file="0before.txt", exist=exist)
-!!$       if (exist) then
-!!$          open(12, file="0before.txt", status="old", position="append", action="write")
-!!$       else
-!!$          open(12, file="0before.txt", status="new", action="write")
-!!$       end if
-!!$       write(12, *) 'startline'
-!!$       write(12, *) tempdata(:,4,2,1,2,2)
-!!$       write(12,*) 'endline'
-!!$       close(12)
-!!$    else if(iproc .eq. 24) then
-!!$       inquire(file="24before.txt", exist=exist)
-!!$       if (exist) then
-!!$          open(12, file="24before.txt", status="old", position="append", action="write")
-!!$       else
-!!$          open(12, file="24before.txt", status="new", action="write")
-!!$       end if
-!!$       write(12, *) 'startline'
-!!$       write(12,*) antot(:,4,2)
-!!$       write(12,*) 'endline'
-!!$       close(12)
-!!$    else if(iproc .eq. 683) then
-!!$       inquire(file="683before.txt", exist=exist)
-!!$       if (exist) then
-!!$          open(12, file="683before.txt", status="old", position="append", action="write")
-!!$       else
-!!$          open(12, file="683before.txt", status="new", action="write")
-!!$       end if
-!!$       write(12, *) 'startline'
-!!$       antot(:,4,2) = 0.
-!!$       write(12,*) antot(:,4,2)
-!!$       write(12,*) 'endline'
-!!$       close(12)
-!!$    end if
-
 
     call time_message(.false.,time_gf_reduce_an_broadcast,' Gf_lo reduce an broadcast')
 
@@ -3306,30 +3270,6 @@ contains
 
              if(kwork_filter(it,ik)) cycle
 
-!!$             if(iproc .eq. 0 .and. ik .eq. 2 .and. it .eq. 4) then
-!!$                write(*,*) 'tempit',tempit,is,ik
-!!$             end if
-!!$             if(iproc .eq. 683 .and. ik .eq. 2 .and. it .eq. 4) then
-!!$                write(*,*) '683 tempit',tempit,is,ik
-!!$             end if
-          
-!!$             if(fphi>epsilon(0.0)) then
-!!$!                call broadcast_sub(antot(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!!$                call broadcast_sub(tempdata(:,tempit,1,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!!$                antot(:,it,ik) = tempdata(:,tempit,1,ik,is,ik)
-!!$             end if
-!!$             
-!!$             if(fapar>epsilon(0.0)) then
-!!$!                call broadcast_sub(antota(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!!$                call broadcast_sub(tempdata(:,tempit,2,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!!$                antota(:,it,ik) = tempdata(:,tempit,2,ik,is,ik)
-!!$             end if
-!!$             
-!!$             if(fbpar>epsilon(0.0)) then
-!!$!                call broadcast_sub(antotp(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!!$                call broadcast_sub(tempdata(:,tempit,3,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!!$                antotp(:,it,ik) = tempdata(:,tempit,3,ik,is,ik)
-!!$             end if
              tempit = tempit + 1
 
           end do
@@ -3337,8 +3277,6 @@ contains
           call broadcast_sub(tempdata(:,1:tempit,1:num_fields,ik,is),root,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
 
           if(fphi>epsilon(0.0)) then
-             !                call broadcast_sub(antot(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!             call broadcast_sub(tempdata(:,1:tempit,1,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
              tempit = 1
              do ic=1,self%kyb(ik)%supercells(is)%ncell
                 it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
@@ -3351,8 +3289,6 @@ contains
           end if
              
           if(fapar>epsilon(0.0)) then
-             !                call broadcast_sub(antota(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!             call broadcast_sub(tempdata(:,1:tempit,2,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
              tempit = 1
              do ic=1,self%kyb(ik)%supercells(is)%ncell
                 it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
@@ -3365,8 +3301,6 @@ contains
           end if
           
           if(fbpar>epsilon(0.0)) then
-             !                call broadcast_sub(antotp(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
-!             call broadcast_sub(tempdata(:,1:tempit,3,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
              tempit = 1
              do ic=1,self%kyb(ik)%supercells(is)%ncell
                 it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
@@ -3383,40 +3317,6 @@ contains
 
     call time_message(.false.,time_gf_reduce_an_broadcast,' Gf_lo reduce an broadcast')
 
-!!$    if(iproc .eq. 0) then
-!!$       inquire(file="0after.txt", exist=exist)
-!!$       if (exist) then
-!!$          open(12, file="0after.txt", status="old", position="append", action="write")
-!!$       else
-!!$          open(12, file="0after.txt", status="new", action="write")
-!!$       end if
-!!$       write(12, *) 'startline'
-!!$       write(12, *) antot(:,4,2)
-!!$       write(12,*) 'endline'
-!!$       close(12)
-!!$    else if(iproc .eq. 24) then
-!!$       inquire(file="24after.txt", exist=exist)
-!!$       if (exist) then
-!!$          open(12, file="24after.txt", status="old", position="append", action="write")
-!!$       else
-!!$          open(12, file="24after.txt", status="new", action="write")
-!!$       end if
-!!$       write(12, *) 'startline'
-!!$       write(12,*) antot(:,4,2)
-!!$       write(12,*) 'endline'
-!!$       close(12)
-!!$    else if(iproc .eq. 683) then
-!!$       inquire(file="683after.txt", exist=exist)
-!!$       if (exist) then
-!!$          open(12, file="683after.txt", status="old", position="append", action="write")
-!!$       else
-!!$          open(12, file="683after.txt", status="new", action="write")
-!!$       end if
-!!$       write(12, *) 'startline'
-!!$       write(12,*) antot(:,4,2)
-!!$       write(12,*) 'endline'
-!!$       close(12)
-!!$    end if
 
     deallocate(tempdata)
 
