@@ -14,10 +14,8 @@ module mp
 !
 # ifdef MPI
 # ifndef MPIINC
+  use mpi
   implicit none
-  include 'mpif.h'
-!AJ  use mpi
-!AJ  implicit none
 #else 
   implicit none
 #endif
@@ -66,6 +64,8 @@ module mp
   public :: init_jobs
   public :: mp_comm
   public :: mp_info
+!AJ
+  public :: initialise_requests
 
   ! <EGH needed for functional_tests
   public :: grp0
@@ -3234,6 +3234,19 @@ contains
     call mpi_recv_init(z,size(z),mpicmplx,dest,tag,mp_comm,handle,ierror)
 #endif
   end subroutine recv_init_complex_array
+
+! ******************* non-blocking utilities ********************
+
+subroutine initialise_requests(requests)
+   !AJ A Routine to initialise request arrays properly so they can have null 
+   !   requests in them and still work problems with waitall and waitany
+  implicit none
+  integer, dimension(:), intent(inout) :: requests 
+#ifdef MPI
+  requests = MPI_REQUEST_NULL
+#endif
+
+end subroutine initialise_requests
 
 ! ********************* non-blocking checks **********************
   subroutine waitall_nostat (count, requests)

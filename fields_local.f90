@@ -23,6 +23,8 @@ module fields_local
   !> Made public for testing
   public :: fieldmat
 
+  public :: time_gf_reduce_an, time_gf_reduce_an_broadcast, time_gf_reduce_an_sendrecv
+
   !//////////////////////////////
   !// CUSTOM TYPES
   !//////////////////////////////
@@ -93,6 +95,7 @@ module fields_local
      integer :: nrow, ncol !The number of rows and columns. Equal to nextend*nfield
      integer :: it_left !It index of leftmost cell
      integer :: head_iproc !The proc id (in sc_sub_all) of the head proc
+     integer :: head_iproc_pd !The proc id (in sc_sub_pd) of the head proc
      logical :: is_local !Does this supercell have any data on this proc?
      logical :: is_empty !Have we got any data for this supercell on this proc?
      logical :: is_all_local !Is all of this supercells data on this proc?
@@ -177,6 +180,7 @@ module fields_local
   type, private :: fieldmat_type
      type(ky_type), dimension(:), allocatable :: kyb !The ky blocks
      integer :: naky !Number of ky blocks
+     integer :: ntheta0 
      integer :: npts !Total number of theta grid points on all extended domains
      integer :: nbound !Number of ignored boundary points
      logical :: is_local !Does this supercell have any data on this proc?
@@ -185,6 +189,7 @@ module fields_local
      type(comm_type) :: fm_sub_all !Sub communicator involving all processors with fieldmat
      type(comm_type) :: fm_sub_headsc_p0 !Sub communicator involving the supercell heads and proc0
      integer :: prepare_type=0 !What sort of preparation do we do to the field matrix
+     integer, dimension(:,:), allocatable :: heads ! An array that holds the iproc (from comm world) of the supercell head for a given ik,it point
      !Currently only support:
      !0   : Invert the field matrix
      !In the future may wish to do things like LU decomposition etc.
@@ -202,13 +207,15 @@ module fields_local
      procedure :: prepare => fm_prepare
      procedure :: make_subcom_1 => fm_make_subcom_1
      procedure :: make_subcom_2 => fm_make_subcom_2
+     procedure :: calc_sc_heads => fm_calc_sc_heads
      procedure :: gather_fields => fm_gather_fields
      procedure :: unpack_to_field => fm_unpack_to_field
      procedure :: write_debug_data => fm_write_debug_data
      procedure :: set_is_local => fm_set_is_local
      procedure :: count_subcom => fm_count_subcom
      procedure :: getfieldeq_nogath => fm_getfieldeq_nogath
-     procedure :: reduce_an => fm_reduce_an
+!AJ     procedure :: reduce_an => fm_reduce_an
+     procedure :: reduce_an => fm_reduce_an_head_send_broadcast
      procedure :: check_an => fm_check_an
      procedure :: getfieldeq1_nogath => fm_getfieldeq1_nogath
      procedure :: update_fields => fm_update_fields
@@ -284,6 +291,12 @@ module fields_local
   integer :: nfq !How many field equations (always equal to nfield)
   type(pc_type),save :: pc !This is the parallel control object
   type(fieldmat_type),save :: fieldmat !This is the top level field matrix object
+
+  real, dimension(:), allocatable :: start_times, end_times, best_times
+
+  real :: time_gf_reduce_an(2) = 0.
+  real :: time_gf_reduce_an_broadcast(2) = 0.
+  real :: time_gf_reduce_an_sendrecv(2) = 0.
 contains
 
 !//////////////////////////////
@@ -1342,6 +1355,10 @@ contains
     if(self%is_head) self%head_iproc=self%sc_sub_all%iproc
     call sum_allreduce_sub(self%head_iproc,self%sc_sub_all%id)
 
+    self%head_iproc_pd=0
+    if(self%is_head) self%head_iproc_pd=self%sc_sub_pd%iproc
+    call sum_allreduce_sub(self%head_iproc_pd,self%sc_sub_all%id)
+
     !/Now make a subcommunicator involving all empty procs and
     !head pd proc
     if(some_empty)then
@@ -1457,6 +1474,7 @@ contains
     !Note: Empty supercells don't do anything
     do is=1,self%nsupercell
        !/Calculate the field update
+!AJ ADD TIMING HERE
        call self%supercells(is)%get_field_update(fq,fqa,fqp)
        !/Now post the non-blocking sends
 !       call self%supercells(is)%gfu_post_send
@@ -1513,7 +1531,8 @@ contains
 
     !AJ Free communicators associated with this ky block
     if(self%ky_sub_all%id .ne. self%parent_sub%id) then
-       write(*,*) 'free comm ky',self%ky_sub_all%id
+!       write(*,*) 'free comm ky',self%ky_sub_all%id
+!AJ FIX
 !       call free_comm(self%ky_sub_all)
     end if
 
@@ -1681,6 +1700,7 @@ contains
     implicit none
     class(fieldmat_type), intent(inout) :: self
     integer :: ik
+    allocate(self%heads(self%ntheta0, self%naky))
     if(.not.self%is_local) return
     do ik=1,self%naky
        call self%kyb(ik)%allocate
@@ -1692,6 +1712,7 @@ contains
     implicit none
     class(fieldmat_type), intent(inout) :: self
     if(allocated(self%kyb)) deallocate(self%kyb)
+    if(allocated(self%heads)) deallocate(self%heads)
   end subroutine fm_deallocate
 
   !>Debug printing
@@ -1809,6 +1830,7 @@ contains
     !Now we want to allocate the basic field structure
     !Store the basic properties
     self%naky=naky
+    self%ntheta0=ntheta0
     self%npts=naky*ntheta0*(2*ntgrid+1)
     self%nbound=0 !Calculated whilst we create objects
     allocate(self%kyb(naky))
@@ -2478,6 +2500,35 @@ contains
 
   end subroutine fm_make_subcom_2
 
+  !AJ Record the process that is the supercell head associated with a given ik,it point
+  !AJ Supercells have a single ik but may have many it points so a given supercell head 
+  !AJ may be responsible for a range of points
+  subroutine fm_calc_sc_heads(self)
+    use mp, only: iproc, sum_allreduce
+    implicit none
+
+    class(fieldmat_type), intent(inout) :: self
+    integer :: ik, is, ic, it
+    !AJ There may be a problem here is any supercell has no assigned head.
+    !AJ This is the case (I think) for 1,1; but it shouldn't actually cause 
+    !AJ a problem as 1,1 shouldn't be communicated anyway as only one process
+    !AJ is involved in it.
+    self%heads = 0
+    do ik=1,self%naky
+       do is=1,self%kyb(ik)%nsupercell
+          if(self%kyb(ik)%supercells(is)%is_head) then
+             do ic=1,self%kyb(ik)%supercells(is)%ncell               
+                it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+                self%heads(it,ik) = iproc
+             end do
+          end if
+       end do
+    end do
+
+    call sum_allreduce(self%heads)
+
+  end subroutine fm_calc_sc_heads
+  
   !>Gather all the fields to proc0/all for diagnostics etc.
   subroutine fm_gather_fields(self,ph,ap,bp,to_all_in,do_allreduce_in)
     use theta_grid, only: ntgrid
@@ -2709,6 +2760,7 @@ contains
     do ik=1,self%naky
        !Skip not local cells
        if(.not.self%kyb(ik)%is_local) cycle
+!AJ ADD TIMING HERE
        do is=1,self%kyb(ik)%nsupercell
           if(.not.self%kyb(ik)%supercells(is)%is_local) cycle
           do ic=1,self%kyb(ik)%supercells(is)%ncell
@@ -2908,34 +2960,37 @@ contains
     use theta_grid, only: ntgrid
     use dist_fn, only: getan_nogath, gf_lo_integrate
     use kt_grids, only: naky, ntheta0
+    use mp, only: iproc
+    use job_manage, only: time_message
     implicit none
     class(fieldmat_type), intent(in) :: self
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
     complex, dimension (:,:,:), allocatable :: antot, antota, antotp
-    complex, dimension (:,:,:), allocatable :: tempantot, tempantota, tempantotp
+!    complex, dimension (:,:,:), allocatable :: tempantot, tempantota, tempantotp
 
     allocate (antot (-ntgrid:ntgrid,ntheta0,naky))
     allocate (antota(-ntgrid:ntgrid,ntheta0,naky))
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (tempantot (-ntgrid:ntgrid,ntheta0,naky))
-    allocate (tempantota(-ntgrid:ntgrid,ntheta0,naky))
-    allocate (tempantotp(-ntgrid:ntgrid,ntheta0,naky))
+!    allocate (tempantot (-ntgrid:ntgrid,ntheta0,naky))
+!    allocate (tempantota(-ntgrid:ntgrid,ntheta0,naky))
+!    allocate (tempantotp(-ntgrid:ntgrid,ntheta0,naky))
 
-
-    gf_lo_integrate = .false.
-    call getan_nogath (antot, antota, antotp)
-    gf_lo_integrate = .true.
-    call getan_nogath (tempantot, tempantota, tempantotp)
+!    gf_lo_integrate = .false.
+    call getan_nogath(antot, antota, antotp)
+!    gf_lo_integrate = .true.
     if(gf_lo_integrate) then
-       call self%reduce_an(tempantot, tempantota, tempantotp)
+!       call getan_nogath(tempantot, tempantota, tempantotp)
+       call time_message(.false.,time_gf_reduce_an,' Gf_lo reduce an')
+       call self%reduce_an(antot, antota, antotp)
+       call time_message(.false.,time_gf_reduce_an,' Gf_lo reduce an')
     end if
-    call self%check_an(antot, tempantot, antota, tempantota, antotp, tempantotp)
+!    call self%check_an(antot, tempantot, antota, tempantota, antotp, tempantotp)
     call self%getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
 
     deallocate (antot, antota, antotp)
-    deallocate (tempantot, tempantota, tempantotp)
+!    deallocate (tempantot, tempantota, tempantotp)
   end subroutine fm_getfieldeq_nogath
 
 !AJ This is designed to reduce data within a supercell communicator.
@@ -2954,10 +3009,6 @@ contains
 
     integer :: ik, it, is, ic, root
 
-    !AJ We are using an allreduce using a sum here, but this is not strictly necessary, no 
-    !AJ reduction is needed, it could be done with an allgather but that would involve manipulating the 
-    !AJ data layout to make the gather work properly.  In the future we could optimise the code to use 
-    !AJ an allgather instead of an allreduce if this is an expensive part of the functionality.
     do ik=1,self%naky
        !Skip empty cells, note this is slightly different to skipping
        !.not.is_local. Skipping empty is probably faster but may be more dangerous
@@ -3043,34 +3094,364 @@ contains
 
   end subroutine fm_reduce_an
 
+
+  subroutine fm_reduce_an_head_send_broadcast (self,antot, antota, antotp)
+    use mp, only: broadcast, iproc, nbsend, nbrecv, initialise_requests, waitall, broadcast_sub
+    use theta_grid, only: ntgrid
+    use run_parameters, only: fphi, fapar, fbpar
+    use gs2_layouts, only: gf_lo, proc_id, idx, ik_idx, it_idx
+    use kt_grids, only: naky, ntheta0, kwork_filter
+    use job_manage, only: time_message
+    implicit none
+    class(fieldmat_type), intent(in) :: self
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: antot, antota, antotp
+
+    integer :: igf, ik, it, ic, is, root, sendreqnum, recvreqnum, sender, receiver, tag, taglim
+    integer, dimension (gf_lo%xypoints*3) :: send_handles
+    !AJ This array is bigger than it needs to be but does mean we do not
+    !AJ need to calculate how many supercells a give process is head for
+    integer, dimension (gf_lo%naky*gf_lo%ntheta0) :: recv_handles
+    integer :: num_fields, tempit, tempis, tempismax
+    complex, dimension(:,:,:,:,:), allocatable :: tempdata
+    logical :: exist
+
+    call time_message(.false.,time_gf_reduce_an_sendrecv,' Gf_lo reduce an sendrecv')
+
+    num_fields = 0
+
+    if(fphi > epsilon(0.0)) num_fields = num_fields + 1
+    if(fapar > epsilon(0.0)) num_fields = num_fields + 1
+    if(fbpar > epsilon(0.0)) num_fields = num_fields + 1
+
+    tempis = 0
+    tempismax = 0
+    do ik = 1,self%naky
+       tempis = self%kyb(ik)%nsupercell
+       if(tempis .gt. tempismax) then
+          tempismax = tempis
+       end if
+       
+    end do
+
+    allocate(tempdata(-ntgrid:ntgrid,gf_lo%ntheta0,num_fields,gf_lo%naky,tempismax))
+
+    call initialise_requests(send_handles)
+    call initialise_requests(recv_handles)
+
+    recvreqnum = 1
+
+    taglim = self%naky*self%ntheta0+1
+
+    !AJ Iterate through the supercells and each supercell that I am a head for 
+    !AJ post a receive for data for a given element of the field array.
+    do ik = 1,self%naky
+       do is=1,self%kyb(ik)%nsupercell
+          if(self%kyb(ik)%supercells(is)%is_head) then
+             tempit = 1
+             do ic=1,self%kyb(ik)%supercells(is)%ncell
+
+                it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+                if(kwork_filter(it,ik)) cycle
+
+                !AJ Calculate which process owns this it,ik point in gf_lo space
+                !AJ i.e. which process will be sending the data to this supercell head
+                sender = proc_id(gf_lo,idx(gf_lo,ik,it))
+
+                if(sender .ne. iproc) then
+                
+                   tag = ik*self%ntheta0 + it
+                
+                   if(fphi>epsilon(0.0)) then
+!                      write(*,*) 'tempdata',iproc,sender,it,ik,tempit,is
+!                      call nbrecv(antot(:,it,ik),sender,tag,recv_handles(recvreqnum))
+                      call nbrecv(tempdata(:,tempit,1,ik,is),sender,tag,recv_handles(recvreqnum))
+                      recvreqnum = recvreqnum + 1
+                   end if
+
+                   tag = tag + taglim
+                   
+                   if(fapar>epsilon(0.0)) then
+!                      call nbrecv(antota(:,it,ik),sender,tag,recv_handles(recvreqnum))
+                      call nbrecv(tempdata(:,tempit,2,ik,is),sender,tag,recv_handles(recvreqnum))
+                      recvreqnum = recvreqnum + 1
+                   end if
+                   
+                   tag = tag + taglim
+                   
+                   if(fbpar>epsilon(0.0)) then
+!                      call nbrecv(antotp(:,it,ik),sender,tag,recv_handles(recvreqnum))
+                      call nbrecv(tempdata(:,tempit,3,ik,is),sender,tag,recv_handles(recvreqnum))
+                      recvreqnum = recvreqnum + 1
+                   end if
+
+                else
+
+                   if(fphi>epsilon(0.0)) then
+                      tempdata(:,tempit,1,ik,is) = antot(:,it,ik)
+                   end if
+
+                   if(fapar>epsilon(0.0)) then
+                      tempdata(:,tempit,2,ik,is) = antota(:,it,ik)
+                   end if
+
+                   if(fbpar>epsilon(0.0)) then
+                      tempdata(:,tempit,3,ik,is) = antotp(:,it,ik)
+                   end if
+
+                end if
+
+                tempit = tempit + 1
+
+             end do
+          end if
+       end do
+    end do
+
+    sendreqnum = 1
+
+    !AJ Iterate through all the points I own in gf_lo and send that part of the field 
+    !AJ arrays to the process that is the supercell head for the supercell that contains 
+    !AJ that it, ik point.
+    do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+       ik = ik_idx(gf_lo,igf)
+       it = it_idx(gf_lo,igf)
+
+       if(kwork_filter(it,ik)) cycle
+
+       tag = ik*self%ntheta0 + it
+
+       receiver = self%heads(it,ik)
+
+       if(iproc .ne. receiver) then
+
+          if(fphi>epsilon(0.0)) then
+             call nbsend(antot(:,it,ik),receiver,tag,send_handles(sendreqnum))
+             sendreqnum = sendreqnum + 1
+          end if
+          
+          tag = tag + taglim
+          
+          if(fapar>epsilon(0.0)) then
+             call nbsend(antota(:,it,ik),receiver,tag,send_handles(sendreqnum))
+             sendreqnum = sendreqnum + 1
+          end if
+          
+          tag = tag + taglim
+          
+          if(fbpar>epsilon(0.0)) then
+             call nbsend(antotp(:,it,ik),receiver,tag,send_handles(sendreqnum))
+             sendreqnum = sendreqnum + 1
+          end if
+          
+       end if
+       
+    end do
+
+    call waitall(sendreqnum-1,send_handles)
+    call waitall(recvreqnum-1,recv_handles)
+
+    call time_message(.false.,time_gf_reduce_an_sendrecv,' Gf_lo reduce an sendrecv')
+
+!!$    if(iproc .eq. 0) then
+!!$       inquire(file="0before.txt", exist=exist)
+!!$       if (exist) then
+!!$          open(12, file="0before.txt", status="old", position="append", action="write")
+!!$       else
+!!$          open(12, file="0before.txt", status="new", action="write")
+!!$       end if
+!!$       write(12, *) 'startline'
+!!$       write(12, *) tempdata(:,4,2,1,2,2)
+!!$       write(12,*) 'endline'
+!!$       close(12)
+!!$    else if(iproc .eq. 24) then
+!!$       inquire(file="24before.txt", exist=exist)
+!!$       if (exist) then
+!!$          open(12, file="24before.txt", status="old", position="append", action="write")
+!!$       else
+!!$          open(12, file="24before.txt", status="new", action="write")
+!!$       end if
+!!$       write(12, *) 'startline'
+!!$       write(12,*) antot(:,4,2)
+!!$       write(12,*) 'endline'
+!!$       close(12)
+!!$    else if(iproc .eq. 683) then
+!!$       inquire(file="683before.txt", exist=exist)
+!!$       if (exist) then
+!!$          open(12, file="683before.txt", status="old", position="append", action="write")
+!!$       else
+!!$          open(12, file="683before.txt", status="new", action="write")
+!!$       end if
+!!$       write(12, *) 'startline'
+!!$       antot(:,4,2) = 0.
+!!$       write(12,*) antot(:,4,2)
+!!$       write(12,*) 'endline'
+!!$       close(12)
+!!$    end if
+
+
+    call time_message(.false.,time_gf_reduce_an_broadcast,' Gf_lo reduce an broadcast')
+
+    do ik = 1,self%naky
+       if(.not.self%kyb(ik)%is_local) cycle
+       do is=1,self%kyb(ik)%nsupercell
+          if(.not. self%kyb(ik)%supercells(is)%is_local) cycle
+          root = self%kyb(ik)%supercells(is)%head_iproc_pd
+          
+          if((self%kyb(ik)%supercells(is)%is_empty.or.self%kyb(ik)%supercells(is)%is_all_local)) cycle
+
+          tempit = 1
+          do ic=1,self%kyb(ik)%supercells(is)%ncell
+             it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+             if(kwork_filter(it,ik)) cycle
+
+!!$             if(iproc .eq. 0 .and. ik .eq. 2 .and. it .eq. 4) then
+!!$                write(*,*) 'tempit',tempit,is,ik
+!!$             end if
+!!$             if(iproc .eq. 683 .and. ik .eq. 2 .and. it .eq. 4) then
+!!$                write(*,*) '683 tempit',tempit,is,ik
+!!$             end if
+          
+!!$             if(fphi>epsilon(0.0)) then
+!!$!                call broadcast_sub(antot(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!!$                call broadcast_sub(tempdata(:,tempit,1,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!!$                antot(:,it,ik) = tempdata(:,tempit,1,ik,is,ik)
+!!$             end if
+!!$             
+!!$             if(fapar>epsilon(0.0)) then
+!!$!                call broadcast_sub(antota(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!!$                call broadcast_sub(tempdata(:,tempit,2,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!!$                antota(:,it,ik) = tempdata(:,tempit,2,ik,is,ik)
+!!$             end if
+!!$             
+!!$             if(fbpar>epsilon(0.0)) then
+!!$!                call broadcast_sub(antotp(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!!$                call broadcast_sub(tempdata(:,tempit,3,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!!$                antotp(:,it,ik) = tempdata(:,tempit,3,ik,is,ik)
+!!$             end if
+             tempit = tempit + 1
+
+          end do
+
+          call broadcast_sub(tempdata(:,1:tempit,1:num_fields,ik,is),root,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+
+          if(fphi>epsilon(0.0)) then
+             !                call broadcast_sub(antot(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!             call broadcast_sub(tempdata(:,1:tempit,1,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+             tempit = 1
+             do ic=1,self%kyb(ik)%supercells(is)%ncell
+                it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+                if(kwork_filter(it,ik)) cycle
+
+                antot(:,it,ik) = tempdata(:,tempit,1,ik,is)
+                tempit = tempit + 1
+             end do
+          end if
+             
+          if(fapar>epsilon(0.0)) then
+             !                call broadcast_sub(antota(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!             call broadcast_sub(tempdata(:,1:tempit,2,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+             tempit = 1
+             do ic=1,self%kyb(ik)%supercells(is)%ncell
+                it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+                if(kwork_filter(it,ik)) cycle
+
+                antota(:,it,ik) = tempdata(:,tempit,2,ik,is)
+                tempit = tempit + 1
+             end do
+          end if
+          
+          if(fbpar>epsilon(0.0)) then
+             !                call broadcast_sub(antotp(:,it,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+!             call broadcast_sub(tempdata(:,1:tempit,3,ik,is,ik),root,self%kyb(ik)%supercells(is)%sc_sub_all%id)
+             tempit = 1
+             do ic=1,self%kyb(ik)%supercells(is)%ncell
+                it = self%kyb(ik)%supercells(is)%cells(ic)%it_ind
+
+                if(kwork_filter(it,ik)) cycle
+
+                antotp(:,it,ik) = tempdata(:,tempit,3,ik,is)
+                tempit = tempit + 1
+             end do
+          end if
+             
+       end do
+    end do
+
+    call time_message(.false.,time_gf_reduce_an_broadcast,' Gf_lo reduce an broadcast')
+
+!!$    if(iproc .eq. 0) then
+!!$       inquire(file="0after.txt", exist=exist)
+!!$       if (exist) then
+!!$          open(12, file="0after.txt", status="old", position="append", action="write")
+!!$       else
+!!$          open(12, file="0after.txt", status="new", action="write")
+!!$       end if
+!!$       write(12, *) 'startline'
+!!$       write(12, *) antot(:,4,2)
+!!$       write(12,*) 'endline'
+!!$       close(12)
+!!$    else if(iproc .eq. 24) then
+!!$       inquire(file="24after.txt", exist=exist)
+!!$       if (exist) then
+!!$          open(12, file="24after.txt", status="old", position="append", action="write")
+!!$       else
+!!$          open(12, file="24after.txt", status="new", action="write")
+!!$       end if
+!!$       write(12, *) 'startline'
+!!$       write(12,*) antot(:,4,2)
+!!$       write(12,*) 'endline'
+!!$       close(12)
+!!$    else if(iproc .eq. 683) then
+!!$       inquire(file="683after.txt", exist=exist)
+!!$       if (exist) then
+!!$          open(12, file="683after.txt", status="old", position="append", action="write")
+!!$       else
+!!$          open(12, file="683after.txt", status="new", action="write")
+!!$       end if
+!!$       write(12, *) 'startline'
+!!$       write(12,*) antot(:,4,2)
+!!$       write(12,*) 'endline'
+!!$       close(12)
+!!$    end if
+
+    deallocate(tempdata)
+
+  end subroutine fm_reduce_an_head_send_broadcast
+
   subroutine fm_check_an (self,antot, tempantot, antota, tempantota, antotp, tempantotp)
     use mp, only: broadcast_sub, iproc, sum_allreduce_sub, mp_abort
     use theta_grid, only: ntgrid
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: gf_lo, proc_id, idx
+    use kt_grids, only: kwork_filter
     implicit none
     class(fieldmat_type), intent(in) :: self
     complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp, tempantot, tempantota, tempantotp
-    complex :: tol = (1e-13,1e-13)
+    complex :: tol = (1e-14,1e-14)
     integer :: ik, it, is, ic, ig
 
-    do ik=1,self%naky
+    loop1: do ik=1,self%naky
        !Skip empty cells, note this is slightly different to skipping
        !.not.is_local. Skipping empty is probably faster but may be more dangerous
        if(self%kyb(ik)%is_empty) cycle
        do is=1,self%kyb(ik)%nsupercell
-          if(self%kyb(ik)%supercells(is)%is_empty .or. self%kyb(ik)%supercells(is)%is_all_local) cycle
+          if(self%kyb(ik)%supercells(is)%is_empty) cycle
           do ic=1,self%kyb(ik)%supercells(is)%ncell
+             if(self%kyb(ik)%supercells(is)%cells(ic)%is_empty) cycle
 
              it=self%kyb(ik)%supercells(is)%cells(ic)%it_ind
-
-
+             if(kwork_filter(it,ik)) cycle
+             
              if(fphi>epsilon(0.0)) then
                 do ig=-ntgrid,ntgrid
                    if(abs(aimag(antot(ig,it,ik)-tempantot(ig,it,ik))).gt.aimag(tol) .or. abs(real(antot(ig,it,ik)-tempantot(ig,it,ik))).gt.real(tol)) then
                       write(*,*) iproc,'problem with antot',it,ik,antot(ig,it,ik),tempantot(ig,it,ik)
                       call mp_abort('Problem with antot')
-                      exit
+                      exit loop1
                    end if
                 end do
              endif
@@ -3080,7 +3461,7 @@ contains
                    if(abs(aimag(antota(ig,it,ik)-tempantota(ig,it,ik))).gt.aimag(tol) .or. abs(real(antota(ig,it,ik)-tempantota(ig,it,ik))).gt.real(tol)) then
                       write(*,*) iproc,'problem with antota',it,ik,antota(ig,it,ik),tempantota(ig,it,ik)
                       call mp_abort('Problem with antota')
-                      exit
+                       exit loop1
                    end if
                 end do
              endif
@@ -3090,13 +3471,13 @@ contains
                    if(abs(aimag(antotp(ig,it,ik)-tempantotp(ig,it,ik))).gt.aimag(tol) .or. abs(real(antotp(ig,it,ik)-tempantotp(ig,it,ik))).gt.real(tol)) then
                       write(*,*) iproc,'problem with antotp',it,ik,antotp(ig,it,ik),tempantotp(ig,it,ik)
                       call mp_abort('Problem with antotp')
-                      exit
+                      exit loop1
                    end if
                 end do
              end if
           end do
        enddo
-    enddo
+    enddo loop1
 
 
   end subroutine fm_check_an
@@ -3887,6 +4268,9 @@ contains
           call cpu_time(ts)
        endif
        call fieldmat%make_subcom_2
+
+       call fieldmat%calc_sc_heads
+
        !if(debug)call barrier
        if(proc0.and.debug) then 
           call cpu_time(te)

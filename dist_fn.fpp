@@ -95,6 +95,7 @@ module dist_fn
 !AJ
   public :: time_orig, time_gf, time_gf_v2, time_gf_gather, time_orig_moment_mult, time_new_moment_mult, time_new_array_moment_mult
   public :: gf_lo_integrate
+  public :: check_getan
 
   ! knobs
   complex, dimension (:), allocatable :: fexp ! (nspec)
@@ -707,6 +708,7 @@ contains
     use species, only: init_species, nspec
     use collisions, only: init_collisions!, vnmult
     use hyper, only: init_hyper
+    use le_grids, only: init_g2gf
     implicit none
     logical,parameter:: debug=.false.
 
@@ -749,6 +751,8 @@ contains
 
     if (debug) write(6,*) "init_dist_fn: init_source_term"
     call init_source_term
+
+    call init_g2gf(debug)
 
   end subroutine init_dist_fn_level_3
 
@@ -1527,9 +1531,9 @@ contains
     do igf = gf_lo%llim_proc, gf_lo%ulim_proc
        ik = ik_idx(gf_lo,igf)
        it = it_idx(gf_lo,igf)
-       do is = 1,gf_lo%nspec
-          do il = 1,gf_lo%nlambda
-             do ie = 1,gf_lo%negrid
+       do il = 1,gf_lo%nlambda
+          do ie = 1,gf_lo%negrid
+             do is = 1,gf_lo%nspec
                 do ig = -ntgrid, ntgrid
                    arg = spec(is)%bess_fac*spec(is)%smz*sqrt(energy(ie)*al(il)/bmag(ig)*kperp2(ig,it,ik))
                    aj0_gf(ig,is,ie,il,igf) = j0(arg)
@@ -6360,10 +6364,12 @@ endif
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
 
     call getan_nogath (antot, antota, antotp)
+
     call getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
 
     deallocate (antot, antota, antotp)
+
   end subroutine getfieldeq_nogath
 
   subroutine getfieldeq1_nogath (phi, apar, bpar, antot, antota, antotp, &
@@ -6438,6 +6444,131 @@ endif
     end if
   end subroutine getfieldeq1_nogath
 
+  subroutine check_getan (antot, antota, antotp, tempantot, tempantota, tempantotp)
+    use mp, only : iproc
+    use species, only: nspec
+    use theta_grid, only: ntgrid
+    use le_grids, only: negrid, nlambda
+    use run_parameters, only: fphi, fapar, fbpar
+    use kt_grids, only: naky, ntheta0, kwork_filter
+    use gs2_layouts, only: g_lo, it_idx, ik_idx, gf_lo, idx, proc_id
+
+    implicit none
+
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky), intent (inout) :: antot, antota, antotp
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky), intent (inout) :: tempantot, tempantota, tempantotp
+    complex :: tol = (1e-14,1e-14)
+    integer :: it, ik, igf, ig, iglo
+
+    if (fphi > epsilon(0.0)) then
+
+       if(any(kwork_filter))then
+          loop1: do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             ik = ik_idx(g_lo,iglo)
+             it = it_idx(g_lo,iglo)
+             if(kwork_filter(it,ik)) cycle
+             igf = idx(gf_lo,ik,it)
+             if(proc_id(gf_lo,igf) .eq. iproc) then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antot(ig,it,ik)-tempantot(ig,it,ik))).gt.aimag(tol) .or. abs(real(antot(ig,it,ik)-tempantot(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antot gf_lo integration',igf,it,ik,antot(ig,it,ik),tempantot(ig,it,ik)
+                      exit loop1
+                   end if
+                end do
+             end if
+          end do loop1
+       else
+          loop2: do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             ik = ik_idx(g_lo,iglo)
+             it = it_idx(g_lo,iglo)
+             igf = idx(gf_lo,ik,it)
+             if(proc_id(gf_lo,igf) .eq. iproc) then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antot(ig,it,ik)-antot(ig,it,ik))).gt.aimag(tol) .or. abs(real(antot(ig,it,ik)-antot(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antot gf_lo integration',igf,it,ik,antot(ig,it,ik),tempantot(ig,it,ik)
+                      exit loop2
+                   end if
+                end do
+             end if
+          end do loop2
+       end if
+
+    end if
+
+    if (fapar > epsilon(0.0)) then
+
+       if(any(kwork_filter))then
+          loop3: do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             ik = ik_idx(g_lo,iglo)
+             it = it_idx(g_lo,iglo)
+             if(kwork_filter(it,ik)) cycle
+             igf = idx(gf_lo,ik,it)
+             if(proc_id(gf_lo,igf) .eq. iproc) then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antota(ig,it,ik)-tempantota(ig,it,ik))).gt.aimag(tol) .or. abs(real(antota(ig,it,ik)-tempantota(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antota gf_lo integration',igf,it,ik,antota(ig,it,ik),tempantota(ig,it,ik)
+                      exit loop3
+                   end if
+                end do
+             end if
+          end do loop3
+       else
+          loop4: do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             ik = ik_idx(g_lo,iglo)
+             it = it_idx(g_lo,iglo)
+             igf = idx(gf_lo,ik,it)
+             if(proc_id(gf_lo,igf) .eq. iproc) then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antota(ig,it,ik)-antota(ig,it,ik))).gt.aimag(tol) .or. abs(real(antota(ig,it,ik)-antota(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antota gf_lo integration',igf,it,ik,antota(ig,it,ik),tempantota(ig,it,ik)
+                      exit loop4
+                   end if
+                end do
+             end if
+          end do loop4
+       end if
+
+
+    end if
+
+
+    if (fbpar > epsilon(0.0)) then
+
+       if(any(kwork_filter))then
+          loop5: do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             ik = ik_idx(g_lo,iglo)
+             it = it_idx(g_lo,iglo)
+             if(kwork_filter(it,ik)) cycle
+             igf = idx(gf_lo,ik,it)
+             if(proc_id(gf_lo,igf) .eq. iproc) then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antotp(ig,it,ik)-tempantotp(ig,it,ik))).gt.aimag(tol) .or. abs(real(antotp(ig,it,ik)-tempantotp(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antotp gf_lo integration',igf,it,ik,antotp(ig,it,ik),tempantotp(ig,it,ik)
+                      exit loop5
+                   end if
+                end do
+             end if
+          end do loop5
+       else
+          loop6: do iglo = g_lo%llim_proc, g_lo%ulim_proc
+             ik = ik_idx(g_lo,iglo)
+             it = it_idx(g_lo,iglo)
+             igf = idx(gf_lo,ik,it)
+             if(proc_id(gf_lo,igf) .eq. iproc) then
+                do ig=-ntgrid,ntgrid
+                   if(abs(aimag(antotp(ig,it,ik)-antotp(ig,it,ik))).gt.aimag(tol) .or. abs(real(antotp(ig,it,ik)-antotp(ig,it,ik))).gt.real(tol)) then
+                      write(*,*) iproc,'problem with antotp gf_lo integration',igf,it,ik,antotp(ig,it,ik),tempantotp(ig,it,ik)
+                      exit loop6
+                   end if
+                end do
+             end if
+          end do loop6
+       end if
+
+    end if
+
+  end subroutine check_getan
+
   subroutine getan_nogath (antot, antota, antotp)
     use mp, only : iproc
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew
@@ -6445,7 +6576,7 @@ endif
     use dist_fn_arrays, only: vpa_gf, vperp2_gf, aj0_gf, aj1_gf
     use species, only: nspec, spec
     use theta_grid, only: ntgrid, bmag
-    use le_grids, only: integrate_species, al, energy, g2gf, negrid, nlambda
+    use le_grids, only: integrate_species, al, energy, g2gf, negrid, nlambda, w, wl
     use run_parameters, only: beta, fphi, fapar, fbpar
     use gs2_layouts, only: g_lo, it_idx,ik_idx, gf_lo, proc_id, idx, ie_idx, is_idx, il_idx
     use spfunc, only: j0, j1
@@ -6463,20 +6594,20 @@ endif
     complex :: tol = (1e-13,1e-13)
     complex, dimension (-ntgrid:ntgrid,2,nspec,negrid,nlambda,gf_lo%llim_proc:gf_lo%ulim_alloc) :: gfarray,gfg0
     integer :: ie, il, is
-!    real :: temparg, temparg2
-!    real, dimension(-ntgrid:ntgrid) :: temparg3
-!    real, dimension(-ntgrid:ntgrid,2) :: tempvpa
+    real :: temparg, temparg2
+    real, dimension(-ntgrid:ntgrid) :: temparg3,temparg4
+    real, dimension(-ntgrid:ntgrid,2) :: tempvpa
    
-#ifdef DEBUG
-    call time_message(.false.,time_gf_gather,' Gf_lo integrate gather')
-#endif
 
     if(gf_lo_integrate) then
-       call gather(g2gf, gnew, gfarray)
-    end if
-#ifdef DEBUG
+!#ifdef DEBUG
     call time_message(.false.,time_gf_gather,' Gf_lo integrate gather')
-#endif
+!#endif
+       call gather(g2gf, gnew, gfarray)
+!#ifdef DEBUG
+    call time_message(.false.,time_gf_gather,' Gf_lo integrate gather')
+!#endif
+    end if
 
     if (fphi > epsilon(0.0)) then
        !<DD>NOTE: It's possible to rewrite this loop as simply
@@ -6487,9 +6618,9 @@ endif
        wgt = spec%z*spec%dens
 
       if(.not. gf_lo_integrate) then
-#ifdef DEBUG
+!#ifdef DEBUG
        call time_message(.false.,time_orig_moment_mult,' Original moment multiply')
-#endif
+!#endif
          if(any(kwork_filter))then
             do iglo = g_lo%llim_proc, g_lo%ulim_proc
                it=it_idx(g_lo,iglo)
@@ -6506,23 +6637,25 @@ endif
                end do
             end do
          endif
-#ifdef DEBUG
+!#ifdef DEBUG
          call time_message(.false.,time_orig_moment_mult,' Original moment multiply')
-#endif
-#ifdef DEBUG
+!#endif
+!#ifdef DEBUG
          call time_message(.false.,time_orig,' Original integrate')
-#endif
+!#endif
          call integrate_species (g0, wgt, antot, nogath=.true.)
-#ifdef DEBUG
+!#ifdef DEBUG
          call time_message(.false.,time_orig,' Original integrate')
-#endif
+!#endif
       end if
 
-!AJ First attempt at generating g0 for gf_lo layout, using on the fly aj0 calculation rather than storing aj0.
-!AJ This is not as fast as using aj0_gf method so it has been commented out.
-!!$#ifdef DEBUG
+
+       if(gf_lo_integrate) then
+!!$!AJ First attempt at generating g0 for gf_lo layout, using on the fly aj0 calculation rather than storing aj0.
+!!$!AJ This is not as fast as using aj0_gf method so it has been commented out.
+!!$!#ifdef DEBUG
 !!$       call time_message(.false.,time_new_moment_mult,' New moment multiply')
-!!$#endif
+!!$!#endif
 !!$       if(any(kwork_filter))then
 !!$          do igf = gf_lo%llim_proc, gf_lo%ulim_proc
 !!$             if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle
@@ -6563,52 +6696,84 @@ endif
 !!$             end do
 !!$          end do
 !!$       endif
-!!$#ifdef DEBUG
+!!$!#ifdef DEBUG
 !!$       call time_message(.false.,time_new_moment_mult,' New moment multiply')
-!!$#endif
+!!$!#endif
 
-       if(gf_lo_integrate) then
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_new_array_moment_mult,' New array moment multiply')
-#endif
+!#endif
           if(any(kwork_filter))then
-             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
-                if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle
+!!$             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$                if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle
+!!$                do il = 1,gf_lo%nlambda
+!!$                   do ie = 1,gf_lo%negrid
+!!$                      do is = 1,gf_lo%nspec
+!!$                         temparg3 = aj0_gf(:,is,ie,il,igf)
+!!$                         do isgn = 1, 2
+!!$!                            do ig = -ntgrid, ntgrid        
+!!$!                               gfg0(:,isgn,is,ie,il,igf) = aj0_gf(:,is,ie,il,igf)*gfarray(:,isgn,is,ie,il,igf)
+!!$                               gfg0(:,isgn,is,ie,il,igf) = temparg3*gfarray(:,isgn,is,ie,il,igf)
+!!$!                            end do
+!!$                         end do
+!!$                      end do
+!!$                   end do
+!!$                end do
+!!$             end do
+!             antot =0.
+             do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+                it = it_idx(gf_lo,igf)
+                ik = ik_idx(gf_lo,igf)
+                antot(:,it,ik) =0.
+                if(kwork_filter(it,ik)) cycle
                 do il = 1,gf_lo%nlambda
                    do ie = 1,gf_lo%negrid
                       do is = 1,gf_lo%nspec
-                         do isgn = 1, 2
-                            do ig = -ntgrid, ntgrid        
-                               gfg0(ig,isgn,is,ie,il,igf) = aj0_gf(ig,is,ie,il,igf)*gfarray(ig,isgn,is,ie,il,igf)
-                            end do
-                         end do
+                         antot(:,it,ik) = antot(:,it,ik) + wgt(is)*w(ie)*wl(:,il)*((aj0_gf(:,is,ie,il,igf)*gfarray(:,1,is,ie,il,igf))+(aj0_gf(:,is,ie,il,igf)*gfarray(:,2,is,ie,il,igf)))
                       end do
                    end do
                 end do
              end do
+       
           else
-             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$                do il = 1,gf_lo%nlambda
+!!$                   do ie = 1,gf_lo%negrid
+!!$                      do is = 1,gf_lo%nspec
+!!$                         temparg3 = aj0_gf(:,is,ie,il,igf)
+!!$                         do isgn = 1, 2
+!!$!                            do ig = -ntgrid, ntgrid        
+!!$!                               gfg0(:,isgn,is,ie,il,igf) = aj0_gf(:,is,ie,il,igf)*gfarray(:,isgn,is,ie,il,igf)
+!!$                               gfg0(:,isgn,is,ie,il,igf) = temparg3*gfarray(:,isgn,is,ie,il,igf)
+!!$!                            end do
+!!$                         end do
+!!$                      end do
+!!$                   end do
+!!$                end do
+!!$             end do
+!             antot =0.
+             do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+                it = it_idx(gf_lo,igf)
+                ik = ik_idx(gf_lo,igf)
+                antot(:,it,ik) =0.
                 do il = 1,gf_lo%nlambda
                    do ie = 1,gf_lo%negrid
                       do is = 1,gf_lo%nspec
-                         do isgn = 1, 2
-                            do ig = -ntgrid, ntgrid        
-                               gfg0(ig,isgn,is,ie,il,igf) = aj0_gf(ig,is,ie,il,igf)*gfarray(ig,isgn,is,ie,il,igf)
-                            end do
-                         end do
+                         antot(:,it,ik) = antot(:,it,ik) + wgt(is)*w(ie)*wl(:,il)*((aj0_gf(:,is,ie,il,igf)*gfarray(:,1,is,ie,il,igf))+(aj0_gf(:,is,ie,il,igf)*gfarray(:,2,is,ie,il,igf)))
                       end do
                    end do
                 end do
              end do
+
           endif
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_new_array_moment_mult,' New array moment multiply')
-#endif
+!#endif
 
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
 #endif
-          call integrate_species (gfg0, wgt, antot)
+!          call integrate_species (gfg0, wgt, antot)
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
 #endif
@@ -6669,9 +6834,9 @@ endif
        wgt = 2.0*beta*spec%z*spec%dens*spec%stm
 
        if(.not. gf_lo_integrate) then
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_orig_moment_mult,' Original moment multiply')
-#endif
+!#endif
           if(any(kwork_filter))then
              do iglo = g_lo%llim_proc, g_lo%ulim_proc
                 it=it_idx(g_lo,iglo)
@@ -6688,24 +6853,24 @@ endif
                 end do
              end do
           end if
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_orig_moment_mult,' Original moment multiply')
-#endif
-#ifdef DEBUG
+!#endif
+!#ifdef DEBUG
           call time_message(.false.,time_orig,' Original integrate')
-#endif
+!#endif
           call integrate_species (g0, wgt, antota, nogath=.true.)
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_orig,' Original integrate')
-#endif
+!#endif
        end if
 
-
-#ifdef DEBUG
-       call time_message(.false.,time_new_moment_mult,' New moment multiply')
-#endif
-!AJ First attempt at generating g0 for gf_lo layout, using on the fly aj0 calculation rather than storing aj0.
-!AJ This is not as fast as using aj0_gf method so it has been commented out.
+       if(gf_lo_integrate) then
+!!$!#ifdef DEBUG
+!!$       call time_message(.false.,time_new_moment_mult,' New moment multiply')
+!!$!#endif
+!!$!AJ First attempt at generating g0 for gf_lo layout, using on the fly aj0 calculation rather than storing aj0.
+!!$!AJ This is not as fast as using aj0_gf method so it has been commented out.
 !!$       if(any(kwork_filter))then
 !!$          do igf = gf_lo%llim_proc, gf_lo%ulim_proc
 !!$             if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle
@@ -6764,51 +6929,84 @@ endif
 !!$             end do
 !!$          end do
 !!$       endif
-#ifdef DEBUG
-       call time_message(.false.,time_new_moment_mult,' New moment multiply')
-#endif
+!!$!#ifdef DEBUG
+!!$       call time_message(.false.,time_new_moment_mult,' New moment multiply')
+!!$!#endif
 
-       if(gf_lo_integrate) then
-#ifdef DEBUG
+
+!#ifdef DEBUG
           call time_message(.false.,time_new_array_moment_mult,' New array moment multiply')
-#endif
+!#endif
           if(any(kwork_filter))then
-             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
-                if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle
+!!$             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$                if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle
+!!$                do il = 1,gf_lo%nlambda
+!!$                   do ie = 1,gf_lo%negrid
+!!$                      do is = 1,gf_lo%nspec
+!!$                         temparg3 = aj0_gf(:,is,ie,ik,igf)
+!!$                         do isgn = 1, 2
+!!$!                            do ig = -ntgrid, ntgrid        
+!!$!                               gfg0(:,isgn,is,ie,il,igf) = aj0_gf(:,is,ie,il,igf)*vpa_gf(:,isgn,ie,il)*gfarray(:,isgn,is,ie,il,igf)
+!!$                               gfg0(:,isgn,is,ie,il,igf) = temparg3*vpa_gf(:,isgn,ie,il)*gfarray(:,isgn,is,ie,il,igf)
+!!$!                            end do
+!!$                         end do
+!!$                      end do
+!!$                   end do
+!!$                end do
+!!$             end do
+!             antota =0.
+             do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+                it = it_idx(gf_lo,igf)
+                ik = ik_idx(gf_lo,igf)
+                antota(:,it,ik) =0.
+                if(kwork_filter(it,ik)) cycle
                 do il = 1,gf_lo%nlambda
                    do ie = 1,gf_lo%negrid
                       do is = 1,gf_lo%nspec
-                         do isgn = 1, 2
-                            do ig = -ntgrid, ntgrid        
-                               gfg0(ig,isgn,is,ie,il,igf) = aj0_gf(ig,is,ie,il,igf)*vpa_gf(ig,isgn,ie,il)*gfarray(ig,isgn,is,ie,il,igf)
-                            end do
-                         end do
+                         antota(:,it,ik) = antota(:,it,ik) + wgt(is)*w(ie)*wl(:,il)*((aj0_gf(:,is,ie,il,igf)*vpa_gf(:,1,ie,il)*gfarray(:,1,is,ie,il,igf))+(aj0_gf(:,is,ie,il,igf)*vpa_gf(:,2,ie,il)*gfarray(:,2,is,ie,il,igf)))
                       end do
                    end do
                 end do
              end do
+
           else
-             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$                do il = 1,gf_lo%nlambda
+!!$                   do ie = 1,gf_lo%negrid
+!!$                      do is = 1,gf_lo%nspec
+!!$                         temparg3 = aj0_gf(:,is,ie,ik,igf)
+!!$                         do isgn = 1, 2
+!!$!                            do ig = -ntgrid, ntgrid        
+!!$!                               gfg0(:,isgn,is,ie,il,igf) = aj0_gf(:,is,ie,il,igf)*vpa_gf(:,isgn,ie,il)*gfarray(:,isgn,is,ie,il,igf)
+!!$                               gfg0(:,isgn,is,ie,il,igf) = temparg3*vpa_gf(:,isgn,ie,il)*gfarray(:,isgn,is,ie,il,igf)
+!!$!                            end do
+!!$                         end do
+!!$                      end do
+!!$                   end do
+!!$                end do
+!!$             end do
+!             antota =0.
+             do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+                it = it_idx(gf_lo,igf)
+                ik = ik_idx(gf_lo,igf)
+                antota(:,it,ik) =0.
                 do il = 1,gf_lo%nlambda
                    do ie = 1,gf_lo%negrid
                       do is = 1,gf_lo%nspec
-                         do isgn = 1, 2
-                            do ig = -ntgrid, ntgrid        
-                               gfg0(ig,isgn,is,ie,il,igf) = aj0_gf(ig,is,ie,il,igf)*vpa_gf(ig,isgn,ie,il)*gfarray(ig,isgn,is,ie,il,igf)
-                            end do
-                         end do
+                         antota(:,it,ik) = antota(:,it,ik) + wgt(is)*w(ie)*wl(:,il)*((aj0_gf(:,is,ie,il,igf)*vpa_gf(:,1,ie,il)*gfarray(:,1,is,ie,il,igf))+(aj0_gf(:,is,ie,il,igf)*vpa_gf(:,2,ie,il)*gfarray(:,2,is,ie,il,igf)))
                       end do
                    end do
                 end do
              end do
+
           end if
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_new_array_moment_mult,' New array moment multiply')
-#endif
+!#endif
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
 #endif
-          call integrate_species (gfg0, wgt, antota)
+!          call integrate_species (gfg0, wgt, antota)
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate f2')
 #endif
@@ -6866,9 +7064,9 @@ endif
        wgt = spec%temp*spec%dens
 
        if(.not. gf_lo_integrate) then
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_orig_moment_mult,' Original moment multiply')
-#endif
+!#endif
           if(any(kwork_filter))then
              do iglo = g_lo%llim_proc, g_lo%ulim_proc
                 it=it_idx(g_lo,iglo)
@@ -6885,23 +7083,24 @@ endif
                 end do
              end do
           end if
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_orig_moment_mult,' Original moment multiply')
-#endif
-#ifdef DEBUG
+!#endif
+!#ifdef DEBUG
           call time_message(.false.,time_orig,' Original integrate')
-#endif
+!#endif
           call integrate_species (g0, wgt, antotp, nogath=.true.)
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_orig,' Original integrate')
-#endif
+!#endif
        end if
 
-#ifdef DEBUG
-       call time_message(.false.,time_new_moment_mult,' New moment multiply')
-#endif
-!AJ First attempt at generating g0 for gf_lo layout, using on the fly aj0 calculation rather than storing aj0.
-!AJ This is not as fast as using aj0_gf method so it has been commented out.
+       if(gf_lo_integrate) then
+!!$!#ifdef DEBUG
+!!$       call time_message(.false.,time_new_moment_mult,' New moment multiply')
+!!$!#endif
+!!$!AJ First attempt at generating g0 for gf_lo layout, using on the fly aj0 calculation rather than storing aj0.
+!!$!AJ This is not as fast as using aj0_gf method so it has been commented out.
 !!$       if(any(kwork_filter))then
 !!$          do igf = gf_lo%llim_proc, gf_lo%ulim_proc
 !!$             if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle
@@ -6945,51 +7144,88 @@ endif
 !!$             end do
 !!$          end do
 !!$       endif
-#ifdef DEBUG
-       call time_message(.false.,time_new_moment_mult,' New moment multiply')
-#endif
+!!$!#ifdef DEBUG
+!!$       call time_message(.false.,time_new_moment_mult,' New moment multiply')
+!!$!#endif
 
-       if(gf_lo_integrate) then
-#ifdef DEBUG
+
+!#ifdef DEBUG
           call time_message(.false.,time_new_array_moment_mult,' New array moment multiply')
-#endif
+!#endif
           if(any(kwork_filter))then
-             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
-                if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle             
+!!$             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$                if(kwork_filter(it_idx(gf_lo,igf),ik_idx(gf_lo,igf))) cycle             
+!!$                do il = 1,gf_lo%nlambda
+!!$                   do ie = 1,gf_lo%negrid
+!!$                      temparg4 = vperp2_gf(:,ie,il)
+!!$                      do is = 1,gf_lo%nspec
+!!$                         temparg3 = aj1_gf(:,is,ie,il,igf)*temparg4
+!!$                         do isgn = 1, 2
+!!$!                            do ig = -ntgrid, ntgrid        
+!!$!                               gfg0(:,isgn,is,ie,il,igf) = aj1_gf(:,is,ie,il,igf)*vperp2_gf(:,ie,il)*gfarray(:,isgn,is,ie,il,igf)
+!!$                               gfg0(:,isgn,is,ie,il,igf) = temparg3*gfarray(:,isgn,is,ie,il,igf)
+!!$!                            end do
+!!$                         end do
+!!$                      end do
+!!$                   end do
+!!$                end do
+!!$             end do
+!             antotp =0.
+             do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+                it = it_idx(gf_lo,igf)
+                ik = ik_idx(gf_lo,igf)
+                antotp(:,it,ik) =0.
+                if(kwork_filter(it,ik)) cycle
                 do il = 1,gf_lo%nlambda
                    do ie = 1,gf_lo%negrid
                       do is = 1,gf_lo%nspec
-                         do isgn = 1, 2
-                            do ig = -ntgrid, ntgrid        
-                               gfg0(ig,isgn,is,ie,il,igf) = aj1_gf(ig,is,ie,il,igf)*vperp2_gf(ig,ie,il)*gfarray(ig,isgn,is,ie,il,igf)
-                            end do
-                         end do
+                         temparg3 = aj1_gf(:,is,ie,il,igf)*vperp2_gf(:,ie,il)
+                         antotp(:,it,ik) = antotp(:,it,ik) + wgt(is)*w(ie)*wl(:,il)*((temparg3*gfarray(:,1,is,ie,il,igf))+(temparg3*gfarray(:,2,is,ie,il,igf)))
                       end do
                    end do
                 end do
              end do
+
           else
-             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$             do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!!$                do il = 1,gf_lo%nlambda
+!!$                   do ie = 1,gf_lo%negrid
+!!$                      temparg4 = vperp2_gf(:,ie,il)
+!!$                      do is = 1,gf_lo%nspec
+!!$                         temparg3 = aj1_gf(:,is,ie,il,igf)*temparg4
+!!$                         do isgn = 1, 2
+!!$!                            do ig = -ntgrid, ntgrid        
+!!$!                               gfg0(:,isgn,is,ie,il,igf) = aj1_gf(:,is,ie,il,igf)*vperp2_gf(:,ie,il)*gfarray(:,isgn,is,ie,il,igf)
+!!$                               gfg0(:,isgn,is,ie,il,igf) = temparg3*gfarray(:,isgn,is,ie,il,igf)
+!!$!                            end do
+!!$                         end do
+!!$                      end do
+!!$                   end do
+!!$                end do
+!!$             end do
+!             antotp =0.
+             do igf = gf_lo%llim_proc,gf_lo%ulim_proc
+                it = it_idx(gf_lo,igf)
+                ik = ik_idx(gf_lo,igf)
+                antotp(:,it,ik) =0.
                 do il = 1,gf_lo%nlambda
                    do ie = 1,gf_lo%negrid
                       do is = 1,gf_lo%nspec
-                         do isgn = 1, 2
-                            do ig = -ntgrid, ntgrid        
-                               gfg0(ig,isgn,is,ie,il,igf) = aj1_gf(ig,is,ie,il,igf)*vperp2_gf(ig,ie,il)*gfarray(ig,isgn,is,ie,il,igf)
-                            end do
-                         end do
+                         temparg3 = aj1_gf(:,is,ie,il,igf)*vperp2_gf(:,ie,il)
+                         antotp(:,it,ik) = antotp(:,it,ik) + wgt(is)*w(ie)*wl(:,il)*((temparg3*gfarray(:,1,is,ie,il,igf))+(temparg3*gfarray(:,2,is,ie,il,igf)))
                       end do
                    end do
                 end do
              end do
+
           endif
-#ifdef DEBUG
+!#ifdef DEBUG
           call time_message(.false.,time_new_array_moment_mult,' New array moment multiply')
-#endif
+!#endif
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
 #endif
-          call integrate_species (gfg0, wgt, antotp)
+!          call integrate_species (gfg0, wgt, antotp)
 #ifdef DEBUG
           call time_message(.false.,time_gf_v2,' Gf_lo integrate v2')
 #endif
