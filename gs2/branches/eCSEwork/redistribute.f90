@@ -5562,7 +5562,7 @@ contains
 
   subroutine c_redist_36_mpi_copy_nonblock(r, from_here, to_here)
 
-    use mp, only: iproc, nproc, nbsend, nbrecv, waitany, waitall, status_size
+    use mp, only: iproc, nproc, nbsend, nbrecv, waitany, waitall, status_size, initialise_requests
     use theta_grid, only : ntgrid
     type (redist_type), intent (in out) :: r
 
@@ -5596,7 +5596,7 @@ contains
        allocate(recv_buff(-ntgrid:ntgrid,1:2,size(r%complex_buff),nrecv))
        allocate(recv_hand(nrecv))
        allocate(recv_lookup(nrecv))
-
+       call initialise_requests(recv_hand)
        count = 0
        do ip=0,nproc-1
           if(r%to(ip)%nn>0.and.ip.ne.iproc) then
@@ -5611,7 +5611,7 @@ contains
     if(nsend>0) then
        allocate(send_buff(-ntgrid:ntgrid,1:2,size(r%complex_buff),nsend))
        allocate(send_hand(nsend))       
-
+       call initialise_requests(send_hand)
        count = 0
        do ip=0,nproc-1
           if(r%from(ip)%nn>0.and.ip.ne.iproc) then

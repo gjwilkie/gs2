@@ -84,7 +84,7 @@ module le_grids
   public :: eint_error, lint_error, trap_error, wdim
   public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
-  public :: lambda_map, energy_map, g2le, g2gf, init_map
+  public :: lambda_map, energy_map, g2le, g2gf, init_map, init_g2gf
   public :: integrate_species_sub !<DD>
 
   !> Unit tests
@@ -711,9 +711,6 @@ contains
           
           !Sum up weighted g
           total_small(:, it, ik) = total_small(:, it, ik) + weights(is)*w(ie)*wl(:,il)*(g(:,1,iglo)+g(:,2,iglo))
-          if(it.eq.1.and.ik.eq.1) then
-             write(*,*) 'sub',iproc,total(-ntgrid,it,ik)
-          end if
        end do
     else
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -827,10 +824,11 @@ contains
        do igf = gf_lo%llim_proc,gf_lo%ulim_proc
           it = it_idx(gf_lo,igf)
           ik = ik_idx(gf_lo,igf)
+          total(:,it,ik) = 0.
           if(kwork_filter(it,ik)) cycle
-          do is = 1,gf_lo%nspec
-             do il = 1,gf_lo%nlambda
-                do ie = 1,gf_lo%negrid
+          do il = 1,gf_lo%nlambda
+             do ie = 1,gf_lo%negrid
+                do is = 1,gf_lo%nspec
                    total(:,it,ik) = total(:,it,ik) + weights(is)*w(ie)*wl(:,il)*(gf(:,1,is,ie,il,igf)+gf(:,2,is,ie,il,igf))
                 end do
              end do
@@ -840,9 +838,10 @@ contains
        do igf = gf_lo%llim_proc,gf_lo%ulim_proc
           it = it_idx(gf_lo,igf)
           ik = ik_idx(gf_lo,igf)
-          do is = 1,gf_lo%nspec
-             do il = 1,gf_lo%nlambda
-                do ie = 1,gf_lo%negrid
+          total(:,it,ik) = 0.
+          do il = 1,gf_lo%nlambda
+             do ie = 1,gf_lo%negrid
+                do is = 1,gf_lo%nspec
                    total(:,it,ik) = total(:,it,ik) + weights(is)*w(ie)*wl(:,il)*(gf(:,1,is,ie,il,igf)+gf(:,2,is,ie,il,igf))
                 end do
              end do
@@ -2645,9 +2644,7 @@ contains
 
     end if
 
-    call init_g2gf_redistribute
-    
-    if (test) call check_g2gf
+    call init_g2gf(test)
 
     if (test) then
        if (proc0) print *, 'init_map done'
@@ -2656,6 +2653,17 @@ contains
     end if
 
   end subroutine init_map
+
+  subroutine init_g2gf(test)
+    implicit none
+
+    logical, intent (in) :: test
+
+    call init_g2gf_redistribute
+    
+    if (test) call check_g2gf
+
+  end subroutine init_g2gf
 
   subroutine init_g2le_redistribute
 

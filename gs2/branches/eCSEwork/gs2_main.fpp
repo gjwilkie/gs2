@@ -1137,7 +1137,8 @@ contains
     use fields_arrays, only: time_field
     use gs2_reinit, only: time_reinit
 !AJ
-    use dist_fn, only: time_orig, time_gf, time_gf_v2, time_gf_gather, time_orig_moment_mult, time_new_moment_mult, time_new_array_moment_mult
+    use fields_local, only: time_gf_reduce_an, time_gf_reduce_an_sendrecv, time_gf_reduce_an_broadcast
+    use dist_fn, only: gf_lo_integrate, time_orig, time_gf, time_gf_v2, time_gf_gather, time_orig_moment_mult, time_new_moment_mult, time_new_array_moment_mult
     implicit none
     type(gs2_program_state_type), intent(in) :: state
     type(gs2_timers_type), intent(in) :: timers
@@ -1145,9 +1146,18 @@ contains
 !AJ
     real :: temptime_gf_v2, min_temptime_gf_v2, max_temptime_gf_v2, av_temptime_gf_v2
 !AJ
-    real :: min_time_orig, max_time_orig, av_time_orig
+    real :: temptime_orig, min_time_orig, max_time_orig, av_time_orig
+    real :: temptime_orig_mult, min_temptime_orig_mult, max_temptime_orig_mult, av_temptime_orig_mult
 !AJ
     real :: min_time_gf, max_time_gf, av_time_gf
+!AJ
+    real :: temptime_gf_v2_plain, min_temptime_gf_v2_plain, max_temptime_gf_v2_plain, av_temptime_gf_v2_plain
+    real :: temptime_gf_v2_gather, min_temptime_gf_v2_gather, max_temptime_gf_v2_gather, av_temptime_gf_v2_gather
+    real :: temptime_gf_v2_array, min_temptime_gf_v2_array, max_temptime_gf_v2_array, av_temptime_gf_v2_array
+    real :: temptime_gf_v2_moment, min_temptime_gf_v2_moment, max_temptime_gf_v2_moment, av_temptime_gf_v2_moment
+    real :: temptime_gf_reduce_an, min_temptime_gf_reduce_an, max_temptime_gf_reduce_an, av_temptime_gf_reduce_an
+    real :: temptime_gf_reduce_an_broadcast, min_temptime_gf_reduce_an_broadcast, max_temptime_gf_reduce_an_broadcast, av_temptime_gf_reduce_an_broadcast
+    real :: temptime_gf_reduce_an_sendrecv, min_temptime_gf_reduce_an_sendrecv, max_temptime_gf_reduce_an_sendrecv, av_temptime_gf_reduce_an_sendrecv
 
     if (proc0) then
        if (state%is_external_job) then
@@ -1181,28 +1191,105 @@ contains
     end if
 
 !AJ start
-!!$    if(time_new_array_moment_mult(1) .lt. time_new_moment_mult(1)) then
-!!$       temptime_gf_v2 = time_new_array_moment_mult(1) + time_gf_v2(1) + time_gf_gather(1)
-!!$    else
-!!$       temptime_gf_v2 = time_new_moment_mult(1) + time_gf_v2(1) + time_gf_gather(1)
-!!$    end if
-!!$
-!!$    min_temptime_gf_v2 = temptime_gf_v2
-!!$    call min_reduce(min_temptime_gf_v2, 0)
-!!$    max_temptime_gf_v2 = temptime_gf_v2
-!!$    call max_reduce(max_temptime_gf_v2, 0)
-!!$    av_temptime_gf_v2 = temptime_gf_v2
-!!$    call sum_reduce(av_temptime_gf_v2, 0)
-!!$    av_temptime_gf_v2 = av_temptime_gf_v2/nproc
-!!$
-!!$    min_time_orig = time_orig(1)
-!!$    call min_reduce(min_time_orig, 0)
-!!$    max_time_orig = time_orig(1)
-!!$    call max_reduce(max_time_orig, 0)
-!!$    av_time_orig = time_orig(1)
-!!$    call sum_reduce(av_time_orig, 0)
-!!$    av_time_orig = av_time_orig/nproc
-!!$
+    if(gf_lo_integrate) then
+!       if(time_new_array_moment_mult(1) .lt. time_new_moment_mult(1)) then
+          temptime_gf_v2 = time_new_array_moment_mult(1) + time_gf_v2(1) + time_gf_gather(1)
+!       else
+!          temptime_gf_v2 = time_new_moment_mult(1) + time_gf_v2(1) + time_gf_gather(1)
+!       end if
+       temptime_gf_v2_plain = time_gf_v2(1)
+       min_temptime_gf_v2_plain = time_gf_v2(1)
+       call min_reduce(min_temptime_gf_v2_plain, 0)
+       max_temptime_gf_v2_plain = time_gf_v2(1)
+       call max_reduce(max_temptime_gf_v2_plain, 0)
+       av_temptime_gf_v2_plain = time_gf_v2(1)
+       call sum_reduce(av_temptime_gf_v2_plain, 0)
+       av_temptime_gf_v2_plain = av_temptime_gf_v2_plain/(nproc*1.)
+       
+       temptime_gf_v2_gather = time_gf_gather(1)
+       min_temptime_gf_v2_gather = time_gf_gather(1)
+       call min_reduce(min_temptime_gf_v2_gather, 0)
+       max_temptime_gf_v2_gather = time_gf_gather(1)
+       call max_reduce(max_temptime_gf_v2_gather, 0)
+       av_temptime_gf_v2_gather = time_gf_gather(1)
+       call sum_reduce(av_temptime_gf_v2_gather, 0)
+       av_temptime_gf_v2_gather = av_temptime_gf_v2_gather/(nproc*1.)
+       
+       temptime_gf_v2_array = time_new_array_moment_mult(1)
+       min_temptime_gf_v2_array = time_new_array_moment_mult(1)
+       call min_reduce(min_temptime_gf_v2_array, 0)
+       max_temptime_gf_v2_array = time_new_array_moment_mult(1)
+       call max_reduce(max_temptime_gf_v2_array, 0)
+       av_temptime_gf_v2_array = time_new_array_moment_mult(1)
+       call sum_reduce(av_temptime_gf_v2_array, 0)
+       av_temptime_gf_v2_array = av_temptime_gf_v2_array/(nproc*1.)
+       
+!!$       temptime_gf_v2_moment = time_new_moment_mult(1)
+!!$       min_temptime_gf_v2_moment = time_new_moment_mult(1)
+!!$       call min_reduce(min_temptime_gf_v2_moment, 0)
+!!$       max_temptime_gf_v2_moment = time_new_moment_mult(1)
+!!$       call max_reduce(max_temptime_gf_v2_moment, 0)
+!!$       av_temptime_gf_v2_moment = time_new_moment_mult(1)
+!!$       call sum_reduce(av_temptime_gf_v2_moment, 0)
+!!$       av_temptime_gf_v2_moment = av_temptime_gf_v2_moment/(nproc*1.)
+       
+       
+       min_temptime_gf_v2 = temptime_gf_v2
+       call min_reduce(min_temptime_gf_v2, 0)
+       max_temptime_gf_v2 = temptime_gf_v2
+       call max_reduce(max_temptime_gf_v2, 0)
+       av_temptime_gf_v2 = temptime_gf_v2
+       call sum_reduce(av_temptime_gf_v2, 0)
+       av_temptime_gf_v2 = av_temptime_gf_v2/(nproc*1.)
+
+       min_temptime_gf_reduce_an = time_gf_reduce_an(1)
+       call min_reduce(min_temptime_gf_reduce_an, 0)
+       max_temptime_gf_reduce_an = time_gf_reduce_an(1)
+       call max_reduce(max_temptime_gf_reduce_an, 0)
+       av_temptime_gf_reduce_an = time_gf_reduce_an(1)
+       call sum_reduce(av_temptime_gf_reduce_an, 0)
+       av_temptime_gf_reduce_an = av_temptime_gf_reduce_an/(nproc*1.)
+
+       min_temptime_gf_reduce_an_broadcast = time_gf_reduce_an_broadcast(1)
+       call min_reduce(min_temptime_gf_reduce_an_broadcast, 0)
+       max_temptime_gf_reduce_an_broadcast = time_gf_reduce_an_broadcast(1)
+       call max_reduce(max_temptime_gf_reduce_an_broadcast, 0)
+       av_temptime_gf_reduce_an_broadcast = time_gf_reduce_an_broadcast(1)
+       call sum_reduce(av_temptime_gf_reduce_an_broadcast, 0)
+       av_temptime_gf_reduce_an_broadcast = av_temptime_gf_reduce_an_broadcast/(nproc*1.)
+
+       min_temptime_gf_reduce_an_sendrecv = time_gf_reduce_an_sendrecv(1)
+       call min_reduce(min_temptime_gf_reduce_an_sendrecv, 0)
+       max_temptime_gf_reduce_an_sendrecv = time_gf_reduce_an_sendrecv(1)
+       call max_reduce(max_temptime_gf_reduce_an_sendrecv, 0)
+       av_temptime_gf_reduce_an_sendrecv = time_gf_reduce_an_sendrecv(1)
+       call sum_reduce(av_temptime_gf_reduce_an_sendrecv, 0)
+       av_temptime_gf_reduce_an_sendrecv = av_temptime_gf_reduce_an_sendrecv/(nproc*1.)
+
+       
+    else
+
+       temptime_orig = time_orig(1) + time_orig_moment_mult(1)
+       min_time_orig = temptime_orig
+       call min_reduce(min_time_orig, 0)
+       max_time_orig = temptime_orig
+       call max_reduce(max_time_orig, 0)
+       av_time_orig = temptime_orig
+       call sum_reduce(av_time_orig, 0)
+       av_time_orig = av_time_orig/(nproc*1.)
+
+       temptime_orig_mult = time_orig_moment_mult(1)
+       min_temptime_orig_mult = temptime_orig_mult
+       call min_reduce(min_temptime_orig_mult, 0)
+       max_temptime_orig_mult = temptime_orig_mult
+       call max_reduce(max_temptime_orig_mult, 0)
+       av_temptime_orig_mult = temptime_orig_mult
+       call sum_reduce(av_temptime_orig_mult, 0)
+       av_temptime_orig_mult = av_temptime_orig_mult/(nproc*1.)
+
+       
+    end if
+
 !!$    min_time_gf = time_gf(1)
 !!$    call min_reduce(min_time_gf, 0)
 !!$    max_time_gf = time_gf(1)
@@ -1210,13 +1297,24 @@ contains
 !!$    av_time_gf = time_gf(1)
 !!$    call sum_reduce(av_time_gf, 0)
 !!$    av_time_gf = av_time_gf/(nproc*1.)
-!!$
-!!$    if (proc0) then
-!!$       write(*,*) 'Original integrate',time_orig(1)/60.,'min',min_time_orig/60.,'max',max_time_orig/60.,'av',av_time_orig/60.
+
+    if (proc0) then
+       if(.not. gf_lo_integrate) then
+          write(*,*) 'Original total integrate time',temptime_orig/60.,'min',min_time_orig/60.,'max',max_time_orig/60.,'av',av_time_orig/60.
+          write(*,*) 'Original moment multiply',temptime_orig_mult/60.,'min',min_temptime_orig_mult/60.,'max',max_temptime_orig_mult/60.,'av',av_temptime_orig_mult/60.
 !!$       write(*,*) 'Gf integrate',time_gf(1)/60.,'min',min_time_gf/60.,'max',max_time_gf/60.,'av',av_time_gf/60.
-!!$       write(*,*) 'Gf v2 integrate',temptime_gf_v2/60.,'min',min_temptime_gf_v2/60.,'max',max_temptime_gf_v2/60.,'av',av_temptime_gf_v2/60.
-!!$       write(*,*) 'Original integrate moment multiply',time_orig_moment_mult(1)/60.,'New integrate moment multiply',time_new_moment_mult(1)/60.,'New integrate array moment multiply',time_new_array_moment_mult(1)/60.
-!!$    end if
+       else
+          write(*,*) 'Gf v2 total integrate time',temptime_gf_v2/60.,'min',min_temptime_gf_v2/60.,'max',max_temptime_gf_v2/60.,'av',av_temptime_gf_v2/60.
+          write(*,*) 'Gf v2 integrate',temptime_gf_v2_plain/60.,'min',min_temptime_gf_v2_plain/60.,'max',max_temptime_gf_v2_plain/60.,'av',av_temptime_gf_v2_plain/60.
+          write(*,*) 'Gf v2 gather',temptime_gf_v2_gather/60.,'min',min_temptime_gf_v2_gather/60.,'max',max_temptime_gf_v2_gather/60.,'av',av_temptime_gf_v2_gather/60.
+          write(*,*) 'Gf v2 array moment multiply',temptime_gf_v2_array/60.,'min',min_temptime_gf_v2_array/60.,'max',max_temptime_gf_v2_array/60.,'av',av_temptime_gf_v2_array/60.
+          write(*,*) 'Gf v2 reduce an',temptime_gf_reduce_an/60.,'min',min_temptime_gf_reduce_an/60.,'max',max_temptime_gf_reduce_an/60.,'av',av_temptime_gf_reduce_an/60.
+          write(*,*) 'Gf v2 reduce an broadcast',temptime_gf_reduce_an_broadcast/60.,'min',min_temptime_gf_reduce_an_broadcast/60.,'max',max_temptime_gf_reduce_an_broadcast/60.,'av',av_temptime_gf_reduce_an_broadcast/60.
+          write(*,*) 'Gf v2 reduce an send/recv',temptime_gf_reduce_an_sendrecv/60.,'min',min_temptime_gf_reduce_an_sendrecv/60.,'max',max_temptime_gf_reduce_an_sendrecv/60.,'av',av_temptime_gf_reduce_an_sendrecv/60.
+!!$          write(*,*) 'Gf v2 on-fly moment mulitply',temptime_gf_v2_moment/60.,'min',min_temptime_gf_v2_moment/60.,'max',max_temptime_gf_v2_moment/60.,'av',av_temptime_gf_v2_moment/60.
+       end if
+!       write(*,*) 'Original integrate moment multiply',time_orig_moment_mult(1)/60.,'New integrate moment multiply',time_new_moment_mult(1)/60.,'New integrate array moment multiply',time_new_array_moment_mult(1)/60.
+    end if
 !AJ end
 
   end subroutine print_times
