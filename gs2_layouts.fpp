@@ -8,6 +8,7 @@ module gs2_layouts
 ! TT: What are gint_layout_type and geint_layout_type?
 
 ! TT>
+  use layouts_type, only: ikit, ikitprocs
   use layouts_type, only: g_layout_type, lz_layout_type, e_layout_type
   use layouts_type, only: le_layout_type, p_layout_type, gf_layout_type
 ! <TT
@@ -704,7 +705,7 @@ contains
        (naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
     use mp, only: split, mp_comm, nproc_comm, rank_comm
-    use mp, only: sum_allreduce_sub
+    use mp, only: sum_allreduce_sub, sum_allreduce
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -714,12 +715,13 @@ contains
     integer :: iglo,ik,it,il,ie,is,col,mycol
     integer :: ik_min,ik_max,it_min,it_max,il_min,il_max,ie_min,ie_max,is_min,is_max,ip
     integer :: nproc_subcomm, rank_subcomm
-    integer :: nproc_tmp, idim, tmp
+    integer :: nproc_tmp, idim, tmp, i
     real :: tmp_r
     integer,dimension(5) :: nproc_dim
     integer,dimension(:),allocatable :: les_kxky_range
     logical,dimension(5) :: dim_divides,dim_local
     logical,dimension(:),allocatable :: it_local, ik_local, il_local, ie_local, is_local
+    integer,dimension(nproc) :: tmp_proc_list
 ! TT>
 # ifdef USE_C_INDEX
     integer :: ierr
@@ -878,6 +880,16 @@ contains
     il_local=.false.
     ie_local=.false.
     is_local=.false.
+    g_lo%ikitrange = 0
+    allocate(g_lo%ikit_procs_assignment(naky,ntheta0))
+    g_lo%ikit_procs_assignment(:,:)%mine = .false.
+    g_lo%ikit_procs_assignment(:,:)%num_procs = 0
+    do ik=1,naky
+       do it=1,ntheta0
+          g_lo%ikit_procs_assignment(ik,it)%point%ik = ik
+          g_lo%ikit_procs_assignment(ik,it)%point%it = it
+       end do
+    end do
     do iglo=g_lo%llim_proc,g_lo%ulim_proc
        ik=ik_idx(g_lo,iglo)
        it=it_idx(g_lo,iglo)
@@ -899,7 +911,45 @@ contains
        il_local(il)=.true.
        ie_local(ie)=.true.
        is_local(is)=.true.
+       if(g_lo%ikit_procs_assignment(ik,it)%mine .eq. .false.) then
+          g_lo%ikit_procs_assignment(ik,it)%mine = .true.
+          g_lo%ikitrange = g_lo%ikitrange + 1
+       end if
     enddo
+
+    do ik=1,naky
+       do it=1,ntheta0
+          tmp = 0
+          tmp_proc_list = 0
+          if(g_lo%ikit_procs_assignment(ik,it)%mine .eq. .true.) then
+             tmp = 1
+             tmp_proc_list(iproc+1) = 1
+          end if
+          call sum_allreduce(tmp)
+          call sum_allreduce(tmp_proc_list)
+          allocate(g_lo%ikit_procs_assignment(ik,it)%proc_list(tmp))
+          g_lo%ikit_procs_assignment(ik,it)%num_procs = tmp
+          tmp = 1
+          do i=1,nproc
+             if(tmp_proc_list(i) .eq. 1) then
+                g_lo%ikit_procs_assignment(ik,it)%proc_list(tmp) = i-1
+                tmp = tmp + 1
+             end if
+          end do
+       end do
+    end do
+
+    allocate(g_lo%local_ikit_points(g_lo%ikitrange))
+    tmp = 1
+    do ik=1,naky
+       do it=1,ntheta0
+          if(g_lo%ikit_procs_assignment(ik,it)%mine .eq. .true.) then
+             g_lo%local_ikit_points(tmp)%ik = ik 
+             g_lo%local_ikit_points(tmp)%it = it 
+             tmp = tmp + 1
+          end if
+       end do
+    end do
 
     !Store dimension locality
     g_lo%y_local=all(ik_local)
@@ -2031,7 +2081,16 @@ contains
 ! > HJL
 
   subroutine finish_dist_fn_layouts
+!    integer :: ik,it
     initialized_dist_fn_layouts = .false.
+!AJ This should not be necessary as deallocating the containing object in FORTRAN should also deallocate these arrays.
+!    do ik = 1,naky
+!       do it = 1,ntheta0
+!          if(allocated(g_lo%ikit_procs_assignment(ik,it)%proc_list)) deallocate(g_lo%ikit_procs_assignment(ik,it)%proc_list)
+!       end do
+!    end do
+    if(allocated(g_lo%ikit_procs_assignment)) deallocate(g_lo%ikit_procs_assignment)
+    if(allocated(g_lo%ikit_procs_assignment)) deallocate(g_lo%local_ikit_points)
   end subroutine finish_dist_fn_layouts
 
 !<DD>Added

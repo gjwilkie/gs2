@@ -5,8 +5,22 @@ module layouts_type
   implicit none
 
   private
+  public :: ikit, ikitprocs
   public :: g_layout_type, lz_layout_type, e_layout_type
   public :: le_layout_type, p_layout_type, gf_layout_type
+
+  type :: ikit
+     sequence
+     integer :: ik, it
+  end type ikit
+
+  type :: ikitprocs
+     sequence
+     type(ikit) :: point
+     logical :: mine
+     integer :: num_procs
+     integer,dimension(:),allocatable  :: proc_list
+  end type ikitprocs
 
   type :: g_layout_type
      sequence
@@ -33,6 +47,9 @@ module layouts_type
      integer :: xysblock_comm !Sub comms for xys blocks (i.e. l-e integrals)
      integer :: lesblock_comm !Sub comms for les blocks (i.e. x-y integrals)
      integer,dimension(:,:),allocatable :: les_kxky_range !Used in integrate species, holds start and stop indices for flattened kxky dimension
+     type(ikitprocs),dimension(:,:),allocatable :: ikit_procs_assignment !Used to record processes that have been assigned specific it ik points in g
+     integer :: ikitrange
+     type(ikit),dimension(:),allocatable :: local_ikit_points
      logical :: x_before_y !Information about layout order
      logical :: x_local, y_local, l_local, e_local, s_local !Used to record if various dimensions are entirely local
   end type g_layout_type

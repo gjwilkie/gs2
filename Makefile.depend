@@ -74,6 +74,7 @@ dump_response_mod = \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_gf_local.o \
 	 fields_implicit.o \
 	 fields_local.o \
 	 fields_test.o \
@@ -100,7 +101,6 @@ dump_response_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
@@ -178,6 +178,7 @@ ffttester_mod = \
 	 ffttester.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_gf_local.o \
 	 fields_implicit.o \
 	 fields_local.o \
 	 fields_parallelization.o \
@@ -209,7 +210,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
@@ -316,6 +316,7 @@ gs2_mod = \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_gf_local.o \
 	 fields_implicit.o \
 	 fields_local.o \
 	 fields_parallelization.o \
@@ -348,7 +349,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
@@ -421,6 +421,7 @@ ingen_mod = \
 	 fft_work.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_gf_local.o \
 	 fields_implicit.o \
 	 fields_local.o \
 	 fields_test.o \
@@ -450,7 +451,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 normalisations.o \
@@ -817,6 +817,7 @@ fields.o: \
 	 antenna.o \
 	 dist_fn.o \
 	 fields_arrays.o \
+	 fields_gf_local.o \
 	 fields_implicit.o \
 	 fields_local.o \
 	 fields_test.o \
@@ -830,6 +831,23 @@ fields.o: \
 	 theta_grid.o \
 	 unit_tests.o 
 fields_arrays.o: 
+fields_gf_local.o: \
+	 antenna.o \
+	 dist_fn.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 fields_implicit.o \
+	 file_utils.o \
+	 gs2_layouts.o \
+	 gs2_save.o \
+	 job_manage.o \
+	 kt_grids.o \
+	 matrix_inverse.o \
+	 mp.o \
+	 run_parameters.o \
+	 runtime_tests.o \
+	 species.o \
+	 theta_grid.o 
 fields_implicit.o: \
 	 antenna.o \
 	 dist_fn.o \
@@ -1035,6 +1053,7 @@ gs2_main.o: \
 	 dist_fn_arrays.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_local.o \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
@@ -1220,7 +1239,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -1267,8 +1285,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
