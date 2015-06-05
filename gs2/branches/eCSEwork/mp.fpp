@@ -63,7 +63,7 @@ module mp
 !</DD>
   public :: init_jobs
   public :: mp_comm
-  public :: mp_info
+  public :: mp_info, mp_comm_null
 !AJ
   public :: initialise_requests
 
@@ -91,6 +91,7 @@ module mp
   integer, target :: comm_all, comm_group
 
   integer, parameter :: mp_info = MPI_INFO_NULL
+  integer, parameter :: mp_comm_null = MPI_COMM_NULL
 
   integer :: job = 0
   integer (kind(MPI_REAL)) :: mpireal, mpicmplx
@@ -98,6 +99,7 @@ module mp
   integer, parameter :: nproc = 1, iproc = 0
   logical, parameter :: proc0 = .true.
 
+  integer, parameter :: mp_comm_null = -1
   integer, parameter :: mp_info = -1
   integer, parameter :: job = 0, mp_comm = -1
 # endif
@@ -142,6 +144,7 @@ module mp
      module procedure nbsend_real_array
      module procedure nbsend_real_array_count
      module procedure nbsend_complex_array
+     module procedure nbsend_complex_2d_array
      module procedure nbsend_complex_3d_array
      module procedure nbsend_complex_array_sub
      module procedure nbsend_complex_array_count
@@ -152,6 +155,7 @@ module mp
      module procedure nbrecv_real_array
      module procedure nbrecv_real_array_count
      module procedure nbrecv_complex_array
+     module procedure nbrecv_complex_2d_array
      module procedure nbrecv_complex_3d_array
      module procedure nbrecv_complex_array_sub
      module procedure nbrecv_complex_array_count
@@ -714,6 +718,7 @@ contains
 # ifdef MPI
     integer :: ierror
     call mpi_comm_free(comm,ierror)
+    comm = mp_comm_null
 # endif
   end subroutine free_comm_id
 
@@ -724,6 +729,7 @@ contains
 #ifdef MPI
     integer :: ierror
     call mpi_comm_free(comm%id,ierror)
+    comm%id = mp_comm_null
 #endif
     !Reset variables
     comm%id=-1
@@ -2808,6 +2814,21 @@ contains
 # endif
   end subroutine nbsend_complex_array
 
+  subroutine nbsend_complex_2d_array(z,dest,tag,handle)
+    !<DD>Routine for nonblocking send of z to dest. Use
+    !tag to label message and return handle for later checking.
+    implicit none
+    complex, dimension(:,:), intent(in) :: z
+    integer, intent(in) :: dest
+    integer, intent(in) :: tag
+    integer,intent(out) :: handle
+# ifdef MPI
+    integer :: ierror
+    call mpi_isend(z,size(z),mpicmplx,dest,tag,mp_comm,handle,ierror)
+# endif
+  end subroutine nbsend_complex_2d_array
+
+
   subroutine nbsend_complex_3d_array(z,dest,tag,handle)
     !<DD>Routine for nonblocking send of z to dest. Use
     !tag to label message and return handle for later checking.
@@ -3176,6 +3197,20 @@ contains
     call mpi_irecv(z,size(z),mpicmplx,dest,tag,mp_comm,handle,ierror)
 # endif
   end subroutine nbrecv_complex_array
+
+  subroutine nbrecv_complex_2d_array(z,dest,tag,handle)
+    !<DD>Routine for nonblocking recv of z to dest. Use
+    !tag to label message and return handle for later checking.
+    implicit none
+    complex, dimension(:,:), intent(out) :: z
+    integer, intent(in) :: dest
+    integer, intent(in) :: tag
+    integer,intent(out) :: handle
+# ifdef MPI
+    integer :: ierror
+    call mpi_irecv(z,size(z),mpicmplx,dest,tag,mp_comm,handle,ierror)
+# endif
+  end subroutine nbrecv_complex_2d_array
 
   subroutine nbrecv_complex_3d_array(z,dest,tag,handle)
     !<DD>Routine for nonblocking recv of z to dest. Use

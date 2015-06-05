@@ -24,7 +24,7 @@ module fields
   integer :: fieldopt_switch
   logical :: remove_zonal_flows_switch
   logical :: force_maxwell_reinit
-  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_local = 3
+  integer, parameter :: fieldopt_implicit = 1, fieldopt_test = 2, fieldopt_local = 3, fieldopt_gf_local = 4
   logical :: dump_response, read_response
   logical :: initialized = .false.
   logical :: exist
@@ -53,6 +53,8 @@ contains
        if(read_response) write (report_unit, fmt="('The response matrix will be read from file.')")
        write(report_unit, fmt="('Using a min block size of ',I0)") minNrow
        if(do_smart_update) write(report_unit, fmt="('Using optimised field update.')")
+    case (fieldopt_gf_local)
+       write (report_unit, fmt="('The field equations will be advanced in time implicitly with decomposition respecting gf_lo layout.')")
     end select
   end subroutine check_fields
 
@@ -72,6 +74,8 @@ contains
        write (unit, fmt="(' field_option = ',a)") '"local"'
        write (unit, fmt="(' minNrow = ',I0)") minNrow
        write (unit, fmt="(' do_smart_update = ',L1)") do_smart_update
+    case (fieldopt_gf_local)
+       write (unit, fmt="(' field_option = ',a)") '"local gf"'
     end select
     if(dump_response) write (unit, fmt="(' dump_response = ',L1)") dump_response
     if(read_response) write (unit, fmt="(' read_response = ',L1)") read_response
@@ -116,6 +120,7 @@ contains
     use fields_implicit, only: init_fields_implicit
     use fields_test, only: init_fields_test
     use fields_local, only: init_fields_local
+    use fields_gf_local, only: init_fields_gf_local
     use unit_tests, only: debug_message
     implicit none
     integer, parameter :: verb=3
@@ -132,6 +137,10 @@ contains
        call debug_message(verb, &
          "fields::fields_init_response init_fields_local")
        call init_fields_local
+    case (fieldopt_gf_local)
+       call debug_message(verb, &
+         "fields::fields_init_response init_fields_gf_local")
+       call init_fields_gf_local
     case default
        !Silently ignore unsupported field options
     end select
@@ -182,6 +191,7 @@ contains
   subroutine dump_response_to_file(suffix)
     use fields_implicit, only: dump_response_to_file_imp
     use fields_local, only: dump_response_to_file_local
+    use fields_gf_local, only: dump_response_to_file_gf_local
     implicit none
     character(len=*), intent(in), optional :: suffix 
     !Note can pass optional straight through as long as also optional
@@ -191,6 +201,8 @@ contains
        call dump_response_to_file_imp(suffix)
     case (fieldopt_local)
        call dump_response_to_file_local(suffix)
+    case (fieldopt_gf_local)
+       call dump_response_to_file_gf_local(suffix)
     case default
        !Silently ignore unsupported field options
     end select
@@ -201,6 +213,8 @@ contains
     use fields_test, only: init_phi_test
     use mp, only: proc0
     use fields_local, only: init_allfields_local
+    use fields_gf_local, only: init_allfields_gf_local
+    use dist_fn, only: gf_lo_integrate
     implicit none
     logical, parameter :: debug=.false.
     if(proc0.and.debug) write(6,*) "Syncing fields with g."
@@ -214,6 +228,16 @@ contains
     case (fieldopt_local)
        if (debug) write(6,*) "init_fields: init_allfields_local"
        call init_allfields_local
+    case (fieldopt_gf_local)
+       if (debug) write(6,*) "init_fields: init_allfields_gf_local"
+       if(.not. gf_lo_integrate) then
+          write(*,*) 'gf local fields cannot be used by gf_lo_integrate'
+          write(*,*) 'defaulting to local fields'
+          write(*,*) 'if you want to use gf local fields then set gf_lo_integrate to true in dist_fn_knobs'
+          call init_allfields_local
+       else
+          call init_allfields_gf_local
+       end if
     end select
   end subroutine set_init_fields
 
@@ -224,20 +248,22 @@ contains
     use fields_implicit, only: field_subgath
     use fields_local, only: minNrow
     use fields_local, only: do_smart_update, field_local_allreduce, field_local_allreduce_sub, field_local_tuneminnrow
+    use fields_gf_local, only: gf_minNrow, field_gf_local_tuneminnrow
     use fields_arrays, only: response_file
     use file_utils, only: run_name
     implicit none
-    type (text_option), dimension (5), parameter :: fieldopts = &
+    type (text_option), dimension (6), parameter :: fieldopts = &
          (/ text_option('default', fieldopt_implicit), &
             text_option('implicit', fieldopt_implicit), &
             text_option('test', fieldopt_test),&
             text_option('local', fieldopt_local),&
+            text_option('gf_local', fieldopt_gf_local),&
             text_option('implicit_local', fieldopt_local)/)
     character(20) :: field_option
     character(len=256) :: response_dir
     namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit,&
          dump_response, read_response, minNrow, do_smart_update, field_local_allreduce, field_local_allreduce_sub,&
-         response_dir, field_local_tuneminnrow
+         response_dir, field_local_tuneminnrow, field_gf_local_tuneminnrow, gf_minNrow
     integer :: ierr, in_file
 
     if (proc0) then
@@ -291,12 +317,16 @@ contains
        call broadcast (field_local_allreduce)
        call broadcast (field_local_tuneminnrow)
        call broadcast (field_local_allreduce_sub)
+    case (fieldopt_gf_local)
+       call broadcast (field_gf_local_tuneminnrow)
+       call broadcast (gf_minNrow)
     end select
   end subroutine read_parameters
 
   subroutine set_dump_and_read_response(dump_flag, read_flag)
     use fields_implicit, only: dump_response_imp => dump_response, read_response_imp=>read_response
     use fields_local, only: dump_response_loc => dump_response, read_response_loc=>read_response
+    use fields_gf_local, only: dump_response_gf => dump_response, read_response_gf=>read_response
     implicit none
     logical, intent(in) :: dump_flag, read_flag
     select case (fieldopt_switch)
@@ -306,6 +336,9 @@ contains
     case (fieldopt_local)
        dump_response_loc=dump_flag
        read_response_loc=read_flag
+    case (fieldopt_gf_local)
+       dump_response_gf=dump_flag
+       read_response_gf=read_flag
     case default
        !Silently ignore unsupported field types
     end select
@@ -339,6 +372,8 @@ contains
     use fields_implicit, only: advance_implicit
     use fields_test, only: advance_test
     use fields_local, only: advance_local
+    use fields_gf_local, only: advance_gf_local
+
     implicit none
     integer, intent (in) :: istep
 
@@ -349,6 +384,8 @@ contains
        call advance_test (istep)
     case (fieldopt_local)
        call advance_local (istep, remove_zonal_flows_switch)
+    case (fieldopt_gf_local)
+       call advance_gf_local (istep, remove_zonal_flows_switch)
     end select
   end subroutine advance
 
@@ -444,6 +481,7 @@ contains
     use fields_implicit, only: fi_reset => reset_init
     use fields_test, only: ft_reset => reset_init
     use fields_local, only: fl_reset => reset_fields_local
+    use fields_gf_local, only: flgf_reset => reset_fields_gf_local
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     implicit none
     initialized  = .false.
@@ -461,6 +499,8 @@ contains
        call ft_reset
     case (fieldopt_local)
        call fl_reset
+    case (fieldopt_gf_local)
+       call flgf_reset
     end select
   end subroutine reset_init
 
@@ -469,6 +509,7 @@ contains
     use fields_implicit, only: implicit_reset => reset_init
     use fields_test, only: test_reset => reset_init
     use fields_local, only: finish_fields_local
+    use fields_gf_local, only: finish_fields_gf_local
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: apar_ext
 
@@ -489,6 +530,8 @@ contains
        call test_reset
     case (fieldopt_local)
        call finish_fields_local
+    case (fieldopt_gf_local)
+       call finish_fields_gf_local
     end select
 
     if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew)
