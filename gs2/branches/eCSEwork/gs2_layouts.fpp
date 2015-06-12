@@ -881,13 +881,13 @@ contains
     ie_local=.false.
     is_local=.false.
     g_lo%ikitrange = 0
-    allocate(g_lo%ikit_procs_assignment(naky,ntheta0))
+    allocate(g_lo%ikit_procs_assignment(ntheta0,naky))
     g_lo%ikit_procs_assignment(:,:)%mine = .false.
     g_lo%ikit_procs_assignment(:,:)%num_procs = 0
     do ik=1,naky
        do it=1,ntheta0
-          g_lo%ikit_procs_assignment(ik,it)%point%ik = ik
-          g_lo%ikit_procs_assignment(ik,it)%point%it = it
+          g_lo%ikit_procs_assignment(it,ik)%point%ik = ik
+          g_lo%ikit_procs_assignment(it,ik)%point%it = it
        end do
     end do
     do iglo=g_lo%llim_proc,g_lo%ulim_proc
@@ -911,8 +911,8 @@ contains
        il_local(il)=.true.
        ie_local(ie)=.true.
        is_local(is)=.true.
-       if(g_lo%ikit_procs_assignment(ik,it)%mine .eq. .false.) then
-          g_lo%ikit_procs_assignment(ik,it)%mine = .true.
+       if(g_lo%ikit_procs_assignment(it,ik)%mine .eq. .false.) then
+          g_lo%ikit_procs_assignment(it,ik)%mine = .true.
           g_lo%ikitrange = g_lo%ikitrange + 1
        end if
     enddo
@@ -921,18 +921,18 @@ contains
        do it=1,ntheta0
           tmp = 0
           tmp_proc_list = 0
-          if(g_lo%ikit_procs_assignment(ik,it)%mine .eq. .true.) then
+          if(g_lo%ikit_procs_assignment(it,ik)%mine .eq. .true.) then
              tmp = 1
              tmp_proc_list(iproc+1) = 1
           end if
           call sum_allreduce(tmp)
           call sum_allreduce(tmp_proc_list)
-          allocate(g_lo%ikit_procs_assignment(ik,it)%proc_list(tmp))
-          g_lo%ikit_procs_assignment(ik,it)%num_procs = tmp
+          allocate(g_lo%ikit_procs_assignment(it,ik)%proc_list(tmp))
+          g_lo%ikit_procs_assignment(it,ik)%num_procs = tmp
           tmp = 1
           do i=1,nproc
              if(tmp_proc_list(i) .eq. 1) then
-                g_lo%ikit_procs_assignment(ik,it)%proc_list(tmp) = i-1
+                g_lo%ikit_procs_assignment(it,ik)%proc_list(tmp) = i-1
                 tmp = tmp + 1
              end if
           end do
@@ -943,7 +943,7 @@ contains
     tmp = 1
     do ik=1,naky
        do it=1,ntheta0
-          if(g_lo%ikit_procs_assignment(ik,it)%mine .eq. .true.) then
+          if(g_lo%ikit_procs_assignment(it,ik)%mine .eq. .true.) then
              g_lo%local_ikit_points(tmp)%ik = ik 
              g_lo%local_ikit_points(tmp)%it = it 
              tmp = tmp + 1
@@ -957,6 +957,8 @@ contains
     g_lo%l_local=all(il_local)
     g_lo%e_local=all(ie_local)
     g_lo%s_local=all(is_local)
+
+!    write(*,*) 'g_lo',iproc,g_lo%ikitrange,g_lo%local_ikit_points
     
     !//Deallocate locality data. Note this may actually be useful in some
     !places, so we may want to think about attaching it to the g_lo object
@@ -2086,7 +2088,7 @@ contains
 !AJ This should not be necessary as deallocating the containing object in FORTRAN should also deallocate these arrays.
 !    do ik = 1,naky
 !       do it = 1,ntheta0
-!          if(allocated(g_lo%ikit_procs_assignment(ik,it)%proc_list)) deallocate(g_lo%ikit_procs_assignment(ik,it)%proc_list)
+!          if(allocated(g_lo%ikit_procs_assignment(it,ik)%proc_list)) deallocate(g_lo%ikit_procs_assignment(it,ik)%proc_list)
 !       end do
 !    end do
     if(allocated(g_lo%ikit_procs_assignment)) deallocate(g_lo%ikit_procs_assignment)
@@ -2627,9 +2629,11 @@ contains
   subroutine init_gf_layouts (ntgrid, naky, ntheta0, negrid, nlambda, nspec)
     use mp, only: iproc, nproc, mp_abort, proc0
     use file_utils, only: error_unit
+    use layouts_type, only: ikit
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, negrid, nlambda, nspec
-
+    type(ikit),dimension(:),allocatable :: tmp
+    integer :: igf, tmp_ind
 # ifdef USE_C_INDEX
     integer :: ierr
     interface
@@ -2657,7 +2661,7 @@ contains
     gf_lo%blocksize = 1
     gf_lo%ulim_world = gf_lo%divisionblock * gf_lo%blocksize
     if(proc0) then
-       write(*,*) 'gf_lo domain size is:', gf_lo%ulim_world
+       write(*,*) 'Gf_lo domain size is:', gf_lo%ulim_world
     end if
 
 !AJ This logic has been setup to deal with all the possible cases when constructing the decomposition of
@@ -2765,8 +2769,20 @@ contains
           gf_lo%xypoints = gf_lo%smallblocksize
        end if
     end if
-
+        
     gf_lo%ulim_alloc = gf_lo%ulim_proc
+
+    allocate(tmp((gf_lo%ulim_proc - gf_lo%llim_proc) + 1))
+    tmp_ind = 1
+    do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+       tmp(tmp_ind)%ik = ik_idx(gf_lo,igf)
+       tmp(tmp_ind)%it = it_idx(gf_lo,igf)
+       tmp_ind = tmp_ind + 1
+    end do
+
+!    write(*,*) 'gf_lo',iproc,((gf_lo%ulim_proc-gf_lo%llim_proc) + 1),tmp
+
+    deallocate(tmp)
 
 # ifdef USE_C_INDEX
     ierr = init_indices_gflo_c (layout)

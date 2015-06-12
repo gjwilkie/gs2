@@ -434,6 +434,7 @@ contains
   !supercell.
   subroutine c_get_field_update(self,fq,fqa,fqp)
     use run_parameters, only: fphi, fapar, fbpar
+    use mp, only: iproc
     implicit none
     class(cell_type), intent(inout) :: self
     complex, dimension(self%ncol), intent(in) :: fq,fqa,fqp
@@ -464,7 +465,7 @@ contains
             self%tmp_sum(self%rb(ifq)%row_llim:self%rb(ifq)%row_ulim)&
             +self%rb(ifq)%tmp_sum
     enddo
-
+!    write(*,*) iproc,self%ik_ind,self%it_ind,self%rb(1)%row_llim,self%rb(1)%row_ulim,self%rb(1)%tmp_sum,':',self%tmp_sum
   end subroutine c_get_field_update
 
   !>A routine to reset the object
@@ -586,26 +587,28 @@ contains
 
   !>Reduce the field update across cells to give the final answer
   subroutine sc_reduce_tmpsum(self)
-    use mp, only: sum_allreduce_sub, sum_reduce_sub!, broadcast_sub
+    use mp, only: sum_allreduce_sub, sum_reduce_sub, iproc
     implicit none
     class(supercell_type), intent(inout) :: self
     integer :: ic
 
     !NOTE: Here we rely on the cells having not reduced/
     !gathered their data yet so there are no repeated rows.
-
     !First do local sums
     do ic=1,self%ncell
        if(self%cells(ic)%is_empty) cycle
        self%tmp_sum=self%tmp_sum+self%cells(ic)%tmp_sum
     enddo
+!    write(*,*) iproc,self%ik_ind,self%tmp_sum
 
     !<DD>TAGGED: As we currently have to do fm_gather_fields on every time step we only need
     !to reduce to the head of the supercell, which may be an all_local proc in which case we don't 
     !want to do any reduction. If it's a pd proc then really we should just do reduce_sub rather 
     !than allreduce_sub as we're going to broadcast the result later anyway.
     !if(self%sc_sub_pd%nproc.gt.0) call sum_allreduce_sub(self%tmp_sum,self%sc_sub_pd%id)
-    if(.not.(self%is_empty.or.self%is_all_local)) call sum_reduce_sub(self%tmp_sum,0,self%sc_sub_pd)
+    if(.not.(self%is_empty.or.self%is_all_local)) then
+       call sum_reduce_sub(self%tmp_sum,0,self%sc_sub_pd)
+    end if
 !AJ Can we do nonblocking stuff here?    
     !<DD> At this point the head of the supercell has the field update stored in self%tmp_sum
     !all other procs have partial/no data
@@ -2247,7 +2250,7 @@ contains
 !<DD>Could improve performance by using a "smart" routine which only operates on local/not empty data
        call self%getfieldeq_nogath(phi,apar,bpar,fq,fqa,fqp)
     endif
-
+!    write(*,*) phi
     !Now get the field update for each ik
     do ik=1,self%naky
        !Skip non-local ky
@@ -2613,7 +2616,8 @@ contains
                    do ig=-ntgrid,ntgrid-bnd
                       iex=iex+1
                       tmp_tmp(ig,it,ik,ifl)=self%kyb(ik)%supercells(is)%tmp_sum(iex)
-                   enddo
+!                      if(ifl .eq. 1) write(*,*) self%kyb(ik)%supercells(is)%tmp_sum(iex)
+                  enddo
                 enddo
              enddo
 !<DD>TAGGED:Worth looking at improving this bad memory pattern
@@ -2633,6 +2637,8 @@ contains
 !       call sum_allreduce_sub(tmp,self%fm_sub_headsc_p0%id)
        if(.not.do_allreduce)call sum_reduce_sub(tmp_tmp,0,self%fm_sub_headsc_p0)
     endif
+
+!    write(*,*) 'tmp_tmp',tmp_tmp(:,:,:,1)
 
     !Should really be able to do this on the xyblock sub communicator
     !but proc0 needs to know full result for diagnostics so would need
@@ -2740,11 +2746,11 @@ contains
 
 !!$    if(iproc .eq. 511) then
 !!$       write (x1,fmt) iproc
-!!$       inquire(file=trim(x1)//".new.txt", exist=exists)
+!!$       inquire(file=trim(x1)//".txt.new", exist=exists)
 !!$       if (exists) then
-!!$          open(12, file=trim(x1)//".new.txt", status="old", position="append", action="write")
+!!$          open(12, file=trim(x1)//".txt.new", status="old", position="append", action="write")
 !!$       else
-!!$          open(12, file=trim(x1)//".new.txt", status="new", action="write")
+!!$          open(12, file=trim(x1)//".txt.new", status="new", action="write")
 !!$       end if
 !!$       write(12,*) 'final received',iproc,':',ph(:,56,32)
 !!$       close(12)
@@ -2752,11 +2758,11 @@ contains
 !!$
 !!$    if(iproc .eq. 510) then
 !!$       write (x1,fmt) iproc
-!!$       inquire(file=trim(x1)//".new.txt", exist=exists)
+!!$       inquire(file=trim(x1)//".txt.new", exist=exists)
 !!$       if (exists) then
-!!$          open(12, file=trim(x1)//".new.txt", status="old", position="append", action="write")
+!!$          open(12, file=trim(x1)//".txt.new", status="old", position="append", action="write")
 !!$       else
-!!$          open(12, file=trim(x1)//".new.txt", status="new", action="write")
+!!$          open(12, file=trim(x1)//".txt.new", status="new", action="write")
 !!$       end if
 !!$       write(12,*) 'final received',iproc,':',ph(:,56,32)
 !!$       close(12)
@@ -2764,11 +2770,11 @@ contains
 !!$
 !!$    if(iproc .eq. 254) then
 !!$       write (x1,fmt) iproc
-!!$       inquire(file=trim(x1)//".new.txt", exist=exists)
+!!$       inquire(file=trim(x1)//".txt.new", exist=exists)
 !!$       if (exists) then
-!!$          open(12, file=trim(x1)//".new.txt", status="old", position="append", action="write")
+!!$          open(12, file=trim(x1)//".txt.new", status="old", position="append", action="write")
 !!$       else
-!!$          open(12, file=trim(x1)//".new.txt", status="new", action="write")
+!!$          open(12, file=trim(x1)//".txt.new", status="new", action="write")
 !!$       end if
 !!$       write(12,*) 'final received',iproc,':',ph(:,56,32)
 !!$       close(12)
@@ -2776,16 +2782,15 @@ contains
 !!$
 !!$    if(iproc .eq. 255) then
 !!$       write (x1,fmt) iproc
-!!$       inquire(file=trim(x1)//".new.txt", exist=exists)
+!!$       inquire(file=trim(x1)//".txt.new", exist=exists)
 !!$       if (exists) then
-!!$          open(12, file=trim(x1)//".new.txt", status="old", position="append", action="write")
+!!$          open(12, file=trim(x1)//".txt.new", status="old", position="append", action="write")
 !!$       else
-!!$          open(12, file=trim(x1)//".new.txt", status="new", action="write")
+!!$          open(12, file=trim(x1)//".txt.new", status="new", action="write")
 !!$       end if
 !!$       write(12,*) 'final received',iproc,':',ph(:,56,32)
 !!$       close(12)
 !!$    end if
-
 
   end subroutine fm_gather_fields
 
@@ -2800,6 +2805,8 @@ contains
     complex,dimension(:,:,:),intent(inout) :: phi,apar,bpar
     integer :: ik,it,is,ic
 
+!    write(*,*) 'update fields orig_phi',orig_phi
+!    write(*,*) 'update fields new_phi',phi
     !If we're proc0 then we need to do full array (for diagnostics)
     if(proc0) then
        if(fphi>epsilon(0.0)) phi=phi+orig_phi
@@ -2807,6 +2814,7 @@ contains
        if(fbpar>epsilon(0.0)) bpar=bpar+orig_bpar
        return
     endif
+!    write(*,*) 'update fields phi after',phi
 
     !Now loop over cells and calculate field equation as required
     do ik=1,self%naky
@@ -3163,17 +3171,12 @@ contains
     !AJ This array is bigger than it needs to be but does mean we do not
     !AJ need to calculate how many supercells a give process is head for
     integer, dimension (gf_lo%naky*gf_lo%ntheta0) :: recv_handles
-    integer :: num_fields, tempit, tempis, tempismax
+    integer :: tempit, tempis, tempismax
     complex, dimension(:,:,:,:,:), allocatable :: tempdata
     logical :: exist
 
     call time_message(.false.,time_gf_reduce_an_sendrecv,' Gf_lo reduce an sendrecv')
 
-    num_fields = 0
-
-    if(fphi > epsilon(0.0)) num_fields = num_fields + 1
-    if(fapar > epsilon(0.0)) num_fields = num_fields + 1
-    if(fbpar > epsilon(0.0)) num_fields = num_fields + 1
 
     tempis = 0
     tempismax = 0
@@ -3185,7 +3188,7 @@ contains
        
     end do
 
-    allocate(tempdata(-ntgrid:ntgrid,gf_lo%ntheta0,num_fields,gf_lo%naky,tempismax))
+    allocate(tempdata(-ntgrid:ntgrid,gf_lo%ntheta0,nfield,gf_lo%naky,tempismax))
 
     call initialise_requests(send_handles)
     call initialise_requests(recv_handles)
@@ -3322,7 +3325,7 @@ contains
 
           end do
 
-          call broadcast_sub(tempdata(:,1:tempit,1:num_fields,ik,is),root,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
+          call broadcast_sub(tempdata(:,1:tempit,1:nfield,ik,is),root,self%kyb(ik)%supercells(is)%sc_sub_pd%id)
 
           if(fphi>epsilon(0.0)) then
              tempit = 1
@@ -4189,7 +4192,7 @@ contains
 
     endif
     !Now write debug data
-!    call fieldmat%write_debug_data
+    call fieldmat%write_debug_data
   end subroutine init_fields_matrixlocal
 
   !>Reset the fields_local module
@@ -4230,18 +4233,26 @@ contains
     !if(debug)call barrier !!/These barriers influence the reported time
     if (proc0) call time_message(.false.,time_field,' Field Solver')
 
+!    write(*,*) 'before phi',phi
     !Use fieldmat routine to calculate the field update
     call fieldmat%get_field_update(phi,apar,bpar)
+!    write(*,*) 'after phi',phi
 
+!    write(*,*) 'fphi',phi
     !Gather to proc0 if requested
     !NOTE: We currently calculate omega at every time step so we
     !actually need to gather everytime, which is a pain!
     !We also fill in the empties here.
+    do_gather = .true.
     if(do_gather) call fieldmat%gather_fields(phi,apar,bpar,&
          to_all_in=.false.,do_allreduce_in=field_local_allreduce)
 
+!    write(*,*) 'fphi after gather',phi
+
     !This routine updates *new fields using gathered update
     if(do_update) call fieldmat%update_fields(phi,apar,bpar)
+
+!    write(*,*) 'fphi after update',phi
 
     !For timing
     !Barrier usage ensures that proc0 measures the longest time taken on
@@ -4272,18 +4283,32 @@ contains
     use dist_fn_arrays, only: g, gnew
     use antenna, only: antenna_amplitudes, no_driver
     use gs2_layouts, only: g_lo
+    use mp, only: iproc
     implicit none
     integer, intent(in) :: istep
     logical, intent(in) :: remove_zonal_flows_switch
     integer :: diagnostics = 1
     logical, parameter :: do_gather=.true.
     logical :: do_update
+    integer, save :: first = 3
+
     !do_gather=.true. => fields are collected from all procs and distributed to everyone (required)
     !do_update=.true. => "Smart" update routines are used which only update the local parts of the
     !field arrays. This could help when xy are strongly parallelised but is likely to be slower
     !when all local, hence we should turn it off if xy all local.
     do_update=do_smart_update
+
     if(g_lo%x_local.and.g_lo%y_local) do_update=.false.
+!!$    if(first .le. 2) then
+!!$
+!!$       if(iproc .eq. 132) then
+!!$          write(*,*) 'phi',phi(:,8,2)
+!!$          write(*,*) 'phinew',phinew(:,8,2)
+!!$       end if
+!!$       first = first + 1
+!!$
+!!$    end if
+
 
     !GGH NOTE: apar_ext is initialized in this call
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
@@ -4301,6 +4326,8 @@ contains
        if(fbpar.gt.0) bpar=bparnew
     endif
 
+!    write(*,*) 'phi before timeadv',phi
+!    write(*,*) 'newphi before timeadv',phinew
     !Find gnew given fields at time step midpoint
     call timeadv (phi, apar, bpar, phinew, &
          aparnew, bparnew, istep)
@@ -4310,8 +4337,10 @@ contains
     !<DD>TAGGED: Should we only this is fapar>0 as well?
     if(.not.no_driver) aparnew=aparnew+apar_ext
 
+!    write(*,*) 'newphi before getfield_local',phinew
     !Calculate the fields at the next time point
     call getfield_local(phinew,aparnew,bparnew,do_gather,do_update)
+
 
     !If we do the update in getfield_local don't do it here
     if(.not.do_update)then
@@ -4320,13 +4349,17 @@ contains
        if(fbpar.gt.0) bparnew=bparnew+bpar
     endif
 
+!    write(*,*) 'phi',phi
+!    write(*,*) 'phnew',phinew
+
     !Remove zonal component if requested
     if(remove_zonal_flows_switch) call remove_zonal_flows
 
     !Evolve gnew to next half time point
     call timeadv (phi, apar, bpar, phinew, &
          aparnew, bparnew, istep, diagnostics) 
-
+!    write(*,*) 'phi at end',phi
+!    write(*,*) 'newphi at end',phinew
   end subroutine advance_local
 
   !> Routine to dump the current response matrix data

@@ -248,7 +248,6 @@ contains
     use fields_implicit, only: field_subgath
     use fields_local, only: minNrow
     use fields_local, only: do_smart_update, field_local_allreduce, field_local_allreduce_sub, field_local_tuneminnrow
-    use fields_gf_local, only: gf_minNrow, field_gf_local_tuneminnrow
     use fields_arrays, only: response_file
     use file_utils, only: run_name
     implicit none
@@ -263,7 +262,7 @@ contains
     character(len=256) :: response_dir
     namelist /fields_knobs/ field_option, remove_zonal_flows_switch, field_subgath, force_maxwell_reinit,&
          dump_response, read_response, minNrow, do_smart_update, field_local_allreduce, field_local_allreduce_sub,&
-         response_dir, field_local_tuneminnrow, field_gf_local_tuneminnrow, gf_minNrow
+         response_dir, field_local_tuneminnrow
     integer :: ierr, in_file
 
     if (proc0) then
@@ -317,9 +316,6 @@ contains
        call broadcast (field_local_allreduce)
        call broadcast (field_local_tuneminnrow)
        call broadcast (field_local_allreduce_sub)
-    case (fieldopt_gf_local)
-       call broadcast (field_gf_local_tuneminnrow)
-       call broadcast (gf_minNrow)
     end select
   end subroutine read_parameters
 
@@ -349,6 +345,7 @@ contains
     use kt_grids, only: naky, ntheta0
     use antenna, only: no_driver
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew, apar_ext
+    use fields_arrays, only: gf_phi, gf_apar, gf_bpar, gf_phinew, gf_aparnew, gf_bparnew
     implicit none
 
     if (.not. allocated(phi)) then
@@ -358,10 +355,27 @@ contains
        allocate (  phinew (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( aparnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bparnew (-ntgrid:ntgrid,ntheta0,naky))
+       if(fieldopt_switch .eq. fieldopt_gf_local) then
+          !AJ It should be possible to reduce the size of these by only allocating them
+          !AJ the extend of it and ik in gf_lo.  However, it would need to be done carefully 
+          !AJ to ensure the proc0 has the full space if we are still reducing data to proc0 
+          !AJ for diagnostics.
+          allocate (    gf_phi (-ntgrid:ntgrid,ntheta0,naky))
+          allocate (   gf_apar (-ntgrid:ntgrid,ntheta0,naky))
+          allocate (   gf_bpar (-ntgrid:ntgrid,ntheta0,naky))          
+          allocate ( gf_phinew (-ntgrid:ntgrid,ntheta0,naky))
+          allocate (gf_aparnew (-ntgrid:ntgrid,ntheta0,naky))
+          allocate (gf_bparnew (-ntgrid:ntgrid,ntheta0,naky))          
+       end if
     endif
     phi = 0.; phinew = 0.
     apar = 0.; aparnew = 0.
     bpar = 0.; bparnew = 0.
+    if(fieldopt_switch .eq. fieldopt_gf_local) then
+       gf_phi = 0.; gf_phinew = 0.
+       gf_apar = 0.; gf_aparnew = 0.
+       gf_bpar = 0.; gf_bparnew = 0.
+    end if
     if(.not.allocated(apar_ext).and.(.not.no_driver))then
        allocate (apar_ext (-ntgrid:ntgrid,ntheta0,naky))
        apar_ext = 0.
@@ -483,6 +497,7 @@ contains
     use fields_local, only: fl_reset => reset_fields_local
     use fields_gf_local, only: flgf_reset => reset_fields_gf_local
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use fields_arrays, only: gf_phi, gf_apar, gf_bpar, gf_phinew, gf_aparnew, gf_bparnew
     implicit none
     initialized  = .false.
     phi = 0.
@@ -491,6 +506,14 @@ contains
     aparnew = 0.
     bpar = .0
     bparnew = 0.
+    if(fieldopt_switch .eq. fieldopt_gf_local) then
+       gf_phi = 0.
+       gf_apar = 0.
+       gf_bpar = 0.
+       gf_phinew = 0.
+       gf_aparnew = 0.
+       gf_bparnew = 0.
+    end if
     !What about apar_ext?
     select case (fieldopt_switch)
     case (fieldopt_implicit)
@@ -511,11 +534,13 @@ contains
     use fields_local, only: finish_fields_local
     use fields_gf_local, only: finish_fields_gf_local
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
-    use fields_arrays, only: apar_ext
+    use fields_arrays, only: apar_ext, gf_phi, gf_apar, gf_bpar
+    use fields_arrays, only: apar_ext, gf_phinew, gf_aparnew, gf_bparnew
 
     implicit none
 
     initialized  = .false.
+!AJ Does these need zero'd if they are to be deallocated below?
     phi = 0.
     phinew = 0.
     apar = 0.
@@ -535,6 +560,7 @@ contains
     end select
 
     if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew)
+    if (allocated(gf_phi)) deallocate(gf_phi, gf_apar, gf_bpar, gf_phinew, gf_aparnew, gf_bparnew)
     if (allocated(apar_ext)) deallocate (apar_ext)
 
   end subroutine finish_fields
