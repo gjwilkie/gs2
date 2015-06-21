@@ -6039,6 +6039,7 @@ endif
       end do
     end do
     end if
+    if(proc0) qpar_gryfx = qpar_gryfx - 3.*upar_gryfx
 
     ! TPRP
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -6084,6 +6085,7 @@ endif
       end do
     end do
     end if
+    if(proc0) qperp_gryfx = (qperp_gryfx - upar_gryfx)
  
        densfac_lin = sqrt(2.)
        uparfac_lin = 2.
