@@ -371,6 +371,7 @@ contains
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_create_and_write, only: create_and_write_variable_noread
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
     use fields_parallelization, only: field_k_local
     use diagnostics_dimensions, only: dim_string
@@ -381,7 +382,7 @@ contains
     type(diagnostics_type), intent(inout) :: gnostics
     character(*), intent(in) :: flux_name, flux_description, flux_units
     real, dimension(ntheta0,naky,nspec), intent(inout) :: flux_value
-    real, dimension(ntheta0,naky,nspec) :: flux_value_temp
+    !real, dimension(ntheta0,naky,nspec) :: flux_value_temp
     logical, intent(in) :: distributed
     real, dimension(ntheta0, naky) :: total_flux_by_mode
     real, dimension(naky) :: total_flux_by_ky
@@ -389,13 +390,13 @@ contains
     real, dimension(nspec) :: flux_by_species
     integer :: is, ik, it
 
-    call broadcast(flux_value)
+    !call broadcast(flux_value)
 
     call average_all(flux_value, flux_by_species, distributed) 
 
-    flux_value_temp = flux_value
+    !flux_value_temp = flux_value
 
-    call broadcast(flux_value_temp)
+    !call broadcast(flux_value_temp)
 
     total_flux_by_mode = 0.
     do ik = 1,naky
@@ -432,7 +433,7 @@ contains
             flux_description//" summed over species and averaged over ky, as a function of kx and time", &
             flux_units, total_flux_by_kx)
        
-       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name, &
+       call create_and_write_variable_noread(gnostics, gnostics%rtype, "total_"//flux_name, &
             dim_string([gnostics%dims%time]), &
             flux_description//" summed over species and averaged over kx and ky, as a function of time", &
             flux_units, sum(total_flux_by_kx))
