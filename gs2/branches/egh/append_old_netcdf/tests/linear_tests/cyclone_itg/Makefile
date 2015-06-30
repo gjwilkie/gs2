@@ -13,6 +13,7 @@ else
 all: cyclone_itg_low_res cyclone_itg_replay
 	#$(call RUNCOMMAND,cyclone_itg_low_res,cyclone_itg_low_res.in,implicit)
 	#$(call RUNCOMMAND,cyclone_itg_low_res,cyclone_itg_low_res_fields_local.in,local)
+	cp cyclone_itg_low_res_fields_local.out.nc cyclone_itg_replay.out.nc
 	$(call RUNCOMMAND,cyclone_itg_replay,cyclone_itg_replay.in,)
 endif
 
