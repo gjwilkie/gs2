@@ -3373,7 +3373,7 @@ contains
     to_high(5) = nlambda
     to_high(6) = gf_lo%ulim_alloc
 
-    !Create g2le redist object
+    !Create g2gf redist object
     call init_redist (g2gf, 'c', to_low, to_high, to_list, from_low, from_high, from_list)
 
     !Deallocate lists

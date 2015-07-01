@@ -3170,7 +3170,7 @@ contains
     integer, dimension (gf_lo%xypoints*3) :: send_handles
     !AJ This array is bigger than it needs to be but does mean we do not
     !AJ need to calculate how many supercells a give process is head for
-    integer, dimension (gf_lo%naky*gf_lo%ntheta0) :: recv_handles
+    integer, dimension (gf_lo%naky*gf_lo%ntheta0*3) :: recv_handles
     integer :: tempit, tempis, tempismax
     complex, dimension(:,:,:,:,:), allocatable :: tempdata
     logical :: exist
@@ -4192,7 +4192,7 @@ contains
 
     endif
     !Now write debug data
-    call fieldmat%write_debug_data
+!    call fieldmat%write_debug_data
   end subroutine init_fields_matrixlocal
 
   !>Reset the fields_local module

@@ -4854,6 +4854,7 @@ contains
     !If overlapping then start comms now 
     if(opt_redist_persist_overlap) call c_redist_33_mpi_copy_persist_start(r, from_here)
 
+
     ! redistribute from local processor to local processor
     do i = 1, r%from(iproc)%nn
        to_here(r%to(iproc)%k(i),&
@@ -5435,7 +5436,7 @@ contains
 
   subroutine c_redist_36 (r, from_here, to_here)
     use job_manage, only: time_message
-    use mp, only: iproc,proc0
+    use mp, only: iproc,proc0,barrier
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -5455,6 +5456,10 @@ contains
 
     !If overlapping then start comms now 
 !    if(opt_redist_persist_overlap) call c_redist_36_mpi_copy_persist_start(r, from_here)
+!AJ4
+!    call barrier()
+
+
 
     ! redistribute from local processor to local processor
     do i = 1, r%from(iproc)%nn
@@ -5601,10 +5606,17 @@ contains
        do ip=0,nproc-1
           if(r%to(ip)%nn>0.and.ip.ne.iproc) then
              count = count + 1
+             if(count .gt. nrecv) then
+                write(*,*) 'error with count',iproc,count,nrecv
+             end if
              recv_lookup(count) = ip
              call nbrecv(recv_buff(-ntgrid:ntgrid,:,1:r%to(ip)%nn,count),ip,ip,recv_hand(count))
           end if
        end do
+
+       if(count .ne. nrecv) then
+         write(*,*) 'problem with count and nrecv'
+       end if
 
     end if
 
@@ -5625,20 +5637,26 @@ contains
     end if
 
     if(nrecv>0) then
+       call waitall(nrecv, recv_hand)
        do ip = 1,nrecv
-          call waitany(nrecv, recv_hand, count, status)          
-          ipfrom = recv_lookup(count) 
+!          call waitany(nrecv, recv_hand, count, status)          
+!          ipfrom = recv_lookup(count) 
+          ipfrom = recv_lookup(ip) 
           do i = 1, r%to(ipfrom)%nn
              to_here(:,:,r%to(ipfrom)%m(i), &
                   r%to(ipfrom)%n(i), &
                   r%to(ipfrom)%o(i), &
                   r%to(ipfrom)%p(i)) &
-                  = recv_buff(:,:,i,count)
+!                  = recv_buff(:,:,i,count)
+                  = recv_buff(:,:,i,ip)
           end do
        end do
     end if
     
-    call waitall(nsend, send_hand)
+    if(nsend>0) then
+       call waitall(nsend, send_hand)
+    end if
+
 
     if(nsend>0) then
        deallocate(send_buff)

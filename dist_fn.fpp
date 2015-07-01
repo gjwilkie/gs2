@@ -6584,6 +6584,7 @@ endif
 !AJ
     use job_manage, only: time_message
     use redistribute, only: gather
+    use mp, only: barrier
 
     implicit none
 
@@ -6597,7 +6598,10 @@ endif
     real :: temparg, temparg2
     real, dimension(-ntgrid:ntgrid) :: temparg3,temparg4
     real, dimension(-ntgrid:ntgrid,2) :: tempvpa
-   
+
+!AJ3   
+    call barrier()
+
 
     if(gf_lo_integrate) then
 !#ifdef DEBUG

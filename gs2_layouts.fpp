@@ -705,7 +705,7 @@ contains
        (naky, ntheta0, nlambda, negrid, nspec)
     use mp, only: iproc, nproc, proc0
     use mp, only: split, mp_comm, nproc_comm, rank_comm
-    use mp, only: sum_allreduce_sub, sum_allreduce
+    use mp, only: sum_allreduce_sub, sum_allreduce, sum_reduce, max_reduce
 ! TT>
     use file_utils, only: error_unit
 ! <TT
@@ -884,12 +884,6 @@ contains
     allocate(g_lo%ikit_procs_assignment(ntheta0,naky))
     g_lo%ikit_procs_assignment(:,:)%mine = .false.
     g_lo%ikit_procs_assignment(:,:)%num_procs = 0
-    do ik=1,naky
-       do it=1,ntheta0
-          g_lo%ikit_procs_assignment(it,ik)%point%ik = ik
-          g_lo%ikit_procs_assignment(it,ik)%point%it = it
-       end do
-    end do
     do iglo=g_lo%llim_proc,g_lo%ulim_proc
        ik=ik_idx(g_lo,iglo)
        it=it_idx(g_lo,iglo)
@@ -917,6 +911,24 @@ contains
        end if
     enddo
 
+    !AJ Record the ik,it points this process have in a contigious array.
+    allocate(g_lo%local_ikit_points(g_lo%ikitrange))
+    tmp = 1
+    do ik=1,naky
+       do it=1,ntheta0
+          if(g_lo%ikit_procs_assignment(it,ik)%mine .eq. .true.) then
+             g_lo%local_ikit_points(tmp)%ik = ik 
+             g_lo%local_ikit_points(tmp)%it = it 
+             tmp = tmp + 1
+          end if
+       end do
+    end do
+
+    !AJ It's probably possible to only run this code below if you are using gf_local fields
+    !AJ Check that this is the case and if so make this conditional.
+    !AJ This will depend if the fields module has been initialised before this module (so we can 
+    !AJ work out which type of field operations we are using).
+    g_lo%max_ikit_nprocs = 0
     do ik=1,naky
        do it=1,ntheta0
           tmp = 0
@@ -929,6 +941,7 @@ contains
           call sum_allreduce(tmp_proc_list)
           allocate(g_lo%ikit_procs_assignment(it,ik)%proc_list(tmp))
           g_lo%ikit_procs_assignment(it,ik)%num_procs = tmp
+          g_lo%max_ikit_nprocs = max(tmp, g_lo%max_ikit_nprocs)
           tmp = 1
           do i=1,nproc
              if(tmp_proc_list(i) .eq. 1) then
@@ -939,17 +952,16 @@ contains
        end do
     end do
 
-    allocate(g_lo%local_ikit_points(g_lo%ikitrange))
-    tmp = 1
-    do ik=1,naky
-       do it=1,ntheta0
-          if(g_lo%ikit_procs_assignment(it,ik)%mine .eq. .true.) then
-             g_lo%local_ikit_points(tmp)%ik = ik 
-             g_lo%local_ikit_points(tmp)%it = it 
-             tmp = tmp + 1
-          end if
-       end do
-    end do
+    tmp = g_lo%ikitrange
+    call max_reduce(tmp,0)
+    if(proc0) then
+       write(*,*) 'maximum number of ik,it points an given process owns in g_lo',tmp
+    end if
+    tmp = g_lo%ikitrange
+    call sum_reduce(tmp, 0)
+    if(proc0) then
+       write(*,*) 'average number of ik,ik points',tmp/nproc
+    end if
 
     !Store dimension locality
     g_lo%y_local=all(ik_local)
@@ -2632,8 +2644,8 @@ contains
     use layouts_type, only: ikit
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, negrid, nlambda, nspec
-    type(ikit),dimension(:),allocatable :: tmp
-    integer :: igf, tmp_ind
+!    type(ikit),dimension(:),allocatable :: tmp
+!    integer :: igf, tmp_ind
 # ifdef USE_C_INDEX
     integer :: ierr
     interface
@@ -2772,17 +2784,17 @@ contains
         
     gf_lo%ulim_alloc = gf_lo%ulim_proc
 
-    allocate(tmp((gf_lo%ulim_proc - gf_lo%llim_proc) + 1))
-    tmp_ind = 1
-    do igf = gf_lo%llim_proc, gf_lo%ulim_proc
-       tmp(tmp_ind)%ik = ik_idx(gf_lo,igf)
-       tmp(tmp_ind)%it = it_idx(gf_lo,igf)
-       tmp_ind = tmp_ind + 1
-    end do
+!    allocate(tmp((gf_lo%ulim_proc - gf_lo%llim_proc) + 1))
+!    tmp_ind = 1
+!    do igf = gf_lo%llim_proc, gf_lo%ulim_proc
+!       tmp(tmp_ind)%ik = ik_idx(gf_lo,igf)
+!       tmp(tmp_ind)%it = it_idx(gf_lo,igf)
+!       tmp_ind = tmp_ind + 1
+!    end do
 
 !    write(*,*) 'gf_lo',iproc,((gf_lo%ulim_proc-gf_lo%llim_proc) + 1),tmp
 
-    deallocate(tmp)
+!    deallocate(tmp)
 
 # ifdef USE_C_INDEX
     ierr = init_indices_gflo_c (layout)

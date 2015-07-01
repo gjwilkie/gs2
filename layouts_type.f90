@@ -16,7 +16,6 @@ module layouts_type
 
   type :: ikitprocs
      sequence
-     type(ikit) :: point
      logical :: mine
      integer :: num_procs
      integer,dimension(:),allocatable  :: proc_list
@@ -49,6 +48,7 @@ module layouts_type
      integer,dimension(:,:),allocatable :: les_kxky_range !Used in integrate species, holds start and stop indices for flattened kxky dimension
      type(ikitprocs),dimension(:,:),allocatable :: ikit_procs_assignment !Used to record processes that have been assigned specific it ik points in g
      integer :: ikitrange
+     integer :: max_ikit_nprocs ! Used to record the largest proc_list size for all the ikitprocs points.  This is useful for setting the size of non-blocking request arrays for communications
      type(ikit),dimension(:),allocatable :: local_ikit_points
      logical :: x_before_y !Information about layout order
      logical :: x_local, y_local, l_local, e_local, s_local !Used to record if various dimensions are entirely local
