@@ -405,7 +405,7 @@ contains
        call write_input_file(gnostics)
     end if
     
-    if (istep > 0) then
+    if (istep > 0 .and. proc0) then
        call calculate_omega(gnostics)
        if (gnostics%write_heating) call calculate_heating (gnostics)
     end if

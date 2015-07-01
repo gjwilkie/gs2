@@ -3436,6 +3436,7 @@ contains
     integer :: j
 
     logical :: debug=.false.
+
     if (debug) write(6,*) "get_omeaavg: allocate domega"
 if (.not. allocated(domega)) allocate(domega(navg,ntheta0,naky))
     if (present(debopt)) debug=debopt
@@ -3470,7 +3471,7 @@ if (debug) write(6,*) "get_omeaavg: set omegahist at istep = 0"
 if (debug) write(6,*) "get_omeaavg: set omegaavg"
     omegaavg = sum(omegahist/real(navg),dim=1)
 if (debug) write(6,*) "get_omegaavg: omegaavg=",omegaavg
-
+    write(*,*) 'bbb'
     if (istep > navg) then
        domega = spread(omegaavg,1,navg) - omegahist
        if (all(sqrt(sum(abs(domega)**2/real(navg),dim=1)) &
