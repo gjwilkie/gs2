@@ -70,7 +70,7 @@ contains
     call debug_message(gnostics%verbosity, &
       'gs2_diagnostics_new::init_gs2_diagnostics_new initialized config')
     call check_parameters
-    call check_restart_file_writeable
+    !call check_restart_file_writeable
     call debug_message(gnostics%verbosity, &
       'gs2_diagnostics_new::init_gs2_diagnostics_new  checked restart file')
     
@@ -169,7 +169,11 @@ contains
        inquire(file=trim(run_name)//'.out.nc', exist=ex)
        if (init_options%replay) then
          if (ex) then
+          call debug_message(gnostics%verbosity, &
+            'gs2_diagnostics_new::init_gs2_diagnostics_new replaying')
            call open_file(gnostics%sfile)
+          call debug_message(gnostics%verbosity, &
+            'gs2_diagnostics_new::init_gs2_diagnostics_new opened replay')
            call set_dimension_start(gnostics%sfile, "t", 1)
            !call print_dimensions(gnostics%sfile)
          else 
@@ -188,6 +192,8 @@ contains
     call debug_message(gnostics%verbosity, &
       'gs2_diagnostics_new::init_gs2_diagnostics_new opened file')
     call broadcast(gnostics%appending)
+
+    gnostics%replay = init_options%replay
 
     !All procs initialise dimension data but if not parallel IO
     !only proc0 has to add them to file.
@@ -293,13 +299,15 @@ contains
     integer, parameter :: verb=3
     if (.not. gnostics%write_any) return
     
-    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
-      & calling save_restart_dist_fn')
-    call save_restart_dist_fn
-    
-    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
-      & calling run_old_final_routines')
-    call run_old_final_routines
+    if (.not. gnostics%replay) then
+      call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+        & calling save_restart_dist_fn')
+      call save_restart_dist_fn
+      
+      call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+        & calling run_old_final_routines')
+      call run_old_final_routines
+    end if
     
     deallocate(gnostics%fluxfac)
     call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
@@ -375,7 +383,7 @@ contains
   !! istep=-1 --> Create all netcdf variables
   !! istep=0 --> Write constant arrays/parameters (e.g. aky) and initial values
   !! istep>0 --> Write variables
-  subroutine run_diagnostics(istep, exit, replay)
+  subroutine run_diagnostics(istep, exit, read_existing)
     use gs2_time, only: user_time
     use mp, only: proc0
     use diagnostics_printout, only: print_flux_line, print_line
@@ -407,7 +415,7 @@ contains
     implicit none
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
-    logical, intent(in) :: replay
+    logical, intent(in) :: read_existing
     integer, parameter :: verb=3
     
     if (.not. gnostics%write_any) return
@@ -423,19 +431,21 @@ contains
     ! otherwise, only proc0. Also, creation of variables
     ! happens when istep == -1
     if (gnostics%parallel .or. proc0) then
-      if (replay) then
+      if (read_existing ) then
        gnostics%create = .false.
        gnostics%wryte = .false.
        gnostics%reed = (istep>-1)
      else
+       gnostics%reed = .false.
        gnostics%create = (istep==-1).and..not.gnostics%appending
-       gnostics%wryte = (istep>-1)
+       gnostics%wryte = (istep>-1) .and. .not. gnostics%replay
      end if
     else
        gnostics%reed = .false.
        gnostics%create=.false.
        gnostics%wryte=.false.
     end if
+
     
     !gnostics%wryte = .false.
     
@@ -450,6 +460,9 @@ contains
          .or.  gnostics%print_flux_line &
          .or.  gnostics%write_flux_line &
          .or.  gnostics%is_trinity_run)
+
+
+    !write (*,*) 'gnostics calculate_fluxes', gnostics%calculate_fluxes
     
     gnostics%user_time = user_time
     if (istep .eq. 0) gnostics%start_time = user_time
@@ -462,7 +475,7 @@ contains
        call write_input_file(gnostics)
     end if
     
-    if (istep > 0) then
+    if (istep > 0 .and. .not. gnostics%replay) then
        call calculate_omega(gnostics)
        if (gnostics%write_heating) call calculate_heating (gnostics)
     end if
@@ -477,6 +490,11 @@ contains
     !end if
 
     if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.gnostics%exit) then
+       ! Finally, write time value and update time index
+       call create_and_write_variable(gnostics, gnostics%rtype, "t", &
+            trim(dim_string(gnostics%dims%time)), &
+            "Values of the time coordinate", "a/v_thr", user_time) 
+       gnostics%user_time = user_time
        gnostics%vary_vnew_only = .false.
        call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics starting write sequence')
        if (gnostics%write_omega)  call write_omega (gnostics)
@@ -514,16 +532,19 @@ contains
        call run_diagnostics_to_be_updated
 
        call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics updating time')
-       ! Finally, write time value and update time index
-       call create_and_write_variable(gnostics, gnostics%rtype, "t", &
-            trim(dim_string(gnostics%dims%time)), &
-            "Values of the time coordinate", "a/v_thr", user_time) 
-       if (gnostics%wryte .or. (gnostics%reed .and. istep==0)) call increment_start(gnostics%sfile, &
+       !if (gnostics%wryte .or. (gnostics%reed .and. istep==0)) call increment_start(gnostics%sfile, &
+         !trim(dim_string(gnostics%dims%time)))
+       !if (.not. read_existing) call increment_start(gnostics%sfile, &
+         !trim(dim_string(gnostics%dims%time)))
+       if (istep>-1) call increment_start(gnostics%sfile, &
          trim(dim_string(gnostics%dims%time)))
        if (gnostics%wryte) call syncfile(gnostics%sfile)
        if (proc0 .and. gnostics%write_ascii) call flush_output_files(gnostics%ascii_files)
        
        ! Update time used for time averages
+       !write (*,*) 'updating user_time_old', gnostics%user_time
+       !if ((.not. gnostics%replay .and. .not. read_existing) .or. (gnostics%replay .and. read_existing)) gnostics%user_time_old = gnostics%user_time
+       !if (.not. read_existing) gnostics%user_time_old = gnostics%user_time
        gnostics%user_time_old = gnostics%user_time
     else if (mod(istep, gnostics%ncheck).eq.0) then
        ! These lines cause the automated checking of velocity space resolution

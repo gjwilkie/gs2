@@ -149,10 +149,10 @@ class GenerateInit
   # Code for determining if the module should
   # be initialized.
   def up
-    "if (up() .and. current%level .lt. init_level_list%#@level_name) call #@level_sub_name"
+    "if (up() .and. current%level == init_level_list%#@level_name-1) call #@level_sub_name"
   end  
   def down
-    "if (down () .and. current%level .le. init_level_list%#@level_name) call #@level_sub_name"
+    "if (down () .and. current%level == init_level_list%#@level_name) call #@level_sub_name"
   end  
   def subroutine
     return <<EOF

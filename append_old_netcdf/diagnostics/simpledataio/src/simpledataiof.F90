@@ -199,6 +199,7 @@ contains
          type(sdatio_file) :: sfile
        end subroutine sdatio_open_file
     end interface
+    !write (*,*) 'opening file'
     call sdatio_open_file(sfile)
 #endif
 #endif

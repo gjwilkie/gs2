@@ -18,7 +18,9 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp, qparflux, pperpj1, qpperpj1
 
-    call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+    if (.not. gnostics%replay) then
+      call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+    end if
 
     call write_standard_moment_properties(gnostics, &
          'ntot',  'The total perturbed species density', 'n_r', ntot, gnostics%distributed)
@@ -55,7 +57,9 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp !, qparflux, pperpj1, qpperpj1
 
-    call getmoms_notgc(phinew, bparnew, density,upar,tpar,tperp,ntot)
+    if (.not. gnostics%replay) then
+      call getmoms_notgc(phinew, bparnew, density,upar,tpar,tperp,ntot)
+    end if
 
     call write_standard_moment_properties(gnostics, &
          'ntot_notgc',  'The total perturbed species density &
