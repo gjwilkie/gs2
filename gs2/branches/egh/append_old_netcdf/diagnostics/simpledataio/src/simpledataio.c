@@ -1018,6 +1018,8 @@ void sdatio_open_file(struct sdatio_file * sfile )  {
   int dummy;
   int *nunlim;
 
+  DEBUG_MESS("starting sdatio_open_file\n");
+
   retval = 0;
 
   if (sfile->is_open){
@@ -1028,6 +1030,7 @@ void sdatio_open_file(struct sdatio_file * sfile )  {
   /* We make the choice to always open the file in readwrite mode*/
   sfile->mode = sfile->mode|NC_WRITE;
 
+  DEBUG_MESS("sdatio_open_file opening file\n");
   /* Open the file*/
   if (sfile->is_parallel) {
 #ifdef PARALLEL 
@@ -1040,6 +1043,7 @@ void sdatio_open_file(struct sdatio_file * sfile )  {
   else {
     if ((retval = nc_open(sfile->name, sfile->mode, &(sfile->nc_file_id)))) ERR(retval);
   }
+  DEBUG_MESS("sdatio_open_file opened file\n");
   /*Initialize object file data*/
   sfile->is_open = 1;
   sfile->n_dimensions = 0;

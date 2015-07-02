@@ -69,6 +69,13 @@ contains
          dim_string([gnostics%dims%ri,gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]), &
          "Complex frequency, averaged over navg timesteps, as a function of kx, ky and time", "a/v_thr", &
          omega_average_woutunits)
+
+     if (gnostics%replay) then 
+       do ik=1,naky
+         omegahist(:,:,ik) = omegahist_woutunits(:,:,ik) / woutunits(ik)
+         omega_average(:,ik) = omega_average_woutunits(:,ik) / woutunits(ik)
+       end do
+     end if
     
 !Is this dead?
     !if (gnostics%wryte) then

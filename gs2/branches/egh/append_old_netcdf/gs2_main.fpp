@@ -458,7 +458,10 @@ contains
     use unit_tests, only: debug_message
     use gs2_reinit, only: init_gs2_reinit
     use fields_implicit, only: skip_initialisation
-    use fields_local, only: fieldmat
+    !use dist_fn, only: replay_d=>replay
+    !use fields, only: fields_allocate_arrays=>allocate_arrays
+    !use fields_local, only: fieldmat
+    use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
@@ -480,17 +483,23 @@ contains
     !! so we disable calculating the implicit response
     !! matrix
     if (state%replay) then
-      skip_initialisation = .true.
-      fieldmat%no_prepare = .true.
-      fieldmat%no_populate = .true.
+      !skip_initialisation = .true.
+      !replay_d = .true.
+      !fieldmat%no_prepare = .true.
+      !fieldmat%no_populate = .true.
+      call init(state%init, init_level_list%le_grids)
+      !call fields_allocate_arrays
+      !nonlinear_mode_switch = nonlinear_mode_none
+    else
+      ! This triggers initializing of all the grids, all the physics parameters
+      ! and all the modules which solve the equations
+      call init(state%init, init_level_list%full)
     end if
-    ! This triggers initializing of all the grids, all the physics parameters
-    ! and all the modules which solve the equations
-    call init(state%init, init_level_list%full)
 
     ! Set the initial simulation time (must be after init_fields
     ! because initial time may be read from a restart file)
     call init_tstart(tstart)
+
 
     ! Here we copy some geometric information required by 
     ! Trinity to state%outputs
@@ -771,25 +780,25 @@ contains
 #ifdef NEW_DIAG
          else 
            !if (state%replay) call broadcast(state%exit)
-           call run_diagnostics (istep, state%exit, .false.)
+           call run_diagnostics (istep, state%exit, state%replay)
 #endif
          end if
        end if
-       if (state%replay) then 
-         !call debug_message(state%verb+1, &
-           !'gs2_main::evolve_equations broadcasting exit')
-         ! Necessary with replay because other procs just read garbage and 
-         ! exit may be wrong
+       !if (state%replay) then 
+         !!call debug_message(state%verb+1, &
+           !!'gs2_main::evolve_equations broadcasting exit')
+         !! Necessary with replay because other procs just read garbage and 
+         !! exit may be wrong
+         !!call broadcast(state%exit)
+!#ifdef NEW_DIAG
+         !if (.not. state%exit .and. istep < istep_loop_max ) then
+           !call debug_message(state%verb+1, &
+             !'gs2_main::evolve_equations rereading variable values')
+           !call run_diagnostics (istep, state%exit, .true.)
+         !end if
+!#endif          
          !call broadcast(state%exit)
-#ifdef NEW_DIAG
-         if (.not. state%exit .and. istep < istep_loop_max ) then
-           call debug_message(state%verb+1, &
-             'gs2_main::evolve_equations rereading variable values')
-           call run_diagnostics (istep, state%exit, .true.)
-         end if
-#endif          
-         !call broadcast(state%exit)
-       end if
+       !end if
 
        if(state%exit) state%converged = .true.
        if (state%exit) call debug_message(state%verb-1, &
@@ -1029,6 +1038,7 @@ contains
     use parameter_scan, only: finish_parameter_scan
     use unit_tests, only: debug_message
     use gs2_reinit, only: finish_gs2_reinit
+    !use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
@@ -1043,6 +1053,8 @@ contains
 
     call deallocate_outputs(state)
     call finish_parameter_scan
+    !if (state%replay .and. allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew)
+
     call init(state%init, init_level_list%basic)
     if (proc0) call time_message(.false.,state%timers%finish,' Finished run')
     if (proc0) call time_message(.false.,state%timers%total,' Total')
@@ -1264,7 +1276,6 @@ contains
 
     if (.not. state%included) return
 
-    time_interval = user_time-start_time
     !write (*,*) 'GETTING FLUXES', 'user_time', user_time, start_time, 'DIFF', time_interval
 
     if (state%nensembles > 1) &
@@ -1282,6 +1293,7 @@ contains
        diff = gnostics%current_results%diffusivity
 #endif 
      endif
+     !write(*,*) 'difff is', diff
      do is = 1,nspec
        ! Q = n chi grad T = n (gamma / k^2) dT / dr
        ! = dens  n_r (gamma_N v_thr / k_N**2 rho_r a) dT / drho drho/dr
@@ -1299,12 +1311,14 @@ contains
      time_interval = 1.0
    else 
      if (use_old_diagnostics) then
+       time_interval = user_time-start_time
        qf = qflux_avg
        pf = pflux_avg
        ht = heat_avg
        vf = vflux_avg
      else
 #ifdef NEW_DIAG
+       time_interval = user_time - gnostics%start_time
        qf = gnostics%current_results%species_heat_flux_avg
        pf = gnostics%current_results%species_particle_flux_avg
        ht = gnostics%current_results%species_heating_avg

@@ -67,11 +67,13 @@ contains
     allocate(errest(5,2), erridx(5,3))
     errest = 0.0; erridx = 0
     
-    ! error estimate obtained by comparing standard integral with less-accurate integral
-    call get_verr (errest, erridx, phinew, bparnew)
-    
-    ! error estimate based on monitoring amplitudes of legendre polynomial coefficients
-    call get_gtran (geavg, glavg, gtavg, phinew, bparnew)
+    if (.not. gnostics%replay) then
+      ! error estimate obtained by comparing standard integral with less-accurate integral
+      call get_verr (errest, erridx, phinew, bparnew)
+      
+      ! error estimate based on monitoring amplitudes of legendre polynomial coefficients
+      call get_gtran (geavg, glavg, gtavg, phinew, bparnew)
+    end if
 
     
     !errest(5,:) = -4

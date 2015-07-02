@@ -14,6 +14,8 @@ module fields
   !> Made public for unit tests
   public :: fields_pre_init
   public :: remove_zonal_flows_switch
+  !> Made public for replay
+  public :: allocate_arrays
 
   interface fieldlineavgphi
      module procedure fieldlineavgphi_loc

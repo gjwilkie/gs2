@@ -278,6 +278,7 @@ module diagnostics_config
      logical :: create
      logical :: wryte
      logical :: reed
+     logical :: replay
      logical :: distributed
      logical :: parallel
      logical :: exit

@@ -22,7 +22,7 @@ contains
     type(diagnostics_type), intent(in) :: gnostics
     complex, dimension(:,:), allocatable :: phi_corr_2pi
     allocate (phi_corr_2pi(-ntgrid:ntgrid,naky))
-    call correlation (phi_corr_2pi)
+    if (.not. gnostics%replay) call correlation (phi_corr_2pi)
     call create_and_write_variable(gnostics, gnostics%rtype, "phi_corr_2pi", &
          dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%ky,gnostics%dims%time]), &
          "2 point correlation function calculated from the electric potential &

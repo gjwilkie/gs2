@@ -17,6 +17,8 @@ contains
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
 
+    if (gnostics%replay) return 
+
     if (fphi >epsilon(0.0)) call write_standard_field_properties(gnostics, &
       'phi',  'The electrostatic potential', 'T_r/e', phinew)
     if (fapar>epsilon(0.0)) call write_standard_field_properties(gnostics, &

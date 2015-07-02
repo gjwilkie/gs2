@@ -187,67 +187,67 @@ contains
       return
     else
       if (up()) then 
-        if (up() .and. current%level .lt. init_level_list%gs2_layouts) call gs2_layouts_subroutine
-        if (up() .and. current%level .lt. init_level_list%normalisations) call normalisations_subroutine
-        if (up() .and. current%level .lt. init_level_list%theta_grid_params) call theta_grid_params_subroutine
-        if (up() .and. current%level .lt. init_level_list%gs2_save) call gs2_save_subroutine
-        if (up() .and. current%level .lt. init_level_list%init_g) call init_g_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_optimisations) call override_optimisations_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_miller_geometry) call override_miller_geometry_subroutine
-        if (up() .and. current%level .lt. init_level_list%theta_grid) call theta_grid_subroutine
-        if (up() .and. current%level .lt. init_level_list%kt_grids_parameters) call kt_grids_parameters_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_kt_grids) call override_kt_grids_subroutine
-        if (up() .and. current%level .lt. init_level_list%kt_grids) call kt_grids_subroutine
-        if (up() .and. current%level .lt. init_level_list%run_parameters) call run_parameters_subroutine
-        if (up() .and. current%level .lt. init_level_list%hyper) call hyper_subroutine
-        if (up() .and. current%level .lt. init_level_list%species) call species_subroutine
-        if (up() .and. current%level .lt. init_level_list%le_grids) call le_grids_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_parameters) call dist_fn_parameters_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_layouts) call dist_fn_layouts_subroutine
-        if (up() .and. current%level .lt. init_level_list%nonlinear_terms) call nonlinear_terms_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_arrays) call dist_fn_arrays_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_level_1) call dist_fn_level_1_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_profiles) call override_profiles_subroutine
-        if (up() .and. current%level .lt. init_level_list%antenna) call antenna_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_level_2) call dist_fn_level_2_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_timestep) call override_timestep_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_level_3) call dist_fn_level_3_subroutine
-        if (up() .and. current%level .lt. init_level_list%collisions) call collisions_subroutine
-        if (up() .and. current%level .lt. init_level_list%fields) call fields_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_initial_values) call override_initial_values_subroutine
-        if (up() .and. current%level .lt. init_level_list%set_initial_values) call set_initial_values_subroutine
-        if (up() .and. current%level .lt. init_level_list%full) call full_subroutine
+        if (up() .and. current%level == init_level_list%gs2_layouts-1) call gs2_layouts_subroutine
+        if (up() .and. current%level == init_level_list%normalisations-1) call normalisations_subroutine
+        if (up() .and. current%level == init_level_list%theta_grid_params-1) call theta_grid_params_subroutine
+        if (up() .and. current%level == init_level_list%gs2_save-1) call gs2_save_subroutine
+        if (up() .and. current%level == init_level_list%init_g-1) call init_g_subroutine
+        if (up() .and. current%level == init_level_list%override_optimisations-1) call override_optimisations_subroutine
+        if (up() .and. current%level == init_level_list%override_miller_geometry-1) call override_miller_geometry_subroutine
+        if (up() .and. current%level == init_level_list%theta_grid-1) call theta_grid_subroutine
+        if (up() .and. current%level == init_level_list%kt_grids_parameters-1) call kt_grids_parameters_subroutine
+        if (up() .and. current%level == init_level_list%override_kt_grids-1) call override_kt_grids_subroutine
+        if (up() .and. current%level == init_level_list%kt_grids-1) call kt_grids_subroutine
+        if (up() .and. current%level == init_level_list%run_parameters-1) call run_parameters_subroutine
+        if (up() .and. current%level == init_level_list%hyper-1) call hyper_subroutine
+        if (up() .and. current%level == init_level_list%species-1) call species_subroutine
+        if (up() .and. current%level == init_level_list%le_grids-1) call le_grids_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_parameters-1) call dist_fn_parameters_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_layouts-1) call dist_fn_layouts_subroutine
+        if (up() .and. current%level == init_level_list%nonlinear_terms-1) call nonlinear_terms_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_arrays-1) call dist_fn_arrays_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_level_1-1) call dist_fn_level_1_subroutine
+        if (up() .and. current%level == init_level_list%override_profiles-1) call override_profiles_subroutine
+        if (up() .and. current%level == init_level_list%antenna-1) call antenna_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_level_2-1) call dist_fn_level_2_subroutine
+        if (up() .and. current%level == init_level_list%override_timestep-1) call override_timestep_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_level_3-1) call dist_fn_level_3_subroutine
+        if (up() .and. current%level == init_level_list%collisions-1) call collisions_subroutine
+        if (up() .and. current%level == init_level_list%fields-1) call fields_subroutine
+        if (up() .and. current%level == init_level_list%override_initial_values-1) call override_initial_values_subroutine
+        if (up() .and. current%level == init_level_list%set_initial_values-1) call set_initial_values_subroutine
+        if (up() .and. current%level == init_level_list%full-1) call full_subroutine
       else if (down()) then
-        if (down () .and. current%level .le. init_level_list%full) call full_subroutine
-        if (down () .and. current%level .le. init_level_list%set_initial_values) call set_initial_values_subroutine
-        if (down () .and. current%level .le. init_level_list%override_initial_values) call override_initial_values_subroutine
-        if (down () .and. current%level .le. init_level_list%fields) call fields_subroutine
-        if (down () .and. current%level .le. init_level_list%collisions) call collisions_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_level_3) call dist_fn_level_3_subroutine
-        if (down () .and. current%level .le. init_level_list%override_timestep) call override_timestep_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_level_2) call dist_fn_level_2_subroutine
-        if (down () .and. current%level .le. init_level_list%antenna) call antenna_subroutine
-        if (down () .and. current%level .le. init_level_list%override_profiles) call override_profiles_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_level_1) call dist_fn_level_1_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_arrays) call dist_fn_arrays_subroutine
-        if (down () .and. current%level .le. init_level_list%nonlinear_terms) call nonlinear_terms_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_layouts) call dist_fn_layouts_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_parameters) call dist_fn_parameters_subroutine
-        if (down () .and. current%level .le. init_level_list%le_grids) call le_grids_subroutine
-        if (down () .and. current%level .le. init_level_list%species) call species_subroutine
-        if (down () .and. current%level .le. init_level_list%hyper) call hyper_subroutine
-        if (down () .and. current%level .le. init_level_list%run_parameters) call run_parameters_subroutine
-        if (down () .and. current%level .le. init_level_list%kt_grids) call kt_grids_subroutine
-        if (down () .and. current%level .le. init_level_list%override_kt_grids) call override_kt_grids_subroutine
-        if (down () .and. current%level .le. init_level_list%kt_grids_parameters) call kt_grids_parameters_subroutine
-        if (down () .and. current%level .le. init_level_list%theta_grid) call theta_grid_subroutine
-        if (down () .and. current%level .le. init_level_list%override_miller_geometry) call override_miller_geometry_subroutine
-        if (down () .and. current%level .le. init_level_list%override_optimisations) call override_optimisations_subroutine
-        if (down () .and. current%level .le. init_level_list%init_g) call init_g_subroutine
-        if (down () .and. current%level .le. init_level_list%gs2_save) call gs2_save_subroutine
-        if (down () .and. current%level .le. init_level_list%theta_grid_params) call theta_grid_params_subroutine
-        if (down () .and. current%level .le. init_level_list%normalisations) call normalisations_subroutine
-        if (down () .and. current%level .le. init_level_list%gs2_layouts) call gs2_layouts_subroutine
+        if (down () .and. current%level == init_level_list%full) call full_subroutine
+        if (down () .and. current%level == init_level_list%set_initial_values) call set_initial_values_subroutine
+        if (down () .and. current%level == init_level_list%override_initial_values) call override_initial_values_subroutine
+        if (down () .and. current%level == init_level_list%fields) call fields_subroutine
+        if (down () .and. current%level == init_level_list%collisions) call collisions_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_level_3) call dist_fn_level_3_subroutine
+        if (down () .and. current%level == init_level_list%override_timestep) call override_timestep_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_level_2) call dist_fn_level_2_subroutine
+        if (down () .and. current%level == init_level_list%antenna) call antenna_subroutine
+        if (down () .and. current%level == init_level_list%override_profiles) call override_profiles_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_level_1) call dist_fn_level_1_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_arrays) call dist_fn_arrays_subroutine
+        if (down () .and. current%level == init_level_list%nonlinear_terms) call nonlinear_terms_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_layouts) call dist_fn_layouts_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_parameters) call dist_fn_parameters_subroutine
+        if (down () .and. current%level == init_level_list%le_grids) call le_grids_subroutine
+        if (down () .and. current%level == init_level_list%species) call species_subroutine
+        if (down () .and. current%level == init_level_list%hyper) call hyper_subroutine
+        if (down () .and. current%level == init_level_list%run_parameters) call run_parameters_subroutine
+        if (down () .and. current%level == init_level_list%kt_grids) call kt_grids_subroutine
+        if (down () .and. current%level == init_level_list%override_kt_grids) call override_kt_grids_subroutine
+        if (down () .and. current%level == init_level_list%kt_grids_parameters) call kt_grids_parameters_subroutine
+        if (down () .and. current%level == init_level_list%theta_grid) call theta_grid_subroutine
+        if (down () .and. current%level == init_level_list%override_miller_geometry) call override_miller_geometry_subroutine
+        if (down () .and. current%level == init_level_list%override_optimisations) call override_optimisations_subroutine
+        if (down () .and. current%level == init_level_list%init_g) call init_g_subroutine
+        if (down () .and. current%level == init_level_list%gs2_save) call gs2_save_subroutine
+        if (down () .and. current%level == init_level_list%theta_grid_params) call theta_grid_params_subroutine
+        if (down () .and. current%level == init_level_list%normalisations) call normalisations_subroutine
+        if (down () .and. current%level == init_level_list%gs2_layouts) call gs2_layouts_subroutine
       end if
     end if
   contains
