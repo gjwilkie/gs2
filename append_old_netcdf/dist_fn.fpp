@@ -5959,10 +5959,16 @@ endif
 
     real :: densfac_lin, uparfac_lin, tparfac_lin, tprpfac_lin, qparfac_lin, qprpfac_lin, phifac_lin
 
+    logical :: higher_order_moments
+
     allocate(total(-ntgrid:ntgrid,ntheta0,naky,nspec))
+   
+
+    higher_order_moments = .false.
 
     ! dens = < f >
     g0 = gnew 
+    if(higher_order_moments) g0 = vpa**4.*gnew !rparpar = < vpar^4 f >
     call integrate_moment (g0, total)
     if(proc0) then
     do ig = -ntgrid, ntgrid-1
@@ -5982,6 +5988,13 @@ endif
 
     ! upar = < (vpar/vti) f > = a/rho_i upar1/vti
     g0 = vpa*g0  ! vpa is normalized to vti, i.e. vpa = vpar/vti
+    if(higher_order_moments) then ! rparprp = < vpar^2 vprp^2/2 f >
+      do iglo = g_lo%llim_proc, g_lo%ulim_proc
+         do isgn = 1, 2
+            g0(:,isgn,iglo) = .5*vperp2(:,iglo)*vpa(:,isgn,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo) 
+         end do
+      end do
+    endif
     call integrate_moment (g0, total)
     if(proc0) then
     do ig = -ntgrid, ntgrid-1
@@ -6001,6 +6014,13 @@ endif
 
     ! ppar = < (vpar/vti)^2 f > = a/rho_i ppar1/( n0 m vti^2 )
     g0 = vpa*g0
+    if(higher_order_moments) then ! rprpprp = < vprp^4/4 f >
+      do iglo = g_lo%llim_proc, g_lo%ulim_proc
+         do isgn = 1, 2
+            g0(:,isgn,iglo) = .25*vperp2(:,iglo)*vperp2(:,iglo)*gnew(:,isgn,iglo) 
+         end do
+      end do
+    endif
     call integrate_moment (g0, total)
     ! this gives ppar = tpar + dens
     if(proc0) then
@@ -6021,6 +6041,13 @@ endif
 
     ! Qpar = < (vpar/vti)^3 f > = a/rho_i Qpar1/( n0 m vti^3 )
     g0 = vpa*g0
+    if(higher_order_moments) then ! sparprp = < vpar^3 vprp^2/2 f >
+      do iglo = g_lo%llim_proc, g_lo%ulim_proc
+         do isgn = 1, 2
+            g0(:,isgn,iglo) = .5*vperp2(:,iglo)*vpa(:,isgn,iglo)*vpa(:,isgn,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo) 
+         end do
+      end do
+    endif
     call integrate_moment (g0, total)
     ! this gives Qpar = qpar + 3*upar
     if(proc0) then
@@ -6046,6 +6073,7 @@ endif
           ! vperp2 is normalized to vti, i.e. vperp2 = (vprp/vti)^2
        end do
     end do
+    if(higher_order_moments) g0 = vpa**5.*gnew !sparpar = < vpar^5 f >
     call integrate_moment (g0, total)
     ! this gives pprp = tprp + dens
     if(proc0) then
@@ -6066,6 +6094,13 @@ endif
 
     ! Qprp = < 1/2 (vpar/vti) (vprp/vti)^2 f > = a/rho_i Qprp1/( n0 m vti^3 )
     g0 = vpa*g0
+    if(higher_order_moments) then ! sprpprp = < vpar vprp^4/4 f >
+      do iglo = g_lo%llim_proc, g_lo%ulim_proc
+         do isgn = 1, 2
+            g0(:,isgn,iglo) = .25*vperp2(:,iglo)*vperp2(:,iglo)*vpa(:,isgn,iglo)*gnew(:,isgn,iglo) 
+         end do
+      end do
+    endif
     call integrate_moment (g0, total)
     ! this gives Qprp = qprp + upar
     if(proc0) then
@@ -6092,7 +6127,16 @@ endif
        qprpfac_lin = 4.                 ! ~ rho_i vti^3
        phifac_lin = densfac_lin         ! ~ rho_i
 
-    if(proc0) then 
+    if(higher_order_moments) then 
+       densfac_lin = -4.*sqrt(2.)        ! rparpar
+       uparfac_lin = -4.*sqrt(2.)        ! rparprp
+       tparfac_lin = -4.*sqrt(2.)        ! rprpprp
+       tprpfac_lin = 8.                 ! sparpar
+       qparfac_lin = 8.                 ! sparprp
+       qprpfac_lin = 8.                 ! sprpprp
+    endif
+
+    if(proc0 ) then 
       ! normalize to gryfx units
       density_gryfx = densfac_lin*density_gryfx
       upar_gryfx = uparfac_lin*upar_gryfx
@@ -6100,14 +6144,15 @@ endif
       tperp_gryfx = tprpfac_lin*tperp_gryfx
       qpar_gryfx = qparfac_lin*qpar_gryfx
       qperp_gryfx = qprpfac_lin*qperp_gryfx
-
-      ! make tpar, tprp, qpar, qprp from ppar, pprp, Qpar, Qprp
-      tpar_gryfx = tpar_gryfx - density_gryfx
-      tperp_gryfx = tperp_gryfx - density_gryfx
-      qpar_gryfx = qpar_gryfx - 3.*upar_gryfx
-      qperp_gryfx = qperp_gryfx - upar_gryfx
+      if(.not. higher_order_moments) then 
+        ! make tpar, tprp, qpar, qprp from ppar, pprp, Qpar, Qprp
+        tpar_gryfx = tpar_gryfx - density_gryfx
+        tperp_gryfx = tperp_gryfx - density_gryfx
+        qpar_gryfx = qpar_gryfx - 3.*upar_gryfx
+        qperp_gryfx = qperp_gryfx - upar_gryfx
+      endif
+    endif
       
-    end if
 
     if(proc0) then
     do ig = -ntgrid, ntgrid-1
@@ -6123,16 +6168,6 @@ endif
 
     deallocate(total)
 
-    !change to left-handed coordinates
-    !if(proc0) then
-    !  density_gryfx = cmplx(-real(density_gryfx), aimag(density_gryfx))
-    !  upar_gryfx = cmplx(-real(upar_gryfx), aimag(upar_gryfx))
-    !  tpar_gryfx = cmplx(-real(tpar_gryfx), aimag(tpar_gryfx))
-    !  tperp_gryfx = cmplx(-real(tperp_gryfx), aimag(tperp_gryfx))
-    !  qpar_gryfx = cmplx(-real(qpar_gryfx), aimag(qpar_gryfx))
-    !  qperp_gryfx = cmplx(-real(qperp_gryfx), aimag(qperp_gryfx))
-    !  phi_gryfx = cmplx(-real(phi_gryfx), aimag(phi_gryfx))
-    !end if
 
   end subroutine getmoms_gryfx
 
