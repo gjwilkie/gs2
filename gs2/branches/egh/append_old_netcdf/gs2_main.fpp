@@ -238,6 +238,12 @@ module gs2_main
     !! e.g. within Trinity.
     logical :: replay = .false.
 
+    !> If true, the equations are fully initialized during
+    !! replays. This is typically needed for linear diffusive
+    !! flux estimates, and is set true automatically in that 
+    !! case.
+    logical :: replay_full_initialize = .false.
+
     !> If true, 
     !! print full timing breakdown. 
     logical :: print_full_timers = .false.
@@ -459,9 +465,10 @@ contains
     use gs2_reinit, only: init_gs2_reinit
     use fields_implicit, only: skip_initialisation
     !use dist_fn, only: replay_d=>replay
-    !use fields, only: fields_allocate_arrays=>allocate_arrays
-    !use fields_local, only: fieldmat
+    use fields, only: fields_allocate_arrays=>allocate_arrays
+    use fields_local, only: fieldmat
     use nonlinear_terms, only: nonlinear_mode_switch, nonlinear_mode_none
+    use run_parameters, only: trinity_linear_fluxes
     implicit none
     type(gs2_program_state_type), intent(inout) :: state
 
@@ -483,11 +490,17 @@ contains
     !! so we disable calculating the implicit response
     !! matrix
     if (state%replay) then
-      !skip_initialisation = .true.
+      skip_initialisation = .true.
       !replay_d = .true.
-      !fieldmat%no_prepare = .true.
-      !fieldmat%no_populate = .true.
+      fieldmat%no_prepare = .true.
+      fieldmat%no_populate = .true.
       call init(state%init, init_level_list%le_grids)
+
+      if (trinity_linear_fluxes) then
+        state%replay_full_initialize = .true.
+        call init(state%init, init_level_list%full)
+      end if
+        
       !call fields_allocate_arrays
       !nonlinear_mode_switch = nonlinear_mode_none
     else
