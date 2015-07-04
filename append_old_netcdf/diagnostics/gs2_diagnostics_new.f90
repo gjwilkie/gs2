@@ -386,6 +386,7 @@ contains
   subroutine run_diagnostics(istep, exit, read_existing)
     use gs2_time, only: user_time
     use mp, only: proc0
+    use simpledataio, only: print_dimensions
     use diagnostics_printout, only: print_flux_line, print_line
     use diagnostics_printout, only: write_flux_line, write_line
     use diagnostics_fluxes, only: calculate_fluxes, write_symmetry, write_parity
@@ -536,7 +537,8 @@ contains
          !trim(dim_string(gnostics%dims%time)))
        !if (.not. read_existing) call increment_start(gnostics%sfile, &
          !trim(dim_string(gnostics%dims%time)))
-       if (istep>-1) call increment_start(gnostics%sfile, &
+       !call print_dimensions(gnostics%sfile)
+       if (gnostics%wryte .or. gnostics%reed) call increment_start(gnostics%sfile, &
          trim(dim_string(gnostics%dims%time)))
        if (gnostics%wryte) call syncfile(gnostics%sfile)
        if (proc0 .and. gnostics%write_ascii) call flush_output_files(gnostics%ascii_files)
