@@ -108,6 +108,9 @@ module dist_fn
 !CMR, 21/5/14: New logical wfb_cmr to enforce trapping conditions on wfb
   logical :: cllc, wfb_cmr
 
+  real :: densfac_lin, uparfac_lin, tparfac_lin, tprpfac_lin
+  real :: qparfac_lin, qprpfac_lin, phifac_lin
+
   integer :: adiabatic_option_switch
   integer, parameter :: adiabatic_option_default = 1, &
        adiabatic_option_zero = 2, &
@@ -921,7 +924,9 @@ contains
          kfilter, afilter, mult_imp, test, def_parity, even, wfb, &
          g_exb, g_exbfac, omprimfac, btor_slab, mach, cllc, lf_default, &
          g_exb_start_time, g_exb_start_timestep, g_exb_error_limit, &
-         lf_decompose, esv, wfb_cmr, opt_init_bc, opt_source, zero_forbid
+         lf_decompose, esv, wfb_cmr, opt_init_bc, opt_source, zero_forbid, &
+         densfac_lin, uparfac_lin, tparfac_lin, tprpfac_lin, &
+         qparfac_lin, qprpfac_lin, phifac_lin
     
     namelist /source_knobs/ t0, omega0, gamma0, source0, phi_ext, source_option
     integer :: ierr, is, in_file
@@ -968,6 +973,15 @@ contains
        lf_default = .true.
        lf_decompose = .false.
        source_option = 'default'
+
+       densfac_lin = sqrt(2.)           ! ~ rho_i
+       uparfac_lin = 2.                 ! ~ rho_i vti
+       tparfac_lin = 2.*sqrt(2.)        ! ~ rho_i vti^2
+       tprpfac_lin = 2.*sqrt(2.)        ! ~ rho_i vti^2
+       qparfac_lin = 4.                 ! ~ rho_i vti^3
+       qprpfac_lin = 4.                 ! ~ rho_i vti^3
+       phifac_lin = densfac_lin         ! ~ rho_i
+
        in_file = input_unit_exist("dist_fn_knobs", dfexist)
 !       if (dfexist) read (unit=input_unit("dist_fn_knobs"), nml=dist_fn_knobs)
        if (dfexist) read (unit=in_file, nml=dist_fn_knobs)
@@ -1036,6 +1050,13 @@ contains
     call broadcast (lf_decompose)
     call broadcast (even)
     call broadcast (wfb)
+    call broadcast (densfac_lin)
+    call broadcast (uparfac_lin)
+    call broadcast (tparfac_lin)
+    call broadcast (tprpfac_lin)
+    call broadcast (qparfac_lin)
+    call broadcast (qprpfac_lin)
+    call broadcast (phifac_lin)
 
     !<DD>Turn off esv if not using linked boundaries
     esv=esv.and.(boundary_option_switch.eq.boundary_option_linked)
@@ -5957,7 +5978,7 @@ endif
     complex*8, dimension(naky*ntheta0*2*ntgrid), intent(out) :: phi_gryfx       
     complex, dimension(:,:,:,:), allocatable :: total
 
-    real :: densfac_lin, uparfac_lin, tparfac_lin, tprpfac_lin, qparfac_lin, qprpfac_lin, phifac_lin
+    !real :: densfac_lin, uparfac_lin, tparfac_lin, tprpfac_lin, qparfac_lin, qprpfac_lin, phifac_lin
 
     logical :: higher_order_moments
 
@@ -6119,13 +6140,13 @@ endif
     end do
     end if
  
-       densfac_lin = sqrt(2.)           ! ~ rho_i
-       uparfac_lin = 2.                 ! ~ rho_i vti
-       tparfac_lin = 2.*sqrt(2.)        ! ~ rho_i vti^2
-       tprpfac_lin = 2.*sqrt(2.)        ! ~ rho_i vti^2
-       qparfac_lin = 4.                 ! ~ rho_i vti^3
-       qprpfac_lin = 4.                 ! ~ rho_i vti^3
-       phifac_lin = densfac_lin         ! ~ rho_i
+!       densfac_lin = sqrt(2.)           ! ~ rho_i
+!       uparfac_lin = 2.                 ! ~ rho_i vti
+!       tparfac_lin = 2.*sqrt(2.)        ! ~ rho_i vti^2
+!       tprpfac_lin = 2.*sqrt(2.)        ! ~ rho_i vti^2
+!       qparfac_lin = 4.                 ! ~ rho_i vti^3
+!       qprpfac_lin = 4.                 ! ~ rho_i vti^3
+!       phifac_lin = densfac_lin         ! ~ rho_i
 
     if(higher_order_moments) then 
        densfac_lin = -4.*sqrt(2.)        ! rparpar
@@ -6146,6 +6167,7 @@ endif
       qperp_gryfx = qprpfac_lin*qperp_gryfx
       if(.not. higher_order_moments) then 
         ! make tpar, tprp, qpar, qprp from ppar, pprp, Qpar, Qprp
+        ! this is only true in GryfX units? would be extra factors in GS2 units?
         tpar_gryfx = tpar_gryfx - density_gryfx
         tperp_gryfx = tperp_gryfx - density_gryfx
         qpar_gryfx = qpar_gryfx - 3.*upar_gryfx
