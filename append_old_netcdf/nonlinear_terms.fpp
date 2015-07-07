@@ -49,6 +49,9 @@ module nonlinear_terms
 ! hyperviscosity coefficients
   real :: C_par, C_perp, p_x, p_y, p_z
 
+! for gryfx
+  real :: densfac, uparfac, tparfac, tprpfac, qparfac, qprpfac
+
   integer :: algorithm = 1
   logical :: nonlin = .false.
   logical :: initialized = .false.
@@ -207,7 +210,8 @@ contains
             text_option('on', flow_mode_on) /)
     character(20) :: flow_mode
     namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
-         C_par, C_perp, p_x, p_y, p_z, zip, nl_forbid_force_zero
+         C_par, C_perp, p_x, p_y, p_z, zip, nl_forbid_force_zero, &
+         densfac, uparfac, tparfac, tprpfac, qparfac, qprpfac
     integer :: ierr, in_file
 
     if (proc0) then
@@ -219,6 +223,13 @@ contains
        p_x = 6.0
        p_y = 6.0
        p_z = 6.0
+
+       densfac = 1.
+       uparfac = 1./sqrt(2.)
+       tparfac = 1./2.
+       tprpfac = 1./2. 
+       qparfac = 1./sqrt(8.)
+       qprpfac = 1./sqrt(8.)
 
        in_file=input_unit_exist("nonlinear_terms_knobs",exist)
        if(exist) read (unit=in_file,nml=nonlinear_terms_knobs)
@@ -242,6 +253,12 @@ contains
     call broadcast (p_z)
     call broadcast (nl_forbid_force_zero)
     call broadcast (zip)
+    call broadcast (densfac)
+    call broadcast (uparfac)
+    call broadcast (tparfac)
+    call broadcast (tprpfac)
+    call broadcast (qparfac)
+    call broadcast (qprpfac)
 
     istep_last = 0
 
@@ -774,13 +791,13 @@ contains
 
     integer :: iglo, ik, it, ig, iz, is, isgn, index_gryfx
 
-    real :: densfac, uparfac, tparfac, tprpfac, qparfac, qprpfac
+    !real :: densfac, uparfac, tparfac, tprpfac, qparfac, qprpfac
     densfac = 1.
     uparfac = 1./sqrt(2.)
-    tparfac = 1./2.
-    tprpfac = 1./2.
-    qparfac = 1./sqrt(8.)
-    qprpfac = 1./sqrt(8.)
+    tparfac = 1.
+    tprpfac = 1.
+    qparfac = 1./sqrt(2.)
+    qprpfac = 1./sqrt(2.)
 
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -797,36 +814,33 @@ contains
         index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
                       g_lo%naky*g_lo%ntheta0*(iz-1) + &
                       (2*ntgrid)*g_lo%naky*g_lo%ntheta0*(is-1)
-        !index_gryfx = 1
-!        g1(ig,isgn,iglo) =  densfac*gryfx_zonal%NLdens_ky0(index_gryfx) + &
-!                 (vpa(ig,isgn,iglo)*vpa(ig,isgn,iglo) - 0.5)* &
-!                     tparfac*gryfx_zonal%NLtpar_ky0(index_gryfx) + &
-!                 (vperp2(ig,iglo) - 1.0)* &
-!                     tprpfac*gryfx_zonal%NLtprp_ky0(index_gryfx) + &
-!                 2.*vpa(ig,isgn,iglo)* &
-!                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) + &
-!                 (2./3.*vpa(ig,isgn,iglo)**3. - vpa(ig,isgn,iglo))* &
-!                     (qparfac*gryfx_zonal%NLqpar_ky0(index_gryfx) - &
-!                     3.*uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) ) + &
-!                 2*vpa(ig,isgn,iglo)*(vperp2(ig,iglo) - 1.)* &
-!                     (qprpfac*gryfx_zonal%NLqprp_ky0(index_gryfx) - &
-!                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) )
+        g1(ig,isgn,iglo) =  densfac*gryfx_zonal%NLdens_ky0(index_gryfx) + &
+                 (vpa(ig,isgn,iglo)*vpa(ig,isgn,iglo) - 0.5)* &
+                     tparfac*gryfx_zonal%NLtpar_ky0(index_gryfx) + &
+                 (vperp2(ig,iglo) - 1.0)* &
+                     tprpfac*gryfx_zonal%NLtprp_ky0(index_gryfx) + &
+                 2.*vpa(ig,isgn,iglo)* &
+                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) + &
+                 (2./3.*vpa(ig,isgn,iglo)**3. - vpa(ig,isgn,iglo))* &
+                     (qparfac*gryfx_zonal%NLqpar_ky0(index_gryfx)) + &
+                 2*vpa(ig,isgn,iglo)*(vperp2(ig,iglo) - 1.)* &
+                     (qprpfac*gryfx_zonal%NLqprp_ky0(index_gryfx)) 
 
         ! leave vpa, vperp2 in GS2 units. use momfacs to get moments in GS2 units
         ! this expression is consistent with moment definitions, such that
         ! dn = < dg >, n0 du = < vpar dg >, etc.
         ! this has been checked with a mathematica script
-        g1(ig,isgn,iglo) =  densfac*gryfx_zonal%NLdens_ky0(index_gryfx) + &
-                 0.5*(vpa(ig,isgn,iglo)*vpa(ig,isgn,iglo) - 1)* &
-                     tparfac*gryfx_zonal%NLtpar_ky0(index_gryfx) + &
-                 0.5*(vperp2(ig,iglo) - 2.0)* &
-                     tprpfac*gryfx_zonal%NLtprp_ky0(index_gryfx) + &
-                 vpa(ig,isgn,iglo)* &
-                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) + &
-                 0.5*(vpa(ig,isgn,iglo)**3./3. - vpa(ig,isgn,iglo))* &
-                     qparfac*gryfx_zonal%NLqpar_ky0(index_gryfx) + &
-                 vpa(ig,isgn,iglo)*(vperp2(ig,iglo)/2. - 1.)* &
-                     qprpfac*gryfx_zonal%NLqprp_ky0(index_gryfx) 
+!        g1(ig,isgn,iglo) =  densfac*gryfx_zonal%NLdens_ky0(index_gryfx) + &
+!                 0.5*(vpa(ig,isgn,iglo)*vpa(ig,isgn,iglo) - 1.)* &
+!                     tparfac*gryfx_zonal%NLtpar_ky0(index_gryfx) + &
+!                 0.5*(vperp2(ig,iglo) - 2.0)* &
+!                     tprpfac*gryfx_zonal%NLtprp_ky0(index_gryfx) + &
+!                 vpa(ig,isgn,iglo)* &
+!                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) + &
+!                 0.5*(vpa(ig,isgn,iglo)**3./3. - vpa(ig,isgn,iglo))* &
+!                     qparfac*gryfx_zonal%NLqpar_ky0(index_gryfx) + &
+!                 vpa(ig,isgn,iglo)*(vperp2(ig,iglo)/2. - 1.)* &
+!                     qprpfac*gryfx_zonal%NLqprp_ky0(index_gryfx) 
          end do
        end do
     end do

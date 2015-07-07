@@ -1059,7 +1059,7 @@ contains
     use theta_grid, only: ntgrid 
     use kt_grids, only: naky, ntheta0, aky, reality
     use le_grids, only: forbid
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, vpa
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     implicit none
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
@@ -1069,7 +1069,7 @@ contains
 
     right = .not. left
 
-    phi = cmplx(1.0,1.0)
+    phi = cmplx(refac,imfac)
     if (chop_side .and. left) phi(:-1,:,:) = 0.0
     if (chop_side .and. right) phi(1:,:,:) = 0.0
     
@@ -1092,9 +1092,9 @@ contains
        it = it_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit
+       g(:,1,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit*(den0 + sqrt(2.)*upar0*vpa(:,1,iglo))
        where (forbid(:,il)) g(:,1,iglo) = 0.0
-       g(:,2,iglo) = g(:,1,iglo)
+       g(:,2,iglo) = -phi(:,it,ik)*spec(is)%z*phiinit*(den0 + sqrt(2.)*upar0*vpa(:,2,iglo))
     end do
     gnew = g
   end subroutine ginit_kz0
