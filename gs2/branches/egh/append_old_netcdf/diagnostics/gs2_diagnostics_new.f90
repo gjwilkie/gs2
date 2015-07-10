@@ -175,6 +175,8 @@ contains
           call debug_message(gnostics%verbosity, &
             'gs2_diagnostics_new::init_gs2_diagnostics_new opened replay')
            call set_dimension_start(gnostics%sfile, "t", 1)
+          call debug_message(gnostics%verbosity, &
+            'gs2_diagnostics_new::init_gs2_diagnostics_new set dimension start')
            !call print_dimensions(gnostics%sfile)
          else 
            call mp_abort("replay set to true but no file exists", .true.)
@@ -186,8 +188,10 @@ contains
        else
          gnostics%appending=.false.
          call create_file(gnostics%sfile)
+         call write_metadata(gnostics)
+         call debug_message(gnostics%verbosity, &
+           'gs2_diagnostics_new::init_gs2_diagnostics_new written metadata')
        end if
-       call write_metadata(gnostics)
     end if
     call debug_message(gnostics%verbosity, &
       'gs2_diagnostics_new::init_gs2_diagnostics_new opened file')
