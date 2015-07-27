@@ -291,10 +291,10 @@ void sdatio_set_dimension_start(struct sdatio_file * sfile, char * dimension_nam
   for (j=0;j<sfile->n_dimensions;j++){
     sdim = sfile->dimensions[j];
     if (!strcmp(sdim->name, dimension_name)){
-      if (sdim->size != SDATIO_UNLIMITED) {
-        printf("Dimension %s does not have unlimited size.\n", dimension_name);
-        abort();
-      }   
+      /*if (sdim->size != SDATIO_UNLIMITED) {*/
+      /*printf("Dimension %s does not have unlimited size.\n", dimension_name);*/
+      /*abort();*/
+      /*}   */
       found = 1;
       sdim->start = start;
       printf("Start for dimension %s is %d\n", sdim->name, sdim->start);
