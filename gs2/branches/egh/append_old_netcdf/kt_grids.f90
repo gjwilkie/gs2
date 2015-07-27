@@ -882,7 +882,7 @@ contains
     use kt_grids_box, only: grbx=>gryfx
     logical :: gryfx
     gryfx = grbx
-    call broadcast(gryfx)
+    !call broadcast(gryfx)
   end function gryfx
 
 
