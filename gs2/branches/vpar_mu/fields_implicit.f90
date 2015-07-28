@@ -20,7 +20,6 @@ module fields_implicit
 contains
 
   subroutine init_fields_implicit
-    use mp, only: proc0
     use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
@@ -85,21 +84,27 @@ contains
 
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
-    use dist_fn_arrays, only: g, gnew, gpnew
+    use fields_arrays, only: phih, aparh, bparh, phihnew, aparhnew, bparhnew
+    use dist_fn_arrays, only: g, gnew, gpnew, gpold !ghnew, ghold
     use dist_fn, only: get_init_field
     use init_g, only: new_field_init
 
     implicit none
 
-    ! MAB> new field init option ported from agk
     if (new_field_init) then
-       ! get iniitial phik corresponding to gk
+       ! get iniitial phik corresponding to lowest order gk
        call get_init_field (gnew, phinew, aparnew, bparnew)
        phi = phinew; apar = aparnew; bpar = bparnew; g = gnew
 
        ! get initial dphi/drho corresponding to dgk/drho
        call get_init_field (gpnew, phipnew, aparpnew, bparpnew)
-       phip = phipnew ; aparp = aparpnew ; bparp = bparpnew
+       phip = phipnew ; aparp = aparpnew ; bparp = bparpnew ; gpold = gpnew
+
+       ! get iniitial phik corresponding to lowest order gk
+! TMP UNTIL phih needed
+!       call get_init_field (ghnew, phihnew, aparhnew, bparhnew)
+       phihnew = 0. ; aparhnew = 0. ; bparhnew = 0.
+       phih = phihnew; aparh = aparhnew; bparh = bparhnew! ; ghold = ghnew
     else
        ! get initial phik corresponding to gk
        call getfield (gnew, phinew, aparnew, bparnew)
@@ -108,8 +113,12 @@ contains
        ! get initial dphi/drho corresponding to dgk/drho
        call getfield (gpnew, phipnew, aparpnew, bparpnew)
        phip = phipnew; aparp = aparpnew; bparp = bparpnew
+
+       ! get iniitial phik corresponding to lowest order gk
+!       call getfield (ghnew, phihnew, aparhnew, bparhnew)
+       phihnew = 0. ; aparhnew = 0. ; bparhnew = 0.
+       phih = phihnew; aparh = aparhnew; bparh = bparhnew
     end if
-    ! <MAB
 
   end subroutine init_phi_implicit
 
@@ -125,7 +134,7 @@ contains
 
     implicit none
 
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: gfnc
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: gfnc
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (:,:,:), intent (out) :: fl
     complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
@@ -166,7 +175,6 @@ contains
   end subroutine get_field_vector
 
   subroutine get_field_solution (u, phifnc, aparfnc, bparfnc)
-    use fields_arrays, only: phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
@@ -235,7 +243,7 @@ contains
 
     implicit none
 
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: gfnc
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: gfnc
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     complex, dimension (:,:,:), allocatable :: fl
     complex, dimension (:), allocatable :: u
@@ -254,6 +262,8 @@ contains
     ! for the right choice of phi, apar, bpar.  They will be nonzero
     ! though because they have been evaluated using old values of phi, apar, bpar.
     call get_field_vector (fl, gfnc, phi, apar, bpar)
+
+!    write (*,*) 'fl', fl(:,1,naky)
 
     u = 0.
     do jflo = jf_lo%llim_proc, jf_lo%ulim_proc
@@ -295,11 +305,15 @@ contains
 
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
+!    use fields_arrays, only: phih, aparh, bparh, phihnew, aparhnew, bparhnew
     use fields_arrays, only: apar_ext !, phi_ext
     use antenna, only: antenna_amplitudes
-    use dist_fn, only: timeadv, exb_shear
-    use dist_fn_arrays, only: g, gold, gnew, kx_shift, theta0_shift
-    use dist_fn_arrays, only: gpold, gpnew
+    use dist_fn, only: timeadv!, get_omega_prime, omprim_converge, get_total_g
+    use dist_fn, only: get_fieldcorrection, profile_variation
+    use dist_fn_arrays, only: g, gold, gnew
+    use dist_fn_arrays, only: gpold, gpnew!, ghold, ghnew
+!    use mp, only: proc0
+!    use kt_grids, only: naky
 
     implicit none
 
@@ -309,49 +323,95 @@ contains
 
     !GGH NOTE: apar_ext is initialized in this call
     call antenna_amplitudes (apar_ext)
-       
-    !! need to repeat for gpnew !!
-    if (allocated(kx_shift) .or. allocated(theta0_shift)) then
-       call exb_shear (gnew, phinew, aparnew, bparnew)
-       call exb_shear (gpnew, phipnew, aparpnew, bparpnew)
-    end if
+
+    ! ! need to worry about how this should be done if splitting g1 and g2
+    ! if (allocated(kx_shift) .or. allocated(theta0_shift)) then
+    !    call exb_shear (gnew, phinew, aparnew, bparnew)
+    !    call exb_shear (gpnew, phipnew, aparpnew, bparpnew)
+    !    call exb_shear (ghnew, phihnew, aparhnew, bparhnew)
+    ! end if
 
     ! TMP FOR TESTING -- MAB
-!    phinew = 0.0
+!    phinew = 0.
+    g = gnew ; gold = gnew ; gpold = gpnew !; ghold = ghnew
+    phi = phinew ; phip = phipnew !; phih = phihnew
+    apar = aparnew ; aparp = aparpnew !; aparh = aparhnew
+    bpar = bparnew ; bparp = bparpnew !; bparh = bparhnew
 
-    g = gnew ; gold = gnew ; gpold = gpnew
-    phi = phinew ; phip = phipnew
-    apar = aparnew ; aparp = aparpnew
-    bpar = bparnew ; bparp = bparpnew
+    ! first solve for g^{n+1} and phi^{n+1} using g'^{n} and phi'^{n}
 
-    ! get gk^{*}, which is g^{n+1} obtained with phi=phi^{n}
-    call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, bparnew, istep, primed=.false.)
-    ! get (dgk/drho)^{*}, which is is (dgk/drho)^{n+1} obtained with (dphik/drho)=(dphik/drho)^{n}
-    call timeadv (gpnew, gpold, phip, aparp, bparp, phipnew, aparpnew, bparpnew, istep, primed=.true.)
+    ! get lowest order gk^{*}. the ^{*} indicates evaluation of g^{n+1} obtained with phi=phi^{n}
+    if (profile_variation) then
+       call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, istep, equation=2)
+    else
+       call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, istep, equation=0)
+    end if
 
-    aparnew = aparnew + apar_ext ; aparpnew = aparpnew + apar_ext
+!    if (proc0) write (*,*) 'phi1', istep, real(phinew(0,1,naky)), aimag(phinew(0,1,naky))
 
-    ! probably need to change getfield subroutine to have g as an in out variable
+    aparnew = aparnew + apar_ext
+
     ! get phik, apark, bpark
     call getfield (gnew, phinew, aparnew, bparnew)
-    ! get phipk, aparpk, bparpk
-    call getfield (gpnew, phipnew, aparpnew, bparpnew)
+! TMP FOR TESTING -- MAB
+!    phinew = 0.
+    phinew = phinew + phi
+    aparnew = aparnew + apar
+    bparnew = bparnew + bpar
 
-    phinew   = phinew  + phi ; phipnew = phipnew + phip
-    aparnew  = aparnew + apar ; aparpnew = aparpnew + aparp
-    bparnew  = bparnew + bpar ; bparpnew = bparpnew + bparp
-    
+!    if (proc0) write (*,*) 'phi2', istep, real(phinew(0,1,naky)), aimag(phinew(0,1,naky))
+
     if (remove_zonal_flows_switch) call remove_zonal_flows
     
-    ! get gk^{n+1}
-    call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, bparnew, istep, primed=.false., mode=diagnostics)
-    ! get (dgk/drho)^{n+1}
-    call timeadv (gpnew, gpold, phip, aparp, bparp, phipnew, aparpnew, bparpnew, istep, primed=.true.)
-    
+    ! get lowest order gk^{n+1}
+    if (profile_variation) then
+       call timeadv (gnew, gold, phi, apar, bpar, phinew, &
+            aparnew, istep, equation=2, mode=diagnostics)
+    else
+       call timeadv (gnew, gold, phi, apar, bpar, phinew, &
+            aparnew, istep, equation=0, mode=diagnostics)
+    end if
+
+!    if (proc0) write (*,*) 'phi3', istep, real(phinew(0,1,naky)), aimag(phinew(0,1,naky))
+
+    if (profile_variation) then
+       ! next solve for g'^{n+1} and phi'^{n+1} using g^{n+1} and phi^{n+1}
+
+       ! get (dgk/drho)^{*}, which is is (dgk/drho)^{n+1} obtained with (dphik/drho)=(dphik/drho)^{n}
+       call timeadv (gpnew, gpold, phip, aparp, bparp, phipnew, &
+            aparpnew, istep, equation=1)
+       ! get next order gk^{*}. the ^{*} indicates evaluation of g^{n+1} obtained with phi=phi^{n}
+       !    call timeadv (ghnew, ghold, phih, aparh, bparh, phihnew, aparhnew, bparhnew, istep, equation=2)
+
+       ! get phipk, aparpk, bparpk
+       call getfield (gpnew, phipnew, aparpnew, bparpnew)
+       ! get phihk, aparhk, bparhk
+       !   call getfield (ghnew, phihnew, aparhnew, bparhnew)
+       
+       phipnew = phipnew + phip
+       aparpnew = aparpnew + aparp
+       bparpnew = bparpnew + bparp
+       
+       call get_fieldcorrection (gnew, phinew, phipnew)
+       
+       ! get (dgk/drho)^{n+1}
+       call timeadv (gpnew, gpold, phip, aparp, bparp, phipnew, &
+            aparpnew, istep, equation=1)
+       
+       ! correct lowest order g with profile variation piece
+!       call get_total_g
+
+       ! get next order gk^{n+1}
+       !    call timeadv (ghnew, ghold, phih, aparh, bparh, phihnew, aparhnew, bparhnew, istep, equation=2)
+       
+       !    call get_omega_prime (phipnew/phinew, phip/phi, phihnew/phinew, phih/phi)
+    end if
+
+
   end subroutine advance_implicit
 
   subroutine remove_zonal_flows
-    use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use fields_arrays, only: phinew
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     
@@ -426,7 +486,7 @@ contains
   end subroutine reset_init
 
   subroutine init_response_matrix
-    use mp, only: barrier, proc0
+    use mp, only: barrier!, proc0
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
@@ -547,7 +607,6 @@ contains
 
   subroutine init_response_row (ig, ifield, am, ic, n)
 
-    use mp, only: proc0
     use dist_fn_arrays, only: gnew, gold
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
@@ -570,7 +629,11 @@ contains
     allocate (fieldeqa(-ntgrid:ntgrid, ntheta0, naky))
     allocate (fieldeqp(-ntgrid:ntgrid, ntheta0, naky))
 
-    call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, bparnew, 0, primed=.false.)
+    ! get response matrix using lowest order equation for g
+    ! no need to get different response matrix for higher order equations
+    ! since the form of the implicit solve is the same for all of them
+    call timeadv (gnew, gold, phi, apar, bpar, phinew, &
+         aparnew, 0, equation=0)
 
     call getfieldeq (gnew, phinew, aparnew, bparnew, fieldeq, fieldeqa, fieldeqp)
 

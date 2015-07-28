@@ -95,13 +95,13 @@ contains
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
        end if
-       write (report_unit, fmt="('The minimum delt ( code_dt_min ) = ',e10.4)") code_dt_min
-       write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e10.4)") code_delt_max
+       write (report_unit, fmt="('The minimum delt ( code_dt_min ) = ',e11.4)") code_dt_min
+       write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e11.4)") code_delt_max
        write (report_unit, fmt="('The maximum delt < ',f10.4,' * min(Delta_perp/v_perp). (cfl)')") cfl
        write (report_unit, fmt="('When the time step needs to be changed, it is adjusted by a factor of ',f10.4)") delt_adj
        write (report_unit, fmt="('The number of time steps nstep = ',i7)") nstep
        write (report_unit, fmt="('If running in batch mode on the NERSC T3E, the run will stop when ', &
-            & f6.4,' % of the time remains.')") 100.*margin
+            & f11.4,' % of the time remains.')") 100.*margin
     endif
   end subroutine check_nonlinear_terms
 
@@ -114,7 +114,7 @@ contains
        write (unit, *)
        write (unit, fmt="(' &',a)") "nonlinear_terms_knobs"
        write (unit, fmt="(' nonlinear_mode = ',a)") '"on"'
-       write (unit, fmt="(' cfl = ',e16.10)") cfl
+       write (unit, fmt="(' cfl = ',e17.10)") cfl
        if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
     endif
@@ -129,7 +129,6 @@ contains
     use gs2_layouts, only: init_gs2_layouts
     use gs2_transforms, only: init_transforms
     implicit none
-    logical :: dum1, dum2
     logical, parameter :: debug=.false.
 
     if (initialized) return
@@ -243,8 +242,10 @@ contains
     use gs2_time, only: save_dt_cfl
     use vpamu_grids, only: nvgrid
     implicit none
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
+! TMP FOR TESTING -- MAB
+!    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
     integer, intent (in) :: istep
     real :: dt_cfl
     logical, save :: nl = .true.
@@ -268,15 +269,18 @@ contains
 
     use theta_grid, only: ntgrid, thet_imp
     use vpamu_grids, only: nvgrid, vpa_imp
-    use gs2_layouts, only: g_lo, ik_idx, it_idx
+    use gs2_layouts, only: g_lo, ik_idx
     use dist_fn_arrays, only: g
     use gs2_time, only: save_dt_cfl
     use centering, only: get_cell_value
+    use kt_grids, only: ntheta0
 
     implicit none
 
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
+! TMP FOR TESTING -- MAB
+!    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     integer, intent (in) :: istep
     logical, intent (in), optional :: nl
 
@@ -309,11 +313,13 @@ contains
           
           ! take g1 at grid points and return g1 at cell centers
           do iglo = g_lo%llim_proc, g_lo%ulim_proc
-             call get_cell_value (thet_imp, vpa_imp, g1(:,:,iglo), g1(:,:,iglo), &
-                  -ntgrid, -nvgrid)
+             do it = 1, ntheta0
+                call get_cell_value (thet_imp, vpa_imp, g1(:,:,it,iglo), g1(:,:,it,iglo), &
+                     -ntgrid, -nvgrid)
+             end do
           end do
-	  ! artifact left from GS2 convention
-          g1 = 2.*g1
+!	  ! artifact left from GS2 convention
+!          g1 = 2.*g1
        else
           g1 = 0.
        end if
@@ -326,14 +332,10 @@ contains
 
     if (zip) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          it = it_idx(g_lo,iglo)
           ik = ik_idx(g_lo,iglo)
-!          if (it == 3 .or. it == ntheta0-1) then
-!          if (it /= 1) then
           if (ik /= 1) then
-!          if (ik == 2 .and. it == 1) then
-             g (:,:,iglo) = 0.
-             g1(:,:,iglo) = 0.
+             g (:,:,:,iglo) = 0.
+             g1(:,:,:,iglo) = 0.
           end if
        end do
     end if
@@ -344,32 +346,57 @@ contains
 
   subroutine add_nl (g1, phi, apar, bpar)
 
-    use mp, only: max_allreduce
-    use theta_grid, only: ntgrid, kxfac
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
+    use mp, only: max_allreduce, mp_abort
+    use theta_grid, only: ntgrid, kxfac, theta, shat
+    use theta_grid, only: delthet, gds23, gds24_noq
+    use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx, iv_idx, ig_idx
     use gs2_layouts, only: yxf_lo
     use dist_fn_arrays, only: g
     use species, only: spec
     use gs2_transforms, only: transform2, inverse2
     use run_parameters, only: fapar, fbpar, fphi
-    use kt_grids, only: aky, akx
-    use vpamu_grids, only: nvgrid
+    use kt_grids, only: aky, akx, ntheta0
+    use vpamu_grids, only: nvgrid, vpa, anon
     use gs2_time, only: save_dt_cfl
-    use constants, only: zi
+    use constants, only: zi, pi
+
     implicit none
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
-    integer :: i, j, k
+
+    integer :: i, j, iglo, ik, it, is, ig, iv, imu
     real :: max_vel, zero
     real :: dt_cfl
 
-    integer :: iglo, ik, it, is, ig, iv
-    
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
+! TMP FOR TESTING -- MAB
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+!    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
+
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)
 
+    ! TMP FOR TESTING -- MAB
+!     g = 0.
+     ! hardwire g to be cos(dkx * x + 2dky * y)
+!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+!        ik = ik_idx(g_lo,iglo) ; if (ik /= 2) cycle 
+!        ik = ik_idx(g_lo,iglo) ; if (ik /= 3) cycle 
+!        ik = ik_idx(g_lo,iglo) ; if (ik /= 1) cycle 
+!        it = 2
+!        g(:,:,it,iglo) = 1.0
+!        g(:,:,it,iglo) = 0.5 ; g(:,:,ntheta0-it+2,iglo) = 0.5
+!     end do
+!     phi = 0.
+     ! hardwire phi to be cos(2dkx * x + dky * y)
+!     ik = 2 ; it = 3
+!     ik = 2 ; it = 1
+!     phi(:,it,ik) = 1.0
+
+    ! TMP FOR TESTING -- MAB
+!    call get_phi (phi)
+!    call write_mpdist (g, '.ginit')
+
     if (fphi > zero) then
-       call load_kx_phi
+       call load_kx_phi (phi, g1)
     else
        g1 = 0.
     end if
@@ -391,7 +418,7 @@ contains
        is = is_idx(g_lo,iglo)
        do iv = -nvgrid, nvgrid
           do ig = -ntgrid, ntgrid
-             g1(ig,iv,iglo) = g1(ig,iv,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,iv,iglo)
+             g1(ig,iv,:,iglo) = g1(ig,iv,:,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,iv,:,iglo)
           end do
        end do
     end do
@@ -417,9 +444,9 @@ contains
     if (fapar  > zero) call load_ky_apar
     
     call transform2 (g1, ba)
-    
+
     if (fphi > zero) then
-       call load_kx_phi
+       call load_kx_phi (phi, g1)
     else
        g1 = 0.
     end if
@@ -427,11 +454,39 @@ contains
     if (fbpar > zero) call load_kx_bpar
     
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       do iv = -nvgrid, nvgrid
-          do ig = -ntgrid, ntgrid
-             g1(ig,iv,iglo) = g1(ig,iv,iglo)*spec(is)%zt + zi*akx(it)*g(ig,iv,iglo)
+       do it = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             do ig = -ntgrid, ntgrid
+                g1(ig,iv,it,iglo) = g1(ig,iv,it,iglo)*spec(is)%zt + zi*akx(it)*g(ig,iv,it,iglo)
+             end do
+          end do
+       end do
+    end do
+    
+    call transform2 (g1, gb)
+
+    do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
+       do i = 1, yxf_lo%ny
+          bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
+          max_vel = max(max_vel,abs(ba(i,j))*cflx)
+       end do
+    end do
+
+#ifdef LOWFLOW
+    if (fphi > zero) then
+       call load_dthet_phi (phi, g1)
+    else
+       g1 = 0.
+    end if
+
+    call transform2 (g1, ba)
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       do it = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             g1(:,iv,it,iglo) = zi*(akx(it)*gds24_noq-aky(ik)*gds23)*g(:,iv,it,iglo)
           end do
        end do
     end do
@@ -440,31 +495,86 @@ contains
     
     do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
        do i = 1, yxf_lo%ny
-          bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)*kxfac
-          max_vel = max(max_vel,abs(ba(i,j))*cflx)
+          bracket(i,j) = bracket(i,j) + ba(i,j)*gb(i,j)
+! assume rhostar terms do not set max_vel
+!          max_vel = max(max_vel,abs(ba(i,j)))
+       end do
+    end do
+
+    if (fphi > zero) then
+       call load_kxky_phi (phi, g1)
+    else
+       g1 = 0.
+    end if
+
+    call transform2 (g1, ba)
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       do it = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             g1(:ntgrid-1,iv,it,iglo) = (g(-ntgrid+1:,iv,it,iglo)-g(:ntgrid-1,iv,it,iglo))/delthet(:ntgrid-1)
+          end do
        end do
     end do
     
+    call transform2 (g1, gb)
+
+    do j = yxf_lo%llim_proc, yxf_lo%ulim_proc
+       do i = 1, yxf_lo%ny
+          bracket(i,j) = bracket(i,j) - ba(i,j)*gb(i,j)
+! assume max_vel is not set by terms small in rhostar
+!          max_vel = max(max_vel,abs(ba(i,j))*cflx)
+       end do
+    end do    
+#endif
+
     call max_allreduce(max_vel)
     
     dt_cfl = 1./max_vel
     call save_dt_cfl (dt_cfl)
+
+    ! g1 = 0.
+    ! do iglo = g_lo%llim_proc, g_lo%ulim_proc
+    !    ik = ik_idx(g_lo,iglo) ; if (ik /= 2) cycle
+    !    imu = imu_idx(g_lo,iglo)
+    !    it = 3
+    !    do iv = -nvgrid, nvgrid
+    !       g1(:,iv,it,iglo) = exp(-theta**2)*anon(:,iv,imu)
+    !    end do
+    ! end do
+    ! call transform2 (g1, bracket)
+!    call write_mpdistyxf (bracket, '.ba')
     
     call inverse2 (bracket, g1)
+
+!    call write_mpdist (g1, '.g1')
+!    call mp_abort ('testing transform2 in nonlinear_terms.fpp')
     
   contains
 
-    subroutine load_kx_phi
+    subroutine load_kx_phi (phi, g1)
 
+      use constants, only: zi
       use dist_fn_arrays, only: aj0
-      complex :: fac
+      use gs2_layouts, only: g_lo, ik_idx
+      use kt_grids, only: akx, ntheta0
+      use theta_grid, only: ntgrid
+      use run_parameters, only: fphi
+      use vpamu_grids, only: nvgrid
+
+      implicit none
+
+      complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+      complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: g1
+
+      integer :: iglo, ik, it, ig
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-         it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
-         do ig = -ntgrid, ntgrid
-            fac = zi*akx(it)*aj0(ig,iglo)*phi(ig,it,ik)*fphi
-            g1(ig,:,iglo) = fac
+         do iv = -nvgrid, nvgrid
+            do ig = -ntgrid, ntgrid
+               g1(ig,iv,:,iglo) = zi*akx*aj0(ig,:,iglo)*phi(ig,:,ik)*fphi
+            end do
          end do
       end do
 
@@ -476,11 +586,12 @@ contains
       complex :: fac
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-         it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
-         do ig = -ntgrid, ntgrid
-            fac = zi*aky(ik)*aj0(ig,iglo)*phi(ig,it,ik)*fphi
-            g1(ig,:,iglo) = fac
+         do it = 1, ntheta0
+            do ig = -ntgrid, ntgrid
+               fac = zi*aky(ik)*aj0(ig,it,iglo)*phi(ig,it,ik)*fphi
+               g1(ig,:,it,iglo) = fac
+            end do
          end do
       end do
 
@@ -493,12 +604,13 @@ contains
       use vpamu_grids, only: vpa
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-         it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
-         do ig = -ntgrid, ntgrid
-            g1(ig,:,iglo) = g1(ig,:,iglo) - zi*akx(it)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa*apar(ig,it,ik)*fapar 
+         do it = 1, ntheta0
+            do ig = -ntgrid, ntgrid
+               g1(ig,:,it,iglo) = g1(ig,:,it,iglo) - zi*akx(it)*aj0(ig,it,iglo)*spec(is)%stm &
+                    *vpa*apar(ig,it,ik)*fapar 
+            end do
          end do
       end do
 
@@ -511,12 +623,13 @@ contains
       use gs2_layouts, only: is_idx
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-         it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
-         do ig = -ntgrid, ntgrid
-            g1(ig,:,iglo) = g1(ig,:,iglo) - zi*aky(ik)*aj0(ig,iglo)*spec(is)%stm &
-                 *vpa*apar(ig,it,ik)*fapar 
+         do it = 1, ntheta0
+            do ig = -ntgrid, ntgrid
+               g1(ig,:,it,iglo) = g1(ig,:,it,iglo) - zi*aky(ik)*aj0(ig,it,iglo)*spec(is)%stm &
+                    *vpa*apar(ig,it,ik)*fapar 
+            end do
          end do
       end do
 
@@ -525,7 +638,7 @@ contains
     subroutine load_kx_bpar
 
       use dist_fn_arrays, only: aj1
-      use gs2_layouts, only: is_idx, ik_idx, it_idx, imu_idx
+      use gs2_layouts, only: is_idx, ik_idx, imu_idx
       use vpamu_grids, only: mu, vperp2
 
       integer :: it, ik, imu, is
@@ -534,15 +647,14 @@ contains
 ! Is this factor of two from the old normalization?
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-         it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
          imu = imu_idx(g_lo,iglo)
-         do ig = -ntgrid, ntgrid
-            fac = g1(ig,1,iglo) + zi*akx(it)*aj1(ig,iglo) &
-                 *2.0*vperp2(ig,imu)*spec(is)%tz*bpar(ig,it,ik)*fbpar
-            g1(ig,1,iglo) = fac
-            g1(ig,2,iglo) = fac
+         do it = 1, ntheta0
+            do ig = -ntgrid, ntgrid
+               g1(ig,:,it,iglo) = g1(ig,:,it,iglo) + zi*akx(it)*aj1(ig,it,iglo) &
+                    *2.0*vperp2(ig,imu)*spec(is)%tz*bpar(ig,it,ik)*fbpar
+            end do
          end do
       end do
 
@@ -551,7 +663,7 @@ contains
     subroutine load_ky_bpar
 
       use dist_fn_arrays, only: aj1
-      use gs2_layouts, only: is_idx, ik_idx, it_idx, imu_idx
+      use gs2_layouts, only: is_idx, ik_idx, imu_idx
       use vpamu_grids, only: vperp2
       use kt_grids, only: aky
 
@@ -561,18 +673,86 @@ contains
 ! Is this factor of two from the old normalization?
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-         it = it_idx(g_lo,iglo)
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
-         do ig = -ntgrid, ntgrid
-            fac = g1(ig,1,iglo) + zi*aky(ik)*aj1(ig,iglo) &
-                 *2.0*vperp2(ig,imu)*spec(is)%tz*bpar(ig,it,ik)*fbpar
-            g1(ig,1,iglo) = fac 
-            g1(ig,2,iglo) = fac
+         do it = 1, ntheta0
+            do ig = -ntgrid, ntgrid
+               g1(ig,:,it,iglo) = g1(ig,:,it,iglo) + zi*aky(ik)*aj1(ig,it,iglo) &
+                    *2.0*vperp2(ig,imu)*spec(is)%tz*bpar(ig,it,ik)*fbpar
+            end do
          end do
       end do
 
     end subroutine load_ky_bpar
+
+#ifdef LOWFLOW
+    subroutine load_dthet_phi (phi, g1)
+
+      use dist_fn_arrays, only: aj0
+      use theta_grid, only: delthet, ntgrid
+      use gs2_layouts, only: g_lo, ik_idx
+      use kt_grids, only: ntheta0
+      use run_parameters, only: fphi, rhostar
+      use vpamu_grids, only: nvgrid
+
+      implicit none
+
+      integer :: iglo, ik, it, ig
+      complex :: fac
+
+      complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+      complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: g1
+
+      ! obtain d<phi>/dtheta
+
+      do iglo = g_lo%llim_proc, g_lo%ulim_proc
+         ik = ik_idx(g_lo,iglo)
+         do it = 1, ntheta0
+            do ig = -ntgrid, ntgrid-1
+               fac = (aj0(ig+1,it,iglo)*phi(ig+1,it,ik)-aj0(ig,it,iglo)*phi(ig,it,ik))*fphi/delthet(ig)
+               g1(ig,:,it,iglo) = fac*0.5*rhostar
+            end do
+         end do
+      end do
+
+    end subroutine load_dthet_phi
+
+    subroutine load_kxky_phi (phi, g1)
+
+      use dist_fn_arrays, only: aj0
+      use theta_grid, only: ntgrid, gds23, gds24_noq, thet_imp
+      use gs2_layouts, only: g_lo, ik_idx
+      use kt_grids, only: ntheta0, akx, aky
+      use run_parameters, only: fphi, rhostar
+      use vpamu_grids, only: nvgrid, vpa_imp
+      use constants, only: zi
+      use centering, only: get_cell_value
+
+      implicit none
+
+      integer :: iglo, ik, it, ig
+      complex :: fac
+
+      complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+      complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: g1
+
+      ! obtain v_E . grad theta in k-space at cell centers
+
+      do iglo = g_lo%llim_proc, g_lo%ulim_proc
+         ik = ik_idx(g_lo,iglo)
+         do it = 1, ntheta0
+            do ig = -ntgrid, ntgrid-1
+               fac = zi*(akx(it)*gds24_noq(ig)-aky(ik)*gds23(ig))*aj0(ig,it,iglo)*phi(ig,it,ik)*fphi
+               g1(ig,:,it,iglo) = fac*rhostar*0.5
+            end do
+            ! convert from grid values to cell values
+            call get_cell_value (thet_imp, vpa_imp, g1(:,:,it,iglo), g1(:,:,it,iglo), &
+                 -ntgrid, -nvgrid)
+         end do
+      end do
+
+    end subroutine load_kxky_phi
+#endif
 
   end subroutine add_nl
 
@@ -610,6 +790,164 @@ contains
     initialized = .false. ; initializing = .true.
 
   end subroutine finish_nonlinear_terms
+
+  subroutine write_mpdistyxf (dist, extension)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: yxf_lo, ig_idx, iv_idx, is_idx, it_idx
+    use gs2_layouts, only: imu_idx, idx_local, proc_id
+    use gs2_time, only: code_time
+    use theta_grid, only: ntgrid, bmag, theta, shat
+    use vpamu_grids, only: vpa, nvgrid, mu
+    use kt_grids, only: theta0, lx, ly
+    use constants, only: pi
+
+    implicit none
+    
+    real, dimension (:,yxf_lo%llim_proc:), intent (in) :: dist
+    character (*), intent (in) :: extension
+    
+    integer :: i, j, it, is, imu, ig, iv
+    integer, save :: unit
+    logical, save :: done = .false.
+    real :: gtmp
+    
+    if (.not. done) then
+       if (proc0) call open_output_file (unit, trim(extension))
+       do j=yxf_lo%llim_world, yxf_lo%ulim_world
+          ig = ig_idx(yxf_lo, j)
+          iv = iv_idx(yxf_lo, j)
+          it = it_idx(yxf_lo, j)
+          is = is_idx(yxf_lo, j) ; if (is /= 1) cycle
+          imu = imu_idx(yxf_lo, j)
+          do i = 1, yxf_lo%ny
+             if (idx_local (yxf_lo, ig, iv, it, imu, is)) then
+                if (proc0) then
+                   gtmp = dist(i,j)
+                else
+                   call send (dist(i,j), 0)
+                end if
+             else if (proc0) then
+                call receive (gtmp, proc_id(yxf_lo, j))
+             end if
+             if (proc0) then
+                write (unit,'(a1,8e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+                     (lx/yxf_lo%nx)*(it-1), (ly/yxf_lo%ny)*(i-1), gtmp
+             end if
+          end do
+          if (proc0) then
+             write (unit,*)
+             write (unit,*)
+          end if
+       end do
+       if (proc0) call close_output_file (unit)
+    end if
+    
+  end subroutine write_mpdistyxf
+
+  ! subroutine used for testing
+  ! takes as input an array using g_lo and
+  ! writes it to a .distmp output file
+  subroutine write_mpdist (dist, extension)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: g_lo, ik_idx, is_idx
+    use gs2_layouts, only: imu_idx, idx_local, proc_id
+    use gs2_time, only: code_time
+    use theta_grid, only: ntgrid, bmag, theta
+    use vpamu_grids, only: vpa, nvgrid, mu
+    use kt_grids, only: theta0, ntheta0, akx, aky
+
+    implicit none
+    
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: dist
+    character (*), intent (in) :: extension
+    
+    integer :: iglo, ik, it, is, imu, ig, iv
+    integer, save :: unit
+    complex :: gtmp
+    
+    if (proc0) call open_output_file (unit, trim(extension))
+    do iglo=g_lo%llim_world, g_lo%ulim_world
+       ik = ik_idx(g_lo, iglo)
+       is = is_idx(g_lo, iglo)
+       imu = imu_idx(g_lo, iglo)
+       do it = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             do ig = -ntgrid, ntgrid
+                if (idx_local (g_lo, ik, imu, is)) then
+                   if (proc0) then
+                      gtmp = dist(ig,iv,it,iglo)
+                   else
+                      call send (dist(ig,iv,it,iglo), 0)
+                   end if
+                else if (proc0) then
+                   call receive (gtmp, proc_id(g_lo, iglo))
+                end if
+                if (proc0) then
+                   write (unit,'(a1,11e14.4,6i4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+                        real(gtmp), aimag(gtmp), theta(ig)-theta0(it,ik), theta0(it,ik), aky(ik), akx(it), ig, imu, iv, ik, it, is
+                end if
+             end do
+          end do
+       end do
+       if (proc0) then
+          write (unit,*)
+          write (unit,*)
+       end if
+    end do
+    if (proc0) call close_output_file (unit)
+    
+  end subroutine write_mpdist
+
+  subroutine get_phi (phi)
+
+    use theta_grid, only: ntgrid, theta
+    use kt_grids, only: naky, ntheta0, aky
+    use ran, only: ranf
+    use dist_fn_arrays, only: g
+    use vpamu_grids, only: nvgrid
+    use species, only: spec
+    use gs2_layouts, only: g_lo, is_idx, ik_idx
+
+    implicit none
+
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi
+
+    integer :: ig, it, ik, iglo, is, iv
+    real :: a, b
+
+    do it = 1, ntheta0
+       do ik = 1, naky
+          do ig = -ntgrid, ntgrid
+             a = ranf()-0.5
+             b = ranf()-0.5
+             phi(ig,it,ik) = cmplx(a,b)
+          end do
+       end do
+    end do
+    
+    !Sort out the zonal/self-periodic modes
+    if (naky .ge. 1 .and. aky(1) == 0.0) then
+       !Set ky=kx=0.0 mode to zero in amplitude
+       phi(:,1,1) = 0.0
+    end if
+    
+    do it = 1, ntheta0/2
+       phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
+    enddo
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       do iv = -nvgrid, nvgrid
+          g(:,iv,:,iglo) = -spec(is)%z*phi(:,:,ik)
+       end do
+    end do
+
+  end subroutine get_phi
 
 end module nonlinear_terms
 

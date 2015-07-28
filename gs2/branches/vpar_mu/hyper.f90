@@ -138,9 +138,9 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperviscosity included without hyperresistivity.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hypervisc
+             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hypervisc
           else
-             write (report_unit, fmt="('The damping coefficent is ',e10.4)") D_hypervisc
+             write (report_unit, fmt="('The damping coefficent is ',e11.4)") D_hypervisc
              write (report_unit, fmt="('The damping rate is proportional to the RMS amplitude of the turbulence.')")
           end if
           if (isotropic_shear) then
@@ -149,7 +149,7 @@ contains
           else
              write (report_unit, fmt="('The hyperviscosity is anisotropic in the perpendicular plane.')")
              write (report_unit, fmt="('This is appropriate for drift-type calculations.')")
-             write (report_unit, fmt="('omega_osc = ',e10.4)") omega_osc
+             write (report_unit, fmt="('omega_osc = ',e11.4)") omega_osc
           end if
           
        case (hyper_option_res)
@@ -157,7 +157,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperresistivity included without hyperviscosity.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
+             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hyperres
           else
              write (report_unit, fmt="('################# WARNING #######################')")
              write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
@@ -179,7 +179,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperresistivity and hyperviscosity included.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
+             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hyperres
           else
              write (report_unit, fmt="('################# WARNING #######################')")
              write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
@@ -212,19 +212,19 @@ contains
              
           case (hyper_option_visc) 
              write (unit, fmt="(' hyper_option = ',a)") '"visc_only"'
-             write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+             write (unit, fmt="(' D_hypervisc = ',e17.10)") D_hypervisc
              
           case (hyper_option_res) 
              write (unit, fmt="(' hyper_option = ',a)") '"res_only"'
-             write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             write (unit, fmt="(' D_hyperres = ',e17.10)") D_hyperres
              
           case (hyper_option_both) 
              write (unit, fmt="(' hyper_option = ',a)") '"both"'
              if (D_hyperres == D_hypervisc) then
-                write (unit, fmt="(' D_hyper = ',e16.10)") D_hyper
+                write (unit, fmt="(' D_hyper = ',e17.10)") D_hyper
              else
-                write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
-                write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+                write (unit, fmt="(' D_hypervisc = ',e17.10)") D_hypervisc
+                write (unit, fmt="(' D_hyperres = ',e17.10)") D_hyperres
              end if
           end select
 
@@ -233,7 +233,7 @@ contains
           write (unit, fmt="(' const_amp = ',L1)") const_amp
           write (unit, fmt="(' isotropic_shear = ',L1)") isotropic_shear
           if (.not. isotropic_shear) &
-               write (unit, fmt="(' omega_osc = ',e16.10)") omega_osc
+               write (unit, fmt="(' omega_osc = ',e17.10)") omega_osc
 
           write (unit, fmt="(' gridnorm = ',L1)") gridnorm
           write (unit, fmt="(' /')")
@@ -440,20 +440,20 @@ contains
 
   end subroutine allocate_arrays
 
-  subroutine hyper_diff (g0, phi, bpar)
+  subroutine hyper_diff (g0, phi)
 
     use mp, only: proc0
-    use gs2_layouts, only: ik_idx, it_idx, is_idx
+    use gs2_layouts, only: ik_idx, is_idx
     use theta_grid, only: ntgrid
-    use run_parameters, only: fphi, fbpar
+    use run_parameters, only: fphi
     use gs2_time, only: code_dt
     use gs2_layouts, only: g_lo
     use kt_grids, only: aky, akx, naky, ntheta0
     use vpamu_grids, only: nvgrid
 
     implicit none
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g0
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
 
     real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, shear_rate_z, shear_rate_z_nz
 
@@ -534,24 +534,26 @@ contains
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
-         it = it_idx(g_lo, iglo)
-         
-         if(aky(ik) == 0.) then
-            hypervisc_filter(:,it,ik) = exp(- (D_hypervisc * code_dt &
-                 * ( shear_rate_z_nz(:) * akx(it) ** 4 / akx4_max )))
-         else
-            hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt & 
-                 * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
-                 + shear_rate_z(:) * akx(it) ** 4/ akx4_max * aky(ik) / aky_max )))
-         endif
-         
-         g0(:,:,iglo) = g0(:,:,iglo) * spread(hypervisc_filter(:,it,ik),2,2*nvgrid+1)
+
+         do it = 1, ntheta0
+            if(aky(ik) == 0.) then
+               hypervisc_filter(:,it,ik) = exp(- (D_hypervisc * code_dt &
+                    * ( shear_rate_z_nz(:) * akx(it) ** 4 / akx4_max )))
+            else
+               hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt & 
+                    * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max & 
+                    + shear_rate_z(:) * akx(it) ** 4/ akx4_max * aky(ik) / aky_max )))
+            endif
+            
+            g0(:,:,it,iglo) = g0(:,:,it,iglo) * spread(hypervisc_filter(:,it,ik),2,2*nvgrid+1)
+         end do
       end do
-    
+
     end subroutine aniso_shear
 
     subroutine iso_shear
 
+      integer :: iv
       real, dimension(naky) :: fac
       
       if (const_amp) then
@@ -572,13 +574,15 @@ contains
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
-         it = it_idx(g_lo, iglo)
          if (damp_zonal_only .and. .not. aky(ik)==epsilon(0.0)) cycle
-         hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt &
-              * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
-         
-         g0(:,1,iglo) = g0(:,1,iglo) * hypervisc_filter(:,it,ik)
-         g0(:,2,iglo) = g0(:,2,iglo) * hypervisc_filter(:,it,ik)
+         do it = 1, ntheta0
+            hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt &
+                 * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
+
+            do iv = -nvgrid, nvgrid
+               g0(:,iv,it,iglo) = g0(:,iv,it,iglo) * hypervisc_filter(:,it,ik)
+            end do
+         end do
       end do
       
     end subroutine iso_shear

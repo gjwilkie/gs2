@@ -41,7 +41,7 @@ contains
 
     implicit none
     
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gold, g1
+    complex, dimension (-ntgrid:,:,:,g_lo%llim_proc:), intent (in out) :: g, gold, g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar, phinew, aparnew, bparnew
     integer, optional, intent (in) :: diagnostics
 

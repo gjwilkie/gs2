@@ -242,7 +242,6 @@ contains
     use mp, only : mp_abort, proc0
     logical, intent (out) :: increment_condition_satisfied
     integer, intent (in) :: istep
-    logical, save :: first = .true.
     integer, save :: last_timestep = 0
     real, save :: last_time = 0.0
 

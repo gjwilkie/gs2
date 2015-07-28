@@ -2,7 +2,6 @@
 ! (c) The Numerical Algorithms Group (NAG) Ltd, 2009 
 !                                 on behalf of the HECToR project
 
-
 # include "define.inc"
 
 module gs2_transforms
@@ -85,7 +84,6 @@ contains
     integer, intent (in) :: nx, ny
     
     logical, save :: initialized = .false.
-    character (1) :: char
 
     if (initialized) return
     initialized = .true.
@@ -114,8 +112,6 @@ contains
     implicit none
 
     logical :: initialized = .false.
-    integer :: idx, i
-
     integer :: nb_ffts
 
     if (initialized) return
@@ -186,13 +182,13 @@ contains
 
     type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
     integer, dimension(0:nproc-1) :: nn_to, nn_from
-    integer, dimension (3) :: from_low, from_high
+    integer, dimension (4) :: from_low, from_high
     integer, dimension (2) :: to_high
     integer :: to_low
     integer, intent (in) :: ntgrid, naky, ntheta0, nvgrid, nmu, nspec, nx
     logical :: initialized = .false.
 
-    integer :: iglo, iv, ig, it, ixxf
+    integer :: iglo, iv, ig, it0, it, ixxf
     integer :: n, ip
 
     if (initialized) return
@@ -205,13 +201,15 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
-       do iv = -nvgrid, nvgrid
-          do ig = -ntgrid, ntgrid
-             call gidx2xxfidx (ig, iv, iglo, g_lo, xxf_lo, it, ixxf)
-             if (idx_local(g_lo,iglo)) &
-                  nn_from(proc_id(xxf_lo,ixxf)) = nn_from(proc_id(xxf_lo,ixxf)) + 1
-             if (idx_local(xxf_lo,ixxf)) &
-                nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
+       do it0 = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             do ig = -ntgrid, ntgrid
+                call gidx2xxfidx (ig, iv, it0, iglo, g_lo, xxf_lo, it, ixxf)
+                if (idx_local(g_lo,iglo)) &
+                     nn_from(proc_id(xxf_lo,ixxf)) = nn_from(proc_id(xxf_lo,ixxf)) + 1
+                if (idx_local(xxf_lo,ixxf)) &
+                     nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
+             end do
           end do
        end do
     end do
@@ -221,6 +219,7 @@ contains
           allocate (from_list(ip)%first(nn_from(ip)))
           allocate (from_list(ip)%second(nn_from(ip)))
           allocate (from_list(ip)%third(nn_from(ip)))
+          allocate (from_list(ip)%fourth(nn_from(ip)))
        end if
        if (nn_to(ip) > 0) then
           allocate (to_list(ip)%first(nn_to(ip)))
@@ -233,31 +232,35 @@ contains
     nn_to = 0
     nn_from = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
-       do iv = -nvgrid, nvgrid
-          do ig = -ntgrid, ntgrid
-             call gidx2xxfidx (ig, iv, iglo, g_lo, xxf_lo, it, ixxf)
-             if (idx_local(g_lo,iglo)) then
-                ip = proc_id(xxf_lo,ixxf)
-                n = nn_from(ip) + 1
-                nn_from(ip) = n
-                from_list(ip)%first(n) = ig
-                from_list(ip)%second(n) = iv
-                from_list(ip)%third(n) = iglo
-             end if
-             if (idx_local(xxf_lo,ixxf)) then
-                ip = proc_id(g_lo,iglo)
-                n = nn_to(ip) + 1
-                nn_to(ip) = n
-                to_list(ip)%first(n) = it
-                to_list(ip)%second(n) = ixxf
-             end if
+       do it0 = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             do ig = -ntgrid, ntgrid
+                call gidx2xxfidx (ig, iv, it0, iglo, g_lo, xxf_lo, it, ixxf)
+                if (idx_local(g_lo,iglo)) then
+                   ip = proc_id(xxf_lo,ixxf)
+                   n = nn_from(ip) + 1
+                   nn_from(ip) = n
+                   from_list(ip)%first(n) = ig
+                   from_list(ip)%second(n) = iv
+                   from_list(ip)%third(n) = it0
+                   from_list(ip)%fourth(n) = iglo
+                end if
+                if (idx_local(xxf_lo,ixxf)) then
+                   ip = proc_id(g_lo,iglo)
+                   n = nn_to(ip) + 1
+                   nn_to(ip) = n
+                   to_list(ip)%first(n) = it
+                   to_list(ip)%second(n) = ixxf
+                end if
+             end do
           end do
        end do
     end do
 
     from_low (1) = -ntgrid
     from_low (2) = -nvgrid
-    from_low (3) = g_lo%llim_proc
+    from_low (3) = 1
+    from_low (4) = g_lo%llim_proc
 
     to_low = xxf_lo%llim_proc
     
@@ -266,7 +269,8 @@ contains
 
     from_high(1) = ntgrid
     from_high(2) = nvgrid
-    from_high(3) = g_lo%ulim_alloc
+    from_high(3) = ntheta0
+    from_high(4) = g_lo%ulim_alloc
 
     call set_redist_character_type(g2x, 'g2x')
 
@@ -389,16 +393,21 @@ contains
 
   subroutine transform_x5d (g, xxf)
 
-    use gs2_layouts, only: xxf_lo, g_lo
+    use gs2_layouts, only: xxf_lo, g_lo, it_idx, ik_idx, imu_idx
     use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather
+    use mp, only: mp_abort
+    use theta_grid, only: theta
+    use vpamu_grids, only: anon
 
     implicit none
 
-    complex, dimension (-xxf_lo%ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-xxf_lo%ntgrid:,-xxf_lo%nvgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (:,xxf_lo%llim_proc:), intent (out) :: xxf
     complex, dimension(:), allocatable :: aux
-    integer :: i
+    integer :: i!, ik, it, imu, iglo, iv
+
+!    complex, dimension (-xxf_lo%ntgrid:xxf_lo%ntgrid, -xxf_lo%nvgrid:xxf_lo%nvgrid, g_lo%llim_proc:g_lo%ulim_alloc) :: g0
 
     call prof_entering ("transform_x5d", "gs2_transforms")
 
@@ -406,8 +415,24 @@ contains
     xxf = 0.
 !CMR, 7/3/2011: gather pulls appropriate pieces of g onto this processor for
 !    local Fourier transform in x, and may also pad with zeros for dealiasing
-!
     call gather (g2x, g, xxf)
+
+!    call write_mpdistxxf (xxf, '.xxf')
+!    call mp_abort ('transform_x5d')
+
+    ! g0 = 0.0
+    ! do iglo = g_lo%llim_proc, g_lo%ulim_proc
+    !    ik = ik_idx(g_lo,iglo)
+    !    it = it_idx(g_lo,iglo)
+    !    imu = imu_idx(g_lo,iglo)
+    !    if (ik /= 2 .or. it /= 3) cycle
+    !    do iv = -g_lo%nvgrid, g_lo%nvgrid
+    !       g0(:,iv,iglo) = exp(-theta**2)*anon(:,iv,imu)
+
+    !    end do
+    ! end do
+
+!    call gather (g2x, g0, xxf)
 
     ! do ffts
 # if FFT == _FFTW_
@@ -427,6 +452,9 @@ contains
     call dfftw_execute(xf_fft%plan)
 # endif
 
+!    call write_mpdistxxf (xxf, '.xxf')
+!    call mp_abort ('transform_x5d')
+
     call prof_leaving ("transform_x5d", "gs2_transforms")
   end subroutine transform_x5d
 
@@ -439,7 +467,7 @@ contains
     implicit none
 
     complex, dimension (:,xxf_lo%llim_proc:), intent (in out) :: xxf
-    complex, dimension (-xxf_lo%ntgrid:,:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-xxf_lo%ntgrid:,-xxf_lo%nvgrid:,:,g_lo%llim_proc:), intent (out) :: g
     complex, dimension(:), allocatable :: aux
     integer :: i
 
@@ -541,21 +569,41 @@ contains
 
   subroutine transform2_5d (g, yxf)
 
-    use gs2_layouts, only: g_lo, yxf_lo, ik_idx
+    use gs2_layouts, only: g_lo, yxf_lo, ik_idx, it_idx, imu_idx
+    use theta_grid, only: theta
+    use vpamu_grids, only: anon
+    use mp, only: mp_abort
 
     implicit none
 
-    complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
+    complex, dimension (-g_lo%ntgrid:,-g_lo%nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
-    integer :: iglo
+    integer :: iglo!, it, ik, imu, iv
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) == 1) cycle
-       g(:,:,iglo) = g(:,:,iglo) / 2.0
+       g(:,:,:,iglo) = g(:,:,:,iglo) / 2.0
     end do
 
+    ! g = 0.0
+    ! do iglo = g_lo%llim_proc, g_lo%ulim_proc
+    !    ik = ik_idx(g_lo,iglo)
+    !    it = it_idx(g_lo,iglo)
+    !    imu = imu_idx(g_lo,iglo)
+    !    if (ik /= 2 .or. it /= 3) cycle
+    !    do iv = -g_lo%nvgrid, g_lo%nvgrid
+    !       g(:,iv,iglo) = exp(-theta**2)*anon(:,iv,imu)
+    !    end do
+    ! end do
+
     call transform_x (g, xxf)
+!    call write_mpdistxxf (xxf, '.xxf')
     call transform_y (xxf, yxf)
+
+!    call write_mpdistyxf (yxf, '.yxf')
+
+!    call mp_abort ('testing xxf layout')
+
   end subroutine transform2_5d
 
   subroutine inverse2_5d (yxf, g)
@@ -565,7 +613,7 @@ contains
     implicit none
 
     real, dimension (:,yxf_lo%llim_proc:), intent (in out) :: yxf
-    complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-yxf_lo%ntgrid:,-yxf_lo%nvgrid:,:,g_lo%llim_proc:), intent (out) :: g
     integer :: iglo
 
     call inverse_y (yxf, xxf)
@@ -575,7 +623,7 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) == 1) cycle
-       g(:,:,iglo) = g(:,:,iglo) * 2.0
+       g(:,:,:,iglo) = g(:,:,:,iglo) * 2.0
     end do
 
   end subroutine inverse2_5d
@@ -919,12 +967,12 @@ contains
   
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_zf (ntgrid, nperiod, howmany)
+  subroutine init_zf (ntgrid, howmany)
 
     use fft_work, only: init_z
 
     implicit none
-    integer, intent (in) :: ntgrid, nperiod, howmany
+    integer, intent (in) :: ntgrid, howmany
     logical :: done = .false.
 
     if (done) return
@@ -936,11 +984,11 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
-  subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
+  subroutine kz_spectrum (an, an2, ntheta0, naky)
 
     complex, dimension (:,:,:), intent(in)  :: an
     complex, dimension (:,:,:), intent(out) :: an2
-    integer, intent (in) :: ntheta0, naky, ntgrid
+    integer, intent (in) :: ntheta0, naky
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
@@ -950,5 +998,173 @@ contains
     an2 = conjg(an2)*an2
 
   end subroutine kz_spectrum
+
+  subroutine write_mpdistxxf (dist, extension)
+
+    use mp, only: proc0, send, receive
+    use file_utils, only: open_output_file, close_output_file
+    use gs2_layouts, only: xxf_lo, ig_idx, iv_idx, ik_idx, is_idx
+    use gs2_layouts, only: imu_idx, idx_local, proc_id
+    use gs2_time, only: code_time
+    use theta_grid, only: ntgrid, bmag, theta, shat
+    use vpamu_grids, only: vpa, nvgrid, mu
+    use kt_grids, only: theta0, lx, ly
+    use constants, only: pi
+
+    implicit none
+    
+    complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: dist
+    character (*), intent (in) :: extension
+    
+    integer :: i, j, ik, is, imu, ig, iv
+    integer, save :: unit
+    logical, save :: done = .false.
+    complex :: gtmp
+    
+    if (.not. done) then
+       if (proc0) call open_output_file (unit, trim(extension))
+       do j=xxf_lo%llim_world, xxf_lo%ulim_world
+          ig = ig_idx(xxf_lo, j)
+          iv = iv_idx(xxf_lo, j)
+          ik = ik_idx(xxf_lo, j)
+          is = is_idx(xxf_lo, j) ; if (is /= 1) cycle
+          imu = imu_idx(xxf_lo, j)
+          do i = 1, xxf_lo%nx
+             if (idx_local (xxf_lo, ig, iv, ik, imu, is)) then
+                if (proc0) then
+                   gtmp = dist(i,j)
+                else
+                   call send (dist(i,j), 0)
+                end if
+             else if (proc0) then
+                call receive (gtmp, proc_id(xxf_lo, j))
+             end if
+             if (proc0) then
+                write (unit,'(a1,6e14.4,i4,2e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+                     (lx/xxf_lo%nx)*(i-1), ik, real(gtmp), aimag(gtmp)
+!                write (unit,'(a1,5e14.4,2i4,2e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+!                     i, ik, real(gtmp), aimag(gtmp)
+             end if
+          end do
+          if (proc0) then
+             write (unit,*)
+             write (unit,*)
+          end if
+       end do
+       if (proc0) call close_output_file (unit)
+    end if
+    
+  end subroutine write_mpdistxxf
+
+!   subroutine write_mpdistyxf (dist, extension)
+
+!     use mp, only: proc0, send, receive
+!     use file_utils, only: open_output_file, close_output_file
+!     use gs2_layouts, only: yxf_lo, ig_idx, iv_idx, it_idx, is_idx
+!     use gs2_layouts, only: imu_idx, idx_local, proc_id
+!     use gs2_time, only: code_time
+!     use theta_grid, only: ntgrid, bmag, theta, shat
+!     use vpamu_grids, only: vpa, nvgrid, mu
+!     use kt_grids, only: theta0, lx, ly
+!     use constants, only: pi
+
+!     implicit none
+    
+!     real, dimension (:,yxf_lo%llim_proc:), intent (in) :: dist
+!     character (*), intent (in) :: extension
+    
+!     integer :: i, j, it, is, imu, ig, iv
+!     integer, save :: unit
+!     logical, save :: done = .false.
+!     real :: gtmp
+    
+!     if (.not. done) then
+!        if (proc0) call open_output_file (unit, trim(extension))
+!        do j=yxf_lo%llim_world, yxf_lo%ulim_world
+!           ig = ig_idx(yxf_lo, j)
+!           iv = iv_idx(yxf_lo, j)
+!           it = it_idx(yxf_lo, j)
+!           is = is_idx(yxf_lo, j) ; if (is /= 1) cycle
+!           imu = imu_idx(yxf_lo, j)
+!           do i = 1, yxf_lo%ny
+!              if (idx_local (yxf_lo, i)) then
+!                 if (proc0) then
+!                    gtmp = dist(i,j)
+!                 else
+!                    call send (dist(i,j), 0)
+!                 end if
+!              else if (proc0) then
+!                 call receive (gtmp, proc_id(yxf_lo, j))
+!              end if
+!              if (proc0) then
+!                 write (unit,'(a1,8e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+!                      (lx/yxf_lo%nx)*(it-1), (ly/yxf_lo%ny)*(i-1), gtmp
+!              end if
+!           end do
+!           if (proc0) then
+!              write (unit,*)
+!              write (unit,*)
+!           end if
+!        end do
+!        if (proc0) call close_output_file (unit)
+!     end if
+    
+!   end subroutine write_mpdistyxf
+
+!   subroutine write_mpdistfft (dist, extension)
+
+!     use mp, only: proc0, send, receive
+!     use file_utils, only: open_output_file, close_output_file
+!     use gs2_layouts, only: yxf_lo, ig_idx, iv_idx, it_idx, is_idx
+!     use gs2_layouts, only: imu_idx, idx_local, proc_id
+!     use gs2_time, only: code_time
+!     use theta_grid, only: ntgrid, bmag, theta, shat
+!     use vpamu_grids, only: vpa, nvgrid, mu
+!     use kt_grids, only: theta0, lx, ly
+!     use constants, only: pi
+
+!     implicit none
+    
+!     complex, dimension (:,yxf_lo%llim_proc:), intent (in) :: dist
+!     character (*), intent (in) :: extension
+    
+!     integer :: i, j, it, is, imu, ig, iv
+!     integer, save :: unit
+!     logical, save :: done = .false.
+!     complex :: gtmp
+    
+!     if (.not. done) then
+!        if (proc0) call open_output_file (unit, trim(extension))
+!        do j=yxf_lo%llim_world, yxf_lo%ulim_world
+!           ig = ig_idx(yxf_lo, j)
+!           iv = iv_idx(yxf_lo, j)
+!           it = it_idx(yxf_lo, j)
+!           is = is_idx(yxf_lo, j) ; if (is /= 1) cycle
+!           imu = imu_idx(yxf_lo, j)
+!           do i = 1, yxf_lo%ny/2+1
+!              if (idx_local (yxf_lo, i)) then
+!                 if (proc0) then
+!                    gtmp = dist(i,j)
+!                 else
+!                    call send (dist(i,j), 0)
+!                 end if
+!              else if (proc0) then
+!                 call receive (gtmp, proc_id(yxf_lo, j))
+!              end if
+!              if (proc0) then
+!                 write (unit,'(a1,6e14.4,i4,2e14.4)') "", code_time, theta(ig), &
+!                      vpa(iv), mu(imu), bmag(ig), &
+!                      (lx/yxf_lo%nx)*(it-1), i, real(gtmp), aimag(gtmp)
+!              end if
+!           end do
+!           if (proc0) then
+!              write (unit,*)
+!              write (unit,*)
+!           end if
+!        end do
+!        if (proc0) call close_output_file (unit)
+!     end if
+    
+!   end subroutine write_mpdistfft
 
 end module gs2_transforms

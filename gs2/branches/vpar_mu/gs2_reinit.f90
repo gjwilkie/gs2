@@ -18,8 +18,8 @@ contains
     integer :: unit
           write (unit, *)
           write (unit, fmt="(' &',a)") "reinit_knobs"
-          write (unit, fmt="(' delt_adj = ',e16.10)") delt_adj
-          write (unit, fmt="(' delt_minimum = ',e16.10)") delt_minimum
+          write (unit, fmt="(' delt_adj = ',e16.9)") delt_adj
+          write (unit, fmt="(' delt_minimum = ',e16.9)") delt_minimum
           write (unit, fmt="(' /')")       
   end subroutine wnml_gs2_reinit
 

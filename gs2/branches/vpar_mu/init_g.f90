@@ -5,7 +5,7 @@ module init_g
   implicit none
 
   public :: ginit
-  public :: init_init_g, finish_init_g, wnml_init_g, check_init_g
+  public :: init_init_g, finish_init_g
   public :: width0
   public :: tstart
   public :: reset_init
@@ -19,7 +19,7 @@ module init_g
   integer, parameter :: ginitopt_default = 1,  &
        ginitopt_noise = 2, ginitopt_restart_many = 3, &
        ginitopt_restart_small = 4, ginitopt_kpar = 5, &
-       ginitopt_nltest = 6
+       ginitopt_nltest = 6, ginitopt_kxtest = 7, ginitopt_rh = 8
 
   real :: width0, phiinit, imfac, refac, zf_init, phifrac
   real :: den0, upar0, tpar0, tperp0
@@ -39,184 +39,6 @@ module init_g
   logical :: exist
 
 contains
-
-  subroutine wnml_init_g(unit)
-  use run_parameters, only: k0
-  implicit none
-  integer :: unit
-       if (.not.exist) return
-       write (unit, *)
-       write (unit, fmt="(' &',a)") "init_g_knobs"
-       select case (ginitopt_switch)
-
-       case (ginitopt_default)
-          write (unit, fmt="(' ginit_option = ',a)") '"default"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' width0 = ',e17.10)") width0
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
-
-       case (ginitopt_noise)
-          write (unit, fmt="(' ginit_option = ',a)") '"noise"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' zf_init = ',e17.10)") zf_init
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
-
-       case (ginitopt_restart_many)
-          write (unit, fmt="(' ginit_option = ',a)") '"many"'
-          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e17.10)") scale
-
-       case (ginitopt_restart_small)
-          write (unit, fmt="(' ginit_option = ',a)") '"small"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' zf_init = ',e17.10)") zf_init
-          write (unit, fmt="(' chop_side = ',L1)") chop_side
-          if (chop_side) write (unit, fmt="(' left = ',L1)") left
-          write (unit, fmt="(' restart_file = ',a)") '"'//trim(restart_file)//'"'
-          write (unit, fmt="(' scale = ',e17.10)") scale
-
-       case (ginitopt_kpar)
-          write (unit, fmt="(' ginit_option = ',a)") '"kpar"'
-          write (unit, fmt="(' phiinit = ',e17.10)") phiinit
-          write (unit, fmt="(' width0 = ',e17.10)") width0
-          write (unit, fmt="(' refac = ',e17.10)") refac
-          write (unit, fmt="(' imfac = ',e17.10)") imfac
-          write (unit, fmt="(' den0 = ',e17.10)") den0
-          write (unit, fmt="(' den1 = ',e17.10)") den1
-          write (unit, fmt="(' den2 = ',e17.10)") den2
-          write (unit, fmt="(' upar0 = ',e17.10)") upar0
-          write (unit, fmt="(' upar1 = ',e17.10)") upar1
-          write (unit, fmt="(' upar2 = ',e17.10)") upar2
-          write (unit, fmt="(' tpar0 = ',e17.10)") tpar0
-          write (unit, fmt="(' tpar1 = ',e17.10)") tpar1
-          write (unit, fmt="(' tperp0 = ',e17.10)") tperp0
-          write (unit, fmt="(' tperp1 = ',e17.10)") tperp1
-          write (unit, fmt="(' tperp2 = ',e17.10)") tperp2
-
-       end select
-       write (unit, fmt="(' /')")
-  end subroutine wnml_init_g
-
- 
-  subroutine check_init_g(report_unit)
-  use run_parameters, only : delt_option_switch, delt_option_auto
-  use species, only : spec, has_electron_species
-  implicit none
-  integer :: report_unit
-    select case (ginitopt_switch)
-    case (ginitopt_default)
-       write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, fmt="('  Amplitude:        ',f10.4)") phiinit
-       write (report_unit, fmt="('  Width in theta:   ',f10.4)") width0
-       if (chop_side) then
-          write (report_unit, fmt="('  Parity:   none')") 
-       else
-          write (report_unit, fmt="('  Parity:   even')") 
-       end if
-
-    case (ginitopt_noise)
-       write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, fmt="('  Amplitude:        ',f10.4)") phiinit
-       write (report_unit, fmt="('  Noise along field line.')") 
-       if (zf_init /= 1.) then
-          write (report_unit, fmt="('  Zonal flows adjusted by factor of zf_init = ',f10.4)") zf_init
-       end if
-
-    case (ginitopt_kpar)
-       write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, fmt="('  Amplitude:             ',f10.4)") phiinit
-       write (report_unit, fmt="('  Real part multiplier:  ',f10.4)") refac
-       write (report_unit, fmt="('  Imag part multiplier:  ',f10.4)") imfac
-       if (width0 > 0.) then
-          write (report_unit, fmt="('  Gaussian envelope in theta with width:  ',f10.4)") width0
-       end if
-       if (chop_side) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('  Parity:   none')") 
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('Remedy: set chop_side = .false. in init_g_knobs.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-       if (den0 > epsilon(0.0) .or. den1 > epsilon(0.0) .or. den2 > epsilon(0.0)) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('Initial density perturbation of the form:')")
-          write (report_unit, fmt="('den0   + den1 * cos(theta) + den2 * cos(2.*theta)')")
-          write (report_unit, *) 
-          write (report_unit, fmt="('with den0 =',f7.4,' den1 = ',f7.4,' den2 = ',f7.4)") den0, den1, den2
-       end if
-       if (upar0 > epsilon(0.0) .or. upar1 > epsilon(0.0) .or. upar2 > epsilon(0.0)) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('Initial parallel velocity perturbation of the form:')")
-          write (report_unit, fmt="('upar0   + upar1 * cos(theta) + upar2 * cos(2.*theta)')")
-          write (report_unit, fmt="('90 degrees out of phase with other perturbations.')")
-          write (report_unit, *) 
-          write (report_unit, fmt="('with upar0 =',f7.4,' upar1 = ',f7.4,' upar2 = ',f7.4)") upar0, upar1, upar2
-       end if
-       if (tpar0 > epsilon(0.0) .or. tpar1 > epsilon(0.0) .or. tpar2 > epsilon(0.0)) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('Initial Tpar perturbation of the form:')")
-          write (report_unit, fmt="('tpar0   + tpar1 * cos(theta) + tpar2 * cos(2.*theta)')")
-          write (report_unit, *) 
-          write (report_unit, fmt="('with tpar0 =',f7.4,' tpar1 = ',f7.4,' tpar2 = ',f7.4)") tpar0, tpar1, tpar2
-       end if
-       if (tperp0 > epsilon(0.0) .or. tperp1 > epsilon(0.0) .or. tperp2 > epsilon(0.0)) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('Initial Tperp perturbation of the form:')")
-          write (report_unit, fmt="('tperp0   + tperp1 * cos(theta) + tperp2 * cos(2.*theta)')")
-          write (report_unit, *) 
-          write (report_unit, fmt="('with tperp0 =',f7.4,' tperp1 = ',f7.4,' tperp2 = ',f7.4)") tperp0, tperp1, tperp2
-       end if
-       if (has_electron_species(spec)) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('Field line average of g_electron subtracted off.')")
-       end if
-
-    case (ginitopt_restart_many)
-       write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, fmt="('Each PE restarts from its own NetCDF restart file.')") 
-
-    case (ginitopt_restart_small)
-       write (report_unit, fmt="('Initial conditions:')")
-       write (report_unit, fmt="('Each PE restarts from its own NetCDF restart file.')") 
-       write (report_unit, fmt="('with amplitudes scaled by factor of scale = ',f10.4)") scale
-       write (report_unit, fmt="('Noise added with amplitude = ',f10.4)") phiinit
-
-    end select
-
-    if (ginitopt_switch == ginitopt_restart_many) then
-       if (delt_option_switch == delt_option_auto) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('This run is a continuation of a previous run.')") 
-          write (report_unit, fmt="('The time step at the beginning of this run')") 
-          write (report_unit, fmt="('will be taken from the end of the previous run.')") 
-       else
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('This run is a continuation of a previous run.')") 
-          write (report_unit, fmt="('The time step is being set by hand.')") 
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('You probably want to set delt_option to be check_restart in the knobs namelist.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-    end if
-
-    if (delt_option_switch == delt_option_auto) then
-       if (ginitopt_switch /= ginitopt_restart_many) then
-          write (report_unit, *) 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, fmt="('This is not a normal continuation run.')") 
-          write (report_unit, fmt="('You probably want to set delt_option to be default in the knobs namelist.')") 
-          write (report_unit, fmt="('THIS IS PROBABLY AN ERROR.')") 
-          write (report_unit, fmt="('################# WARNING #######################')")
-          write (report_unit, *) 
-       end if
-    end if
-  end subroutine check_init_g
 
   subroutine init_init_g
     use gs2_save, only: init_save, read_many
@@ -296,6 +118,8 @@ contains
        call ginit_noise
     case (ginitopt_kpar)
        call ginit_kpar
+    case (ginitopt_rh)
+       call ginit_rh
     case (ginitopt_restart_many)
        call ginit_restart_many 
        call init_tstart (tstart, istatus)
@@ -308,6 +132,8 @@ contains
        scale = 1.
     case (ginitopt_nltest)
        call ginit_nltest
+    case (ginitopt_kxtest)
+       call ginit_kxtest
     end select
   end subroutine ginit
 
@@ -318,13 +144,15 @@ contains
 
     implicit none
 
-    type (text_option), dimension (6), parameter :: ginitopts = &
+    type (text_option), dimension (8), parameter :: ginitopts = &
          (/ text_option('default', ginitopt_default), &
             text_option('noise', ginitopt_noise), &
             text_option('many', ginitopt_restart_many), &
             text_option('small', ginitopt_restart_small), &
             text_option('nltest', ginitopt_nltest), &
-            text_option('kpar', ginitopt_kpar) &
+            text_option('kxtest', ginitopt_kxtest), &
+            text_option('kpar', ginitopt_kpar), &
+            text_option('rh', ginitopt_rh) &
             /)
     character(20) :: ginit_option
     namelist /init_g_knobs/ ginit_option, width0, phiinit, chop_side, &
@@ -381,8 +209,9 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, aky, reality
     use vpamu_grids, only: nvgrid, vpa, mu
     use dist_fn_arrays, only: g, gnew, gold
-    use dist_fn_arrays, only: gpnew, gpold
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx
+    use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
+    use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx
+    use run_parameters, only: rhostar
 
     implicit none
 
@@ -415,13 +244,17 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        imu = imu_idx(g_lo,iglo)
-       g(:,:,iglo) = spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1)*spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
+       do it = 1, ntheta0
+          g(:,:,it,iglo) = spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) &
+               *spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
+       end do
     end do
     gnew = g ; gold = g
-    gpnew = gnew ; gpold = gold
+!    gpnew = gnew ; gpold = gold
+    gpnew = 0. ; gpold = 0.
+!    ghnew = rhostar*gnew ; ghold = rhostar*gold
 
   end subroutine ginit_default
 
@@ -434,8 +267,9 @@ contains
     use kt_grids, only: naky, ntheta0, theta0, aky, reality
     use vpamu_grids, only: nvgrid, vpa, mu
     use dist_fn_arrays, only: g, gnew, gold
-    use dist_fn_arrays, only: gpnew, gpold
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx
+    use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
+    use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx
+    use run_parameters, only: rhostar
 
     implicit none
 
@@ -459,15 +293,51 @@ contains
     g = 0.0
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo) ; if (ik /= 2 .and. ik /= 3) cycle
-       it = it_idx(g_lo,iglo) ; if (it /= 1) cycle
+       it = 1
        is = is_idx(g_lo,iglo)
        imu = imu_idx(g_lo,iglo)
-       g(:,:,iglo) = spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1)*spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
+       g(:,:,it,iglo) = spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) &
+            *spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
     end do
     gnew = g ; gold = g
-    gpnew = gnew ; gpold = gold
+!    gpnew = gnew ; gpold = gold
+    gpnew = 0. ; gpold = 0.
+!    ghnew = rhostar*gnew ; ghold = rhostar*gold
 
   end subroutine ginit_nltest
+
+  subroutine ginit_kxtest
+
+    use constants, only: zi
+    use species, only: spec
+    use theta_grid, only: ntgrid, theta, bmag, itor_over_b
+    use kt_grids, only: naky, ntheta0, theta0, akx
+    use vpamu_grids, only: nvgrid, energy, vpa
+    use dist_fn_arrays, only: g, gnew, gold
+    use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
+    use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx
+    use run_parameters, only: rhostar
+
+    implicit none
+
+    integer :: iglo
+    integer :: ig, ik, it, is, imu, iv
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       imu = imu_idx(g_lo,iglo)
+       do it = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             g(:,iv,it,iglo) = exp(-zi*akx(it)*itor_over_B*vpa(iv)/spec(is)%zstm) &
+                  *exp(-energy(:,iv,imu))*spec(is)%z*phiinit
+          end do
+       end do
+    end do
+    gnew = g ; gold = g
+    gpnew = 0. ; gpold = 0.
+
+  end subroutine ginit_kxtest
 
   !> Initialise with only the kparallel = 0 mode.
   
@@ -508,11 +378,12 @@ contains
     use kt_grids, only: naky, ntheta0, aky, reality
     use vpamu_grids, only: nvgrid, vpa, mu
     use dist_fn_arrays, only: g, gnew, gold
-    use dist_fn_arrays, only: gpnew, gpold
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx, proc_id
+    use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
+    use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx, proc_id
     use dist_fn, only: boundary_option_linked, boundary_option_switch
     use dist_fn, only: l_links, r_links
     use redistribute, only: fill, delete_redist
+    use run_parameters, only: rhostar
     use ran
 
     implicit none
@@ -572,20 +443,25 @@ contains
     !Now set g using data in phi
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        imu = imu_idx(g_lo,iglo)
 
        !Handle tracer_species 
-       if (spec(is)%type == tracer_species) then          
-          g(:,:,iglo) = -spread(exp(-2.0*mu(imu)*bmag)*phit(:,it,ik),2,2*nvgrid+1)*spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
-       else
-          g(:,:,iglo) = -spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1)*spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
-       end if
+       do it = 1, ntheta0
+          if (spec(is)%type == tracer_species) then          
+             g(:,:,it,iglo) = -spread(exp(-2.0*mu(imu)*bmag)*phit(:,it,ik),2,2*nvgrid+1) &
+                  *spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
+          else
+             g(:,:,it,iglo) = -spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) &
+                  *spec(is)%z*phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2)
+          end if
+       end do
     end do
 
     gnew = g ; gold = g
-    gpnew = gnew ; gpold = gold
+!    gpnew = gnew ; gpold = gold
+    gpnew = 0. ; gpold = 0.
+!    ghnew = rhostar*gnew ; ghold = rhostar*gold
 
   end subroutine ginit_noise
 
@@ -596,8 +472,9 @@ contains
     use kt_grids, only: naky, ntheta0, theta0
     use vpamu_grids, only: nvgrid, vpa, mu, vperp2
     use dist_fn_arrays, only: g, gnew, gold
-    use dist_fn_arrays, only: gpnew, gpold
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, imu_idx
+    use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
+    use gs2_layouts, only: g_lo, ik_idx, imu_idx
+    use run_parameters, only: rhostar
     use constants
     use ran
 
@@ -637,21 +514,19 @@ contains
 ! charge dependence keeps initial Phi from being too small
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        imu = imu_idx(g_lo,iglo)
-       
-       g(:,:,iglo) = phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2) &
-            * ( spread(vpa,1,2*ntgrid+1) * spread(dfac*exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) &
-            + 2.0 * spread(vpa,1,2*ntgrid+1) * spread(ufac*exp(-2.0*mu(imu)*bmag)*odd(:,it,ik),2,2*nvgrid+1) &
-            + (spread(vpa,1,2*ntgrid+1)**2-0.5) * spread(tparfac*exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) &
-            + spread(tperpfac*(vperp2(:,imu)-1.)*exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) )
 
-!       g(:,:,iglo) = phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2) &
-!            ( spread(vpa,1,2*ntgrid+1) * spread(dfac*exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) &
-!            + 2.0 * spread(vpa,1,2*ntgrid+1) * spread(ufac*exp(-2.0*mu(imu)*bmag)*odd(:,it,ik),2,2*nvgrid+1) &
-!            + (spread(vpa,1,2*ntgrid+1)**2-0.5) * spread(tparfac*exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) &
-!            + spread(tperpfac*(vperp2(:,imu)-1.)*exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1)
+       do it = 1, ntheta0
+          g(:,:,it,iglo) = phiinit*exp(-spread(vpa,1,2*ntgrid+1)**2) &
+               * ( spread(vpa,1,2*ntgrid+1) * spread(dfac*exp(-2.0*mu(imu)*bmag) &
+               *phi(:,it,ik),2,2*nvgrid+1) &
+               + 2.0 * spread(vpa,1,2*ntgrid+1) * spread(ufac*exp(-2.0*mu(imu)*bmag) &
+               *odd(:,it,ik),2,2*nvgrid+1) &
+               + (spread(vpa,1,2*ntgrid+1)**2-0.5) &
+               * spread(tparfac*exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) &
+               + spread(tperpfac*(vperp2(:,imu)-1.)*exp(-2.0*mu(imu)*bmag)*phi(:,it,ik),2,2*nvgrid+1) )
 
+       end do
     end do
 
     if (has_electron_species(spec)) then
@@ -660,18 +535,65 @@ contains
     end if
 
     gnew = g ; gold = g
-    gpnew = gnew ; gpold = gold
+!    gpnew = gnew ; gpold = gold
+    gpnew = 0. ; gpold = 0.
+!    ghnew = rhostar*gnew ; ghold = rhostar*gold
 
   end subroutine ginit_kpar
+
+  subroutine ginit_rh
+
+    use species, only: spec, has_electron_species
+    use theta_grid, only: ntgrid, theta, bmag
+    use kt_grids, only: naky, ntheta0, theta0
+    use vpamu_grids, only: nvgrid, vpa, mu, vperp2
+    use dist_fn_arrays, only: g, gnew, gold, kperp2
+    use dist_fn_arrays, only: gpnew, gpold
+    use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
+    use run_parameters, only: rhostar
+    use constants
+    use ran
+
+    implicit none
+
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
+    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac
+    integer :: iglo
+    integer :: ig, ik, it, imu, is
+    
+    ! initialize g to be a Maxwellian with a constant density perturbation
+
+    phi(:,:,1) = phiinit
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       imu = imu_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       do it = 1, ntheta0
+          g(:,:,it,iglo) = spec(is)%z*0.5*exp(-spread(vpa,1,2*ntgrid+1)**2) &
+               * spread(exp(-2.0*mu(imu)*bmag)*phi(:,it,ik)*kperp2(:,it,ik),2,2*nvgrid+1)
+       end do
+    end do
+
+!    if (has_electron_species(spec)) then
+!       call flae (g, gnew)
+!       g = g - gnew
+!    end if
+
+    gnew = g ; gold = g
+    gpnew = 0. ; gpold = 0.
+
+  end subroutine ginit_rh
 
   subroutine ginit_restart_many
 
     use dist_fn_arrays, only: g, gnew, gold
-    use dist_fn_arrays, only: gpnew, gpold
+    use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, fapar, fbpar, rhostar
     implicit none
     integer :: istatus, ierr
 
@@ -683,18 +605,20 @@ contains
        g = 0.
     end if
     gnew = g ; gold = g
-    gpnew = gnew ; gpold = gold
+!    gpnew = gnew ; gpold = gold
+    gpnew = 0. ; gpold = 0.
+!    ghnew = rhostar*gnew ; ghold = rhostar*gold
 
   end subroutine ginit_restart_many
 
   subroutine ginit_restart_small
 
     use dist_fn_arrays, only: g, gnew, gold
-    use dist_fn_arrays, only: gpnew, gpold
+    use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
     use gs2_save, only: gs2_restore
     use mp, only: proc0
     use file_utils, only: error_unit
-    use run_parameters, only: fphi, fapar, fbpar
+    use run_parameters, only: fphi, fapar, fbpar, rhostar
     implicit none
     integer :: istatus, ierr
 
@@ -708,7 +632,9 @@ contains
     end if
     g = g + gnew
     gnew = g ; gold = g
-    gpnew = gnew ; gpold = gold
+!    gpnew = gnew ; gpold = gold
+    gpnew = 0. ; gpold = 0.
+!    ghnew = rhostar*gnew ; ghold = rhostar*gold
 
   end subroutine ginit_restart_small
 
@@ -722,14 +648,14 @@ contains
 
     use species, only: spec, electron_species 
     use theta_grid, only: ntgrid, delthet, jacob
-    use kt_grids, only: aky
+    use kt_grids, only: aky, ntheta0
     use vpamu_grids, only: nvgrid
     use gs2_layouts, only: g_lo, is_idx, ik_idx
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: g
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (out) :: gavg
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: gavg
 
     real :: wgt
-    integer :: iglo, iv
+    integer :: iglo, iv, it
     
     gavg = 0.
     wgt = 1./sum(delthet*jacob)
@@ -737,8 +663,10 @@ contains
     do iglo = g_lo%llim_proc, g_lo%ulim_proc       
        if (spec(is_idx(g_lo, iglo))%type /= electron_species) cycle
        if (aky(ik_idx(g_lo, iglo)) /= 0.) cycle
-       do iv = -nvgrid, nvgrid
-          gavg(:,iv,iglo) = sum(g(:,iv,iglo)*delthet*jacob)*wgt
+       do it = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             gavg(:,iv,it,iglo) = sum(g(:,iv,it,iglo)*delthet*jacob)*wgt
+          end do
        end do
     end do
 

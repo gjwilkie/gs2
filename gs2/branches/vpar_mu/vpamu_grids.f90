@@ -4,6 +4,7 @@ module vpamu_grids
 
   public :: init_vpamu_grids, finish_vpamu_grids
   public :: integrate_moment, integrate_species
+  public :: integrate_mu
   public :: vpa, nvgrid, wgts_vpa, dvpa, vpac
   public :: mu, nmu, wgts_mu, vpa_imp
   public :: vperp2, energy, anon, anonc
@@ -137,17 +138,42 @@ contains
 
   end subroutine init_vpa_grid
 
+  subroutine integrate_mu (ig, g, total)
+
+    use species, only: nspec
+    use theta_grid, only: bmag
+
+    implicit none
+
+    integer, intent (in) :: ig
+    real, dimension (:,:), intent (in) :: g
+    real, dimension (:), intent (out) :: total
+
+    integer :: is, imu
+
+    total = 0.
+
+    do is = 1, nspec
+       ! sum over mu
+       do imu = 1, nmu
+          total(is) = total(is) + wgts_mu(imu)*bmag(ig)*g(imu,is)
+       end do
+    end do
+
+  end subroutine integrate_mu
+
+  ! integrate over v-space for each species
   subroutine integrate_moment (g, total, all)
 
     use mp, only: nproc, sum_reduce, sum_allreduce
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, imu_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
     use theta_grid, only: ntgrid, bmag
 
     implicit none
 
-    integer :: iglo, iv, ik, it, is, imu
+    integer :: iglo, iv, ik, is, imu, ig
 
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     integer, intent (in), optional :: all
 
@@ -155,14 +181,15 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        imu = imu_idx(g_lo,iglo)
 
-       ! sum over parallel speeds
-       do iv = -nvgrid, nvgrid
-          total(:,it,ik,is) = total(:,it,ik,is) + &
-               wgts_mu(imu)*wgts_vpa(iv)*bmag*g(:,iv,iglo)
+       do ig = -ntgrid, ntgrid
+          ! sum over parallel speeds
+          do iv = -nvgrid, nvgrid
+             total(ig,:,ik,is) = total(ig,:,ik,is) + &
+                  wgts_mu(imu)*wgts_vpa(iv)*bmag(ig)*g(ig,iv,:,iglo)
+          end do
        end do
     end do
 
@@ -176,17 +203,18 @@ contains
 
   end subroutine integrate_moment
 
+  ! integrave over v-space and sum over species
   subroutine integrate_species (g, weights, total)
 
     use mp, only: nproc, sum_allreduce
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, imu_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
     use theta_grid, only: ntgrid, bmag
 
     implicit none
 
-    integer :: iglo, iv, ik, it, is, imu
+    integer :: iglo, iv, ik, ig, is, imu
 
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (in) :: weights
     complex, dimension (-ntgrid:,:,:), intent (out) :: total
 
@@ -194,14 +222,15 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
        imu = imu_idx(g_lo,iglo)
 
-       ! sum over parallel speeds
-       do iv = -nvgrid, nvgrid
-          total(:,it,ik) = total(:,it,ik) + &
-               wgts_mu(imu)*wgts_vpa(iv)*bmag*g(:,iv,iglo)*weights(is)
+       do ig = -ntgrid, ntgrid
+          ! sum over parallel speeds
+          do iv = -nvgrid, nvgrid
+             total(ig,:,ik) = total(ig,:,ik) + &
+                  wgts_mu(imu)*wgts_vpa(iv)*bmag(ig)*g(ig,iv,:,iglo)*weights(is)
+          end do
        end do
     end do
 
@@ -265,14 +294,10 @@ contains
        wgts_mu(idx) = wgts_mu(idx) + del*mu(idx)
        wgts_mu(idx+1) = wgts_mu(idx+1) + 4.*del*mu(idx+1)
        wgts_mu(idx+2) = wgts_mu(idx+2) + del*mu(idx+2)
-!       wgts_mu(idx) = wgts_mu(idx) + del
-!       wgts_mu(idx+1) = wgts_mu(idx+1) + 4.*del
-!       wgts_mu(idx+2) = wgts_mu(idx+2) + del
     end do
     ! if there is an extra segment with only 2 points in it,
     ! assign weights using trapezoid rule
     if (mod(nmu,2)==0) wgts_mu(nmu-1:) = wgts_mu(nmu-1:) + dmu(nmu-1)*0.5*mu(nmu-1)
-!    if (mod(nmu,2)==0) wgts_mu(nmu-1:) = wgts_mu(nmu-1:) + dmu(nmu-1)*0.5
 
     ! factor of 2./sqrt(pi) necessary to account for 2pi from 
     ! integration over gyro-angle and 1/pi^(3/2) normalization

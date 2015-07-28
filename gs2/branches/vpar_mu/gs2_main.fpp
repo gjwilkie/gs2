@@ -43,7 +43,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use job_manage, only: checkstop, job_fork, checktime, time_message
     use mp, only: init_mp, finish_mp, proc0, nproc, broadcast, scope, subprocs
     use mp, only: max_reduce, min_reduce, sum_reduce
-    use file_utils, only: init_file_utils, run_name, list_name!, finish_file_utils
+    use file_utils, only: init_file_utils, run_name
     use fields, only: init_fields, advance
     use species, only: ions, electrons, impurity
     use gs2_diagnostics, only: init_gs2_diagnostics, finish_gs2_diagnostics
@@ -55,7 +55,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_diagnostics, only: loop_diagnostics, ensemble_average
     use gs2_reinit, only: reset_time_step, check_time_step, time_reinit
     use gs2_time, only: update_time, write_dt, init_tstart
-    use gs2_time, only: user_time, user_dt, code_time
+    use gs2_time, only: user_time, user_dt
     use init_g, only: tstart
     use geometry, only: surfarea, dvdrhon
     use redistribute, only: time_redist
@@ -74,7 +74,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     real :: time_total(2) = 0.
     real :: time_interval
     real :: time_main_loop(2)
-    real :: time_main_loop_min,time_main_loop_max,time_main_loop_av
+
+!    real :: t1, t2, t3, t4
 
     integer :: istep = 0, istatus, istep_end
     logical :: exit, reset, list
@@ -107,12 +108,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        if (proc0) then
           if (nproc == 1) then
              if (.not. nofin) then
-	        write(*,*) 'Running on ',nproc,' processor'
-	     end if 
-         else
+                write(*,*) 'Running on ',nproc,' processor'
+             end if
+          else
              if (.not. nofin) then
-	        write(*,*) 'Running on ',nproc,' processors'
-	     end if	  
+                write(*,*) 'Running on ',nproc,' processors'
+             end if
           end if
           write (*,*) 
           ! <doc> Call init_file_utils, ie. initialize the inputs and outputs, checking 
@@ -141,11 +142,11 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
           cbuff = trim(run_name)
        end if
        
-
-
        call broadcast (cbuff)
        if (.not. proc0) run_name => cbuff
+
        call init_parameter_scan
+
        call init_fields
 
        call init_gs2_diagnostics (list, nstep)
@@ -242,7 +243,7 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
        end if
        vflux = vflux_avg(1)/time_interval
     else
-       if (.not.nofin ) call finish_gs2_diagnostics (istep_end)
+       if (.not.nofin ) call finish_gs2_diagnostics
        if (.not.nofin) call finish_gs2
     end if
     
@@ -310,7 +311,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
   end subroutine finish_gs2
 
-  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
+!  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, gexb, mach, nu, nensembles)
+  subroutine reset_gs2 (ntspec, dens, temp, fprim, tprim, nu, nensembles)
 
     use dist_fn, only: d_reset => reset_init
     use fields, only: init_fields, f_reset => reset_init
@@ -325,12 +327,12 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     use gs2_time, only: code_dt, user_dt, save_dt, user_time
     use run_parameters, only: fphi, fapar, fbpar
     use antenna, only: a_reset => reset_init
-    use mp, only: proc0, scope, subprocs, allprocs
+    use mp, only: scope, subprocs, allprocs
 
     implicit none
 
     integer, intent (in) :: ntspec, nensembles
-    real, intent (in) :: gexb, mach
+!    real, intent (in) :: gexb, mach
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
 
     integer :: istatus
@@ -364,7 +366,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
   end subroutine reset_gs2
 
   subroutine gs2_trin_init (rhoc, qval, shat, rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift, &
-       betaprim, ntspec, dens, temp, fprim, tprim, gexb, mach, nu, use_gs2_geo)
+!       betaprim, ntspec, dens, temp, fprim, tprim, gexb, mach, nu, use_gs2_geo)
+       betaprim, ntspec, dens, temp, fprim, tprim, nu, use_gs2_geo)
 
     use species, only: init_trin_species
     use theta_grid_params, only: init_trin_geo
@@ -373,7 +376,8 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
 
     integer, intent (in) :: ntspec
     real, intent (in) :: rhoc, qval, shat, rgeo_lcfs, rgeo_local, kap, kappri, tri, tripri, shift
-    real, intent (in) :: betaprim, gexb, mach
+!    real, intent (in) :: betaprim, gexb, mach
+    real, intent (in) :: betaprim
     real, dimension (:), intent (in) :: dens, fprim, temp, tprim, nu
     logical, intent (in) :: use_gs2_geo
 

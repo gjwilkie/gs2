@@ -5,8 +5,8 @@
 module dist_fn_arrays
 
   public :: g, gnew, gold, kx_shift, theta0_shift, source
-  public :: gpnew, gpold
-  public :: vpar, aj0, aj1, aj2, mirror, vparp, aj0p
+  public :: gpnew, gpold!, ghnew, ghold
+  public :: vpar, aj0, aj1, vparp, aj0p
   public :: apar_ext, kperp2, dkperp2dr
   public :: g_adjust
 #ifdef LOWFLOW
@@ -15,20 +15,18 @@ module dist_fn_arrays
 
 
   ! dist fn
-  complex, dimension (:,:,:), allocatable :: g, gnew, gold, source
-  complex, dimension (:,:,:), allocatable :: gpnew, gpold
+  complex, dimension (:,:,:,:), allocatable :: g, gnew, gold, source
+  complex, dimension (:,:,:,:), allocatable :: gpnew, gpold!, ghnew, ghold
   ! (-ntgrid:ntgrid, -nvgrid:nvgrid, -g-layout-)
 
   real, dimension(:), allocatable :: kx_shift, theta0_shift
   ! (naky)
 
-  real, dimension (:,:,:), allocatable :: vpar, mirror, vparp
-  ! (-ntgrid:ntgrid,2, -g-layout-)
+  real, dimension (:,:,:), allocatable :: vpar, vparp
+  ! (-ntgrid:ntgrid, -nvgrid:nvgrid, nspec)
 
-
-! DJA: 17/1/06, add variable aj2 to store J_2(x)
-  real, dimension (:,:), allocatable :: aj0, aj1, aj2, aj0p
-  ! (-ntgrid:ntgrid, -g-layout-)
+  real, dimension (:,:,:), allocatable :: aj0, aj1, aj0p
+  ! (-ntgrid:ntgrid, ntheta0, -g-layout-)
 
   ! fieldeq
   complex, dimension (:,:,:), allocatable :: apar_ext
@@ -61,30 +59,34 @@ contains
     use species, only: spec
     use theta_grid, only: ntgrid
     use vpamu_grids, only: nvgrid, mu, vperp2, anon
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, imu_idx
+    use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx
+
     implicit none
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in out) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     real, intent (in) :: facphi, facbpar
 
-    integer :: iglo, ig, ik, it, is, imu, iv
+    integer :: iglo, ig, ik, it, is, imu, iv, ntheta0
     complex :: adj
+
+    ntheta0 = size(g,3)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       it = it_idx(g_lo,iglo)
        imu = imu_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
 ! BD:  bpar == delta B_parallel / B_0(theta) so no extra factor of 
 ! 1/bmag is needed here.
-       do iv = -nvgrid, nvgrid
-          do ig = -ntgrid, ntgrid
-             adj = (2.0*vperp2(ig,imu)*aj1(ig,iglo) &
-                  *bpar(ig,it,ik)*facbpar &
-                  + spec(is)%z*phi(ig,it,ik)*aj0(ig,iglo) &
-                  /spec(is)%temp*facphi) &
-                  * anon(ig,iv,imu)
-             g(ig,iv,iglo) = g(ig,iv,iglo) + adj
+       do it = 1, ntheta0
+          do iv = -nvgrid, nvgrid
+             do ig = -ntgrid, ntgrid
+                adj = (2.0*vperp2(ig,imu)*aj1(ig,it,iglo) &
+                     *bpar(ig,it,ik)*facbpar &
+                     + spec(is)%z*phi(ig,it,ik)*aj0(ig,it,iglo) &
+                     /spec(is)%temp*facphi) &
+                     * anon(ig,iv,imu)
+                g(ig,iv,it,iglo) = g(ig,iv,it,iglo) + adj
+             end do
           end do
        end do
     end do
