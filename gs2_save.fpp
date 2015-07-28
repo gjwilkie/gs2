@@ -46,7 +46,8 @@ module gs2_save
   character (300), save :: restart_file
 
 # ifdef NETCDF
-  real, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
+  real, allocatable, dimension (:,:,:,:) :: tmpr, tmpi
+  real, allocatable, dimension(:,:,:) :: ftmpr, ftmpi
   real, allocatable, dimension(:) :: stmp  ! MR: tmp var for kx_shift
   real, allocatable, dimension(:) :: atmp
 !  integer, parameter :: kind_nf = kind (NF90_NOERR)
@@ -89,7 +90,7 @@ contains
     use vpamu_grids, only: nvgrid
     use parameter_scan_arrays, only: current_scan_parameter_value
     implicit none
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
     real, intent (in) :: fphi, fapar, fbpar
     integer, intent (out) :: istatus
@@ -100,7 +101,7 @@ contains
     character (10) :: suffix
     integer :: i, n_elements, ierr
     integer :: total_elements
-    integer, dimension(3) :: start_pos, counts
+    integer, dimension(4) :: start_pos, counts
     logical :: exit
     integer, parameter :: tmpunit = 348
 
@@ -302,7 +303,7 @@ contains
        
        if (n_elements > 0) then
           istatus = nf90_def_var (ncid, "gr", netcdf_real, &
-               (/ thetaid, vpaid, gloid /), gr_id)
+               (/ thetaid, vpaid, kxid, gloid /), gr_id)
           if (istatus /= NF90_NOERR) then
              ierr = error_unit()
              write(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
@@ -310,7 +311,7 @@ contains
           end if
           
           istatus = nf90_def_var (ncid, "gi", netcdf_real, &
-               (/ thetaid, vpaid, gloid /), gi_id)
+               (/ thetaid, vpaid, kxid, gloid /), gi_id)
           if (istatus /= NF90_NOERR) then
              ierr = error_unit()
              write(ierr,*) "nf90_def_var g error: ", nf90_strerror(istatus)
@@ -485,7 +486,7 @@ contains
        end if
 
        if (.not. allocated(tmpr)) &
-            allocate (tmpr(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
+            allocate (tmpr(2*ntgrid+1,2*nvgrid+1,ntheta0,g_lo%llim_proc:g_lo%ulim_alloc))
 
        tmpr = real(g)
 
@@ -498,8 +499,8 @@ contains
           istatus = nf90_var_par_access(ncid, gr_id, NF90_COLLECTIVE)
           istatus = nf90_var_par_access(ncid, gi_id, NF90_COLLECTIVE)
 
-          start_pos = (/1,1,g_lo%llim_proc+1/)
-          counts = (/2*ntgrid+1, 2*nvgrid+1, n_elements/)
+          start_pos = (/1,1,1,g_lo%llim_proc+1/)
+          counts = (/2*ntgrid+1, 2*nvgrid+1, ntheta0, n_elements/)
 
           istatus = nf90_put_var (ncid, gr_id, tmpr, start=start_pos, count=counts)
        endif
@@ -606,12 +607,12 @@ contains
     use gs2_layouts, only: g_lo
     use file_utils, only: error_unit
     implicit none
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
 # ifdef NETCDF
-    integer, dimension(3) :: counts, start_pos
+    integer, dimension(4) :: counts, start_pos
     character (306) :: file_proc
     character (10) :: suffix
     integer :: i, n_elements, ierr
@@ -722,9 +723,9 @@ contains
     end if
     
     if (.not. allocated(tmpr)) &
-         allocate (tmpr(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
+         allocate (tmpr(2*ntgrid+1,2*nvgrid+1,ntheta0,g_lo%llim_proc:g_lo%ulim_alloc))
     if (.not. allocated(tmpi)) &
-         allocate (tmpi(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
+         allocate (tmpi(2*ntgrid+1,2*nvgrid+1,ntheta0,g_lo%llim_proc:g_lo%ulim_alloc))
 
     tmpr = 0.; tmpi = 0.
 # ifdef NETCDF_PARALLEL
@@ -733,8 +734,8 @@ contains
        istatus = nf90_get_var (ncid, gr_id, tmpr)
 #ifdef NETCDF_PARALLEL
     else
-       start_pos = (/1,1,g_lo%llim_proc+1/)
-       counts = (/2*ntgrid+1, 2*nvgrid+1, n_elements/)
+       start_pos = (/1,1,1,g_lo%llim_proc+1/)
+       counts = (/2*ntgrid+1, 2*nvgrid+1, ntheta0, n_elements/)
        istatus = nf90_get_var (ncid, gr_id, tmpr, start=start_pos, count=counts)
     end if
 # endif

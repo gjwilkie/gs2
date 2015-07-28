@@ -2,6 +2,7 @@
 module fields
   use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
   use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
+  use fields_arrays, only: phih, aparh, bparh, phihnew, aparhnew, bparhnew
   use fields_arrays, only: phitmp, apartmp, bpartmp
   use fields_arrays, only: phitmp1, apartmp1, bpartmp1
   use fields_arrays, only: phi_ext, apar_ext
@@ -11,17 +12,13 @@ module fields
   public :: init_fields, finish_fields
   public :: read_parameters, wnml_fields, check_fields
   public :: advance
-  public :: phinorm, kperp, fieldlineavgphi
+  public :: phinorm, kperp
   public :: phi, apar, bpar, phinew, aparnew, bparnew
   public :: phip, aparp, bparp, phipnew, aparpnew, bparpnew
+  public :: phih, aparh, bparh, phihnew, aparhnew, bparhnew
   public :: reset_init
 
   private
-
-  interface fieldlineavgphi
-     module procedure fieldlineavgphi_loc
-     module procedure fieldlineavgphi_tot
-  end interface
 
   ! knobs
   integer :: fieldopt_switch
@@ -68,19 +65,15 @@ contains
   subroutine init_fields
 !CMR,18/2/2011:
 ! add optional logical arg "noalloc" to avoid array allocations in ingen
-    use mp, only: proc0
     use theta_grid, only: init_theta_grid
     use run_parameters, only: init_run_parameters
     use dist_fn, only: init_dist_fn, write_mpdist
-    use dist_fn_arrays, only: gnew
-    use gs2_layouts, only: g_lo
     use init_g, only: ginit, init_init_g
     use fields_implicit, only: init_fields_implicit, init_phi_implicit
     use fields_test, only: init_fields_test, init_phi_test
     use nonlinear_terms, only: nl_finish_init => finish_init
     use antenna, only: init_antenna
     implicit none
-    integer :: iglo
     logical :: restarted
     logical:: debug=.false.
 
@@ -189,6 +182,12 @@ contains
        allocate (phipnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (aparpnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bparpnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (phih (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (aparh (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bparh (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (phihnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (aparhnew (-ntgrid:ntgrid,ntheta0,naky))
+       allocate (bparhnew (-ntgrid:ntgrid,ntheta0,naky))
        allocate (  phitmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate ( apartmp (-ntgrid:ntgrid,ntheta0,naky))
        allocate (bpartmp (-ntgrid:ntgrid,ntheta0,naky))
@@ -204,6 +203,9 @@ contains
     phip = 0. ; phipnew = 0.
     aparp = 0. ; aparpnew = 0.
     bparp = 0. ; bparpnew = 0.
+    phih = 0. ; phihnew = 0.
+    aparh = 0. ; aparhnew = 0.
+    bparh = 0. ; bparhnew = 0.
 !    phitmp1 = 0. ; apartmp1 = 0. ; bpartmp1 = 0.
 !    phi_ext = 0.
     apar_ext = 0.
@@ -225,19 +227,20 @@ contains
     end select
   end subroutine advance
 
-  subroutine phinorm (phitot)
-    use theta_grid, only: delthet
+  subroutine phinorm (phifnc, aparfnc, bparfnc, phitot)
+    use theta_grid, only: delthet, ntgrid
     use kt_grids, only: naky, ntheta0
     use constants
     implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phifnc, aparfnc, bparfnc
     real, dimension (:,:), intent (out) :: phitot
     integer :: ik, it
 
     do ik = 1, naky
        do it = 1, ntheta0
           phitot(it,ik) = 0.5/pi &
-           *(sum((abs(phinew(:,it,ik))**2 + abs(aparnew(:,it,ik))**2 &
-                  + abs(bparnew(:,it,ik))**2) &
+           *(sum((abs(phifnc(:,it,ik))**2 + abs(aparfnc(:,it,ik))**2 &
+                  + abs(bparfnc(:,it,ik))**2) &
                  *delthet))
        end do
     end do
@@ -274,37 +277,6 @@ contains
     end do
   end subroutine kperp
 
-  subroutine fieldlineavgphi_loc (ntgrid_output, it, ik, phiavg)
-    use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag, delthet
-    implicit none
-    integer, intent (in) :: ntgrid_output, ik, it
-    complex, intent (out) :: phiavg
-    real, dimension (-ntgrid:ntgrid) :: jac
-
-    jac = 1.0/abs(drhodpsi*gradpar*bmag)
-    phiavg = sum(phi(-ntgrid_output:ntgrid_output,it,ik) &
-                 *jac(-ntgrid_output:ntgrid_output) &
-                 *delthet(-ntgrid_output:ntgrid_output)) &
-            /sum(delthet(-ntgrid_output:ntgrid_output) &
-                 *jac(-ntgrid_output:ntgrid_output))
-  end subroutine fieldlineavgphi_loc
-
-  subroutine fieldlineavgphi_tot (phiavg)
-    use theta_grid, only: ntgrid, drhodpsi, gradpar, bmag, delthet
-    implicit none
-    complex, dimension (:,:), intent (out) :: phiavg
-    real, dimension (-ntgrid:ntgrid) :: jac
-    integer :: ntg
-
-    ntg = ntgrid
-    jac = 1.0/abs(drhodpsi*gradpar*bmag)
-!    phiavg = sum(phi(-ntg:ntg,:,:)*jac(-ntg:ntg)*delthet(-ntg:ntg)) &
-!         /sum(delthet(-ntg:ntg)*jac(-ntg:ntg))
-    phiavg = 0.
-    write(*,*) 'error in fields'
-  end subroutine fieldlineavgphi_tot
-
-
   !!> This generates a flux surface average of phi. 
 
   !subroutine flux_surface_average_phi (phi_in, phi_average)
@@ -334,6 +306,8 @@ contains
     phinew = 0.
     phip = 0.
     phipnew = 0.
+    phih = 0.
+    phihnew = 0.
 
   end subroutine reset_init
 
@@ -358,6 +332,7 @@ contains
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: phitmp, apartmp, bpartmp, apar_ext
     use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
+    use fields_arrays, only: phih, aparh, bparh, phihnew, aparhnew, bparhnew
 
     implicit none
 
@@ -368,6 +343,7 @@ contains
     if (allocated(phi)) deallocate (phi, apar, bpar, phinew, aparnew, bparnew, &
          phitmp, apartmp, bpartmp, apar_ext)
     if (allocated(phip)) deallocate (phip, aparp, bparp, phipnew, aparpnew, bparpnew)
+    if (allocated(phih)) deallocate (phih, aparh, bparh, phihnew, aparhnew, bparhnew)
 
   end subroutine finish_fields
 

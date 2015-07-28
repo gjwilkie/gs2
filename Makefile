@@ -83,7 +83,7 @@ USE_MPI ?= on
 # turns on SHMEM parallel communications on SGI (bin)
 USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
-USE_FFT ?= fftw
+USE_FFT ?= fftw3
 # uses netcdf library (bin)
 USE_NETCDF ?= on
 # uses parallel netcdf library
@@ -129,7 +129,7 @@ FC		= f90
 MPIFC		?= mpif90
 H5FC		?= h5fc
 H5FC_par	?= h5pfc
-F90FLAGS	=
+F90FLAGS	= -framework Accelerate
 F90OPTFLAGS	=
 CC		= cc
 MPICC		?= mpicc

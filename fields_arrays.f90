@@ -8,7 +8,9 @@ module fields_arrays
   complex, dimension (:,:,:), allocatable :: phitmp, apartmp, bpartmp
   complex, dimension (:,:,:), allocatable :: phitmp1, apartmp1, bpartmp1
   complex, dimension (:,:,:), allocatable :: phip, aparp, bparp
+  complex, dimension (:,:,:), allocatable :: phih, aparh, bparh
   complex, dimension (:,:,:), allocatable :: phipnew, aparpnew, bparpnew
+  complex, dimension (:,:,:), allocatable :: phihnew, aparhnew, bparhnew
   ! (-ntgrid:ntgrid,ntheta0,naky) replicated
 
 !!  complex, dimension (:,:), allocatable :: aminv

@@ -32,8 +32,8 @@ contains
    integer:: unit
      write (unit, *)
      write (unit, fmt="(' &',a)") "kt_grids_single_parameters"
-     write (unit, fmt="(' aky = ',e16.10)") aky
-     write (unit, fmt="(' theta0 = ',e16.10)") theta0
+     write (unit, fmt="(' aky = ',e17.10)") aky
+     write (unit, fmt="(' theta0 = ',e17.10)") theta0
      write (unit, fmt="(' /')")
   end subroutine wnml_kt_grids_single
 
@@ -121,13 +121,13 @@ contains
      write (unit, *)
      write (unit, fmt="(' &',a)") "kt_grids_range_parameters"
      write (unit, fmt="(' naky = ',i3)") naky
-     write (unit, fmt="(' aky_min = ',e16.10)") aky_min
-     write (unit, fmt="(' aky_max = ',e16.10)") aky_max
+     write (unit, fmt="(' aky_min = ',e17.10)") aky_min
+     write (unit, fmt="(' aky_max = ',e17.10)") aky_max
      write (unit, fmt="(' ntheta0 = ',i3)") ntheta0
-     write (unit, fmt="(' theta0_min = ',e16.10)") theta0_min
-     write (unit, fmt="(' theta0_max = ',e16.10)") theta0_max
-     write (unit, fmt="(' akx_min = ',e16.10)") akx_min
-     write (unit, fmt="(' akx_max = ',e16.10)") akx_max
+     write (unit, fmt="(' theta0_min = ',e17.10)") theta0_min
+     write (unit, fmt="(' theta0_max = ',e17.10)") theta0_max
+     write (unit, fmt="(' akx_min = ',e17.10)") akx_min
+     write (unit, fmt="(' akx_max = ',e17.10)") akx_max
      write (unit, fmt="(' /')")
   end subroutine wnml_kt_grids_range
 
@@ -164,12 +164,12 @@ contains
     aky = (/ (aky_min + dky*real(i), i = 0,naky-1) /)
 
 ! set default theta0 to 0
-    theta0=0.0d0
+    theta0=0.0
 
 !
 ! BD: Assumption here differs from convention that abs(shat) <= 1.e-5 triggers periodic bc
 !
-    if (shat /= 0.0d0) then  ! ie assumes boundary_option .eq. 'linked'
+    if (shat /= 0.0) then  ! ie assumes boundary_option .eq. 'linked'
        dtheta0 = 0.0
        if (ntheta0 > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0 - 1)
 
@@ -211,7 +211,7 @@ contains
 
        do j = 0, naky-1
           do i = 0, ntheta0-1
-             write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4,' kx rho = ',e10.4)") &
+             write (report_unit, fmt="('ky rho = ',e11.4,' theta0 = ',e11.4,' kx rho = ',e11.4)") &
                   aky_min + dky*real(j), theta0_min + dtheta0*real(i), akx_min + dkx*real(i)
           end do
        end do
@@ -224,7 +224,7 @@ contains
              write (report_unit, *) 
              write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is an ERROR that will corrupt results.')")
              write (report_unit, fmt="('check_kt_grids_range: inappropriate theta0 grid')")
-             write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e10.4,' must be set equal to dtheta = ',e10.4)") twopi-theta0_max+theta0_min, dtheta0
+             write (report_unit, fmt="('In ballooning space with sheared flow, 2pi-theta0_max+theta0_min =',e11.4,' must be set equal to dtheta = ',e11.4)") twopi-theta0_max+theta0_min, dtheta0
          endif
        endif
 
@@ -338,7 +338,7 @@ contains
     write (report_unit, fmt="('A set of ',i3,' k_perps will be evolved.')") max(naky,ntheta0)
     write (report_unit, *) 
     do i=1, max(naky,ntheta0)
-       write (report_unit, fmt="('ky rho = ',e10.4,' theta0 = ',e10.4)") aky(i), theta0(i)
+       write (report_unit, fmt="('ky rho = ',e11.4,' theta0 = ',e11.4)") aky(i), theta0(i)
     end do
   end subroutine check_kt_grids_specified
 
@@ -398,6 +398,7 @@ contains
     ntheta0_private = ntheta0
     nx_private = nx
     ny_private = ny
+
   end subroutine init_kt_grids_box
 
   subroutine wnml_kt_grids_box (unit)
@@ -408,9 +409,9 @@ contains
      write (unit, fmt="(' &',a)") "kt_grids_box_parameters"
      write (unit, fmt="(' nx = ',i4)") nx_private
      write (unit, fmt="(' ny = ',i4)") ny_private
-     write (unit, fmt="(' Ly = ',e16.10)") ly
+     write (unit, fmt="(' Ly = ',e17.10)") ly
      if (rtwist /= 0.) then
-        write (unit, fmt="(' rtwist = ',e16.10)") rtwist
+        write (unit, fmt="(' rtwist = ',e17.10)") rtwist
      else
         write (unit, fmt="(' jtwist = ',i4)") jtwist
      end if
@@ -568,7 +569,7 @@ end module kt_grids_box
 module kt_grids
 !  <doc> Set up the perpendicular wavenumbers by calling the appropriate sub-modules. 
 ! </doc>
-  use kt_grids_box, only: jtwist
+  use kt_grids_box, only: jtwist, y0
   implicit none
 
   public :: init_kt_grids, box, finish_kt_grids, check_kt_grids, wnml_kt
@@ -578,8 +579,11 @@ module kt_grids
   public :: ikx, iky, jtwist_out
   public :: gridopt_switch, grid_option
   public :: gridopt_single, gridopt_range, gridopt_specified, gridopt_box
+  public :: lx, ly
+
   private
 
+  real :: lx, ly
   real, dimension (:,:), allocatable :: theta0
   real, dimension (:), allocatable :: aky, akx
   integer, dimension(:), allocatable :: ikx, iky
@@ -600,8 +604,11 @@ module kt_grids
 contains
 
   subroutine init_kt_grids
+
     use theta_grid, only: init_theta_grid, shat, gds22
     use mp, only: proc0, broadcast
+    use constants, only: pi
+
     implicit none
 
     integer :: ik, it
@@ -635,6 +642,9 @@ contains
     do ik = 1, naky
        call broadcast (theta0(:,ik))
     end do
+
+    ly = 2.*pi*y0
+    lx = y0*jtwist/shat
 
   end subroutine init_kt_grids
 

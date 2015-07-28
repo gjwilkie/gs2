@@ -475,7 +475,7 @@ contains
        dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
        dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     use constants
-    use theta_grid_params, only: eps, epsl, shat_param => shat, pk, qinp, rhoc
+    use theta_grid_params, only: eps, epsl, shat_param => shat, pk, rhoc
     use theta_grid_gridgen, only: theta_grid_gridgen_init, gridgen_get_grids
     implicit none
     integer, intent (in) :: nperiod
@@ -521,7 +521,7 @@ contains
     else
        drhodpsi = 1.0
     end if
-    kxfac = 1.0
+    kxfac = 0.5
     if (epsl > epsilon(0.0)) then
        qval = epsl/pk
     else
@@ -1232,7 +1232,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use geometry, only: alpha_input, invLp_input, beta_prime_input, dp_mult
     use geometry, only: rmaj, r_geo
     use geometry, only: shift, qinp, akappa, akappri, tri, tripri, asym, asympri
-    use geometry, only: d2qdr2, betadbprim
+    use geometry, only: d2qdr2, betadbprim, d2psidr2
     use geometry, only: delrho, rmin, rmax
     use geometry, only: isym, in_nt, writelots
     use theta_grid_params, only: nperiod_in => nperiod
@@ -1246,6 +1246,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use theta_grid_params, only: asym_in => asym, asympri_in => asympri
     use theta_grid_params, only: betaprim_in => betaprim
     use theta_grid_params, only: d2qdr2_in => d2qdr2
+    use theta_grid_params, only: d2psidr2_in => d2psidr2
     use theta_grid_params, only: betadbprim_in => betadbprim
     implicit none
     integer :: in_file
@@ -1272,6 +1273,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     asympri = asympri_in
     beta_prime_input = betaprim_in
     d2qdr2 = d2qdr2_in
+    d2psidr2 = d2psidr2_in
     betadbprim = betadbprim_in
 
     itor = 1
@@ -1670,7 +1672,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
   subroutine broadcast_results
 
     use mp, only: proc0, broadcast
-    use geometry, only: rhoc
+    use geometry, only: rhoc, d2psidr2
 
     implicit none
 
@@ -1686,6 +1688,7 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
     call broadcast (ntgrid)
     call broadcast (nperiod)
     call broadcast (nbset)
+    call broadcast (d2psidr2)
 
     if (.not. proc0) then
        call allocate_arrays

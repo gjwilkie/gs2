@@ -8,11 +8,6 @@ int ik_idx_g_xy    (struct g_layout_type*,int*);
 int ik_idx_g_mxy   (struct g_layout_type*,int*);
 int ik_idx_g_my    (struct g_layout_type*,int*);
 int ik_idx_g_xmy   (struct g_layout_type*,int*);
-int it_idx_g_x     (struct g_layout_type*,int*);
-int it_idx_g_yx    (struct g_layout_type*,int*);
-int it_idx_g_mx    (struct g_layout_type*,int*);
-int it_idx_g_ymx   (struct g_layout_type*,int*);
-int it_idx_g_myx   (struct g_layout_type*,int*);
 int imu_idx_g_m    (struct g_layout_type*,int*);
 int imu_idx_g_ym   (struct g_layout_type*,int*);
 int imu_idx_g_xm   (struct g_layout_type*,int*);
@@ -49,37 +44,31 @@ int init_indices_glo_c__ (char *layout)
   ierr = 0;
   if (!strcmp(layout,"yxms")) {
     pik_g = ik_idx_g_y;
-    pit_g = it_idx_g_yx;
     pimu_g = imu_idx_g_yxm;
     pis_g = is_idx_g_yxms;
     pidx_g = idx_g_yxms;
   } else if (!strcmp(layout,"xyms")) {
     pik_g = ik_idx_g_xy;
-    pit_g = it_idx_g_x;
     pimu_g = imu_idx_g_xym;
     pis_g = is_idx_g_xyms;
     pidx_g = idx_g_xyms;
   } else if (!strcmp(layout,"xmys")) {
     pik_g = ik_idx_g_xmy;
-    pit_g = it_idx_g_mx;
     pimu_g = imu_idx_g_xm;
     pis_g = is_idx_g_xmys;
     pidx_g = idx_g_xmys;
   } else if (!strcmp(layout,"ymxs")) {
     pik_g = ik_idx_g_y;
-    pit_g = it_idx_g_ymx;
     pimu_g = imu_idx_g_y;
     pis_g = is_idx_g_ymxs;
     pidx_g = idx_g_ymxs;
   } else if (!strcmp(layout,"mxys")) {
     pik_g = ik_idx_g_mxy;
-    pit_g = it_idx_g_mx;
     pimu_g = imu_idx_g_m;
     pis_g = is_idx_g_mxys;
     pidx_g = idx_g_mxys;
   } else if (!strcmp(layout,"myxs")) {
     pik_g = ik_idx_g_my;
-    pit_g = it_idx_g_myx;
     pimu_g = imu_idx_g_m;
     pis_g = is_idx_g_myxs;
     pidx_g = idx_g_myxs;
@@ -97,15 +86,6 @@ int ik_idx_g_c_ (struct g_layout_type *lo, int *i)
 int ik_idx_g_c__ (struct g_layout_type *lo, int *i)
 # endif
 { return (*pik_g)(lo,i); }
-
-# ifdef NO_UNDERSCORE
-int it_idx_g_c (struct g_layout_type *lo, int *i)
-# elif UNDERSCORE != 2
-int it_idx_g_c_ (struct g_layout_type *lo, int *i)
-# else
-int it_idx_g_c__ (struct g_layout_type *lo, int *i)
-# endif
-{ return (*pit_g)(lo,i); }
 
 # ifdef NO_UNDERSCORE
 int imu_idx_g_c (struct g_layout_type *lo, int *i)
@@ -148,17 +128,6 @@ int ik_idx_g_my (struct g_layout_type *lo, int *i)
 { return 1 + (*i - lo->llim_world)/lo->nmu % lo->naky; }
 int ik_idx_g_xmy (struct g_layout_type *lo, int *i)
 { return 1 + (*i - lo->llim_world)/lo->ntheta0/lo->nmu % lo->naky; }
-
-int it_idx_g_x (struct g_layout_type *lo, int *i)
-{ return 1 + (*i - lo->llim_world) % lo->ntheta0; }
-int it_idx_g_yx (struct g_layout_type *lo, int *i)
-{ return 1 + (*i - lo->llim_world)/lo->naky % lo->ntheta0; }
-int it_idx_g_mx (struct g_layout_type *lo, int *i)
-{ return 1 + (*i - lo->llim_world)/lo->nmu % lo->ntheta0; }
-int it_idx_g_ymx (struct g_layout_type *lo, int *i)
-{ return 1 + (*i - lo->llim_world)/lo->naky/lo->nmu % lo->ntheta0; }
-int it_idx_g_myx (struct g_layout_type *lo, int *i)
-{ return 1 + (*i - lo->llim_world)/lo->nmu/lo->naky % lo->ntheta0; }
 
 int imu_idx_g_m (struct g_layout_type *lo, int *i)
 { return 1 + (*i - lo->llim_world) % lo->nmu; }

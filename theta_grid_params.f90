@@ -6,7 +6,7 @@ module theta_grid_params
 
   real, public :: rhoc, rmaj, r_geo, eps, epsl
   real, public :: qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri
-  real, public :: asym, asympri, btor_slab, d2qdr2, betadbprim
+  real, public :: asym, asympri, btor_slab, d2qdr2, betadbprim, d2psidr2
   real, public :: betaprim, thet_imp
 
   integer, public :: ntheta, nperiod
@@ -42,7 +42,8 @@ contains
 ! geometry, where flow is by definition in the toroidal direction.
     namelist /theta_grid_parameters/ rhoc, rmaj, r_geo, eps, epsl, &
          qinp, shat, alpmhd, pk, shift, akappa, akappri, tri, tripri, &
-         ntheta, nperiod, kp, asym, asympri, btor_slab, thet_imp, d2qdr2, betadbprim
+         ntheta, nperiod, kp, asym, asympri, btor_slab, thet_imp, d2qdr2, betadbprim, &
+         d2psidr2
 
     rhoc = 0.5
     rmaj = 3.0
@@ -61,6 +62,8 @@ contains
     asympri = 0.0
     btor_slab = 0.0
     d2qdr2 = 0.0
+    d2psidr2 = 0.0
+    betaprim = 0.0
     betadbprim = 0.0
     ntheta = 24
     nperiod = 2

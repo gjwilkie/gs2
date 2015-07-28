@@ -13,7 +13,8 @@ module gs2_save
   private
   character(300), save :: restart_file
 
-  double precision, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
+  double precision, allocatable, dimension(:,:,:,:) :: tmpr, tmpi
+  double precision, allocatable, dimension(:,:,:) :: ftmpr, ftmpi
   integer :: ncid, thetaid, vpaid, gloid, kyid, kxid
   integer :: phir_id, phii_id, aparr_id, apari_id, bparr_id, bpari_id
   integer :: delt0id, t0id, gr_id, gi_id
@@ -37,7 +38,7 @@ contains
     implicit none
     character (305) :: file_proc
     character (5) :: suffix
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
     real, intent (in) :: fphi, fapar, fbpar
     integer, intent (out) :: istatus
@@ -255,7 +256,7 @@ contains
 
     if (n_elements > 0) then
 
-       if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
+       if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2*nvgrid+1,ntheta0,g_lo%llim_proc:g_lo%ulim_alloc))
 
        tmpr = real(g)
        istatus = nf_put_var_double (ncid, gr_id, tmpr)
@@ -345,7 +346,7 @@ contains
     implicit none
     character (305) :: file_proc
     character (5) :: suffix
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
@@ -505,8 +506,8 @@ contains
        end if
     end if
     
-    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
-    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1,2*nvgrid+1,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1,2*nvgrid+1,ntheta0,g_lo%llim_proc:g_lo%ulim_alloc))
+    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1,2*nvgrid+1,ntheta0,g_lo%llim_proc:g_lo%ulim_alloc))
 
      ! <doc> Restore the distribution function. </doc>
 
@@ -612,7 +613,7 @@ contains
     use vpamu_grids, only: nvgrid
     use file_utils, only: error_unit
     implicit none
-    complex, dimension (-ntgrid:,-nvgrid:,g_lo%llim_proc:), intent (out) :: g
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: g
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
@@ -755,20 +756,20 @@ contains
        return
     endif
 
-    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1, 2*nvgrid+1, n_elements))    
-    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1, 2*nvgrid+1, n_elements))
+    if (.not. allocated(tmpr)) allocate (tmpr(2*ntgrid+1, 2*nvgrid+1, ntheta0, n_elements))    
+    if (.not. allocated(tmpi)) allocate (tmpi(2*ntgrid+1, 2*nvgrid+1, ntheta0, n_elements))
 
     tmpr = 0.;  tmpi = 0.
        
-    istatus = nf_get_vara_double (ncid, gr_id, (/ 1, 1, g_lo%llim_proc /), &
-         (/ 2*ntgrid + 1, 2*nvgrid + 1, n_elements /), tmpr)
+    istatus = nf_get_vara_double (ncid, gr_id, (/ 1, 1, 1, g_lo%llim_proc /), &
+         (/ 2*ntgrid + 1, 2*nvgrid + 1, ntheta0, n_elements /), tmpr)
     if (istatus /= 0) then
        ierr = error_unit()
        write(ierr,*) "nf_get_vara_double gr error: ", nf_strerror(istatus),' ',iproc
     end if
     
-    istatus = nf_get_vara_double (ncid, gi_id,  (/ 1, 1, g_lo%llim_proc /), &
-         (/ 2*ntgrid + 1, 2*nvgrid + 1, n_elements /), tmpi)
+    istatus = nf_get_vara_double (ncid, gi_id,  (/ 1, 1, 1, g_lo%llim_proc /), &
+         (/ 2*ntgrid + 1, 2*nvgrid + 1, ntheta0, n_elements /), tmpi)
     if (istatus /= 0) then
        ierr = error_unit()
        write(ierr,*) "nf_get_vara_double gi error: ", nf_strerror(istatus),' ',iproc
