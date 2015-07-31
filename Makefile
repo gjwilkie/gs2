@@ -102,6 +102,8 @@ USE_POSIX ?=
 USE_LOCAL_SPFUNC ?= 
 # Use nag libraray (spfunc,undefined)
 USE_NAGLIB ?= 
+# Use BLAS library
+USE_BLAS ?= on
 # Make GS2 into a library which can be called by external programs
 MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
@@ -129,7 +131,7 @@ FC		= f90
 MPIFC		?= mpif90
 H5FC		?= h5fc
 H5FC_par	?= h5pfc
-F90FLAGS	= -framework Accelerate
+F90FLAGS	=
 F90OPTFLAGS	=
 CC		= cc
 MPICC		?= mpicc
@@ -154,6 +156,8 @@ MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
 FFT_LIB ?=
+BLAS_LIB ?=
+BLAS_INC ?=
 NETCDF_INC ?=
 NETCDF_LIB ?=
 HDF5_INC ?=
@@ -208,7 +212,7 @@ endif
 ifeq ($(MAKECMDGOALS),depend)
 # must invoke full functionality when make depend
 	MAKE += USE_HDF5=on USE_FFT=fftw USE_NETCDF=on USE_MPI=on \
-		USE_LOCAL_BESSEL=on USE_LOCAL_RAN=mt
+		USE_LOCAL_BESSEL=on USE_LOCAL_RAN=mt USE_BLAS=on
 endif
 
 ifdef USE_SHMEM
@@ -313,10 +317,10 @@ ifdef USE_LE_LAYOUT
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB) $(NAG_LIB)
+		$(IPM_LIB) $(NAG_LIB) $(BLAS_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) $(BLAS_INC)
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
