@@ -196,8 +196,8 @@ sinclude Makefile.local
 
 #############################################################################
 
-UTILS=utils_local
-GEO=geo_local
+UTILS=utils
+GEO=geo
 
 ifeq ($(GK_PROJECT),rmhdper)
 	override USE_MPI =

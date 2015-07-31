@@ -844,7 +844,7 @@ contains
     phixf(:,:)=transpose(phix(:,:))
 
     deallocate (aphi, phix)
-!RN> this statement causes error for lahey with DEBUG. I don't know why
+!RN> this statement causes error for lahey with DEBUG. I do not know why
 !    call delete_fft(xf2d)
   end subroutine transform2_2d
 
@@ -898,7 +898,7 @@ contains
     end do
 
     deallocate (aphi, phix)
-!RN> this statement causes error for lahey with DEBUG. I don't know why
+!RN> this statement causes error for lahey with DEBUG. I do not know why
 !    call delete_fft(xf2d)
   end subroutine inverse2_2d
 
