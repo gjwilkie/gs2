@@ -431,7 +431,7 @@ contains
        end if
        
        ! TMP FOR TESTING -- MAB
-       call open_output_file (funit,".funit")
+!       call open_output_file (funit,".funit")
 
        if (dump_check2) then
           call get_unused_unit (dump_check2_unit)
@@ -618,7 +618,7 @@ contains
 !       if (write_ascii .and. write_cross_phase) call close_output_file (phase_unit)
 
        ! TMP FOR TESTING -- MAB
-       call close_output_file (funit)
+!       call close_output_file (funit)
 
        if (dump_check1) close (dump_check1_unit)
        if (dump_check2) call close_output_file (dump_check2_unit)
@@ -1535,17 +1535,17 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     fluxfac(1) = 1.0
 
     ! TMP FOR TESTING -- MAB
-    do iglo=g_lo%llim_world, g_lo%ulim_world
-       imu = imu_idx(g_lo,iglo) ; if (imu /= 4) cycle
-       is = is_idx(g_lo,iglo) ; if (is /= 1) cycle
-       do iv = -nvgrid, nvgrid
-          do ig = -ntgrid, ntgrid
-             write (funit,'(a9,6e12.4)') 'distfnc', t, theta(ig), vpa(iv), &
-                  real(gnew(ig,iv,1,iglo)), aimag(gnew(ig,iv,1,iglo)), bmag(ig)
-          end do
-          write (funit,*)
-       end do
-    end do
+!     do iglo=g_lo%llim_world, g_lo%ulim_world
+!        imu = imu_idx(g_lo,iglo) ; if (imu /= 4) cycle
+!        is = is_idx(g_lo,iglo) ; if (is /= 1) cycle
+!        do iv = -nvgrid, nvgrid
+!           do ig = -ntgrid, ntgrid
+!              write (funit,'(a9,6e12.4)') 'distfnc', t, theta(ig), vpa(iv), &
+!                   real(gnew(ig,iv,1,iglo)), aimag(gnew(ig,iv,1,iglo)), bmag(ig)
+!           end do
+!           write (funit,*)
+!        end do
+!     end do
 
     if (proc0) then
        if (print_flux_line) then
