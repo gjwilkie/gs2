@@ -151,7 +151,7 @@ contains
     if (code_dt*fac > code_dt_cfl) then
        call reduce_time_step
 ! If timestep is too small, make it bigger
-    else if (code_dt*fac < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
+    else if (code_dt*fac <= min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
        call increase_time_step
     endif
     
@@ -204,7 +204,7 @@ contains
     if (code_dt*fac > code_dt_cfl) reset = .true. !Note this logic is repeated in gs2_time::check_time_step_too_large
        
 ! If timestep is too small, make it bigger
-    if (code_dt*fac < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
+    if (code_dt*fac <= min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
 
   end subroutine check_time_step
 
