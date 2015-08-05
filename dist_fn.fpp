@@ -2609,74 +2609,16 @@ contains
        allocate (dgdgn(1)) ; dgdgn = 0.
     end if
 
+    ! reset gfnc to zero for all phase space points
+    ! except those which are potentially determined already
+    ! via parallel BC or response matrix
+    call reset_gfnc (gfnc, iglo, it)
+
     iseg = 1
-    ! initialize gfnc to zero for all (theta,vpa) in this segment except (theta<0,vpa=0),
-    ! which was set earlier as initial condition.
-    ! if periodic BC for this ky, then also do not set g to zero for 
-    ! (theta_min,vpa>0) and (theta_max,vpa<0).
-
-    ! RESPONSE CHANGE
-    ! do not solve for rightmost theta of rightmost segment for vpa > 0 if periodic
-    ! instead is set equal to leftmost theta of leftmost segment earlier
-    ! do not solve for leftmost theta of leftmost segment for vpa < 0 if periodic
-    ! instead is set equal to rightmost theta of rightmost segment earlier
-    igup = ig_up(iseg)
-    iglow = ig_low(iseg)
-    if (periodic(ik)) then
-       iglow = iglow+1
-       if (iseg==nsegments(it,ik)) igup = igup-1
-    end if
-
-    ! IS ALL OF THIS SETTING OF GFNC TO ZERO NECESSARY?
-    ! SEEMS LIKE IT'S ALREADY SET TO ZERO BY NOW
-    
-    ! set g to zero for vpa=0, theta above and including midplane
-    ! do not include rightmost theta, as this will be treated separately if periodic
-    ! RESPONSE CHANGE
-!    gfnc(ig_mid(iseg):ig_up(iseg),0,itmod(iseg,it,ik),iglo) = 0.0
-    gfnc(ig_mid(iseg):igup,0,itmod(iseg,it,ik),iglo) = 0.0
-    ! set g to zero for vpa>0, except at leftmost theta
-    ! RESPONSE CHANGE
-!    gfnc(ig_low(iseg)+1:ig_up(iseg),1:,itmod(iseg,it,ik),iglo) = 0.0
-    gfnc(iglow:igup,1:,itmod(iseg,it,ik),iglo) = 0.0
-    ! set g to zero for vpa<0, except at rightmost theta
-    ! RESPONSE CHANGE
-!    gfnc(ig_low(iseg):ig_up(iseg)-1,-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
-    gfnc(iglow:igup,-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
-
-    ! RESPONSE CHANGE
-!     if (.not.periodic(ik)) then
-!        gfnc(ig_low(iseg),1:nvgrid,itmod(iseg,it,ik),iglo) = 0.0
-!        gfnc(ig_up(iseg),-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
-!     else if (iseg < nsegments(it,ik)) then
-!        gfnc(ig_up(iseg),-nvgrid:0,itmod(iseg,it,ik),iglo) = 0.0
-!     end if
-       
     call implicit_sweep_right (iglo, itmod(iseg,it,ik), ik, iseg, imu, gfnc)
+
     if (nsegments(it,ik) > 1) then
        do iseg = 2, nsegments(it,ik)
-
-          igup = ig_up(iseg)
-          if (periodic(ik) .and. iseg==nsegments(it,ik)) igup = ig_up(iseg)-1
-
-          ! initialize gfnc to zero for all (theta,vpa) except (theta<0,vpa=0)
-          ! which was set earlier as initial condition
-          ! RESPONSE CHANGE
-!          gfnc(ig_mid(iseg):ig_up(iseg),0,itmod(iseg,it,ik),iglo) = 0.0
-          gfnc(ig_mid(iseg):igup,0,itmod(iseg,it,ik),iglo) = 0.0
-          ! note that gfnc(ig_low(iseg),1:) will be set via connection to the previous segment
-          ! RESPONSE CHANGE
-!          gfnc(ig_low(iseg)+1:ig_up(iseg),1:,itmod(iseg,it,ik),iglo) = 0.0
-          gfnc(ig_low(iseg)+1:igup,1:,itmod(iseg,it,ik),iglo) = 0.0
-          ! RESPONSE CHANGE
-!          gfnc(ig_low(iseg):ig_up(iseg)-1,-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
-          gfnc(ig_low(iseg):igup,-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
-          ! RESPONSE CHANGE
-!           ! if periodic BC for this ky, also do not set g to zero for (theta_max,vpa<0)
-!           if ( (.not.periodic(ik)) .or. (iseg<nsegments(it,ik)) ) then
-!              gfnc(ig_up(iseg),-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
-!           end if
-
           ! make connection with previous segment by setting gfnc(-pi) for this segment
           ! equal to gfnc(pi) from previous segment
           gfnc(ig_low(iseg),0:,itmod(iseg,it,ik),iglo) = gfnc(ig_up(iseg-1),0:,itmod(iseg-1,it,ik),iglo)
@@ -2687,6 +2629,7 @@ contains
     iseg = nsegments(it,ik)
     call implicit_sweep_left(iglo, itmod(iseg,it,ik), ik, iseg, gfnc)
     if (nsegments(it,ik) > 1) then
+
        do iseg = nsegments(it,ik)-1, 1, -1
           
           ! make connection with previous segment by setting gfnc(pi) for this segment
@@ -2934,6 +2877,56 @@ contains
 !         = gfnc(ig_low(iseg):ig_mid(iseg)-1,-nvgrid+1,it,iglo)*decay_fac
     
   end subroutine implicit_sweep_left
+
+  subroutine reset_gfnc (gfnc, iglo, it)
+    
+    use gs2_layouts, only: g_lo, ik_idx
+    use theta_grid, only: ntgrid
+    use vpamu_grids, only: nvgrid
+    
+    implicit none
+    
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: gfnc
+    integer, intent (in) :: iglo, it
+    
+    integer :: iseg, ik
+    integer :: iglow, igup
+    
+    ik = ik_idx(g_lo,iglo)
+    
+    do iseg = 1, nsegments(it,ik)
+
+       iglow = ig_low(iseg)
+       igup = ig_up(iseg)
+       if (periodic(ik)) then
+          if (iseg==1) then
+             ! do not zero out leftmost theta for vpa < 0 if periodic,
+             ! as these points have been determined via response matrix
+             iglow = ig_low(iseg)+1
+          else if (iseg==nsegments(it,ik)) then
+             ! do not zero out rightmost theta for vpa >= 0 if periodic,
+             ! as these points have been determined via response matrix
+             igup = ig_up(iseg)-1
+          end if
+       end if
+
+       ! zero out vpa=0, theta above and including midplane
+       gfnc(ig_mid(iseg):igup,0,itmod(iseg,it,ik),iglo) = 0.0
+       ! zero out vpa > 0, all theta except leftmost theta in each segment
+       ! note that leftmost theta in all segments except first will be 
+       ! immediately set by linking to rightmost theta of previous segment
+       ! if periodic, rightmost theta of last segment also not zeroed out
+       ! as it will have been fixed already by periodicity
+       gfnc(ig_low(iseg)+1:igup,1:,itmod(iseg,it,ik),iglo) = 0.0
+       ! zero out vpa < 0, all tehta except rightmost theta in each segment
+       ! note that rightmost theta in all segments except first will be
+       ! immediately set by linking to leftmost theat of previous segment
+       ! if periodic, leftmost theta of final segment also not zeroed out
+       ! as it will have been fixed already by periodicity
+       gfnc(iglow:ig_up(iseg)-1,-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
+    end do
+
+  end subroutine reset_gfnc
 
   subroutine implicit_solve (gfnc, gfncold, phi, phinew, &
        apar, aparnew, istep, equation)
