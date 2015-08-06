@@ -1282,11 +1282,17 @@ contains
 
        ! figure out how much to shift it by to get to
        ! the left-most (theta-theta0) in each set of connected 2pi segments
+       ! note that theta0 goes from 0 to theta0_max and then from theta0_min back
+       ! to -dtheta0
        do it = 1, neigen_max
+          ! first ntheta0/2+1 theta0s are 0 and all positive theta0 values
+          ! remainder are negative theta0s
+          ! note that ntheta0 is always positive for box
           if (it <= ntheta0/2+1) then
              it_shift_left(it) = ntheta0/2-2*it+2
           else
-             it_shift_left(it) = 0
+!             it_shift_left(it) = 0
+             it_shift_left(it) = 3*(ntheta0/2)-2*it+3
           end if
        end do
 
@@ -1430,7 +1436,7 @@ contains
 
     use theta_grid, only: ntgrid, nperiod, ntheta, theta
     use kt_grids, only: naky, ntheta0, aky, theta0
-    use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, imu_idx
     use gs2_layouts, only: idx, proc_id
     use mp, only: iproc, nproc, max_allreduce, proc0
     use constants
@@ -2058,7 +2064,7 @@ contains
 
     use theta_grid, only: ntgrid, ntheta
     use vpamu_grids, only: nvgrid, energy
-    use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, imu_idx
     use matrix_inversion, only: invert_matrix
     use dist_fn_arrays, only: gnew, source
 
@@ -2612,9 +2618,10 @@ contains
     ! reset gfnc to zero for all phase space points
     ! except those which are potentially determined already
     ! via parallel BC or response matrix
-    call reset_gfnc (gfnc, iglo, it)
+!    call reset_gfnc (gfnc, iglo, it)
 
     iseg = 1
+
     call implicit_sweep_right (iglo, itmod(iseg,it,ik), ik, iseg, imu, gfnc)
 
     if (nsegments(it,ik) > 1) then
@@ -2931,7 +2938,7 @@ contains
   subroutine implicit_solve (gfnc, gfncold, phi, phinew, &
        apar, aparnew, istep, equation)
 
-    use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
+    use gs2_layouts, only: g_lo, ik_idx, imu_idx
     use theta_grid, only: dbdthetc, theta, ntgrid, ntheta
     use vpamu_grids, only: nvgrid
     use kt_grids, only: ntheta0
@@ -2963,6 +2970,8 @@ contains
        call add_higher_order_source
     end if
     
+    call set_parallel_bc (gfnc)
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        do it = 1, ntheta0
           ! initially set g^{n+1}(theta<0,vpa=0) to zero
@@ -2971,11 +2980,9 @@ contains
           where (dbdthetc(:ntgrid-1,1) < -epsilon(0.))
              gfnc(:ntgrid-1,0,it,iglo) = 0.0
           end where
-          gfnc(-ntgrid,1:nvgrid,it,iglo) = 0.0
-          gfnc(ntgrid,-nvgrid:-1,it,iglo) = 0.0
        end do
     end do
-    
+
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        
        ik = ik_idx(g_lo,iglo)
@@ -3505,6 +3512,34 @@ contains
     deallocate (phipc, gpc, gptc)
 
   end subroutine add_higher_order_source
+
+  subroutine set_parallel_bc (gfnc)
+
+    use theta_grid, only: ntgrid
+    use vpamu_grids, only: nvgrid
+    use gs2_layouts, only: g_lo, ik_idx
+
+    implicit none
+
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: gfnc
+
+    integer :: iglo, it, ik
+    integer :: itleft, itright
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+
+       ik = ik_idx(g_lo,iglo)
+       do it = 1, neigen(ik)
+          itleft = itmod(1,it,ik)
+          itright = itmod(nsegments(it,ik),it,ik)
+
+          gfnc(-ntgrid,1:nvgrid,itleft,iglo) = 0.0
+          gfnc(ntgrid,-nvgrid:-1,itright,iglo) = 0.0
+       end do
+
+    end do
+
+  end subroutine set_parallel_bc
 
 !   subroutine get_total_g
 
