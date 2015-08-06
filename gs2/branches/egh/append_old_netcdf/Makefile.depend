@@ -222,6 +222,7 @@ ffttester_mod = \
 	 redistribute.o \
 	 run_parameters.o \
 	 runtime_tests.o \
+	 simpledataio_read.o \
 	 simpledataio_write.o \
 	 simpledataiof.o \
 	 sorting.o \
@@ -363,6 +364,7 @@ gs2_mod = \
 	 redistribute.o \
 	 run_parameters.o \
 	 runtime_tests.o \
+	 simpledataio_read.o \
 	 simpledataio_write.o \
 	 simpledataiof.o \
 	 sorting.o \
@@ -576,6 +578,7 @@ diagnostics_create_and_write.o: \
 	 file_utils.o \
 	 kt_grids.o \
 	 mp.o \
+	 simpledataio_read.o \
 	 simpledataio_write.o \
 	 simpledataiof.o 
 diagnostics_dimensions.o: \
@@ -632,6 +635,7 @@ diagnostics_fluxes.o: \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid.o \
+	 unit_tests.o \
 	 volume_averages.o 
 diagnostics_geometry.o: \
 	 diagnostics_config.o \
@@ -901,7 +905,8 @@ geometry.o: \
 	 ideq.o \
 	 leq.o \
 	 mp.o \
-	 peq.o 
+	 peq.o \
+	 spl.o 
 geq.o: \
 	 constants.o \
 	 mp.o \
@@ -984,12 +989,15 @@ gs2_diagnostics_new.o: \
 gs2_gryfx_zonal.o: \
 	 dist_fn.o \
 	 file_utils.o \
+	 geometry.o \
 	 gs2_main.o \
 	 kt_grids.o \
 	 mp.o \
 	 nonlinear_terms.o \
 	 species.o \
-	 theta_grid.o 
+	 spl.o \
+	 theta_grid.o \
+	 unit_tests.o 
 gs2_heating.o: \
 	 mp.o \
 	 species.o 
@@ -1047,6 +1055,8 @@ gs2_main.o: \
 	 dist_fn_arrays.o \
 	 fields.o \
 	 fields_arrays.o \
+	 fields_implicit.o \
+	 fields_local.o \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
@@ -1316,6 +1326,9 @@ rungridgen.o: \
 	 gridgen4mod.o \
 	 spl.o 
 runtime_tests.o: 
+simpledataio_read.o: \
+	 simpledataio_write.o \
+	 simpledataiof.o 
 simpledataio_write.o: \
 	 simpledataiof.o 
 simpledataiof.o: 
