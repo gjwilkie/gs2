@@ -3180,16 +3180,19 @@ contains
                 ! do nothing
              case (1)
                 do ig = -ntgrid, ntgrid-1
-                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*gexp_1(ig,:,it,iglo)
+!                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*gexp_1(ig,:,it,iglo)
+                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*gexp_1(ig,:,it,iglo)
                 end do
              case (2)
                 do ig = -ntgrid, ntgrid-1
-                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*( &
+                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*( &
+!                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*( &
                         1.5*gexp_1(ig,:,it,iglo) - 0.5*gexp_2(ig,:,it,iglo))
                 end do
              case default
                 do ig = -ntgrid, ntgrid-1
-                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*( &
+                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*( &
+!                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*( &
                         (23./12.)*gexp_1(ig,:,it,iglo) &
                         - (4./3.)*gexp_2(ig,:,it,iglo) &
                         + (5./12.)*gexp_3(ig,:,it,iglo))
@@ -3214,16 +3217,19 @@ contains
                    ! do nothing
                 case (1)
 !                   do ig = -ntgrid, ntgrid-1
-                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*gexp_1(:,0,it,iglo)
+                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*gexp_1(:,0,it,iglo)
+!                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*gexp_1(:,0,it,iglo)
 !                   end do
                 case (2)
 !                   do ig = -ntgrid, ntgrid-1
-                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*( &
+                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*( &
+!                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*( &
                         1.5*gexp_1(:,0,it,iglo) - 0.5*gexp_2(:,0,it,iglo))
 !                   end do
                 case default
 !                   do ig = -ntgrid, ntgrid-1
-                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*( &
+                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*( &
+!                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*( &
                         (23./12.)*gexp_1(:,0,it,iglo) &
                         - (4./3.)*gexp_2(:,0,it,iglo) &
                         + (5./12.)*gexp_3(:,0,it,iglo))
@@ -3249,12 +3255,15 @@ contains
                 case (0)
                    ! do nothing
                 case (1)
-                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)
+                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)
+!                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)
                 case (2)
-                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*( &
+                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*( &
+!                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*( &
                         1.5*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) - 0.5*gexp_2(ig_mid(iseg),0,itmod(iseg,it,ik),iglo))
                 case default
-                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*( &
+                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*( &
+!                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*( &
                         (23./12.)*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) &
                         - (4./3.)*gexp_2(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) &
                         + (5./12.)*gexp_3(ig_mid(iseg),0,itmod(iseg,it,ik),iglo))

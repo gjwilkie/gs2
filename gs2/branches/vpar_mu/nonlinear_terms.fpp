@@ -19,6 +19,7 @@ module nonlinear_terms
   ! knobs
   integer, public :: nonlinear_mode_switch
   integer :: flow_mode_switch
+  logical :: test_nonlinear
 
   integer, public, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
   integer, public, parameter :: flow_mode_off = 1, flow_mode_on = 2
@@ -185,7 +186,7 @@ contains
             text_option('on', flow_mode_on) /)
     character(20) :: flow_mode
     namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
-         C_par, C_perp, p_x, p_y, p_z, zip
+         C_par, C_perp, p_x, p_y, p_z, zip, test_nonlinear
     integer :: ierr, in_file
 !    logical :: done = .false.
 
@@ -195,6 +196,7 @@ contains
     if (proc0) then
        nonlinear_mode = 'default'
        flow_mode = 'default'
+       test_nonlinear = .false.
        cfl = 0.1
        C_par = 0.1
        C_perp = 0.1
@@ -216,6 +218,7 @@ contains
 
     call broadcast (nonlinear_mode_switch)
     call broadcast (flow_mode_switch)
+    call broadcast (test_nonlinear)
     call broadcast (cfl)
     call broadcast (C_par) 
     call broadcast (C_perp) 
@@ -243,9 +246,7 @@ contains
     use vpamu_grids, only: nvgrid
     implicit none
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
-! TMP FOR TESTING -- MAB
-!    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
-    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi,    apar,    bpar
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     integer, intent (in) :: istep
     real :: dt_cfl
     logical, save :: nl = .true.
@@ -267,6 +268,7 @@ contains
 
   subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, nl)
 
+    use mp, only: mp_abort
     use theta_grid, only: ntgrid, thet_imp
     use vpamu_grids, only: nvgrid, vpa_imp
     use gs2_layouts, only: g_lo, ik_idx
@@ -278,8 +280,6 @@ contains
     implicit none
 
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
-! TMP FOR TESTING -- MAB
-!    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
     integer, intent (in) :: istep
     logical, intent (in), optional :: nl
@@ -300,6 +300,10 @@ contains
 ! Currently not self-starting.  Need to fix this.
 !
 
+    ! Implicit terms must be calculated twice per time step
+    ! due to nature of Beam-Warming algorithm.
+    ! However, explicit terms such as nonlinearity need only 
+    ! be computed once.    
     if (istep /= istep_last) then
 
        zero = epsilon(0.0)
@@ -318,8 +322,12 @@ contains
                      -ntgrid, -nvgrid)
              end do
           end do
-!	  ! artifact left from GS2 convention
-!          g1 = 2.*g1
+
+          if (test_nonlinear) then
+             call write_mpdist (g1, '.g1')
+             call mp_abort ('testing calculation of nonlinear term. results in .g1 file')
+          end if
+
        else
           g1 = 0.
        end if
@@ -367,33 +375,12 @@ contains
     real :: dt_cfl
 
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
-! TMP FOR TESTING -- MAB
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
-!    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
 
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)
 
-    ! TMP FOR TESTING -- MAB
-!     g = 0.
-     ! hardwire g to be cos(dkx * x + 2dky * y)
-!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-!        ik = ik_idx(g_lo,iglo) ; if (ik /= 2) cycle 
-!        ik = ik_idx(g_lo,iglo) ; if (ik /= 3) cycle 
-!        ik = ik_idx(g_lo,iglo) ; if (ik /= 1) cycle 
-!        it = 2
-!        g(:,:,it,iglo) = 1.0
-!        g(:,:,it,iglo) = 0.5 ; g(:,:,ntheta0-it+2,iglo) = 0.5
-!     end do
-!     phi = 0.
-     ! hardwire phi to be cos(2dkx * x + dky * y)
-!     ik = 2 ; it = 3
-!     ik = 2 ; it = 1
-!     phi(:,it,ik) = 1.0
-
-    ! TMP FOR TESTING -- MAB
-!    call get_phi (phi)
-!    call write_mpdist (g, '.ginit')
+    if (test_nonlinear) call init_test (phi, g)
 
     if (fphi > zero) then
        call load_kx_phi (phi, g1)
@@ -533,24 +520,37 @@ contains
     dt_cfl = 1./max_vel
     call save_dt_cfl (dt_cfl)
 
-    ! g1 = 0.
-    ! do iglo = g_lo%llim_proc, g_lo%ulim_proc
-    !    ik = ik_idx(g_lo,iglo) ; if (ik /= 2) cycle
-    !    imu = imu_idx(g_lo,iglo)
-    !    it = 3
-    !    do iv = -nvgrid, nvgrid
-    !       g1(:,iv,it,iglo) = exp(-theta**2)*anon(:,iv,imu)
-    !    end do
-    ! end do
-    ! call transform2 (g1, bracket)
-!    call write_mpdistyxf (bracket, '.ba')
-    
     call inverse2 (bracket, g1)
 
-!    call write_mpdist (g1, '.g1')
-!    call mp_abort ('testing transform2 in nonlinear_terms.fpp')
-    
   contains
+
+    subroutine init_test (phitest, gtest)
+
+      use theta_grid, only: ntgrid
+      use vpamu_grids, only: nvgrid
+      use gs2_layouts, only: g_lo, ik_idx
+
+      implicit none
+
+      complex, dimension (-ntgrid:,:,:), intent (out) :: phitest
+      complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: gtest
+
+      integer :: iglo, ik, it
+
+      ! hardwire g to be cos(dkx * x + dky * y)
+      gtest = 0.
+      do iglo = g_lo%llim_proc, g_lo%ulim_proc
+         ik = ik_idx(g_lo,iglo) ; if (ik /= 2) cycle 
+         it = 2
+         gtest(:,:,it,iglo) = 1.0
+      end do
+      
+      ! hardwire phi to be cos(2dkx * x + dky * y)
+      phitest = 0.
+      ik = 2 ; it = 3
+      phitest(:,it,ik) = 1.0
+      
+    end subroutine init_test
 
     subroutine load_kx_phi (phi, g1)
 
@@ -901,53 +901,6 @@ contains
     if (proc0) call close_output_file (unit)
     
   end subroutine write_mpdist
-
-  subroutine get_phi (phi)
-
-    use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, aky
-    use ran, only: ranf
-    use dist_fn_arrays, only: g
-    use vpamu_grids, only: nvgrid
-    use species, only: spec
-    use gs2_layouts, only: g_lo, is_idx, ik_idx
-
-    implicit none
-
-    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi
-
-    integer :: ig, it, ik, iglo, is, iv
-    real :: a, b
-
-    do it = 1, ntheta0
-       do ik = 1, naky
-          do ig = -ntgrid, ntgrid
-             a = ranf()-0.5
-             b = ranf()-0.5
-             phi(ig,it,ik) = cmplx(a,b)
-          end do
-       end do
-    end do
-    
-    !Sort out the zonal/self-periodic modes
-    if (naky .ge. 1 .and. aky(1) == 0.0) then
-       !Set ky=kx=0.0 mode to zero in amplitude
-       phi(:,1,1) = 0.0
-    end if
-    
-    do it = 1, ntheta0/2
-       phi(:,it+(ntheta0+1)/2,1) = conjg(phi(:,(ntheta0+1)/2+1-it,1))
-    enddo
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       is = is_idx(g_lo,iglo)
-       ik = ik_idx(g_lo,iglo)
-       do iv = -nvgrid, nvgrid
-          g(:,iv,:,iglo) = -spec(is)%z*phi(:,:,ik)
-       end do
-    end do
-
-  end subroutine get_phi
 
 end module nonlinear_terms
 
