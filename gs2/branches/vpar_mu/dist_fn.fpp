@@ -126,7 +126,7 @@ module dist_fn
   ! plus grid points at theta=-ntgrid, vpa>0 and theta=ntgrid, vpa<0).
 !  ! plus grid points at theta=-ntgrid, vpa>=0 and theta=ntgrid, vpa<0).
   ! for non-periodic, nresponse = ntheta/2 * nsegments + 1.
-  ! no need for grid points at vpa /= 0 since don't need to enfore periodicity
+  ! no need for grid points at vpa /= 0 since do not need to enfore periodicity
   integer :: nresponse
 
   !< end arrays for implicit solve
@@ -1267,7 +1267,7 @@ contains
        neigen(ik) = ntheta0
        if (naky > 1) then
           do ik = 2, naky
-             ! must link different kx's at theta = +/- pi
+             ! must link different kx values at theta = +/- pi
              ! neigen is the number of independent eigenfunctions along the field line
              neigen(ik) = min((ik-1)*jtwist_out,ntheta0)
           end do
@@ -3353,7 +3353,7 @@ contains
           g_m(:ntgrid-1,:nvgrid-1) = gtvc(-ntgrid+1:,:nvgrid-1) - gtvc(:ntgrid-1,:nvgrid-1)
 
           ! get vpa derivative of gtc
-          dgdv(:ntgrid-1,:nvgrid-1) = gtc(:ntgrid-1,-nvgrid+1:)-gtc(:ntgrid-1,:nvgrid-1)
+          dgdv(:,:nvgrid-1) = gtc(:,-nvgrid+1:)-gtc(:,:nvgrid-1)
        
           ! get time and theta cell values for g
           do iv = -nvgrid, -1
@@ -3687,13 +3687,6 @@ contains
     ! Implicit Solve for gfnc
     call implicit_solve (gfnc, gfncold, phi, phinew, &
          apar, aparnew, istep, equation)
-    if (istep==nstep) then
-!       write (*,*) 'Re[gfnc]3', real(gfnc(ig_low(1):ig_mid(1),0,itmod(1,1,1),g_lo%ulim_proc)), &
-!            'Im[gfnc]3', aimag(gfnc(ig_low(1):ig_mid(1),0,itmod(1,1,1),g_lo%ulim_proc))
-!       call write_mpdist (gfnc, '.mpdist', last=.true.)
-!    else if (mod(istep,25)==0) then
-!       call write_mpdist (gfnc, '.mpdist')
-    end if
     ! Add hyper terms (damping)
     call hyper_diff (gfnc, phinew)
     ! Add collisions
@@ -3731,7 +3724,9 @@ contains
     end do
     wgt = spec%z
     call integrate_species (g0, wgt, tot)
-    phipfnc = phipfnc + tot/gamtot + gamtotp*phifnc
+    where (abs(gamtot) > epsilon(0.))
+       phipfnc = phipfnc + tot/gamtot + gamtotp*phifnc
+    end where
 
     deallocate (tot)
 
@@ -4449,7 +4444,11 @@ contains
        end do
     end do
     call integrate_species (g0, wgt, tot)
-    gamtotp = real(tot)/gamtot
+    where (abs(gamtot) < epsilon(0.))
+       gamtotp = 0.
+    elsewhere
+       gamtotp = real(tot)/gamtot
+    end where
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        imu = imu_idx(g_lo,iglo)
@@ -4495,7 +4494,7 @@ contains
 
   end subroutine init_fieldeq
 
-  subroutine getfieldeq1 (phi, apar, bpar, antot, antota, antotp, &
+  subroutine getfieldeq1 (phifnc, aparfnc, bparfnc, antot, antota, antotp, &
        fieldeq, fieldeqa, fieldeqp)
 
     use dist_fn_arrays, only: kperp2
@@ -4507,7 +4506,7 @@ contains
 
     implicit none
 
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phifnc, aparfnc, bparfnc
     complex, dimension (-ntgrid:,:,:), intent (in) :: antot, antota, antotp
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
 
@@ -4542,7 +4541,7 @@ contains
 
     if (fphi > epsilon(0.0)) then
        ! fieldeq is Poisson equation grouped so that RHS = 0; i.e., fieldeq = 0
-       fieldeq = antot + bpar*gamtot1 - gamtot*phi 
+       fieldeq = antot + bparfnc*gamtot1 - gamtot*phifnc
 
        if (.not. has_electron_species(spec)) then
           do ik = 1, naky
@@ -4555,23 +4554,24 @@ contains
 
     if (fapar > epsilon(0.0)) then
 !       fieldeqa = antota - (kperp2+gamtota)*apar
-       fieldeqa = antota - kperp2*apar
+       fieldeqa = antota - kperp2*aparfnc
     end if
     ! bpar == delta B_parallel / B_0(theta) b/c of the factor of 1/bmag(theta)**2
     ! in the following
     if (fbpar > epsilon(0.0)) then
-       fieldeqp = (antotp+bpar*gamtot2+0.5*phi*gamtot1)*beta*apfac
+       fieldeqp = (antotp+bparfnc*gamtot2+0.5*phifnc*gamtot1)*beta*apfac
        do ik = 1, naky
           do it = 1, ntheta0
              fieldeqp(:,it,ik) = fieldeqp(:,it,ik)/bmag(:)**2
           end do
        end do
-       fieldeqp = fieldeqp + bpar
+       fieldeqp = fieldeqp + bparfnc
     end if
 
   end subroutine getfieldeq1
 
-  subroutine getfieldeq (gfnc, phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
+  subroutine getfieldeq (gfnc, phifnc, aparfnc, bparfnc, &
+       fieldeq, fieldeqa, fieldeqp)
 
     use gs2_layouts, only: g_lo
     use theta_grid, only: ntgrid
@@ -4581,7 +4581,7 @@ contains
     implicit none
 
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: gfnc
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phifnc, aparfnc, bparfnc
     complex, dimension (-ntgrid:,:,:), intent (out) ::fieldeq,fieldeqa,fieldeqp
 
     complex, dimension (:,:,:), allocatable :: antot, antota, antotp
@@ -4598,7 +4598,7 @@ contains
 
     ! getfieldeq1 returns field equations;
     ! e.g., fieldeq = antot + sum_s (Gam0_s - 1)*Z_s^2*e*phi/T_s * n_s / n_ref = 0
-    call getfieldeq1 (phi, apar, bpar, antot, antota, antotp, &
+    call getfieldeq1 (phifnc, aparfnc, bparfnc, antot, antota, antotp, &
          fieldeq, fieldeqa, fieldeqp)
 
     deallocate (antot, antota, antotp)
