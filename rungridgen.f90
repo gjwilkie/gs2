@@ -259,7 +259,7 @@ contains
     implicit none
     real :: var
     integer :: ifail
-    if (smoothknob == 0.0) then
+    if (abs(smoothknob) < epsilon(0.0)) then
        bmagsm = bmagin
     else
        var = smoothknob
@@ -324,7 +324,7 @@ contains
        print *, "fraction in +ve cvdrift: ", real(nin)/real(ntheta)
        print *, "deltaw: ", deltaw
        if (d > delth_max) then
-          if (deltaw_ok /= 0.0) then
+          if (abs(deltaw_ok) > epsilon(0.0)) then
              deltaw = sqrt(deltaw*deltaw_ok)
           else
              deltaw = 0.5*deltaw
@@ -339,7 +339,7 @@ contains
        end if
     end do
 
-    if (deltaw_ok /= 0.0 .and. d > delth_max) then
+    if (abs(deltaw_ok) > epsilon(0.0) .and. d > delth_max) then
        deltaw = deltaw_ok
        ntheta = nthetaout
        nlambda = nlambdaout

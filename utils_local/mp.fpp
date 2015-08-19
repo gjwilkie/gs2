@@ -136,9 +136,9 @@ module mp
   
   !KDN 100526: Allows summing into alternate variable
   !rather than overwriting local data
-  interface sum_reduce_alt
-     module procedure sum_reduce_alt_complex_3array
-  end interface
+!  interface sum_reduce_alt
+!     module procedure sum_reduce_alt_complex_3array
+!  end interface
 
   interface sum_allreduce
      module procedure sum_allreduce_integer
@@ -599,23 +599,23 @@ contains
 # endif
   end subroutine sum_reduce_integer_array
 
-  subroutine sum_reduce_logical (a, dest)
-    implicit none
-    logical, intent (in out) :: a
-    integer, intent (in) :: dest
-# ifdef MPI
-    integer :: ierror
-    if(iproc.eq.dest)then
-       call mpi_reduce &
-            (MPI_IN_PLACE, a, 1, MPI_LOGICAL, MPI_LOR, dest, mp_comm, ierror)
-    else
-       call mpi_reduce &
-            (a, a, 1, MPI_LOGICAL, MPI_LOR, dest, mp_comm, ierror)
-    endif
-# else
-    if (dest /= 0) call error ("reduce to")
-# endif
-  end subroutine sum_reduce_logical
+!   subroutine sum_reduce_logical (a, dest)
+!     implicit none
+!     logical, intent (in out) :: a
+!     integer, intent (in) :: dest
+! # ifdef MPI
+!     integer :: ierror
+!     if(iproc.eq.dest)then
+!        call mpi_reduce &
+!             (MPI_IN_PLACE, a, 1, MPI_LOGICAL, MPI_LOR, dest, mp_comm, ierror)
+!     else
+!        call mpi_reduce &
+!             (a, a, 1, MPI_LOGICAL, MPI_LOR, dest, mp_comm, ierror)
+!     endif
+! # else
+!     if (dest /= 0) call error ("reduce to")
+! # endif
+!   end subroutine sum_reduce_logical
 
   subroutine sum_reduce_real (a, dest)
     implicit none
@@ -833,20 +833,20 @@ contains
 # endif
   end subroutine sum_reduce_complex_5array
 
-! Sum all z1's into z2 at dest
-  subroutine sum_reduce_alt_complex_3array (z1,z2,dest)
-    implicit none
-    complex, dimension (:,:,:), intent (in out) :: z1
-    complex, dimension (:,:,:), intent (in out) :: z2
-    integer, intent (in) :: dest
-# ifdef MPI
-    integer :: ierror
-    call mpi_reduce &
-         (z1, z2, size(z1), mpicmplx, MPI_SUM, dest, mp_comm, ierror)
-# else
-    if (dest /= 0) call error ("reduce to")
-# endif
-  end subroutine sum_reduce_alt_complex_3array
+! Sum all z1 values into z2 at dest
+!   subroutine sum_reduce_alt_complex_3array (z1,z2,dest)
+!     implicit none
+!     complex, dimension (:,:,:), intent (in out) :: z1
+!     complex, dimension (:,:,:), intent (in out) :: z2
+!     integer, intent (in) :: dest
+! # ifdef MPI
+!     integer :: ierror
+!     call mpi_reduce &
+!          (z1, z2, size(z1), mpicmplx, MPI_SUM, dest, mp_comm, ierror)
+! # else
+!     if (dest /= 0) call error ("reduce to")
+! # endif
+!   end subroutine sum_reduce_alt_complex_3array
   
   subroutine sum_allreduce_integer (i)
     implicit none
@@ -1533,22 +1533,22 @@ contains
 # endif
   end subroutine ssend_logical_array
 
-  subroutine ssend_character (s, dest, tag)
-    implicit none
-    character(*), intent (in) :: s
-    integer, intent (in) :: dest
-    integer, intent (in), optional :: tag
-# ifdef MPI
-    integer :: ierror
-    integer :: tagp
-    tagp = 0
-    if (present(tag)) tagp = tag
-    call mpi_ssend &
-         (s, len(s), MPI_CHARACTER, dest, tagp, mp_comm, ierror)
-# else
-    call error ("send")
-# endif
-  end subroutine ssend_character
+!   subroutine ssend_character (s, dest, tag)
+!     implicit none
+!     character(*), intent (in) :: s
+!     integer, intent (in) :: dest
+!     integer, intent (in), optional :: tag
+! # ifdef MPI
+!     integer :: ierror
+!     integer :: tagp
+!     tagp = 0
+!     if (present(tag)) tagp = tag
+!     call mpi_ssend &
+!          (s, len(s), MPI_CHARACTER, dest, tagp, mp_comm, ierror)
+! # else
+!     call error ("send")
+! # endif
+!   end subroutine ssend_character
 ! <MAB
 
 ! ********************* receives  **********************
@@ -1823,7 +1823,7 @@ contains
 # ifdef MPI
 !    integer, parameter :: reorder=1
     ! TT: I changed variable definition by assuming integer 1 corresponds to
-    ! TT: logical .true. but I'm not sure if reorder is needed.
+    ! TT: logical .true. but I am not sure if reorder is needed.
     ! TT: In any case this subroutine is only called when you use job fork.
     logical, parameter :: reorder=.true.
     integer :: ip, j, comm2d, id2d, ierr, nrows
@@ -1926,10 +1926,7 @@ contains
     real, intent (out) :: group
     integer, intent (in) :: njobs
 
-    integer :: ij, ik, tag
-
-    ! TESTING -- MAB
-    integer :: idx
+    integer :: ik, tag, idx
 
     tag = 1000
 
@@ -1973,10 +1970,7 @@ contains
     real, dimension (:), intent (out) :: group
     integer, intent (in) :: njobs
 
-    integer :: ij, ik, tag
-
-    ! TESTING -- MAB
-    integer :: idx
+    integer :: ik, tag, idx
 
 # ifndef MPI
     call error ("all_to_group")
@@ -2020,9 +2014,7 @@ contains
     real, dimension (:), intent (out) :: all
     integer, intent (in) :: njobs
 
-    integer :: ij, ik, tag
-
-    integer :: idx
+    integer :: ik, tag, idx
 
     tag = 1002
 
@@ -2055,9 +2047,7 @@ contains
     real, dimension (:,:), intent (out) :: all
     integer, intent (in) :: njobs
 
-    integer :: ij, ik, tag
-
-    integer :: idx
+    integer :: ik, tag, idx
 
     tag = 1003
 

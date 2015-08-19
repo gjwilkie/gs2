@@ -58,7 +58,7 @@ contains
 !
     use species, only: spec
     use theta_grid, only: ntgrid
-    use vpamu_grids, only: nvgrid, mu, vperp2, anon
+    use vpamu_grids, only: nvgrid, vperp2, anon
     use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx
 
     implicit none

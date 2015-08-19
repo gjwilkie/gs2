@@ -63,13 +63,19 @@ module fft_work
 
 contains
 
+# if FFT == _FFTW3_  
   subroutine init_z (fft, is, n, howmany)
+# else
+  subroutine init_z (fft, is, n)
+# endif
 
     use mp, only: mp_abort
 
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, n
+# if FFT == _FFTW3_
     integer, optional, intent (in) :: howmany
+# endif
     integer :: j
 
 # if FFT == _FFTW3_
@@ -114,16 +120,18 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-
+# if FFT == _FFTW3_
   subroutine init_ccfftw (fft, is, n, howmany, data_array)
-
+# else
+  subroutine init_ccfftw (fft, is, n)
+# endif
     use mp, only: mp_abort
 
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, n
+# if FFT == _FFTW3_
     integer, optional, intent (in) :: howmany
     complex, optional, dimension(:,:), intent(inout) :: data_array 
-# if FFT == _FFTW3_
     integer, dimension(1) :: array_n
 # endif    
 

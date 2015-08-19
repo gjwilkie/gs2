@@ -41,178 +41,178 @@ module read_chease
   implicit none
   integer :: npsi_chease, nchi_chease 
   public :: npsi_chease, nchi_chease 
-	
-
-	real :: r0exp_chease
-	public :: r0exp_chease
-
-
-	real :: b0exp_chease
-	public :: b0exp_chease
-
-	
+  
+  
+  real :: r0exp_chease
+  public :: r0exp_chease
+  
+  
+  real :: b0exp_chease
+  public :: b0exp_chease
+  
+  
   real, dimension (:), allocatable :: psi_chease,chi_chease
-	public :: psi_chease, chi_chease
-
-
-	real, dimension(:), allocatable :: rgeom_chease
-	public :: rgeom_chease
-
-	real, dimension(:), allocatable :: ageom_chease
-	public :: ageom_chease
-
-	real, dimension(:), allocatable :: q_chease
-	public :: q_chease
-
-	real, dimension(:), allocatable :: dqdpsi_chease
-	public :: dqdpsi_chease
-
-	real, dimension(:), allocatable :: d2qdpsi2_chease
-	public :: d2qdpsi2_chease
-
-	real, dimension(:), allocatable :: p_chease
-	public :: p_chease
-
-	real, dimension(:), allocatable :: dpdpsi_chease
-	public :: dpdpsi_chease
-
-	real, dimension(:), allocatable :: f_chease
-	public :: f_chease
-
-	real, dimension(:), allocatable :: fdfdpsi_chease
-	public :: fdfdpsi_chease
-
-	real, dimension(:), allocatable :: v_chease
-	public :: v_chease
-
-	real, dimension(:), allocatable :: rho_t_chease
-	public :: rho_t_chease
-
-	real, dimension(:), allocatable :: shear_chease
-	public :: shear_chease
-
-	real, dimension(:), allocatable :: dsheardpsi_chease
-	public :: dsheardpsi_chease
-
-	real, dimension(:), allocatable :: kappa_chease
-	public :: kappa_chease
-
-	real, dimension(:), allocatable :: delta_lower_chease
-	public :: delta_lower_chease
-
-	real, dimension(:), allocatable :: delta_upper_chease
-	public :: delta_upper_chease
-
-	real, dimension(:), allocatable :: dvdpsi_chease
-	public :: dvdpsi_chease
-
-	real, dimension(:), allocatable :: dpsidrhotor_chease
-	public :: dpsidrhotor_chease
-
-	real, dimension(:), allocatable :: gdpsi_av_chease
-	public :: gdpsi_av_chease
-
-	real, dimension(:), allocatable :: radius_av_chease
-	public :: radius_av_chease
-
-	real, dimension(:), allocatable :: r_av_chease
-	public :: r_av_chease
-
-	real, dimension(:), allocatable :: te_chease
-	public :: te_chease
-
-	real, dimension(:), allocatable :: dtedpsi_chease
-	public :: dtedpsi_chease
-
-	real, dimension(:), allocatable :: ne_chease
-	public :: ne_chease
-
-	real, dimension(:), allocatable :: dnedpsi_chease
-	public :: dnedpsi_chease
-
-	real, dimension(:), allocatable :: ti_chease
-	public :: ti_chease
-
-	real, dimension(:), allocatable :: dtidpsi_chease
-	public :: dtidpsi_chease
-
-	real, dimension(:), allocatable :: ni_chease
-	public :: ni_chease
-
-	real, dimension(:), allocatable :: dnidpsi_chease
-	public :: dnidpsi_chease
-
-	real, dimension(:), allocatable :: zeff_chease
-	public :: zeff_chease
-
-	real, dimension(:), allocatable :: signeo_chease
-	public :: signeo_chease
-
-	real, dimension(:), allocatable :: jbsbav_chease
-	public :: jbsbav_chease
-	
-
-	real, dimension(:,:), allocatable :: g11_chease
-	public :: g11_chease
-
-
-	real, dimension(:,:), allocatable :: g12_chease
-	public :: g12_chease
-
-
-	real, dimension(:,:), allocatable :: g22_chease
-	public :: g22_chease
-
-
-	real, dimension(:,:), allocatable :: g33_chease
-	public :: g33_chease
-
-
-	real, dimension(:,:), allocatable :: b_chease
-	public :: b_chease
-
-
-	real, dimension(:,:), allocatable :: dbdpsi_chease
-	public :: dbdpsi_chease
-
-
-	real, dimension(:,:), allocatable :: dbdchi_chease
-	public :: dbdchi_chease
-
-
-	real, dimension(:,:), allocatable :: dpsidr_chease
-	public :: dpsidr_chease
-
-
-	real, dimension(:,:), allocatable :: dpsidz_chease
-	public :: dpsidz_chease
-
-
-	real, dimension(:,:), allocatable :: dchidr_chease
-	public :: dchidr_chease
-
-
-	real, dimension(:,:), allocatable :: dchidz_chease
-	public :: dchidz_chease
-
-
-	real, dimension(:,:), allocatable :: jacobian_chease
-	public :: jacobian_chease
-
-
-	real, dimension(:,:), allocatable :: r_chease
-	public :: r_chease
-
-
-	real, dimension(:,:), allocatable :: z_chease
-	public :: z_chease
-
-
+  public :: psi_chease, chi_chease
+  
+  
+  real, dimension(:), allocatable :: rgeom_chease
+  public :: rgeom_chease
+  
+  real, dimension(:), allocatable :: ageom_chease
+  public :: ageom_chease
+  
+  real, dimension(:), allocatable :: q_chease
+  public :: q_chease
+  
+  real, dimension(:), allocatable :: dqdpsi_chease
+  public :: dqdpsi_chease
+  
+  real, dimension(:), allocatable :: d2qdpsi2_chease
+  public :: d2qdpsi2_chease
+  
+  real, dimension(:), allocatable :: p_chease
+  public :: p_chease
+  
+  real, dimension(:), allocatable :: dpdpsi_chease
+  public :: dpdpsi_chease
+  
+  real, dimension(:), allocatable :: f_chease
+  public :: f_chease
+  
+  real, dimension(:), allocatable :: fdfdpsi_chease
+  public :: fdfdpsi_chease
+  
+  real, dimension(:), allocatable :: v_chease
+  public :: v_chease
+  
+  real, dimension(:), allocatable :: rho_t_chease
+  public :: rho_t_chease
+  
+  real, dimension(:), allocatable :: shear_chease
+  public :: shear_chease
+  
+  real, dimension(:), allocatable :: dsheardpsi_chease
+  public :: dsheardpsi_chease
+  
+  real, dimension(:), allocatable :: kappa_chease
+  public :: kappa_chease
+  
+  real, dimension(:), allocatable :: delta_lower_chease
+  public :: delta_lower_chease
+  
+  real, dimension(:), allocatable :: delta_upper_chease
+  public :: delta_upper_chease
+  
+  real, dimension(:), allocatable :: dvdpsi_chease
+  public :: dvdpsi_chease
+  
+  real, dimension(:), allocatable :: dpsidrhotor_chease
+  public :: dpsidrhotor_chease
+  
+  real, dimension(:), allocatable :: gdpsi_av_chease
+  public :: gdpsi_av_chease
+  
+  real, dimension(:), allocatable :: radius_av_chease
+  public :: radius_av_chease
+  
+  real, dimension(:), allocatable :: r_av_chease
+  public :: r_av_chease
+  
+  real, dimension(:), allocatable :: te_chease
+  public :: te_chease
+  
+  real, dimension(:), allocatable :: dtedpsi_chease
+  public :: dtedpsi_chease
+  
+  real, dimension(:), allocatable :: ne_chease
+  public :: ne_chease
+  
+  real, dimension(:), allocatable :: dnedpsi_chease
+  public :: dnedpsi_chease
+  
+  real, dimension(:), allocatable :: ti_chease
+  public :: ti_chease
+  
+  real, dimension(:), allocatable :: dtidpsi_chease
+  public :: dtidpsi_chease
+  
+  real, dimension(:), allocatable :: ni_chease
+  public :: ni_chease
+  
+  real, dimension(:), allocatable :: dnidpsi_chease
+  public :: dnidpsi_chease
+  
+  real, dimension(:), allocatable :: zeff_chease
+  public :: zeff_chease
+  
+  real, dimension(:), allocatable :: signeo_chease
+  public :: signeo_chease
+  
+  real, dimension(:), allocatable :: jbsbav_chease
+  public :: jbsbav_chease
+  
+  
+  real, dimension(:,:), allocatable :: g11_chease
+  public :: g11_chease
+  
+  
+  real, dimension(:,:), allocatable :: g12_chease
+  public :: g12_chease
+  
+  
+  real, dimension(:,:), allocatable :: g22_chease
+  public :: g22_chease
+  
+  
+  real, dimension(:,:), allocatable :: g33_chease
+  public :: g33_chease
+  
+  
+  real, dimension(:,:), allocatable :: b_chease
+  public :: b_chease
+  
+  
+  real, dimension(:,:), allocatable :: dbdpsi_chease
+  public :: dbdpsi_chease
+  
+  
+  real, dimension(:,:), allocatable :: dbdchi_chease
+  public :: dbdchi_chease
+  
+  
+  real, dimension(:,:), allocatable :: dpsidr_chease
+  public :: dpsidr_chease
+  
+  
+  real, dimension(:,:), allocatable :: dpsidz_chease
+  public :: dpsidz_chease
+  
+  
+  real, dimension(:,:), allocatable :: dchidr_chease
+  public :: dchidr_chease
+  
+  
+  real, dimension(:,:), allocatable :: dchidz_chease
+  public :: dchidz_chease
+  
+  
+  real, dimension(:,:), allocatable :: jacobian_chease
+  public :: jacobian_chease
+  
+  
+  real, dimension(:,:), allocatable :: r_chease
+  public :: r_chease
+  
+  
+  real, dimension(:,:), allocatable :: z_chease
+  public :: z_chease
+  
+  
   integer :: infile=1212
   integer, parameter :: ncols = 5
-
-
-  contains
+  
+  
+contains
   subroutine read_infile(filename)
     character (len=80) :: filename
     open(infile,file= filename)
@@ -222,16 +222,16 @@ module read_chease
     read(infile, *)
     read(infile, *) nchi_chease
     write(*, *) nchi_chease, "<---nchi_chease"
-
-
+    
+    
     read(infile, *)
     read(infile, *) r0exp_chease
-
-
+    
+    
     read(infile, *)
     read(infile, *) b0exp_chease
-
-
+    
+    
     allocate(psi_chease(npsi_chease))
     read(infile, *)
     read(infile, *) psi_chease
@@ -526,15 +526,15 @@ module read_chease
   subroutine finish
     deallocate(psi_chease)
     deallocate(chi_chease)
-		
+    
     deallocate(rgeom_chease)
-
+    
     deallocate(ageom_chease)
-
+    
     deallocate(q_chease)
-
+    
     deallocate(dqdpsi_chease)
-
+    
     deallocate(d2qdpsi2_chease)
 
     deallocate(p_chease)

@@ -50,9 +50,12 @@ module run_parameters
 contains
 
   subroutine check_run_parameters(report_unit)
-  implicit none
-  integer :: report_unit
-    if (fphi /= 1.) then
+
+    implicit none
+
+    integer :: report_unit
+
+    if (abs(fphi-1.) > epsilon(0.)) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, fmt="('fphi in the knobs namelist = ',e10.4)") fphi
@@ -62,13 +65,13 @@ contains
        write (report_unit, *) 
     end if
 
-    if (fapar == 0.) then
+    if (abs(fapar) < epsilon(0.)) then
        write (report_unit, fmt="('A_parallel will not be included in the calculation.')")
     end if
-    if (fapar == 1.) then
+    if (abs(fapar-1.) < epsilon(0.)) then
        write (report_unit, fmt="('A_parallel will be included in the calculation.')")
     end if
-    if (fapar /= 0. .and. fapar /= 1.) then
+    if (abs(fapar) > epsilon(0.) .and. abs(fapar-1.) > epsilon(0.)) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, fmt="('fapar in the knobs namelist = ',e10.4)") fapar
@@ -78,13 +81,13 @@ contains
        write (report_unit, *) 
     end if
 
-    if (fbpar == 0.) then
+    if (abs(fbpar) < epsilon(0.)) then
        write (report_unit, fmt="('B_parallel will not be included in the calculation.')")
     end if
-    if (fbpar == 1.) then
+    if (abs(fbpar-1.) < epsilon(0.)) then
        write (report_unit, fmt="('B_parallel will be included in the calculation.')")
     end if
-    if (fbpar /= 0. .and. fbpar /= 1.) then
+    if (abs(fbpar) > epsilon(0.) .and. abs(fbpar-1.0) > epsilon(0.)) then
        write (report_unit, *) 
        write (report_unit, fmt="('################# WARNING #######################')")
        write (report_unit, fmt="('fbpar in the knobs namelist = ',e10.4)") fbpar
@@ -244,11 +247,11 @@ contains
 !       if (knexist) read (unit=input_unit("knobs"), nml=knobs)
        if (knexist) read (unit=in_file, nml=knobs)
 
-       if (teti /= -100.0) tite = teti
+       if (abs(teti+100.) > epsilon(0.)) tite = teti
 
 ! Allow faperp-style initialization for backwards compatibility.
 ! Only fbpar is used outside of this subroutine.
-       if (fbpar == -1.) then
+       if (abs(fbpar+1.) < epsilon(0.)) then
           fbpar = faperp
        end if
 
@@ -357,12 +360,12 @@ contains
 !CMRend
     if (wstar_units) then
        wunits = 1.0
-       where (aky /= 0.0)
+       where (aky > epsilon(0.0))
           tunits = 2.0/aky
        elsewhere
           tunits = 0.0
        end where
-       if (any(tunits == 0.0) .and. proc0) then
+       if (any(abs(tunits) < epsilon(0.)) .and. proc0) then
           write (error_unit(), *) &
                "WARNING: wstar_units=.true. and aky=0.0: garbage results"
           print *, &

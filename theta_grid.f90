@@ -68,7 +68,7 @@ contains
        gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
        dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
-       dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
+       dcvdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     use gridgen4mod
     use constants
     implicit none
@@ -81,7 +81,7 @@ contains
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
          Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
          dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
-         dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
+         dcvdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
     integer :: ntheta_old, ntgrid_old, nbset_old
     real, dimension (-ntgrid:ntgrid) :: thetasave
     real, dimension (ntheta+1) :: thetaold, thetanew
@@ -227,12 +227,12 @@ contains
      if (epsl > 0.) then
         arat = 2. / epsl
         
-        if (epsl == 2.0) then
+        if (abs(epsl-2.0) < epsilon(0.)) then
            write (report_unit, &
                 & fmt="('Scale lengths are normalized to the major radius, R')")
         else
            write (report_unit, fmt="('The aspect ratio R/a = ',f7.4)") arat
-           if (alne == 1.0) then
+           if (abs(alne-1.0) < epsilon(0.)) then
               write (report_unit, &
                    & fmt="('Scale lengths are normalized to the density scale length, Ln')")
            end if
@@ -471,7 +471,7 @@ contains
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
        gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, shat, drhodpsi, kxfac, &
-       qval, shape, gb_to_cv, Bpol, &
+       qval, shape, Bpol, &
        dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
        dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     use constants
@@ -490,7 +490,6 @@ contains
          dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     character (8), intent(out) :: shape
-    logical, intent (in) :: gb_to_cv
     integer :: i
 
     theta = (/ (real(i)*2.0*pi/real(ntheta), i=-ntgrid,ntgrid) /)
@@ -638,7 +637,7 @@ contains
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
             dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
-            dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
+            dcvdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     end if
   end subroutine salpha_get_grids
 
@@ -661,7 +660,7 @@ contains
   use geometry, only: delrho, dp_mult, rmin, rmax
   use geometry, only: bishop, iflux, irho, itor, isym
   use geometry, only: eqfile
-  use geometry, only: idfit_eq, gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
+  use geometry, only: gen_eq, efit_eq, ppl_eq, local_eq, dfit_eq
   use geometry, only: gs2d_eq, transp_eq, writelots, equal_arc
   implicit none
   integer :: unit
@@ -711,13 +710,13 @@ contains
         write (report_unit, *)
         if (local_eq .and. iflux == 0) then
            write (report_unit, fmt="('A local equilibrium model has been selected.')")
-           if (Rmaj == 1.0) then
+           if (abs(Rmaj-1.0) < epsilon(0.)) then
               write (report_unit, &
                    & fmt="('Scale lengths are normalized to the major radius, R')")
            else
               write (report_unit, fmt="('The aspect ratio R/a = ',f7.4)") Rmaj
            end if
-           if (Rmaj /= R_geo) then
+           if (abs(Rmaj-R_geo) > epsilon(0.)) then
               write (report_unit, *) 
               write (report_unit, fmt="('################# WARNING #######################')")
               write (report_unit, fmt="('R_geo is not equal to Rmaj.')")
@@ -1142,7 +1141,7 @@ if (debug) write(6,*) "init_theta_grid_eik: done, ntheta=",ntheta
          dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
-    integer :: i, ig
+    integer :: ig
     logical:: debug=.false.
 if (debug) write(6,*) 'eik_get_grids: ntgrid=',ntgrid
     do ig=-ntgrid,ntgrid
@@ -1205,7 +1204,7 @@ if (debug) write(6,*) 'eik_get_grids: call gridgen_get_grids'
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, &
          grho, Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol, &
          dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
-         dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
+         dcvdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     shat = s_hat_new
     drhodpsi = drhodpsin
     kxfac = kxfac_out
@@ -1419,21 +1418,20 @@ contains
     close (unit=unit)
   end subroutine file_get_sizes
 
-  subroutine file_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, &
+  subroutine file_get_grids (ntgrid, nbset, theta, bset, &
        bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
        gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
        Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-       shat, drhodpsi, kxfac, qval, gb_to_cv, Bpol)
+       shat, drhodpsi, kxfac, qval, gb_to_cv)
     use file_utils, only: get_unused_unit
     implicit none
-    integer, intent (in) :: nperiod
-    integer, intent (in out) :: ntheta, ntgrid, nbset
+    integer, intent (in out) :: ntgrid, nbset
     real, dimension (-ntgrid:ntgrid), intent (out) :: theta
     real, dimension (nbset), intent (out) :: bset
     real, dimension (-ntgrid:ntgrid), intent (out) :: &
          bmag, gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
          gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
-         Rplot, Zplot, Rprime, Zprime, aplot, aprime, Bpol
+         Rplot, Zplot, Rprime, Zprime, aplot, aprime
     real, intent (out) :: shat, drhodpsi, kxfac, qval
     logical, intent (in) :: gb_to_cv
     integer :: unit
@@ -1645,10 +1643,12 @@ contains
   end subroutine wnml_theta_grid
 
   subroutine init_theta_grid
+
     use mp, only: proc0
+
     implicit none
+
     logical, save :: initialized = .false.
-    integer :: i
     logical :: debug=.false.
     if (initialized) return
     initialized = .true.
@@ -1859,7 +1859,6 @@ if (debug) write(6,*) "init_theta_grid: call finish_init"
 
     real, dimension (nbset) :: bset_save
     real, dimension (-ntgrid:ntgrid) :: eik_save
-    integer :: ierr, ig
     
     ! in case nbset changes after gridgen
     if (nbset /= size(bset)) then
@@ -2114,13 +2113,15 @@ if (debug) write(6,*) 'get_sizes: done'
   end subroutine get_sizes
 
   subroutine get_grids
-    use mp, only: proc0
+
     use theta_grid_eik, only: eik_get_grids
     use theta_grid_salpha, only: salpha_get_grids
     use theta_grid_file, only: file_get_grids
     use theta_grid_params, only: eps, btor_slab
     use geometry, only: rhoc
+
     implicit none
+
     logical:: debug=.false.
     select case (eqopt_switch)
     case (eqopt_eik)
@@ -2141,16 +2142,16 @@ if (debug) write(6,*) 'get_grids: call salpha_get_grids'
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-            shat, drhodpsi, kxfac, qval, shape, gb_to_cv, Bpol, &
+            shat, drhodpsi, kxfac, qval, shape, Bpol, &
             dgradpardrho, dgradparbdrho, dcvdrift0drho, dgbdrift0drho, &
             dcvdriftdrho, dgbdriftdrho, dgds2dr, dgds21dr, dgds22dr, dBdrho)
     case (eqopt_file)
 if (debug) write(6,*) 'get_grids: call file_get_grids'
-       call file_get_grids (nperiod, ntheta, ntgrid, nbset, theta, bset, bmag, &
+       call file_get_grids (ntgrid, nbset, theta, bset, bmag, &
             gradpar, gbdrift, gbdrift0, cvdrift, cvdrift0, cdrift, cdrift0, &
             gbdrift_th, cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq, grho, &
             Rplot, Zplot, Rprime, Zprime, aplot, aprime, &
-            shat, drhodpsi, kxfac, qval, gb_to_cv, Bpol)
+            shat, drhodpsi, kxfac, qval, gb_to_cv)
        shape = 'torus   '
     end select
     kxfac = abs(kxfac)
@@ -2162,7 +2163,7 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
 ! cleaner equivalent alternative to using btor_slab in "dist_fn_knobs", and 
 ! sets geometric paramater itor_over_B in one place for ALL geometries.
 !
-    if (eqopt_switch .eq. eqopt_salpha .and. eps .eq. 0. ) then
+    if (eqopt_switch .eq. eqopt_salpha .and. eps < epsilon(0.) ) then
        itor_over_B = btor_slab
     else
 !CMR, 19/10/10: moved MAB's definition of geometry quantity itor_over_B from 
@@ -2176,7 +2177,7 @@ if (debug) write(6,*) 'get_grids: call file_get_grids'
     ! CMR, 2/2/2011: itor_over_B=0 if rhoc=0
     !                this dropping parallel sheared flow source term in GKE
     !                itor_over_B=0 is safer than itor_over_B=NaN!
-       if (rhoc /= 0.) itor_over_B = qval / rhoc * IoB
+       if (abs(rhoc) > epsilon(0.)) itor_over_B = qval / rhoc * IoB
      endif
   end subroutine get_grids
 

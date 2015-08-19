@@ -50,7 +50,7 @@ contains
 
     tnew=timer_local()
 
-    if (targ(2) == 0.) then
+    if (abs(targ(2)) < epsilon(0.)) then
        targ(2) = tnew
     else
        targ(1)=targ(1)+tnew-targ(2)
@@ -68,7 +68,7 @@ contains
 ! only on proc0
     use file_utils, only: init_error_unit, init_input_unit, list_name
 ! <MAB
-    use mp, only: job, scope, allprocs
+    use mp, only: job, scope
     use mp, only: proc0, nproc
     use mp, only: init_jobs, broadcast, finish_mp
     implicit none
@@ -85,7 +85,7 @@ contains
     ! open file containing list of input files to run and read total
     ! number of input files from first line
     if (.not. present(n_ensembles)) then
-       if (proc0) then		 
+       if (proc0) then
           call get_unused_unit(list_unit)
           open (unit=list_unit, file=trim(list_name))
           read (list_unit,*) njobs
@@ -94,7 +94,7 @@ contains
        njobs = n_ensembles
     end if
     call broadcast (njobs)
-
+    
     if (nproc < njobs) then
        if (proc0) then
           write (*,*) 
@@ -106,7 +106,7 @@ contains
        call finish_mp
        stop
     end if
-       
+    
     if (mod(nproc, njobs) /= 0) then
        if (proc0) then
           write (*,*) 
@@ -118,9 +118,9 @@ contains
        call finish_mp
        stop
     end if
-       
+    
     allocate (job_list(0:njobs-1))
-       
+    
     if (proc0) then
        if (.not. present(n_ensembles)) then
           do i=0,njobs-1
@@ -157,7 +157,7 @@ contains
        call init_input_unit (inp)
     end if
     ! <MAB
-
+    
     if (nproc > 1 .and. proc0) &
          & write(*,*) 'Job ',job,' is called ',trim(run_name),&
          & ' and is running on ',nproc,' processors'
@@ -165,11 +165,11 @@ contains
          & ' and is running on ',nproc,' processor'
     
     deallocate (group0, job_list) ! MAB
-       
+    
   end subroutine job_fork
-
+  
   subroutine checkstop(exit,list)
-
+    
     use mp, only: proc0, broadcast
     use file_utils, only: run_name, list_name
     logical, intent (in), optional :: list
@@ -177,7 +177,7 @@ contains
     character (len=300) :: filename
     
     logical :: exit_local
-
+    
     ! If .stop file has appeared, set exit flag
     filename=trim(run_name)//".stop"
     if(present(list)) then
@@ -188,11 +188,11 @@ contains
        inquire(file=filename,exist=exit_local)
        exit = exit .or. exit_local
     end if
-
+    
     call broadcast (exit)
-
+    
   end subroutine checkstop
-
+  
   subroutine checktime(avail_time,exit)
     use mp, only: proc0, broadcast
     use file_utils, only: error_unit

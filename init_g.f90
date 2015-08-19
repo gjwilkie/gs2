@@ -231,7 +231,7 @@ contains
     if (reality) then
        phi(:,1,1) = 0.0
 
-       if (naky > 1 .and. aky(1) == 0.0) then
+       if (naky > 1 .and. aky(1) < epsilon(0.0)) then
           phi(:,:,1) = 0.0
        end if
 
@@ -263,8 +263,8 @@ contains
 
     use mp, only: proc0
     use species, only: spec
-    use theta_grid, only: ntgrid, theta, bmag
-    use kt_grids, only: naky, ntheta0, theta0, aky, reality
+    use theta_grid, only: ntgrid, bmag
+    use kt_grids, only: naky, ntheta0
     use vpamu_grids, only: nvgrid, vpa, mu
     use dist_fn_arrays, only: g, gnew, gold
     use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
@@ -310,8 +310,8 @@ contains
 
     use constants, only: zi
     use species, only: spec
-    use theta_grid, only: ntgrid, theta, bmag, itor_over_b
-    use kt_grids, only: naky, ntheta0, theta0, akx
+    use theta_grid, only: itor_over_b
+    use kt_grids, only: ntheta0, akx
     use vpamu_grids, only: nvgrid, energy, vpa
     use dist_fn_arrays, only: g, gnew, gold
     use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
@@ -321,7 +321,7 @@ contains
     implicit none
 
     integer :: iglo
-    integer :: ig, ik, it, is, imu, iv
+    integer :: ik, it, is, imu, iv
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
@@ -380,8 +380,6 @@ contains
     use dist_fn_arrays, only: g, gnew, gold
     use dist_fn_arrays, only: gpnew, gpold!, ghnew, ghold
     use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx, proc_id
-    use dist_fn, only: boundary_option_linked, boundary_option_switch
-    use dist_fn, only: l_links, r_links
     use redistribute, only: fill, delete_redist
     use run_parameters, only: rhostar
     use ran
@@ -424,7 +422,7 @@ contains
     if (ikx_init  > 0) call single_initial_kx(phi)
     
     !Sort out the zonal/self-periodic modes
-    if (naky .ge. 1 .and. aky(1) == 0.0) then
+    if (naky .ge. 1 .and. aky(1) < epsilon(0.0)) then
        !Apply scaling factor
        phi(:,:,1) = phi(:,:,1)*zf_init
        
@@ -544,9 +542,9 @@ contains
   subroutine ginit_rh
 
     use species, only: spec, has_electron_species
-    use theta_grid, only: ntgrid, theta, bmag
-    use kt_grids, only: naky, ntheta0, theta0
-    use vpamu_grids, only: nvgrid, vpa, mu, vperp2
+    use theta_grid, only: ntgrid, bmag
+    use kt_grids, only: naky, ntheta0
+    use vpamu_grids, only: nvgrid, vpa, mu
     use dist_fn_arrays, only: g, gnew, gold, kperp2
     use dist_fn_arrays, only: gpnew, gpold
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
@@ -556,10 +554,9 @@ contains
 
     implicit none
 
-    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi, odd
-    real, dimension (-ntgrid:ntgrid) :: dfac, ufac, tparfac, tperpfac
+    complex, dimension (-ntgrid:ntgrid,ntheta0,naky) :: phi
     integer :: iglo
-    integer :: ig, ik, it, imu, is
+    integer :: ik, it, imu, is
     
     ! initialize g to be a Maxwellian with a constant density perturbation
 
@@ -662,7 +659,7 @@ contains
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc       
        if (spec(is_idx(g_lo, iglo))%type /= electron_species) cycle
-       if (aky(ik_idx(g_lo, iglo)) /= 0.) cycle
+       if (aky(ik_idx(g_lo, iglo)) > epsilon(0.)) cycle
        do it = 1, ntheta0
           do iv = -nvgrid, nvgrid
              gavg(:,iv,it,iglo) = sum(g(:,iv,it,iglo)*delthet*jacob)*wgt

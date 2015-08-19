@@ -67,7 +67,7 @@ contains
        write (report_unit, *) 
        write (report_unit, fmt="('ky rho = ',f10.4)") aky
        write (report_unit, fmt="('theta_0 = ',f10.4)") theta0
-       if (akx /= 0.) then
+       if (abs(akx) > epsilon(0.)) then
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, fmt="('The value of akx in the kt_grids_single_parameters namelist is ignored.')") 
@@ -169,7 +169,7 @@ contains
 !
 ! BD: Assumption here differs from convention that abs(shat) <= 1.e-5 triggers periodic bc
 !
-    if (shat /= 0.0) then  ! ie assumes boundary_option .eq. 'linked'
+    if (abs(shat) > epsilon(0.)) then  ! ie assumes boundary_option .eq. 'linked'
        dtheta0 = 0.0
        if (ntheta0 > 1) dtheta0 = (theta0_max - theta0_min)/real(ntheta0 - 1)
 
@@ -219,7 +219,7 @@ contains
 ! CMR, add some !!!error checking!!! for ballooning space runs for shat /= 0 
 ! using flow shear: check that the constraints on theta0 grid are satisfied!
 
-       if (shat /= 0) then
+       if (abs(shat) > epsilon(0.)) then
          if (abs(mod(twopi-theta0_max+theta0_min,twopi)-dtheta0) > 1.0e-3*dtheta0) then
              write (report_unit, *) 
              write (report_unit, fmt="('IF using perp ExB flow shear in BALLOONING SPACE there is an ERROR that will corrupt results.')")
@@ -371,7 +371,7 @@ contains
     integer :: in_file
     logical :: exist
     namelist /kt_grids_box_parameters/ naky, ntheta0, ly, nx, ny, jtwist, &
-	y0, rtwist, x0, nkpolar
+         y0, rtwist, x0, nkpolar
 
     call init_theta_grid
 
@@ -387,10 +387,10 @@ contains
 
     if (y0 < 0) y0 = -1./y0
 
-    if (ly == 0.) ly = 2.0*pi*y0
+    if (abs(ly) < epsilon(0.)) ly = 2.0*pi*y0
     if (naky == 0) naky = (ny-1)/3 + 1
     if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
-    if (rtwist == 0.) rtwist = real(jtwist)
+    if (abs(rtwist) < epsilon(0.)) rtwist = real(jtwist)
     if (nkpolar == 0) nkpolar = int(real(naky-1.)*sqrt(2.))
     
     nkpolar_private = nkpolar
@@ -410,7 +410,7 @@ contains
      write (unit, fmt="(' nx = ',i4)") nx_private
      write (unit, fmt="(' ny = ',i4)") ny_private
      write (unit, fmt="(' Ly = ',e17.10)") ly
-     if (rtwist /= 0.) then
+     if (abs(rtwist) > epsilon(0.)) then
         write (unit, fmt="(' rtwist = ',e17.10)") rtwist
      else
         write (unit, fmt="(' jtwist = ',i4)") jtwist
@@ -446,7 +446,7 @@ contains
 
     if(abs(shat) <=  1.e-5) then   ! non-quantized b/c assumed to be periodic instead linked boundary conditions       
 
-       if (x0 == 0.) then          
+       if (abs(x0) < epsilon(0.)) then          
           
           if (rtwist > 0) then 
              ratio = rtwist
@@ -489,7 +489,7 @@ contains
        akx(i) = real(i-ntheta0-1)*dkx
     end do
 
-    if (shat /= 0.) then
+    if (abs(shat) > epsilon(0.)) then
        do i = 1, ntheta0
           theta0(i,1) = 0.0
           theta0(i,2:) = akx(i)/(aky(2:)*shat)
@@ -517,7 +517,7 @@ contains
     ny=ny_private
     shat=shat_real
 
-    if (y0 /= 2.) then
+    if (abs(y0-2.) > epsilon(0.)) then
        if (abs(2.0*pi*y0 - ly) > 1.0e-7) then
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
@@ -535,7 +535,7 @@ contains
     write (report_unit, fmt="('The domain is ',f10.4,' rho in the y direction.')") ly
     
     if (abs(shat) <= 1.e-5) then
-       if (x0 == 0.) then
+       if (abs(x0) < epsilon(0.)) then
           if (rtwist > 0) then
              write (report_unit, fmt="('At theta=0, the domain has Lx = ',f10.5)")  ly*rtwist
           else
@@ -605,13 +605,13 @@ contains
 
   subroutine init_kt_grids
 
-    use theta_grid, only: init_theta_grid, shat, gds22
+    use theta_grid, only: init_theta_grid, shat
     use mp, only: proc0, broadcast
     use constants, only: pi
 
     implicit none
 
-    integer :: ik, it
+    integer :: ik
 
     if (initialized) return
     initialized = .true.
