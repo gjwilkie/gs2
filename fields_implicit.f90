@@ -1,5 +1,7 @@
 module fields_implicit
+
   use fields_arrays, only: nidx
+
   implicit none
 
   public :: init_fields_implicit
@@ -20,12 +22,15 @@ module fields_implicit
 contains
 
   subroutine init_fields_implicit
+
     use antenna, only: init_antenna
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids
     use gs2_layouts, only: init_gs2_layouts
     use parameter_scan_arrays, only: run_scan
+
     implicit none
+
     logical:: debug=.false.
     logical :: dummy
 
@@ -85,7 +90,7 @@ contains
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use fields_arrays, only: phip, aparp, bparp, phipnew, aparpnew, bparpnew
     use fields_arrays, only: phih, aparh, bparh, phihnew, aparhnew, bparhnew
-    use dist_fn_arrays, only: g, gnew, gpnew, gpold !ghnew, ghold
+    use dist_fn_arrays, only: g, gold, gnew, gpnew, gpold !ghnew, ghold
     use dist_fn, only: get_init_field
     use init_g, only: new_field_init
 
@@ -94,7 +99,7 @@ contains
     if (new_field_init) then
        ! get iniitial phik corresponding to lowest order gk
        call get_init_field (gnew, phinew, aparnew, bparnew)
-       phi = phinew; apar = aparnew; bpar = bparnew; g = gnew
+       phi = phinew; apar = aparnew; bpar = bparnew; g = gnew ; gold = gnew
 
        ! get initial dphi/drho corresponding to dgk/drho
        call get_init_field (gpnew, phipnew, aparpnew, bparpnew)
@@ -122,31 +127,28 @@ contains
 
   end subroutine init_phi_implicit
 
-  subroutine get_field_vector (fl, gfnc, phi, apar, bpar)
+  subroutine get_field_vector (fl, gfnc, phifnc, aparfnc, bparfnc)
 
     use gs2_layouts, only: g_lo
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use dist_fn, only: getfieldeq
     use run_parameters, only: fphi, fapar, fbpar
-    use prof, only: prof_entering, prof_leaving
     use vpamu_grids, only: nvgrid
 
     implicit none
 
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: gfnc
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phifnc, aparfnc, bparfnc
     complex, dimension (:,:,:), intent (out) :: fl
     complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
     integer :: istart, ifin
-
-    call prof_entering ("get_field_vector", "fields_implicit")
 
     allocate (fieldeq (-ntgrid:ntgrid,ntheta0,naky))
     allocate (fieldeqa(-ntgrid:ntgrid,ntheta0,naky))
     allocate (fieldeqp(-ntgrid:ntgrid,ntheta0,naky))
 
-    call getfieldeq (gfnc, phi, apar, bpar, fieldeq, fieldeqa, fieldeqp)
+    call getfieldeq (gfnc, phifnc, aparfnc, bparfnc, fieldeq, fieldeqa, fieldeqp)
 
     ifin = 0
 
@@ -170,8 +172,6 @@ contains
 
     deallocate (fieldeq, fieldeqa, fieldeqp)
 
-    call prof_leaving ("get_field_vector", "fields_implicit")
-
   end subroutine get_field_vector
 
   subroutine get_field_solution (u, phifnc, aparfnc, bparfnc)
@@ -179,7 +179,6 @@ contains
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: jf_lo, ij_idx
-    use prof, only: prof_entering, prof_leaving
 
     implicit none
 
@@ -187,8 +186,6 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (out) :: phifnc, aparfnc, bparfnc
 
     integer :: ik, it, ifield, ll, lr
-
-    call prof_entering ("get_field_solution", "fields_implicit")
 
     ifield = 0
 
@@ -225,15 +222,12 @@ contains
        end do
     endif
 
-    call prof_leaving ("get_field_solution", "fields_implicit")
-
   end subroutine get_field_solution
 
-  subroutine getfield (gfnc, phi, apar, bpar)
+  subroutine getfield (gfnc, phifnc, aparfnc, bparfnc)
 
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: f_lo, jf_lo, ij, mj, dj, g_lo
-    use prof, only: prof_entering, prof_leaving
     use fields_arrays, only: aminv
     use theta_grid, only: ntgrid
     use dist_fn, only: N_class
@@ -244,14 +238,13 @@ contains
     implicit none
 
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: gfnc
-    complex, dimension (-ntgrid:,:,:), intent (in out) :: phi, apar, bpar
+    complex, dimension (-ntgrid:,:,:), intent (in out) :: phifnc, aparfnc, bparfnc
     complex, dimension (:,:,:), allocatable :: fl
     complex, dimension (:), allocatable :: u
     integer :: jflo, ik, it, nl, nr, i, m, n, dc
 
     if (proc0) call time_message(.false.,time_field,' Field Solver')
 
-    call prof_entering ("getfield", "fields_implicit")
     allocate (fl(nidx, ntheta0, naky))
     allocate (u (0:nidx*ntheta0*naky-1))
 
@@ -261,7 +254,7 @@ contains
     ! setup fl to contain the field equations, which should be zero
     ! for the right choice of phi, apar, bpar.  They will be nonzero
     ! though because they have been evaluated using old values of phi, apar, bpar.
-    call get_field_vector (fl, gfnc, phi, apar, bpar)
+    call get_field_vector (fl, gfnc, phifnc, aparfnc, bparfnc)
 
 !    write (*,*) 'fl', fl(:,1,naky)
 
@@ -291,11 +284,9 @@ contains
     deallocate (fl)
     call sum_allreduce (u)
 
-    call get_field_solution (u, phi, apar, bpar)
+    call get_field_solution (u, phifnc, aparfnc, bparfnc)
 
     deallocate (u)
-
-    call prof_leaving ("getfield", "fields_implicit")
 
     if (proc0) call time_message(.false.,time_field,' Field Solver')
 
@@ -331,8 +322,6 @@ contains
     !    call exb_shear (ghnew, phihnew, aparhnew, bparhnew)
     ! end if
 
-    ! TMP FOR TESTING -- MAB
-!    phinew = 0.
     g = gnew ; gold = gnew ; gpold = gpnew !; ghold = ghnew
     phi = phinew ; phip = phipnew !; phih = phihnew
     apar = aparnew ; aparp = aparpnew !; aparh = aparhnew
@@ -347,19 +336,14 @@ contains
        call timeadv (gnew, gold, phi, apar, bpar, phinew, aparnew, istep, equation=0)
     end if
 
-!    if (proc0) write (*,*) 'phi1', istep, real(phinew(0,1,naky)), aimag(phinew(0,1,naky))
-
     aparnew = aparnew + apar_ext
 
     ! get phik, apark, bpark
     call getfield (gnew, phinew, aparnew, bparnew)
-! TMP FOR TESTING -- MAB
-!    phinew = 0.
+
     phinew = phinew + phi
     aparnew = aparnew + apar
     bparnew = bparnew + bpar
-
-!    if (proc0) write (*,*) 'phi2', istep, real(phinew(0,1,naky)), aimag(phinew(0,1,naky))
 
     if (remove_zonal_flows_switch) call remove_zonal_flows
     
@@ -372,12 +356,10 @@ contains
             aparnew, istep, equation=0, mode=diagnostics)
     end if
 
-!    if (proc0) write (*,*) 'phi3', istep, real(phinew(0,1,naky)), aimag(phinew(0,1,naky))
-
     if (profile_variation) then
        ! next solve for g'^{n+1} and phi'^{n+1} using g^{n+1} and phi^{n+1}
 
-       ! get (dgk/drho)^{*}, which is is (dgk/drho)^{n+1} obtained with (dphik/drho)=(dphik/drho)^{n}
+       ! get (dgk/drho)^{*}, which is (dgk/drho)^{n+1} obtained with (dphik/drho)=(dphik/drho)^{n}
        call timeadv (gpnew, gpold, phip, aparp, bparp, phipnew, &
             aparpnew, istep, equation=1)
        ! get next order gk^{*}. the ^{*} indicates evaluation of g^{n+1} obtained with phi=phi^{n}
@@ -391,7 +373,7 @@ contains
        phipnew = phipnew + phip
        aparpnew = aparpnew + aparp
        bparpnew = bparpnew + bparp
-       
+ 
        call get_fieldcorrection (gnew, phinew, phipnew)
        
        ! get (dgk/drho)^{n+1}
@@ -490,18 +472,15 @@ contains
     use fields_arrays, only: phi, apar, bpar, phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use dist_fn_arrays, only: g
+    use dist_fn_arrays, only: g, gold
     use dist_fn, only: M_class, N_class, i_class
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: init_fields_layouts, f_lo
     use gs2_layouts, only: init_jfields_layouts
-    use prof, only: prof_entering, prof_leaving
     implicit none
     integer :: ig, ifield, it, ik, i, m, n
     complex, dimension(:,:), allocatable :: am
     logical :: endpoint
-
-    call prof_entering ("init_response_matrix", "fields_implicit")
 
     nfield = 0
     if (fphi > epsilon(0.0)) nfield = nfield + 1
@@ -526,7 +505,8 @@ contains
 
        am = 0.0
        g = 0.0
-       
+       gold = 0.0
+
        phi = 0.0
        apar = 0.0
        bpar = 0.0
@@ -601,8 +581,6 @@ contains
 
     end do
 
-    call prof_leaving ("init_response_matrix", "fields_implicit")
-
   end subroutine init_response_matrix
 
   subroutine init_response_row (ig, ifield, am, ic, n)
@@ -614,7 +592,6 @@ contains
     use dist_fn, only: getfieldeq, timeadv, M_class, N_class
     use run_parameters, only: fphi, fapar, fbpar
     use gs2_layouts, only: f_lo, idx, idx_local
-    use prof, only: prof_entering, prof_leaving
 
     implicit none
 
@@ -622,8 +599,6 @@ contains
     complex, dimension(:,f_lo(ic)%llim_proc:), intent (in out) :: am
     complex, dimension (:,:,:), allocatable :: fieldeq, fieldeqa, fieldeqp
     integer :: irow, istart, iflo, ik, it, ifin, m, nn
-
-    call prof_entering ("init_response_row", "fields_implicit")
 
     allocate (fieldeq (-ntgrid:ntgrid, ntheta0, naky))
     allocate (fieldeqa(-ntgrid:ntgrid, ntheta0, naky))
@@ -673,8 +648,9 @@ contains
                     
        end do
     end do
+
     deallocate (fieldeq, fieldeqa, fieldeqp)
-    call prof_leaving ("init_response_row", "fields_implicit")
+
   end subroutine init_response_row
 
   subroutine init_inverse_matrix (am, ic)
@@ -686,7 +662,6 @@ contains
     use gs2_layouts, only: f_lo, idx, idx_local, proc_id, jf_lo
     use gs2_layouts, only: if_idx, im_idx, in_idx, local_field_solve
     use gs2_layouts, only: ig_idx, ifield_idx, ij_idx, mj, dj
-    use prof, only: prof_entering, prof_leaving
     use fields_arrays, only: aminv
     use dist_fn, only: i_class, M_class, N_class
 
@@ -701,8 +676,6 @@ contains
     integer :: irow, ilo, jlo, dc, iflo, ierr
     logical :: iskip, jskip
 
-    call prof_entering ("init_inverse_matrix", "fields_implicit")
-    
     allocate (lhscol (nidx*N_class(ic),M_class(ic)))
     allocate (rhsrow (nidx*N_class(ic),M_class(ic)))
     call barrier
@@ -761,7 +734,7 @@ contains
           
           irow = if_idx(f_lo(ic),jlo)
 
-          if (aky(ik) /= 0.0 .or. akx(it) /= 0.0) then
+          if (aky(ik) > epsilon(0.0) .or. abs(akx(it)) > epsilon(0.0)) then
              fac = am(i,jlo)/lhscol(i,m)
              am(i,jlo) = fac
              am(:i-1,jlo) = am(:i-1,jlo) - lhscol(:i-1,m)*fac
@@ -938,7 +911,6 @@ contains
 
     deallocate (am_tmp)
 
-    call prof_leaving ("init_inverse_matrix", "fields_implicit")
   end subroutine init_inverse_matrix
 
   subroutine finish_fields_layouts
@@ -1043,19 +1015,19 @@ contains
 
   end subroutine kt2ki
 
-  subroutine timer
+  ! subroutine timer
     
-    character (len=10) :: zdate, ztime, zzone
-    integer, dimension(8) :: ival
-    real, save :: told=0., tnew=0.
+  !   character (len=10) :: zdate, ztime, zzone
+  !   integer, dimension(8) :: ival
+  !   real, save :: told=0., tnew=0.
     
-    call date_and_time (zdate, ztime, zzone, ival)
-    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
-    if (told > 0.) then
-       print *, 'Fields_implicit: Time since last called: ',tnew-told,' seconds'
-    end if
-    told = tnew
-  end subroutine timer
+  !   call date_and_time (zdate, ztime, zzone, ival)
+  !   tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
+  !   if (told > 0.) then
+  !      print *, 'Fields_implicit: Time since last called: ',tnew-told,' seconds'
+  !   end if
+  !   told = tnew
+  ! end subroutine timer
 
 end module fields_implicit
 
