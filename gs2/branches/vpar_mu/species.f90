@@ -176,7 +176,7 @@ contains
           write (unit, fmt="(' tprim = ',e13.6)") spec(i)%tprim
           write (unit, fmt="(' fprim = ',e13.6)") spec(i)%fprim
           write (unit, fmt="(' uprim = ',e13.6)") spec(i)%uprim
-          if (spec(i)%uprim2 /= 0.) write (unit, fmt="(' uprim2 = ',e13.6)") spec(i)%uprim2
+          if (abs(spec(i)%uprim2) > epsilon(0.)) write (unit, fmt="(' uprim2 = ',e13.6)") spec(i)%uprim2
           write (unit, fmt="(' vnewk = ',e13.6)") spec(i)%vnewk
           if (spec(i)%type == ion_species) &
                write (unit, fmt="(a)") ' type = "ion" /'

@@ -219,7 +219,7 @@ contains
 
   subroutine init_dist_fn
 
-    use mp, only: proc0, finish_mp, nproc, mp_abort
+    use mp, only: proc0, finish_mp, mp_abort
     use species, only: init_species, nspec
     use theta_grid, only: init_theta_grid, ntgrid, ntheta, nperiod
     use kt_grids, only: init_kt_grids, naky, ntheta0
@@ -445,7 +445,7 @@ contains
 
     use centering, only: get_cell_value
     use species, only: nspec
-    use theta_grid, only: ntgrid, bmag, thet_imp
+    use theta_grid, only: ntgrid, thet_imp
     use kt_grids, only: ntheta0
     use vpamu_grids, only: nvgrid, vpa_imp, nmu
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
@@ -526,7 +526,7 @@ contains
 
   function wdrift_func (ig, iv, imu, it, ik)
 
-    use theta_grid, only: bmag, gbdrift, gbdrift0, cvdrift, cvdrift0
+    use theta_grid, only: gbdrift, gbdrift0, cvdrift, cvdrift0
     use theta_grid, only: shat
     use kt_grids, only: aky, theta0, akx
     use vpamu_grids, only: vpa, vperp2
@@ -539,7 +539,7 @@ contains
     integer, intent (in) :: ig, ik, it, iv, imu
 
     ! note that wunits=aky/2 (for wstar_units=F)
-    if (aky(ik) == 0.0) then
+    if (aky(ik) < epsilon(0.0)) then
        wdrift_func = akx(it)/shat &
             * (cvdrift0(ig)*vpa(iv)**2 + gbdrift0(ig)*0.5*vperp2(ig,imu)) &
             * code_dt/2.0
@@ -552,8 +552,8 @@ contains
 
   function wdriftp_func (ig, iv, imu, it, ik)
 
-    use theta_grid, only: bmag, shat, dcvdrift0drho, dgbdrift0drho
-    use theta_grid, only: dcvdriftdrho, dgbdriftdrho, theta
+    use theta_grid, only: shat, dcvdrift0drho, dgbdrift0drho
+    use theta_grid, only: dcvdriftdrho, dgbdriftdrho
     use kt_grids, only: aky, theta0, akx
     use vpamu_grids, only: vpa, mu, nmu
     use gs2_time, only: code_dt
@@ -565,7 +565,7 @@ contains
     integer, intent (in) :: ig, ik, it, iv, imu
 
     ! note that wunits=aky/2 (for wstar_units=F)
-    if (aky(ik) == 0.0) then
+    if (aky(ik) < epsilon(0.0)) then
        wdriftp_func = akx(it)/shat &
             * (dcvdrift0drho(ig)*vpa(iv)**2 + dgbdrift0drho(ig)*mu(imu)) &
             * code_dt*0.5
@@ -623,7 +623,7 @@ contains
 
   function wcoriolis_func (ig, iv, it, ik, is)
 
-    use theta_grid, only: bmag, cdrift, cdrift0, shat
+    use theta_grid, only: cdrift, cdrift0, shat
     use kt_grids, only: aky, theta0, akx
     use vpamu_grids, only: vpa
     use run_parameters, only: wunits
@@ -635,7 +635,7 @@ contains
     real :: wcoriolis_func
     integer, intent (in) :: ig, ik, it, iv, is
 
-    if (aky(ik) == 0.0) then
+    if (aky(ik) < epsilon(0.0)) then
        wcoriolis_func = mach * vpa(iv) &
             * cdrift0(ig) * code_dt * akx(it)/(2.*shat*spec(is)%stm)
     else
@@ -651,8 +651,8 @@ contains
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: vpar, vparp
     use species, only: spec, nspec
-    use theta_grid, only: ntgrid, bmag, thet_imp, dbdthetc, gradparc, delthet, gradpar
-    use theta_grid, only: dgradpardrhoc, dgradparbdrhoc, dgradparbdrho
+    use theta_grid, only: ntgrid, bmag, thet_imp, dbdthetc, gradparc, delthet
+    use theta_grid, only: dgradpardrhoc, dgradparbdrhoc
     use vpamu_grids, only: vperp2, nmu, mu, energy, anon, anonc
     use vpamu_grids, only: vpa, vpac, vpa_imp, nvgrid, dvpa
 
@@ -723,8 +723,8 @@ contains
     use centering, only: get_cell_value
     use geometry, only: d2psidr2
     use species, only: spec, nspec
-    use theta_grid, only: ntgrid, thet_imp, itor_over_b, dBdrho, drhodpsi, theta, bmag
-    use vpamu_grids, only: nvgrid, vpa, vperp2, vpa_imp, nmu, energy, mu
+    use theta_grid, only: ntgrid, thet_imp, itor_over_b, dBdrho, drhodpsi
+    use vpamu_grids, only: nvgrid, vpa, vpa_imp, nmu, energy, mu
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
     use gs2_layouts, only: is_idx, ik_idx, imu_idx, g_lo
@@ -803,12 +803,11 @@ contains
 
     use dist_fn_arrays, only: aj0, aj1, kperp2, aj0p, dkperp2dr
     use species, only: spec
-    use theta_grid, only: ntgrid, bmag, dBdrho, theta
-    use kt_grids, only: naky, akx, ntheta0
+    use theta_grid, only: ntgrid, bmag, dBdrho
+    use kt_grids, only: ntheta0
     use vpamu_grids, only: vperp2, mu
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
     use spfunc, only: j0, j1
-    use mp, only: proc0
 
     implicit none
 
@@ -861,7 +860,6 @@ contains
   subroutine init_kperp2
 
     use dist_fn_arrays, only: kperp2, dkperp2dr
-    use species, only: spec
     use theta_grid, only: ntgrid, gds2, gds21, gds22, shat
     use theta_grid, only: dgds2dr, dgds21dr, dgds22dr
     use kt_grids, only: naky, ntheta0, aky, theta0, akx
@@ -876,7 +874,7 @@ contains
     allocate (kperp2(-ntgrid:ntgrid,ntheta0,naky))
     allocate (dkperp2dr(-ntgrid:ntgrid,ntheta0,naky))
     do ik = 1, naky
-       if (aky(ik) == 0.0) then
+       if (aky(ik) < epsilon(0.0)) then
          do it = 1, ntheta0
              kperp2(:,it,ik) = akx(it)*akx(it)*gds22/(shat*shat)
              dkperp2dr(:,it,ik) = akx(it)*akx(it)*dgds22dr/shat**2
@@ -905,8 +903,12 @@ contains
        print *,"WARNING: kt_grids used in init_par_filter before initialised?"
     endif
 
+# if FFT == _FFTW_
+    call init_zf (ntgrid)
+# elif FFT == _FFTW3_
     call init_zf (ntgrid, ntheta0*naky)
-
+# endif
+    
   end subroutine init_par_filter
 
   subroutine par_spectrum(an, an2)
@@ -932,15 +934,14 @@ contains
     use gs2_time, only: code_dt
     use run_parameters, only: t_imp, rhostar
     use species, only: spec, nspec
-    use theta_grid, only: ntgrid, dbdthetc, gradparc, thet_imp, delthet, ntheta, gradpar
-    use theta_grid, only: cvdrift_th, gbdrift_th
-    use vpamu_grids, only: nvgrid, vpa_imp, vpac, dvpa, vpa, mu
+    use theta_grid, only: ntgrid, dbdthetc, gradparc, thet_imp, ntheta
+    use vpamu_grids, only: nvgrid, vpa_imp, dvpa, vpa, mu
     use kt_grids, only: naky, ntheta0
     use centering, only: get_cell_value
 
     implicit none
 
-    integer :: iglo, imu, ig, iv, ntg, is, it, ik, igl, igm, igu, iseg, ie, iup
+    integer :: iglo, imu, ig, iv, ntg, is, it, ik, igl, igm, igu, iseg, ie
     real :: thm_fac, vpm_fac, vpp_fac, thp_fac, stm
 
     real, dimension (:,:), allocatable :: dum1, dum2
@@ -1229,7 +1230,7 @@ contains
 
   subroutine init_connections
 
-    use mp, only: nproc, mp_abort, proc0
+    use mp, only: nproc, mp_abort
     use centering, only: init_centering
     use theta_grid, only: nperiod, ntgrid, ntheta
     use kt_grids, only: ntheta0, jtwist_out, naky, aky
@@ -1238,8 +1239,7 @@ contains
 
     implicit none
 
-    integer :: iseg, ik, ie, ntg, it, i, j, k
-    integer, dimension (naky*ntheta0) :: n_k
+    integer :: iseg, ik, ie, ntg, it
 
     ntg = ntheta/2
 
@@ -1250,7 +1250,7 @@ contains
        periodic = .true.
     else
        do ik = 1, naky
-          if (aky(ik)==0.0) periodic(ik) = .true.
+          if (aky(ik) < epsilon(0.0)) periodic(ik) = .true.
        end do
     end if
 
@@ -1434,25 +1434,20 @@ contains
 
   subroutine init_connected_bc
 
-    use theta_grid, only: ntgrid, nperiod, ntheta, theta
+    use theta_grid, only: nperiod, ntheta, theta
     use kt_grids, only: naky, ntheta0, aky, theta0
-    use gs2_layouts, only: g_lo, ik_idx, imu_idx
+    use gs2_layouts, only: ik_idx, imu_idx
     use gs2_layouts, only: idx, proc_id
-    use mp, only: iproc, nproc, max_allreduce, proc0
+    use mp, only: iproc, max_allreduce
     use constants
-    use redistribute, only: index_list_type, init_fill, delete_list
+    use redistribute, only: index_list_type, delete_list
     use vpamu_grids, only: nvgrid
 
     implicit none
 
-    type (index_list_type), dimension(0:nproc-1) :: to, from
-    integer, dimension (0:nproc-1) :: nn_from, nn_to
-    integer, dimension (3) :: to_low, from_low, to_high, from_high
-    integer :: ik, it, imu, is, iglo, it0, itl, itr, jshift0
-    integer :: ip, ipleft, ipright
-    integer :: iglo_left, iglo_right, i, j, k
-    integer :: iglo_star, it_star, ncell
-    integer :: n, n_links_max, nn_max
+    integer :: ik, it, it0, itl, itr, jshift0
+    integer :: i, j, k
+    integer :: it_star
     integer :: ng
     integer, dimension(naky*ntheta0) :: n_k
 
@@ -1468,7 +1463,7 @@ contains
 
     if (naky > 1 .and. ntheta0 > 1) then
        jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,2)-theta0(1,2)) + 0.01)
-    else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) /= 0.0) then
+    else if (naky == 1 .and. ntheta0 > 1 .and. aky(1) > epsilon(0.0)) then
        jshift0 = int((theta(ng)-theta(-ng))/(theta0(2,1)-theta0(1,1)) + 0.01)
     else
        jshift0 = 1
@@ -1488,7 +1483,7 @@ contains
           end if
 
           if (ik == 1) then
-             if (aky(ik) /= 0.0 .and. naky == 1) then
+             if (aky(ik) > epsilon(0.0) .and. naky == 1) then
                 ! for this case, jshift0 is delta j from Beer thesis
                 itl = it0 + jshift0
                 itr = it0 - jshift0
@@ -1511,11 +1506,11 @@ contains
              itleft(ik,it) = itl + ntheta0 + 1
           else
              ! for periodic, need to change below -- MAB/BD
-             ! j' = j + delta j not included in simulation, so can't connect
+             ! jhat = j + delta j not included in simulation, so cannot connect
              itleft(ik,it) = -1
           end if
 
-          ! same stuff for j' = j - delta j
+          ! same stuff for jhat = j - delta j
           if (itr >= 0 .and. itr < (ntheta0+1)/2) then
              itright(ik,it) = itr + 1
           else if (itr + ntheta0 + 1 > (ntheta0+1)/2 &
@@ -1537,7 +1532,7 @@ contains
 
     !    do it = 1, ntheta0
 
-    !       ! get processors and indices for j' (kx') modes connecting
+    !       ! get processors and indices for jhat (kxhat) modes connecting
     !       ! to mode j (kx) so we can set up communication
           
     !       if (itleft(ik,it) < 0) then
@@ -2026,39 +2021,39 @@ contains
 
   end subroutine init_connected_bc
 
-  subroutine get_left_connection (iglo, iglo_left, iproc_left)
-    use gs2_layouts, only: g_lo, proc_id, idx
-    use gs2_layouts, only: ik_idx, imu_idx, is_idx
-    use kt_grids, only: ntheta0
-    implicit none
-    integer, intent (in) :: iglo
-    integer, intent (out) :: iglo_left, iproc_left
-    integer :: ik, is, imu
+  ! subroutine get_left_connection (iglo, iglo_left, iproc_left)
+  !   use gs2_layouts, only: g_lo, proc_id, idx
+  !   use gs2_layouts, only: ik_idx, imu_idx, is_idx
+  !   use kt_grids, only: ntheta0
+  !   implicit none
+  !   integer, intent (in) :: iglo
+  !   integer, intent (out) :: iglo_left, iproc_left
+  !   integer :: ik, is, imu
 
-    ik = ik_idx(g_lo,iglo)
-    imu = imu_idx(g_lo,iglo)
-    is = is_idx(g_lo,iglo)
+  !   ik = ik_idx(g_lo,iglo)
+  !   imu = imu_idx(g_lo,iglo)
+  !   is = is_idx(g_lo,iglo)
        
-    iglo_left = idx(g_lo,ik,imu,is)
-    iproc_left = proc_id(g_lo,iglo_left)
+  !   iglo_left = idx(g_lo,ik,imu,is)
+  !   iproc_left = proc_id(g_lo,iglo_left)
     
-  end subroutine get_left_connection
+  ! end subroutine get_left_connection
 
-  subroutine get_right_connection (iglo, iglo_right, iproc_right)
-    use gs2_layouts, only: g_lo, proc_id, idx
-    use gs2_layouts, only: ik_idx, imu_idx, is_idx
-    implicit none
-    integer, intent (in) :: iglo
-    integer, intent (out) :: iglo_right, iproc_right
-    integer :: ik, imu, is
+  ! subroutine get_right_connection (iglo, iglo_right, iproc_right)
+  !   use gs2_layouts, only: g_lo, proc_id, idx
+  !   use gs2_layouts, only: ik_idx, imu_idx, is_idx
+  !   implicit none
+  !   integer, intent (in) :: iglo
+  !   integer, intent (out) :: iglo_right, iproc_right
+  !   integer :: ik, imu, is
 
-    ik = ik_idx(g_lo,iglo)
-    imu = imu_idx(g_lo,iglo)
-    is = is_idx(g_lo,iglo)
+  !   ik = ik_idx(g_lo,iglo)
+  !   imu = imu_idx(g_lo,iglo)
+  !   is = is_idx(g_lo,iglo)
 
-    iglo_right = idx(g_lo,ik,imu,is)
-    iproc_right = proc_id(g_lo,iglo_right)
-  end subroutine get_right_connection
+  !   iglo_right = idx(g_lo,ik,imu,is)
+  !   iproc_right = proc_id(g_lo,iglo_right)
+  ! end subroutine get_right_connection
 
   subroutine get_gresponse_matrix
 
@@ -2198,7 +2193,6 @@ contains
   subroutine fill_response (iglo, it, ik, impulse, response)
 
     use theta_grid, only: ntheta, ntgrid
-    use gs2_layouts, only: g_lo
     use dist_fn_arrays, only: gnew
     use vpamu_grids, only: nvgrid
 
@@ -2601,7 +2595,7 @@ contains
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: gfnc
     complex, dimension (:), intent (in out), optional :: source_mod
 
-    integer :: ntg, k, ik, iseg, kmax, iup, imu, iglow, igup
+    integer :: ntg, k, ik, iseg, kmax, iup, imu
     complex, dimension (:), allocatable :: dgdgn
 
     ik = ik_idx(g_lo,iglo)
@@ -2885,61 +2879,61 @@ contains
     
   end subroutine implicit_sweep_left
 
-  subroutine reset_gfnc (gfnc, iglo, it)
+  ! subroutine reset_gfnc (gfnc, iglo, it)
     
-    use gs2_layouts, only: g_lo, ik_idx
-    use theta_grid, only: ntgrid
-    use vpamu_grids, only: nvgrid
+  !   use gs2_layouts, only: g_lo, ik_idx
+  !   use theta_grid, only: ntgrid
+  !   use vpamu_grids, only: nvgrid
     
-    implicit none
+  !   implicit none
     
-    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: gfnc
-    integer, intent (in) :: iglo, it
+  !   complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: gfnc
+  !   integer, intent (in) :: iglo, it
     
-    integer :: iseg, ik
-    integer :: iglow, igup
+  !   integer :: iseg, ik
+  !   integer :: iglow, igup
     
-    ik = ik_idx(g_lo,iglo)
+  !   ik = ik_idx(g_lo,iglo)
     
-    do iseg = 1, nsegments(it,ik)
+  !   do iseg = 1, nsegments(it,ik)
 
-       iglow = ig_low(iseg)
-       igup = ig_up(iseg)
-       if (periodic(ik)) then
-          if (iseg==1) then
-             ! do not zero out leftmost theta for vpa < 0 if periodic,
-             ! as these points have been determined via response matrix
-             iglow = ig_low(iseg)+1
-          else if (iseg==nsegments(it,ik)) then
-             ! do not zero out rightmost theta for vpa >= 0 if periodic,
-             ! as these points have been determined via response matrix
-             igup = ig_up(iseg)-1
-          end if
-       end if
+  !      iglow = ig_low(iseg)
+  !      igup = ig_up(iseg)
+  !      if (periodic(ik)) then
+  !         if (iseg==1) then
+  !            ! do not zero out leftmost theta for vpa < 0 if periodic,
+  !            ! as these points have been determined via response matrix
+  !            iglow = ig_low(iseg)+1
+  !         else if (iseg==nsegments(it,ik)) then
+  !            ! do not zero out rightmost theta for vpa >= 0 if periodic,
+  !            ! as these points have been determined via response matrix
+  !            igup = ig_up(iseg)-1
+  !         end if
+  !      end if
 
-       ! zero out vpa=0, theta above and including midplane
-       gfnc(ig_mid(iseg):igup,0,itmod(iseg,it,ik),iglo) = 0.0
-       ! zero out vpa > 0, all theta except leftmost theta in each segment
-       ! note that leftmost theta in all segments except first will be 
-       ! immediately set by linking to rightmost theta of previous segment
-       ! if periodic, rightmost theta of last segment also not zeroed out
-       ! as it will have been fixed already by periodicity
-       gfnc(ig_low(iseg)+1:igup,1:,itmod(iseg,it,ik),iglo) = 0.0
-       ! zero out vpa < 0, all tehta except rightmost theta in each segment
-       ! note that rightmost theta in all segments except first will be
-       ! immediately set by linking to leftmost theat of previous segment
-       ! if periodic, leftmost theta of final segment also not zeroed out
-       ! as it will have been fixed already by periodicity
-       gfnc(iglow:ig_up(iseg)-1,-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
-    end do
+  !      ! zero out vpa=0, theta above and including midplane
+  !      gfnc(ig_mid(iseg):igup,0,itmod(iseg,it,ik),iglo) = 0.0
+  !      ! zero out vpa > 0, all theta except leftmost theta in each segment
+  !      ! note that leftmost theta in all segments except first will be 
+  !      ! immediately set by linking to rightmost theta of previous segment
+  !      ! if periodic, rightmost theta of last segment also not zeroed out
+  !      ! as it will have been fixed already by periodicity
+  !      gfnc(ig_low(iseg)+1:igup,1:,itmod(iseg,it,ik),iglo) = 0.0
+  !      ! zero out vpa < 0, all tehta except rightmost theta in each segment
+  !      ! note that rightmost theta in all segments except first will be
+  !      ! immediately set by linking to leftmost theat of previous segment
+  !      ! if periodic, leftmost theta of final segment also not zeroed out
+  !      ! as it will have been fixed already by periodicity
+  !      gfnc(iglow:ig_up(iseg)-1,-nvgrid:-1,itmod(iseg,it,ik),iglo) = 0.0
+  !   end do
 
-  end subroutine reset_gfnc
+  ! end subroutine reset_gfnc
 
   subroutine implicit_solve (gfnc, gfncold, phi, phinew, &
        apar, aparnew, istep, equation)
 
     use gs2_layouts, only: g_lo, ik_idx, imu_idx
-    use theta_grid, only: dbdthetc, theta, ntgrid, ntheta
+    use theta_grid, only: dbdthetc, ntgrid, ntheta
     use vpamu_grids, only: nvgrid
     use kt_grids, only: ntheta0
 
@@ -3051,14 +3045,12 @@ contains
 
     use constants, only: zi
     use centering, only: get_cell_value
-    use fields_arrays, only: phi, phinew
     use dist_fn_arrays, only: aj0, vpar, source
     use gs2_time, only: code_dt
     use species, only: spec
     use run_parameters, only: t_imp, fapar
-    use theta_grid, only: ntgrid, gradparc, thet_imp, delthet, gradpar
-    use theta_grid, only: dgradparbdrhoc
-    use vpamu_grids, only: nvgrid, anon, vpac, anonc, vpa, vpa_imp, mu
+    use theta_grid, only: ntgrid, thet_imp
+    use vpamu_grids, only: nvgrid, anon, vpac, anonc, vpa_imp
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
     use nonlinear_terms, only: nonlin
     use kt_grids, only: ntheta0
@@ -3070,14 +3062,11 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: aparfnc, aparnewfnc
     integer, intent (in) :: istep
 
-    integer :: ig, iv, iglo, iseg, it, ik, idx, imu, is, ie
-    integer :: nvpa
-    real :: stm
+    integer :: ig, iv, iglo, iseg, it, ik, idx, imu, is
     complex, dimension (:), allocatable :: phi_m
     complex, dimension (:,:), allocatable :: phic
     complex, dimension (:,:), allocatable :: apar_m
     complex, dimension (:,:), allocatable :: aparc
-    complex, dimension (:,:), allocatable :: vpc
 
     allocate (phic(-ntgrid:ntgrid,3))
     allocate (phi_m(-ntgrid:ntgrid))
@@ -3288,8 +3277,7 @@ contains
     use run_parameters, only: t_imp
     use centering, only: get_cell_value
     use theta_grid, only: ntgrid, dbdthet, thet_imp
-    use vpamu_grids, only: nvgrid, vpa_imp, anonc, anon, mu
-    use gs2_time, only: code_dt
+    use vpamu_grids, only: nvgrid, vpa_imp, anonc, anon
     use kt_grids, only: ntheta0
 
     implicit none
@@ -3365,13 +3353,13 @@ contains
 
           ! these are the terms appearing on the RHS of the d/dt(dg/dr) equation
           source(:ntgrid-1,-nvgrid:-1,it,iglo) = source(:ntgrid-1,-nvgrid:-1,it,iglo) &
-               ! vparp is parallel streaming term with b.grad(theta) -> (b.grad(theta))'
-               ! mirror is the mirror term (dg/dvpa) with b.grad(B) -> (b.grad(B))'
-               ! varfacc term is the parallel electric field term with F_M/T -> [F_M/T]'
-               ! streamfac term is the parallel electric field term with b.grad[theta] -> [b.grad[theta]]'
-               ! wdriftpc is the wdrift term with v_M.k -> [v_M.k]'
-               ! wdriftc term is the usual wdrift with F_M/T -> [F_M/T]'
-               ! wstarpc is the wstar term with wstar -> wstar'
+               ! vparp is parallel streaming term with b.grad(theta) -> d(b.grad(theta))/dr
+               ! mirror is the mirror term (dg/dvpa) with b.grad(B) -> d(b.grad(B))/dr
+               ! varfacc term is the parallel electric field term with F_M/T -> d[F_M/T]/dr
+               ! streamfac term is the parallel electric field term with b.grad[theta] -> d[b.grad[theta]]/dr
+               ! wdriftpc is the wdrift term with v_M.k -> d[v_M.k]/dr
+               ! wdriftc term is the usual wdrift with F_M/T -> d[F_M/T]/dr
+               ! wstarpc is the wstar term with wstar -> d(wstar)/dr
                - vparp(:ntgrid-1,-nvgrid:-1,is)*g_m(:ntgrid-1,-nvgrid:-1) &
                - mirror(:ntgrid-1,-nvgrid:-1,imu,is)*dgdvc(:ntgrid-1,-nvgrid:-1) &
                - zi*wdriftpc(:ntgrid-1,-nvgrid:-1,it,iglo)*spec(is)%tz*gc(:ntgrid-1,-nvgrid:-1) &
@@ -3436,17 +3424,14 @@ contains
 
   subroutine add_higher_order_source
 
-    use constants, only: zi
     use centering, only: get_cell_value
     use fields_arrays, only: phi, phinew, phip, phipnew
-    use dist_fn_arrays, only: aj0, vpar, source, gpnew, aj0p, gpold
-    use gs2_time, only: code_dt
+    use dist_fn_arrays, only: aj0, source, gpnew, aj0p, gpold
     use species, only: spec
     use run_parameters, only: t_imp
-    use theta_grid, only: ntgrid, gradparc, thet_imp, delthet, gradpar
-    use vpamu_grids, only: nvgrid, anon, anonc, vpa, vpa_imp
+    use theta_grid, only: ntgrid, thet_imp
+    use vpamu_grids, only: nvgrid, anon, anonc, vpa_imp
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
-    use nonlinear_terms, only: nonlin
     use kt_grids, only: ntheta0
 
     implicit none
@@ -3633,7 +3618,7 @@ contains
 !          save_h = .false.
 !       endif
        if (abs(g_exb*g_exbfac) > epsilon(0.)) then           ! MR 
-          if (box .or. shat .eq. 0.0) then
+          if (box .or. abs(shat) < epsilon(0.0)) then
              allocate (kx_shift(naky))
              kx_shift = 0.
           else
@@ -3662,7 +3647,6 @@ contains
 
     use theta_grid, only: ntgrid
 !    use le_derivatives, only: vspace_derivatives
-    use dist_fn_arrays, only: g
     use nonlinear_terms, only: add_explicit_terms
     use hyper, only: hyper_diff
     use run_parameters, only: nstep
@@ -3737,7 +3721,7 @@ contains
   ! redistribute routines should be used  BD
 
 !   subroutine exb_shear (g0, phi, apar, bpar)
-! ! MR, 2007: modified Bill Dorland's version to include grids where kx grid
+! ! MR, 2007: modified Bill Dorland version to include grids where kx grid
 ! !           is split over different processors
 ! ! MR, March 2009: ExB shear now available on extended theta grid (ballooning)
 ! ! CMR, May 2009: 2pishat correction factor on extended theta grid (ballooning)
@@ -3815,7 +3799,7 @@ contains
     
     
 !     ! BD: To do: Put the right timestep in here.
-!     ! For now, approximate Greg's dt == 1/2 (t_(n+1) - t_(n-1))
+!     ! For now, approximate dt == 1/2 (t_(n+1) - t_(n-1))
 !     ! with code_dt.  
 !     !
 !     ! Note: at first time step, there is a difference of a factor of 2.
@@ -4131,7 +4115,6 @@ contains
     use theta_grid, only: ntgrid
     use vpamu_grids, only: vperp2, vpa, integrate_species, nvgrid
     use run_parameters, only: beta, fphi, fapar, fbpar
-    use prof, only: prof_entering, prof_leaving
     use gs2_layouts, only: g_lo, imu_idx, ik_idx, is_idx
     use kt_grids, only: ntheta0
 
@@ -4142,8 +4125,6 @@ contains
     real, dimension (nspec) :: wgt
 
     integer :: iv, iglo, ig, imu, it
-
-    call prof_entering ("getan", "dist_fn")
 
     if (fphi > epsilon(0.0)) then
        do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -4196,7 +4177,6 @@ contains
        antotp=0.
     end if
 
-    call prof_leaving ("getan", "dist_fn")
   end subroutine getan
 
   subroutine getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
@@ -4206,7 +4186,6 @@ contains
     use species, only: nspec, spec
     use theta_grid, only: ntgrid
     use vpamu_grids, only: vpa, vperp2, integrate_moment, anon, energy, nvgrid
-    use prof, only: prof_entering, prof_leaving
     use run_parameters, only: fphi, fbpar
     use fields_arrays, only: phinew, bparnew
     use kt_grids, only: ntheta0
@@ -4218,7 +4197,6 @@ contains
     integer :: ik, it, iv, imu, is, iglo, ig
 
     ! returns moment integrals to PE 0
-    call prof_entering ("getmoms", "dist_fn")
 
 ! DJA+CMR: 17/1/06, use g_adjust routine to extract g_wesson
 !                   from gnew, phinew and bparnew.
@@ -4243,8 +4221,8 @@ contains
     end do
 
 ! CMR: density is the nonadiabatic piece of perturbed density
-! NB normalised wrt equ'm density for species s: n_s n_ref  
-!    ie multiply by (n_s n_ref) to get abs density pert'n
+! NB normalised wrt equilibrium density for species s: n_s n_ref  
+!    ie multiply by (n_s n_ref) to get abs density perturbation
     call integrate_moment (g0, density)
 
 ! DJA/CMR: upar and tpar moments 
@@ -4364,7 +4342,6 @@ contains
 ! return gnew to its initial state, the variable evolved in GS2
     call g_adjust(gnew,phinew,bparnew,-fphi,-fbpar)
 
-    call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
 
   subroutine init_fieldeq
@@ -4591,7 +4568,7 @@ contains
     allocate (antotp(-ntgrid:ntgrid,ntheta0,naky))
 
     ! getan returns velocity space integrals of g needed to 
-    ! solve Maxwell's equations; e.g., antot = sum_s Z_s int d3v J0_s * g_s / n_ref
+    ! solve Maxwell equations; e.g., antot = sum_s Z_s int d3v J0_s * g_s / n_ref
     call getan (gfnc, antot, antota, antotp)
 
 !    write (*,*) 'antot', antot(0,1,naky)
@@ -4611,7 +4588,7 @@ contains
     !   gamtot * phi - gamtot1 * bpar = antot
     !   (kperp2 + gamtota) * apar = antota
     !   beta/2 * gamtot1 * phi + (beta * gamtot2 + 1) * bpar = - beta * antotp
-    ! I haven't made any check for use_Bpar=T case.
+    ! I have not made any check for use_Bpar=T case.
     use gs2_layouts, only: g_lo
     use run_parameters, only: beta, fphi, fapar, fbpar
     use theta_grid, only: ntgrid, bmag
@@ -4679,15 +4656,10 @@ contains
        pmflux, qmflux, vmflux, &
        pbflux, qbflux, vbflux)
 
-!CMR, 15/1/08: 
-!  Implemented Clemente Angioni's fix for fluxes by replacing g with gnew 
-!  so fields and distribution function are evaluated self-consistently in time.
-!  This fixed unphysical oscillations in non-ambipolar particle fluxes 
-!
     use species, only: spec
     use theta_grid, only: ntgrid, bmag, gradpar, delthet
     use theta_grid, only: qval, shat, gds21, gds22
-    use kt_grids, only: naky, ntheta0, akx, theta0, aky
+    use kt_grids, only: naky, ntheta0, theta0, aky
     use vpamu_grids, only: energy, vpa, vperp2, nvgrid
     use dist_fn_arrays, only: aj0, aj1
     use gs2_layouts, only: g_lo, imu_idx, is_idx, ik_idx
@@ -4902,7 +4874,7 @@ contains
 
   subroutine get_flux (fld, flx, dnorm)
 
-    use theta_grid, only: ntgrid, delthet, grho
+    use theta_grid, only: ntgrid, grho
     use kt_grids, only: ntheta0, aky, naky
     use vpamu_grids, only: integrate_moment
     use species, only: nspec
@@ -4944,10 +4916,10 @@ contains
     use gs2_layouts, only: g_lo, imu_idx, ik_idx, is_idx
     use gs2_time, only: code_dt
     use dist_fn_arrays, only: gnew, aj0
-    use theta_grid, only: ntgrid, gradpar, delthet, bmag, jacob, thet_imp
+    use theta_grid, only: ntgrid, gradpar, delthet, jacob, thet_imp
     use kt_grids, only: ntheta0, naky
     use vpamu_grids, only: integrate_moment, nvgrid, vpac, vpa_imp
-    use run_parameters, only: woutunits, fphi
+    use run_parameters, only: fphi
     use species, only: spec, nspec
     use nonlinear_terms, only: nonlin
     use centering, only: get_cell_value
@@ -5173,8 +5145,7 @@ contains
     use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx
     use gs2_layouts, only: idx_local, proc_id
     use vpamu_grids, only: nvgrid, nmu, vpa, vperp2, mu
-    use gs2_time, only: user_time
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: gnew
 
     integer :: iglo, ik, it, is, iv, ig, imu
     integer, save :: unit
@@ -5225,55 +5196,55 @@ contains
 
   end subroutine boundary
 
-  subroutine timer (i, place)
+  ! subroutine timer (i, place)
     
-    character (len=10) :: zdate, ztime, zzone
-    character (*) :: place
-    integer, intent (in) :: i
-    integer, dimension(8) :: ival
-    real, save :: told=0., tnew=0.
+  !   character (len=10) :: zdate, ztime, zzone
+  !   character (*) :: place
+  !   integer, intent (in) :: i
+  !   integer, dimension(8) :: ival
+  !   real, save :: told=0., tnew=0.
     
-    call date_and_time (zdate, ztime, zzone, ival)
-    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
-    if (i == 0) told = -1.
-    if (told > 0.) then
-       print *, ': Elapsed time = ',tnew-told,' seconds in '//trim(place)
-    end if
-    told = tnew
-  end subroutine timer
+  !   call date_and_time (zdate, ztime, zzone, ival)
+  !   tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
+  !   if (i == 0) told = -1.
+  !   if (told > 0.) then
+  !      print *, ': Elapsed time = ',tnew-told,' seconds in '//trim(place)
+  !   end if
+  !   told = tnew
+  ! end subroutine timer
 
-  subroutine dot (a, anew, adot, fac)
+!   subroutine dot (a, anew, adot, fac)
 
-! Get a theta-centered and time-centered estimate of the time derivative 
-! of a field.
-! 
-! tunits(ky) == 1. unless the "omega_*" units are chosen.
-! omega_* units normalize time by an additional factor of ky.
-!    
+! ! Get a theta-centered and time-centered estimate of the time derivative 
+! ! of a field.
+! ! 
+! ! tunits(ky) == 1. unless the "omega_*" units are chosen.
+! ! omega_* units normalize time by an additional factor of ky.
+! !    
 
-    use run_parameters, only: tunits
-    use gs2_time, only: code_dt
-    use kt_grids, only: naky, ntheta0
-    use theta_grid, only: ntgrid
+!     use run_parameters, only: tunits
+!     use gs2_time, only: code_dt
+!     use kt_grids, only: naky, ntheta0
+!     use theta_grid, only: ntgrid
 
-    implicit none
-    complex, intent (in), dimension (-ntgrid:,:,:) :: a, anew
-    complex, intent (out), dimension (-ntgrid:,:,:) :: adot
-    real, intent (in) :: fac
-    real :: dtinv
-    integer :: ig, it, ik
+!     implicit none
+!     complex, intent (in), dimension (-ntgrid:,:,:) :: a, anew
+!     complex, intent (out), dimension (-ntgrid:,:,:) :: adot
+!     real, intent (in) :: fac
+!     real :: dtinv
+!     integer :: ig, it, ik
 
-    do ik=1,naky
-       dtinv = 1./(code_dt*tunits(ik))
-       do it=1,ntheta0
-          do ig=-ntgrid,ntgrid-1
-             adot(ig,it,ik) = 0.5*fac*(anew(ig+1,it,ik)+anew(ig,it,ik) - &
-                  (a(ig+1,it,ik)+a(ig,it,ik)))*dtinv
-          end do
-       end do
-    end do
+!     do ik=1,naky
+!        dtinv = 1./(code_dt*tunits(ik))
+!        do it=1,ntheta0
+!           do ig=-ntgrid,ntgrid-1
+!              adot(ig,it,ik) = 0.5*fac*(anew(ig+1,it,ik)+anew(ig,it,ik) - &
+!                   (a(ig+1,it,ik)+a(ig,it,ik)))*dtinv
+!           end do
+!        end do
+!     end do
     
-  end subroutine dot
+!   end subroutine dot
 
   complex function fdot (fl, fr, fnewl, fnewr, dtinv)
 
@@ -5423,27 +5394,27 @@ contains
 
 !   end subroutine get_omega_prime
 
-  subroutine get_fldline_avg (fld_in, fld_out)
+  ! subroutine get_fldline_avg (fld_in, fld_out)
 
-    use theta_grid, only: delthet, jacob
+  !   use theta_grid, only: delthet, jacob
 
-    implicit none
+  !   implicit none
 
-    real, dimension (:), allocatable :: dl_over_b
+  !   real, dimension (:), allocatable :: dl_over_b
 
-    complex, dimension (-ntg_out:), intent (in) :: fld_in
-    complex, intent (out) :: fld_out
+  !   complex, dimension (-ntg_out:), intent (in) :: fld_in
+  !   complex, intent (out) :: fld_out
 
-    allocate (dl_over_b(-ntg_out:ntg_out))
+  !   allocate (dl_over_b(-ntg_out:ntg_out))
 
-    dl_over_b = delthet(-ntg_out:ntg_out)*jacob(-ntg_out:ntg_out)
-    dl_over_b = dl_over_b / sum(dl_over_b)
+  !   dl_over_b = delthet(-ntg_out:ntg_out)*jacob(-ntg_out:ntg_out)
+  !   dl_over_b = dl_over_b / sum(dl_over_b)
 
-    fld_out = sum(fld_in*dl_over_b)
+  !   fld_out = sum(fld_in*dl_over_b)
 
-    deallocate (dl_over_b)
+  !   deallocate (dl_over_b)
 
-  end subroutine get_fldline_avg
+  ! end subroutine get_fldline_avg
 
   ! subroutine takes g(x,y,mu,spec) in g_lo
   ! and averages over x,y, leaving g(mu,spec)
@@ -5471,7 +5442,7 @@ contains
        is = is_idx(g_lo,iglo)
        imu = imu_idx(g_lo,iglo)
 
-       if (aky(ik) == 0.) then
+       if (aky(ik) < epsilon(0.)) then
           fac = 1.0
        else
           fac = 0.5
@@ -5616,58 +5587,58 @@ contains
     
   end subroutine write_mpdist_complex
 
-  subroutine write_response (dist, extension)
+  ! subroutine write_response (dist, extension)
 
-    use mp, only: proc0, send, receive
-    use file_utils, only: open_output_file, close_output_file
-    use gs2_layouts, only: g_lo, ik_idx, is_idx
-    use gs2_layouts, only: imu_idx, idx_local, proc_id
-    use gs2_time, only: code_time
-    use theta_grid, only: ntgrid, bmag, theta, ntheta
-    use vpamu_grids, only: vpa, nvgrid, mu
-    use kt_grids, only: theta0, ntheta0, naky
+  !   use mp, only: proc0, send, receive
+  !   use file_utils, only: open_output_file, close_output_file
+  !   use gs2_layouts, only: g_lo, ik_idx, is_idx
+  !   use gs2_layouts, only: imu_idx, idx_local, proc_id
+  !   use gs2_time, only: code_time
+  !   use theta_grid, only: ntgrid, bmag, theta, ntheta
+  !   use vpamu_grids, only: vpa, nvgrid, mu
+  !   use kt_grids, only: theta0, ntheta0, naky
 
-    implicit none
+  !   implicit none
     
-    complex, dimension (:,:,:,g_lo%llim_proc:), intent (in) :: dist
-    character (*), intent (in) :: extension
+  !   complex, dimension (:,:,:,g_lo%llim_proc:), intent (in) :: dist
+  !   character (*), intent (in) :: extension
     
-    integer :: iglo, ik, it, is, imu, ig, iv
-    integer, save :: unit
-    complex :: gtmp
+  !   integer :: iglo, ik, it, is, imu, ig, iv
+  !   integer, save :: unit
+  !   complex :: gtmp
     
-    if (proc0) call open_output_file (unit, trim(extension))
-    do iglo=g_lo%llim_world, g_lo%ulim_world
-       ik = ik_idx(g_lo, iglo) ; if (ik /= naky) cycle
-       is = is_idx(g_lo, iglo) !; if (is /= 1) cycle
-       imu = imu_idx(g_lo, iglo)
-       do it = 1, neigen(ik)
-          do iv = 1, (ntheta/2)*nsegments(it,ik)+1
-             do ig = 1, (ntheta/2)*nsegments(it,ik)+1
-                if (idx_local (g_lo, ik, imu, is)) then
-                   if (proc0) then
-                      gtmp = dist(ig,iv,it,iglo)
-                   else
-                      call send (dist(ig,iv,it,iglo), 0)
-                   end if
-                else if (proc0) then
-                   call receive (gtmp, proc_id(g_lo, iglo))
-                end if
-                if (proc0) then
-                   write (unit,'(a1,6i4,2e14.6)') "", ig, iv, it, ik, is, imu, &
-                        real(gtmp), aimag(gtmp)
-                end if
-             end do
-          end do
-       end do
-       if (proc0) then
-          write (unit,*)
-          write (unit,*)
-       end if
-    end do
-    if (proc0) call close_output_file (unit)
+  !   if (proc0) call open_output_file (unit, trim(extension))
+  !   do iglo=g_lo%llim_world, g_lo%ulim_world
+  !      ik = ik_idx(g_lo, iglo) ; if (ik /= naky) cycle
+  !      is = is_idx(g_lo, iglo) !; if (is /= 1) cycle
+  !      imu = imu_idx(g_lo, iglo)
+  !      do it = 1, neigen(ik)
+  !         do iv = 1, (ntheta/2)*nsegments(it,ik)+1
+  !            do ig = 1, (ntheta/2)*nsegments(it,ik)+1
+  !               if (idx_local (g_lo, ik, imu, is)) then
+  !                  if (proc0) then
+  !                     gtmp = dist(ig,iv,it,iglo)
+  !                  else
+  !                     call send (dist(ig,iv,it,iglo), 0)
+  !                  end if
+  !               else if (proc0) then
+  !                  call receive (gtmp, proc_id(g_lo, iglo))
+  !               end if
+  !               if (proc0) then
+  !                  write (unit,'(a1,6i4,2e14.6)') "", ig, iv, it, ik, is, imu, &
+  !                       real(gtmp), aimag(gtmp)
+  !               end if
+  !            end do
+  !         end do
+  !      end do
+  !      if (proc0) then
+  !         write (unit,*)
+  !         write (unit,*)
+  !      end if
+  !   end do
+  !   if (proc0) call close_output_file (unit)
     
-  end subroutine write_response
+  ! end subroutine write_response
   
   subroutine finish_dist_fn
 

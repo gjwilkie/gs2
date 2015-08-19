@@ -21,7 +21,7 @@ module gs2_layouts
 
   public :: init_x_transform_layouts, init_y_transform_layouts
   public :: xxf_lo, xxf_layout_type, yxf_lo, yxf_layout_type
-  public :: gidx2xxfidx, xxfidx2yxfidx, yxfidx2xxfidx, xxfidx2gidx
+  public :: gidx2xxfidx, xxfidx2yxfidx, yxfidx2xxfidx
   public :: xxf_ky_is_zero
 
   public :: ig_idx, ik_idx, it_idx, iv_idx, imu_idx, is_idx, if_idx
@@ -213,7 +213,7 @@ contains
   subroutine init_dist_fn_layouts &
        (ntgrid, naky, ntheta0, nvgrid, nmu, nspec)
 
-    use mp, only: iproc, nproc, proc0
+    use mp, only: iproc, nproc
     use file_utils, only: error_unit
 
     implicit none
@@ -279,7 +279,7 @@ contains
     end interface
     is_idx_g = is_idx_g_c (lo,i)
 # else
-    ! TT: the order of the division doesn't matter, so no need for branching
+    ! TT: the order of the division does not matter, so no need for branching
     is_idx_g = 1 + mod((i - lo%llim_world)/lo%naky/lo%nmu, lo%nspec)
 # endif
 
@@ -678,10 +678,9 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine init_x_transform_layouts &
        (ntgrid, naky, ntheta0, nvgrid, nmu, nspec, nx)
-    use mp, only: iproc, nproc, proc0, barrier
+    use mp, only: iproc, nproc, barrier
     implicit none
     integer, intent (in) :: ntgrid, nvgrid, naky, ntheta0, nmu, nspec, nx
-    integer :: nprocset, ngroup, ip, nblock
 
     if (initialized_x_transform) return
     initialized_x_transform = .true.
@@ -717,7 +716,7 @@ contains
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
 
-    ! TT: the order of the division doesn't matter, so no need for branching
+    ! TT: the order of the division does not matter, so no need for branching
     is_idx_xxf = 1 + mod((i - lo%llim_world)/lo%naky/(2*lo%ntgrid + 1)/(2*lo%nvgrid+1)/lo%nmu, lo%nspec)
 
   end function is_idx_xxf
@@ -773,7 +772,6 @@ contains
     integer :: proc_id_xxf
     type (xxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    integer :: block_offset, offset_block_number, j, k, tempi
     
     proc_id_xxf = i/lo%blocksize
 
@@ -811,11 +809,11 @@ contains
 
   subroutine init_y_transform_layouts &
        (ntgrid, naky, ntheta0, nvgrid, nmu, nspec, nx, ny)
-    use mp, only: iproc, nproc, proc0
+    use mp, only: iproc, nproc
     implicit none
     integer, intent (in) :: ntgrid, nvgrid, naky, ntheta0, nmu, nspec
     integer, intent (in) :: nx, ny
-    integer :: nnx, nny, ngroup, nprocset, nblock
+    integer :: nnx, nny
 
     if (initialized_y_transform) return
     initialized_y_transform = .true.
@@ -926,7 +924,6 @@ contains
     integer :: proc_id_yxf
     type (yxf_layout_type), intent (in) :: lo
     integer, intent (in) :: i
-    integer :: block_offset, offset_block_number, j, k, tempi
 
     proc_id_yxf = i/lo%blocksize
 
@@ -975,37 +972,6 @@ contains
          imu_idx(g_lo,iglo), is_idx(g_lo,iglo))
   end subroutine gidx2xxfidx
 
-! TT>
-# ifdef USE_C_INDEX
-  subroutine xxfidx2gidx (it, ixxf, xxf_lo, g_lo, ig, iv, iglo)
-# else
-  elemental subroutine xxfidx2gidx (it_in, ixxf, xxf_lo, g_lo, ig, iv, it_out, iglo)
-# endif
-! <TT
-    implicit none
-    integer, intent (in) :: it_in, ixxf
-    type (xxf_layout_type), intent (in) :: xxf_lo
-    type (g_layout_type), intent (in) :: g_lo
-    integer, intent (out) :: ig, iv, it_out, iglo
-    integer :: it0
-
-    it_out = it_in
-    if (it_out > (xxf_lo%ntheta0+1)/2) then
-       it_out = it_out + xxf_lo%ntheta0 - xxf_lo%nx
-       if (it0 <= (xxf_lo%ntheta0+1)/2) then
-          ig = -999999
-          iv = -999999
-          iglo = -999999
-          return
-       end if
-    end if
-
-    ig = ig_idx(xxf_lo,ixxf)
-    iv = iv_idx(xxf_lo,ixxf)
-    iglo = idx(g_lo, ik_idx(xxf_lo,ixxf), &
-         imu_idx(xxf_lo,ixxf), is_idx(xxf_lo,ixxf))
-  end subroutine xxfidx2gidx
-
   elemental subroutine xxfidx2yxfidx (it, ixxf, xxf_lo, yxf_lo, ik, iyxf)
     implicit none
     integer, intent (in) :: it, ixxf
@@ -1038,25 +1004,25 @@ contains
          ik0, imu_idx(yxf_lo,iyxf), is_idx(yxf_lo,iyxf))
   end subroutine yxfidx2xxfidx
 
-  subroutine factors (n, j, div)
-    integer, intent (in) :: n
-    integer, intent (out) :: j
-    integer, dimension (:), intent (out) :: div
-    integer :: i, imax
+  ! subroutine factors (n, j, div)
+  !   integer, intent (in) :: n
+  !   integer, intent (out) :: j
+  !   integer, dimension (:), intent (out) :: div
+  !   integer :: i, imax
 
-    do i=2,n
-       if (mod(n,i)==0) exit
-    end do
-    imax = n/i
-    j=1
-    do i=1,imax
-       if (mod(n,i)==0) then
-          div(j) = i
-          j=j+1
-       end if
-    end do
-    div(j) = n
-  end subroutine factors
+  !   do i=2,n
+  !      if (mod(n,i)==0) exit
+  !   end do
+  !   imax = n/i
+  !   j=1
+  !   do i=1,imax
+  !      if (mod(n,i)==0) then
+  !         div(j) = i
+  !         j=j+1
+  !      end if
+  !   end do
+  !   div(j) = n
+  ! end subroutine factors
 
   subroutine finish_layouts
 

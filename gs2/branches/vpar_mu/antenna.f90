@@ -56,7 +56,7 @@ contains
   implicit none
   integer :: report_unit, i
        if (no_driver) return
-       if (amplitude == 0.0) then 
+       if (abs(amplitude) < epsilon(0.)) then 
           write (report_unit, *) 
           write (report_unit, fmt="('No Langevin antenna included.')")
           write (report_unit, *) 
@@ -115,11 +115,11 @@ contains
   end subroutine wnml_antenna
 
   subroutine init_antenna
-    use mp, only: proc0
+
     use species, only: spec, nspec, init_species
     use run_parameters, only: beta
     use antenna_data, only: init_antenna_data
-    use theta_grid, only: gradpar
+
     implicit none
 
     integer :: i
@@ -180,8 +180,8 @@ contains
        if (.not. exist) then
           no_driver = .true.
        else
-	  if (ant_off) no_driver = .true.
-
+          if (ant_off) no_driver = .true.
+          
           read (unit=input_unit("driver"), nml=driver)
           
           call init_antenna_data (nk_stir)
@@ -215,7 +215,8 @@ contains
              kz_stir(i) = kz
              trav(i) = travel
 ! If a, b are not specified in the input file:
-	     if (a == -1.0 .and. b == -1.0) then
+             if (abs(a+1.) < epsilon(0.) &
+                  .and. abs(b+1.) < epsilon(0.)) then
 ! And if a, b are not specified in the restart file 
 ! (else use values from restart file by default)
                 if (ierr /= 0) then                   
@@ -226,7 +227,7 @@ contains
              else
                 a_ant(i) = a
                 b_ant(i) = b
-             end if 
+             end if
           end do
        end if
     end if
@@ -458,10 +459,12 @@ contains
   end function antenna_w
 !=============================================================================
   subroutine dump_ant_amp
+
     use gs2_time, only: user_time
-    use theta_grid, only: ntgrid, theta
     use mp, only: proc0
+
     implicit none
+
     real :: time
     integer :: i
 

@@ -875,8 +875,8 @@ if (debug) write(6,*) "eikcoefs: end gradients"
           qval2=qval+dqdrho*delrho
        endif
     
-       call seikon(rp1, qval1, seik1, dsdthet1, rgrid1, ltheta, bpolmag, dum)
-       call seikon(rp2, qval2, seik2, dsdthet2, rgrid2, ltheta, bpolmag, dum)
+       call seikon(rp1, qval1, seik1, dsdthet1, rgrid1, dum)
+       call seikon(rp2, qval2, seik2, dsdthet2, rgrid2, dum)
        
        do i=-nth,nth
           dsdrp(i)=(seik2(i)-seik1(i))/(2.*delrp)
@@ -1471,10 +1471,9 @@ end subroutine eikcoefs
 
     real, dimension (-ntgrid:ntgrid, 3) :: bgradtot, pgradtot, &
          dummy, dummy1, curve
-    real, dimension (-ntgrid:ntgrid, 2) :: pgrad, igrad, bgrad1
+    real, dimension (-ntgrid:ntgrid, 2) :: pgrad, bgrad1
     real, dimension (-ntgrid:ntgrid) :: gbdrift1, gbdrift2, cvdrift1, cvdrift2, cdrift1, cdrift2
     real, dimension (-ntgrid:ntgrid) :: gbdrift3, cvdrift3
-    real, dimension (2*ntgrid + 1) :: dumdum1, dumdum2
 
     real :: dum
     character(1) char
@@ -1620,11 +1619,10 @@ end subroutine eikcoefs
 
   end subroutine sym
       
-
-  subroutine seikon(rp, qval, seik, dsdthet, rgrid, ltheta, bpolmag, dpsidrp)
+  subroutine seikon(rp, qval, seik, dsdthet, rgrid, dpsidrp)
     
     real :: rp, qval
-    real, dimension(-ntgrid:) :: seik, dsdthet, rgrid, ltheta, bpolmag
+    real, dimension(-ntgrid:) :: seik, dsdthet, rgrid
     real, dimension(-ntgrid:ntgrid, 2) :: thgrad, rpgrad
     real :: dpsidrp, dum
     
@@ -1683,10 +1681,10 @@ end subroutine eikcoefs
     
     char='T'
     if(bishop == 0) then
-	if(efit_eq .or. dfit_eq) then
-   	   write(*,*) 'error in thetagrad'
-	   stop
-	endif
+       if (efit_eq .or. dfit_eq) then
+          write(*,*) 'error in thetagrad'
+          stop
+       endif
        call grad(rgrid, theta, thgrad, char, dum, nth, ntgrid)
     else
        call bgrad(rgrid, theta, thgrad, char, dum, nth, ntgrid)
@@ -1842,7 +1840,9 @@ end subroutine eikcoefs
 !
 ! In the present code, most calls to this routine have the same r, thet, so: 
 !
-    if(r == r_last .and. thet == theta_last .and. eqinit /= 1) then
+    if(abs(r-r_last) < epsilon(0.) &
+         .and. abs(thet-theta_last) < epsilon(0.) &
+         .and. eqinit /= 1) then
        btori = I_last
        return
     endif
@@ -1937,7 +1937,7 @@ end subroutine eikcoefs
     use eeq, only: eeq_iofpbar => btori
     use leq, only: leq_i => btori
     
-    real :: iofrho, f
+    real :: iofrho
     real, intent (in) :: rho
             
     if (gen_eq) iofrho = geq_iofpbar(pbarofrho(rho))
@@ -2311,11 +2311,11 @@ end subroutine eikcoefs
     
     integer :: init = 1, i
      
-    if(r == 0.) then
+    if(abs(r) < epsilon(0.)) then
        psi=psi_0
        return
     endif
-    if(r == 1. .and. thet == 0.) then
+    if(abs(r-1.) < epsilon(0.) .and. abs(thet) < epsilon(0.)) then
        psi=psi_a
        return
     endif
@@ -2425,18 +2425,17 @@ end subroutine eikcoefs
     d = rcenter(rp) - rcenter(psi_a)
 end subroutine geofax
       
-  function rmagaxis(rp)
+  ! function rmagaxis
 
-    real :: rmagaxis
-    real, intent (in) :: rp
+  !   real :: rmagaxis
     
-    if(iflux == 1) then
-       rmagaxis=rmaj
-    else
-       rmagaxis=R_geo
-    endif
+  !   if(iflux == 1) then
+  !      rmagaxis=rmaj
+  !   else
+  !      rmagaxis=R_geo
+  !   endif
     
-  end function rmagaxis
+  ! end function rmagaxis
 
   function rcenter(rp)
 
@@ -2803,7 +2802,7 @@ end subroutine geofax
     real :: pi
 !RN>
 !    integer :: nthg, nthsave, i, ntheta_returned
-    integer :: nthg, nthsave, i
+    integer :: nthg, i
     integer, intent(out), optional :: ntheta_returned
 !<RN
 !cmr Jun06: adding following debug switch
@@ -3187,7 +3186,7 @@ end subroutine geofax
 !         write(*,*) 'a, b = ',a,b
     rfun=zbrent(rpfun, a, b, rootval, thetroot, xerrsec)
 !         write(*,1000) a, b, fa, fb, rfun, thet
- 1000 format(1x,11e16.9)
+! 1000 format(1x,11e16.9)
 
   end function rfun
 
@@ -3238,13 +3237,13 @@ end subroutine geofax
        endif
        tol1=2.*eps*abs(b)+0.5*tol
        xm=.5*(c-b)
-       if(abs(xm) <= tol1 .or. fb == 0.)then
+       if(abs(xm) <= tol1 .or. abs(fb) < epsilon(0.))then
           zbrent=b
           return
        endif
        if(abs(e) >= tol1 .and. abs(fa) > abs(fb)) then
           s=fb/fa
-          if(a == c) then
+          if (abs(a-c) < epsilon(0.)) then
              p=2.*xm*s
              q=1.-s
           else

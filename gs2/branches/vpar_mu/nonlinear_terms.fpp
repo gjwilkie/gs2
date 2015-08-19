@@ -101,8 +101,6 @@ contains
        write (report_unit, fmt="('The maximum delt < ',f10.4,' * min(Delta_perp/v_perp). (cfl)')") cfl
        write (report_unit, fmt="('When the time step needs to be changed, it is adjusted by a factor of ',f10.4)") delt_adj
        write (report_unit, fmt="('The number of time steps nstep = ',i7)") nstep
-       write (report_unit, fmt="('If running in batch mode on the NERSC T3E, the run will stop when ', &
-            & f11.4,' % of the time remains.')") 100.*margin
     endif
   end subroutine check_nonlinear_terms
 
@@ -355,8 +353,7 @@ contains
   subroutine add_nl (g1, phi, apar, bpar)
 
     use mp, only: max_allreduce, mp_abort
-    use theta_grid, only: ntgrid, kxfac, theta, shat
-    use theta_grid, only: delthet, gds23, gds24_noq
+    use theta_grid, only: ntgrid, kxfac
     use gs2_layouts, only: g_lo, ik_idx, is_idx, imu_idx, iv_idx, ig_idx
     use gs2_layouts, only: yxf_lo
     use dist_fn_arrays, only: g
@@ -364,13 +361,13 @@ contains
     use gs2_transforms, only: transform2, inverse2
     use run_parameters, only: fapar, fbpar, fphi
     use kt_grids, only: aky, akx, ntheta0
-    use vpamu_grids, only: nvgrid, vpa, anon
+    use vpamu_grids, only: nvgrid
     use gs2_time, only: save_dt_cfl
-    use constants, only: zi, pi
+    use constants, only: zi
 
     implicit none
 
-    integer :: i, j, iglo, ik, it, is, ig, iv, imu
+    integer :: i, j, iglo, ik, it, is, ig, iv
     real :: max_vel, zero
     real :: dt_cfl
 
@@ -557,7 +554,7 @@ contains
       use constants, only: zi
       use dist_fn_arrays, only: aj0
       use gs2_layouts, only: g_lo, ik_idx
-      use kt_grids, only: akx, ntheta0
+      use kt_grids, only: akx
       use theta_grid, only: ntgrid
       use run_parameters, only: fphi
       use vpamu_grids, only: nvgrid
@@ -567,7 +564,7 @@ contains
       complex, dimension (-ntgrid:,:,:), intent (in) :: phi
       complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: g1
 
-      integer :: iglo, ik, it, ig
+      integer :: iglo, ik, ig
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo,iglo)
@@ -583,6 +580,8 @@ contains
     subroutine load_ky_phi
 
       use dist_fn_arrays, only: aj0
+      use kt_grids, only: ntheta0
+      
       complex :: fac
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -639,12 +638,11 @@ contains
 
       use dist_fn_arrays, only: aj1
       use gs2_layouts, only: is_idx, ik_idx, imu_idx
-      use vpamu_grids, only: mu, vperp2
+      use vpamu_grids, only: vperp2
 
       integer :: it, ik, imu, is
-      complex :: fac
 
-! Is this factor of two from the old normalization?
+      ! Is this factor of two from the old normalization?
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo,iglo)
@@ -668,13 +666,13 @@ contains
       use kt_grids, only: aky
 
       integer :: imu, it, ik, is, ig
-      complex :: fac
 
 ! Is this factor of two from the old normalization?
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo,iglo)
          is = is_idx(g_lo,iglo)
+         imu = imu_idx(g_lo,iglo)
          do it = 1, ntheta0
             do ig = -ntgrid, ntgrid
                g1(ig,:,it,iglo) = g1(ig,:,it,iglo) + zi*aky(ik)*aj1(ig,it,iglo) &
@@ -791,60 +789,60 @@ contains
 
   end subroutine finish_nonlinear_terms
 
-  subroutine write_mpdistyxf (dist, extension)
+  ! subroutine write_mpdistyxf (dist, extension)
 
-    use mp, only: proc0, send, receive
-    use file_utils, only: open_output_file, close_output_file
-    use gs2_layouts, only: yxf_lo, ig_idx, iv_idx, is_idx, it_idx
-    use gs2_layouts, only: imu_idx, idx_local, proc_id
-    use gs2_time, only: code_time
-    use theta_grid, only: ntgrid, bmag, theta, shat
-    use vpamu_grids, only: vpa, nvgrid, mu
-    use kt_grids, only: theta0, lx, ly
-    use constants, only: pi
+  !   use mp, only: proc0, send, receive
+  !   use file_utils, only: open_output_file, close_output_file
+  !   use gs2_layouts, only: yxf_lo, ig_idx, iv_idx, is_idx, it_idx
+  !   use gs2_layouts, only: imu_idx, idx_local, proc_id
+  !   use gs2_time, only: code_time
+  !   use theta_grid, only: ntgrid, bmag, theta, shat
+  !   use vpamu_grids, only: vpa, nvgrid, mu
+  !   use kt_grids, only: theta0, lx, ly
+  !   use constants, only: pi
 
-    implicit none
+  !   implicit none
     
-    real, dimension (:,yxf_lo%llim_proc:), intent (in) :: dist
-    character (*), intent (in) :: extension
+  !   real, dimension (:,yxf_lo%llim_proc:), intent (in) :: dist
+  !   character (*), intent (in) :: extension
     
-    integer :: i, j, it, is, imu, ig, iv
-    integer, save :: unit
-    logical, save :: done = .false.
-    real :: gtmp
+  !   integer :: i, j, it, is, imu, ig, iv
+  !   integer, save :: unit
+  !   logical, save :: done = .false.
+  !   real :: gtmp
     
-    if (.not. done) then
-       if (proc0) call open_output_file (unit, trim(extension))
-       do j=yxf_lo%llim_world, yxf_lo%ulim_world
-          ig = ig_idx(yxf_lo, j)
-          iv = iv_idx(yxf_lo, j)
-          it = it_idx(yxf_lo, j)
-          is = is_idx(yxf_lo, j) ; if (is /= 1) cycle
-          imu = imu_idx(yxf_lo, j)
-          do i = 1, yxf_lo%ny
-             if (idx_local (yxf_lo, ig, iv, it, imu, is)) then
-                if (proc0) then
-                   gtmp = dist(i,j)
-                else
-                   call send (dist(i,j), 0)
-                end if
-             else if (proc0) then
-                call receive (gtmp, proc_id(yxf_lo, j))
-             end if
-             if (proc0) then
-                write (unit,'(a1,8e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
-                     (lx/yxf_lo%nx)*(it-1), (ly/yxf_lo%ny)*(i-1), gtmp
-             end if
-          end do
-          if (proc0) then
-             write (unit,*)
-             write (unit,*)
-          end if
-       end do
-       if (proc0) call close_output_file (unit)
-    end if
+  !   if (.not. done) then
+  !      if (proc0) call open_output_file (unit, trim(extension))
+  !      do j=yxf_lo%llim_world, yxf_lo%ulim_world
+  !         ig = ig_idx(yxf_lo, j)
+  !         iv = iv_idx(yxf_lo, j)
+  !         it = it_idx(yxf_lo, j)
+  !         is = is_idx(yxf_lo, j) ; if (is /= 1) cycle
+  !         imu = imu_idx(yxf_lo, j)
+  !         do i = 1, yxf_lo%ny
+  !            if (idx_local (yxf_lo, ig, iv, it, imu, is)) then
+  !               if (proc0) then
+  !                  gtmp = dist(i,j)
+  !               else
+  !                  call send (dist(i,j), 0)
+  !               end if
+  !            else if (proc0) then
+  !               call receive (gtmp, proc_id(yxf_lo, j))
+  !            end if
+  !            if (proc0) then
+  !               write (unit,'(a1,8e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+  !                    (lx/yxf_lo%nx)*(it-1), (ly/yxf_lo%ny)*(i-1), gtmp
+  !            end if
+  !         end do
+  !         if (proc0) then
+  !            write (unit,*)
+  !            write (unit,*)
+  !         end if
+  !      end do
+  !      if (proc0) call close_output_file (unit)
+  !   end if
     
-  end subroutine write_mpdistyxf
+  ! end subroutine write_mpdistyxf
 
   ! subroutine used for testing
   ! takes as input an array using g_lo and

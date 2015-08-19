@@ -73,7 +73,6 @@ contains
   subroutine init_transforms &
        (ntgrid, naky, ntheta0, nvgrid, nmu, nspec, nx, ny)
 
-    use mp, only: nproc
     use gs2_layouts, only: init_gs2_layouts
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: init_x_transform_layouts
@@ -106,14 +105,16 @@ contains
 
   subroutine init_y_fft
 
-    use gs2_layouts, only: xxf_lo, yxf_lo, g_lo
+    use gs2_layouts, only: xxf_lo, yxf_lo
     use fft_work, only: init_crfftw, init_rcfftw, init_ccfftw
 
     implicit none
 
     logical :: initialized = .false.
+# if FFT == _FFTW3_
     integer :: nb_ffts
-
+# endif
+    
     if (initialized) return
     initialized = .true.
 
@@ -394,11 +395,8 @@ contains
   subroutine transform_x5d (g, xxf)
 
     use gs2_layouts, only: xxf_lo, g_lo, it_idx, ik_idx, imu_idx
-    use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather
     use mp, only: mp_abort
-    use theta_grid, only: theta
-    use vpamu_grids, only: anon
 
     implicit none
 
@@ -408,8 +406,6 @@ contains
     integer :: i!, ik, it, imu, iglo, iv
 
 !    complex, dimension (-xxf_lo%ntgrid:xxf_lo%ntgrid, -xxf_lo%nvgrid:xxf_lo%nvgrid, g_lo%llim_proc:g_lo%ulim_alloc) :: g0
-
-    call prof_entering ("transform_x5d", "gs2_transforms")
 
     ! intent statement in gather actually makes this next line non-standard: 
     xxf = 0.
@@ -455,13 +451,11 @@ contains
 !    call write_mpdistxxf (xxf, '.xxf')
 !    call mp_abort ('transform_x5d')
 
-    call prof_leaving ("transform_x5d", "gs2_transforms")
   end subroutine transform_x5d
 
   subroutine inverse_x5d (xxf, g)
 
     use gs2_layouts, only: xxf_lo, g_lo
-    use prof, only: prof_entering, prof_leaving
     use redistribute, only: scatter
 
     implicit none
@@ -470,8 +464,6 @@ contains
     complex, dimension (-xxf_lo%ntgrid:,-xxf_lo%nvgrid:,:,g_lo%llim_proc:), intent (out) :: g
     complex, dimension(:), allocatable :: aux
     integer :: i
-
-    call prof_entering ("inverse_x5d", "gs2_transforms")
 
     ! do ffts
 # if FFT == _FFTW_
@@ -493,13 +485,11 @@ contains
 
     call scatter (g2x, xxf, g)
 
-    call prof_leaving ("inverse_x5d", "gs2_transforms")
   end subroutine inverse_x5d
 
   subroutine transform_y5d (xxf, yxf)
 
     use gs2_layouts, only: xxf_lo, yxf_lo
-    use prof, only: prof_entering, prof_leaving
     use redistribute, only: gather
 
     implicit none
@@ -511,8 +501,6 @@ contains
     real, dimension (:,yxf_lo%llim_proc:) :: yxf
 # endif
     integer :: i
-
-    call prof_entering ("transform_y5d", "gs2_transforms")
 
     fft = 0.
     call gather (x2y, xxf, fft)
@@ -533,19 +521,15 @@ contains
     call dfftw_execute_dft_c2r (yf_fft%plan, fft, yxf)
 # endif
 
-    call prof_leaving ("transform_y5d", "gs2_transforms")
   end subroutine transform_y5d
 
   subroutine inverse_y5d (yxf, xxf)
     use gs2_layouts, only: xxf_lo, yxf_lo
-    use prof, only: prof_entering, prof_leaving
     use redistribute, only: scatter
     implicit none
     real, dimension (:,yxf_lo%llim_proc:), intent (in out) :: yxf
     complex, dimension (:,xxf_lo%llim_proc:), intent (out) :: xxf
     integer :: i 
-
-    call prof_entering ("inverse_y5d", "gs2_transforms")
 
     ! do ffts
 # if FFT == _FFTW_
@@ -564,14 +548,11 @@ contains
 
     call scatter (x2y, fft, xxf)
 
-    call prof_leaving ("inverse_y5d", "gs2_transforms")
   end subroutine inverse_y5d
 
   subroutine transform2_5d (g, yxf)
 
     use gs2_layouts, only: g_lo, yxf_lo, ik_idx, it_idx, imu_idx
-    use theta_grid, only: theta
-    use vpamu_grids, only: anon
     use mp, only: mp_abort
 
     implicit none
@@ -673,7 +654,7 @@ contains
   subroutine transform2_3d (phi, phixf, nny, nnx)
 
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, nx, aky
+    use kt_grids, only: naky, ntheta0, aky
 
     implicit none
 
@@ -795,7 +776,7 @@ contains
   subroutine transform2_2d (phi, phixf, nny, nnx)
 
     use fft_work, only: FFTW_BACKWARD, delete_fft, init_crfftw
-    use kt_grids, only: naky, nakx => ntheta0, nx, aky, akx
+    use kt_grids, only: naky, nakx => ntheta0, nx, aky
 
     implicit none
 
@@ -877,7 +858,7 @@ contains
 
     allocate (aphi (nny/2+1, nnx))
     allocate (phix (nny, nnx))
-    phix(:,:)=cmplx(0.,0.); aphi(:,:)=cmplx(0.,0.)
+    phix(:,:)=0.; aphi(:,:)=cmplx(0.,0.)
 
     phix(:,:)=transpose(phixf(:,:))
 
@@ -909,7 +890,7 @@ contains
 !     but transform only operates for species=1
 !     anyone who uses this routine should be aware of/fix this!
     use theta_grid, only: ntgrid
-    use kt_grids, only: naky, ntheta0, nx, aky
+    use kt_grids, only: naky, ntheta0, aky
 
     implicit none
 
@@ -967,18 +948,29 @@ contains
   
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+# if FFT == _FFTW3_  
   subroutine init_zf (ntgrid, howmany)
-
+# else
+  subroutine init_zf (ntgrid)
+# endif
+    
     use fft_work, only: init_z
 
     implicit none
-    integer, intent (in) :: ntgrid, howmany
+    integer, intent (in) :: ntgrid
+# if FFT == _FFTW3_
+    integer, intent (in) :: howmany
+# endif
     logical :: done = .false.
 
     if (done) return
     done = .true.
 
+# if FFT == _FFTW3_    
     call init_z (zf_fft, 1, 2*ntgrid, howmany)
+# else
+    call init_z (zf_fft, 1, 2*ntgrid)
+# endif
     
   end subroutine init_zf
 
@@ -999,62 +991,62 @@ contains
 
   end subroutine kz_spectrum
 
-  subroutine write_mpdistxxf (dist, extension)
+!   subroutine write_mpdistxxf (dist, extension)
 
-    use mp, only: proc0, send, receive
-    use file_utils, only: open_output_file, close_output_file
-    use gs2_layouts, only: xxf_lo, ig_idx, iv_idx, ik_idx, is_idx
-    use gs2_layouts, only: imu_idx, idx_local, proc_id
-    use gs2_time, only: code_time
-    use theta_grid, only: ntgrid, bmag, theta, shat
-    use vpamu_grids, only: vpa, nvgrid, mu
-    use kt_grids, only: theta0, lx, ly
-    use constants, only: pi
+!     use mp, only: proc0, send, receive
+!     use file_utils, only: open_output_file, close_output_file
+!     use gs2_layouts, only: xxf_lo, ig_idx, iv_idx, ik_idx, is_idx
+!     use gs2_layouts, only: imu_idx, idx_local, proc_id
+!     use gs2_time, only: code_time
+!     use theta_grid, only: ntgrid, bmag, theta, shat
+!     use vpamu_grids, only: vpa, nvgrid, mu
+!     use kt_grids, only: theta0, lx, ly
+!     use constants, only: pi
 
-    implicit none
+!     implicit none
     
-    complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: dist
-    character (*), intent (in) :: extension
+!     complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: dist
+!     character (*), intent (in) :: extension
     
-    integer :: i, j, ik, is, imu, ig, iv
-    integer, save :: unit
-    logical, save :: done = .false.
-    complex :: gtmp
+!     integer :: i, j, ik, is, imu, ig, iv
+!     integer, save :: unit
+!     logical, save :: done = .false.
+!     complex :: gtmp
     
-    if (.not. done) then
-       if (proc0) call open_output_file (unit, trim(extension))
-       do j=xxf_lo%llim_world, xxf_lo%ulim_world
-          ig = ig_idx(xxf_lo, j)
-          iv = iv_idx(xxf_lo, j)
-          ik = ik_idx(xxf_lo, j)
-          is = is_idx(xxf_lo, j) ; if (is /= 1) cycle
-          imu = imu_idx(xxf_lo, j)
-          do i = 1, xxf_lo%nx
-             if (idx_local (xxf_lo, ig, iv, ik, imu, is)) then
-                if (proc0) then
-                   gtmp = dist(i,j)
-                else
-                   call send (dist(i,j), 0)
-                end if
-             else if (proc0) then
-                call receive (gtmp, proc_id(xxf_lo, j))
-             end if
-             if (proc0) then
-                write (unit,'(a1,6e14.4,i4,2e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
-                     (lx/xxf_lo%nx)*(i-1), ik, real(gtmp), aimag(gtmp)
-!                write (unit,'(a1,5e14.4,2i4,2e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
-!                     i, ik, real(gtmp), aimag(gtmp)
-             end if
-          end do
-          if (proc0) then
-             write (unit,*)
-             write (unit,*)
-          end if
-       end do
-       if (proc0) call close_output_file (unit)
-    end if
+!     if (.not. done) then
+!        if (proc0) call open_output_file (unit, trim(extension))
+!        do j=xxf_lo%llim_world, xxf_lo%ulim_world
+!           ig = ig_idx(xxf_lo, j)
+!           iv = iv_idx(xxf_lo, j)
+!           ik = ik_idx(xxf_lo, j)
+!           is = is_idx(xxf_lo, j) ; if (is /= 1) cycle
+!           imu = imu_idx(xxf_lo, j)
+!           do i = 1, xxf_lo%nx
+!              if (idx_local (xxf_lo, ig, iv, ik, imu, is)) then
+!                 if (proc0) then
+!                    gtmp = dist(i,j)
+!                 else
+!                    call send (dist(i,j), 0)
+!                 end if
+!              else if (proc0) then
+!                 call receive (gtmp, proc_id(xxf_lo, j))
+!              end if
+!              if (proc0) then
+!                 write (unit,'(a1,6e14.4,i4,2e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+!                      (lx/xxf_lo%nx)*(i-1), ik, real(gtmp), aimag(gtmp)
+! !                write (unit,'(a1,5e14.4,2i4,2e14.4)') "", code_time, theta(ig), vpa(iv), mu(imu), bmag(ig), &
+! !                     i, ik, real(gtmp), aimag(gtmp)
+!              end if
+!           end do
+!           if (proc0) then
+!              write (unit,*)
+!              write (unit,*)
+!           end if
+!        end do
+!        if (proc0) call close_output_file (unit)
+!     end if
     
-  end subroutine write_mpdistxxf
+!   end subroutine write_mpdistxxf
 
 !   subroutine write_mpdistyxf (dist, extension)
 

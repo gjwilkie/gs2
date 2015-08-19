@@ -263,7 +263,7 @@ contains
                          + aparnew(-ntgrid_output:ntgrid_output,it,ik)*fapar &
                          + bparnew(-ntgrid_output:ntgrid_output,it,ik)*fbpar)**2 &
                       *delthet(-ntgrid_output:ntgrid_output))
-          if (anorm < 2.0*epsilon(0.0) .or. aky(ik) == 0.0) then
+          if (anorm < 2.0*epsilon(0.0) .or. aky(ik) < epsilon(0.0)) then
              akperp(it,ik) = 0.0
           else
              akperp(it,ik) &
@@ -311,19 +311,19 @@ contains
 
   end subroutine reset_init
 
-  subroutine timer
+  ! subroutine timer
     
-    character (len=10) :: zdate, ztime, zzone
-    integer, dimension(8) :: ival
-    real, save :: told=0., tnew=0.
+  !   character (len=10) :: zdate, ztime, zzone
+  !   integer, dimension(8) :: ival
+  !   real, save :: told=0., tnew=0.
     
-    call date_and_time (zdate, ztime, zzone, ival)
-    tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
-    if (told > 0.) then
-       print *, 'Fields: Time since last called: ',tnew-told,' seconds'
-    end if
-    told = tnew
-  end subroutine timer
+  !   call date_and_time (zdate, ztime, zzone, ival)
+  !   tnew = ival(5)*3600.+ival(6)*60.+ival(7)+ival(8)/1000.
+  !   if (told > 0.) then
+  !      print *, 'Fields: Time since last called: ',tnew-told,' seconds'
+  !   end if
+  !   told = tnew
+  ! end subroutine timer
 
   subroutine finish_fields
 

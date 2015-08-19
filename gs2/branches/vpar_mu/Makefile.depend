@@ -87,7 +87,6 @@ ffttester_mod = \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
-	 prof.o \
 	 ran.o \
 	 read_chease.o \
 	 redistribute.o \
@@ -145,7 +144,6 @@ gs2_mod = \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
-	 prof.o \
 	 ran.o \
 	 read_chease.o \
 	 redistribute.o \
@@ -205,7 +203,6 @@ ingen_mod = \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
 	 peq.o \
-	 prof.o \
 	 ran.o \
 	 read_chease.o \
 	 redistribute.o \
@@ -278,7 +275,6 @@ dist_fn.o: \
 	 matrix_inversion.o \
 	 mp.o \
 	 nonlinear_terms.o \
-	 prof.o \
 	 redistribute.o \
 	 run_parameters.o \
 	 species.o \
@@ -341,7 +337,6 @@ fields_implicit.o: \
 	 kt_grids.o \
 	 mp.o \
 	 parameter_scan_arrays.o \
-	 prof.o \
 	 run_parameters.o \
 	 species.o \
 	 theta_grid.o \
@@ -404,7 +399,6 @@ gs2_diagnostics.o: \
 	 mp.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
-	 prof.o \
 	 run_parameters.o \
 	 species.o \
 	 spl.o \
@@ -511,17 +505,12 @@ gs2_save_hdf5.o: \
 	 vpamu_grids.o 
 gs2_time.o: 
 gs2_transforms.o: \
-	 constants.o \
 	 fft_work.o \
-	 file_utils.o \
 	 gs2_layouts.o \
-	 gs2_time.o \
 	 kt_grids.o \
 	 mp.o \
-	 prof.o \
 	 redistribute.o \
-	 theta_grid.o \
-	 vpamu_grids.o 
+	 theta_grid.o 
 hdf_wrapper.o: \
 	 constants.o \
 	 convert.o \
@@ -563,7 +552,6 @@ ingen.o: \
 	 theta_grid_params.o 
 init_g.o: \
 	 constants.o \
-	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
@@ -627,7 +615,6 @@ nonlinear_terms.o: \
 	 gs2_transforms.o \
 	 kt_grids.o \
 	 mp.o \
-	 ran.o \
 	 run_parameters.o \
 	 species.o \
 	 text_options.o \
@@ -653,7 +640,6 @@ peq.o: \
 	 spl.o 
 pgplot_utils.o: \
 	 constants.o 
-prof.o: 
 ran.o: \
 	 mt19937.o 
 read_chease.o: 

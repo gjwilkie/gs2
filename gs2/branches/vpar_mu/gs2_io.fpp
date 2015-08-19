@@ -287,7 +287,7 @@ contains
        status = nf90_def_dim (ncid_movie, 'tm', nmovie_tot, time_movie_dim)
        if (status /= NF90_NOERR) call netcdf_error (status, dim='tm')
     endif
-    ! define time_movie_dim for use in other diagnostics that shouldn't be written
+    ! define time_movie_dim for use in other diagnostics that should not be written
     ! out often
 !    status = nf90_def_dim (ncid_movie, 'tm', nmovie_tot, time_movie_dim)
 !    if (status /= NF90_NOERR) call netcdf_error (status, dim='tm')
@@ -296,7 +296,7 @@ contains
 
   subroutine nc_grids
 
-    use theta_grid, only: ntgrid, theta, eps, ntheta
+    use theta_grid, only: ntgrid, theta
     use kt_grids, only: naky, ntheta0, theta0, akx, aky, nx, ny
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
@@ -450,7 +450,7 @@ contains
 
     use mp, only: nproc
     use species, only: nspec
-    use kt_grids, only: naky, ntheta0, theta0
+    use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
     use parameter_scan_arrays, only: write_scan_parameter
 # ifdef NETCDF
@@ -1268,9 +1268,9 @@ contains
     use convert, only: c2r
     use run_parameters, only: fphi, fapar, fbpar
     use fields_arrays, only: phi, apar, bpar
-    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
 # ifdef NETCDF
+    use theta_grid, only: ntgrid
     use netcdf, only: nf90_put_var
 # endif
     complex, dimension(:,:), intent (in) :: phase
@@ -1404,9 +1404,9 @@ contains
     use convert, only: c2r
     use run_parameters, only: fphi, fapar, fbpar
     use fields_arrays, only: phi, apar, bpar
-    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
 # ifdef NETCDF
+    use theta_grid, only: ntgrid
     use netcdf, only: nf90_put_var
 
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
@@ -1436,9 +1436,9 @@ contains
 
     use convert, only: c2r
     use run_parameters, only: fphi, fapar, fbpar
-    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
 # ifdef NETCDF
+    use theta_grid, only: ntgrid
     use netcdf, only: nf90_put_var
 # endif
     complex, dimension (:,:,:), intent (in) :: epar
@@ -1455,10 +1455,10 @@ contains
   subroutine nc_final_moments (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
 
     use convert, only: c2r
-    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
 # ifdef NETCDF
+    use theta_grid, only: ntgrid
     use netcdf, only: nf90_put_var
 # endif
     complex, dimension (:,:,:,:), intent (in) :: ntot, density, upar, tpar, tperp
@@ -1506,7 +1506,6 @@ contains
        phi00, ntot00, density00, upar00, tpar00, tperp00, tpar2_by_mode, tperp2_by_mode)
 
     use convert, only: c2r
-    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
 # ifdef NETCDF
@@ -1914,7 +1913,7 @@ contains
 
     use convert, only: c2r
     use run_parameters, only: fphi
-    use kt_grids, only: ntheta0, naky, jtwist_out
+    use kt_grids, only: naky
     use theta_grid, only: ntgrid
 # ifdef NETCDF
     use netcdf, only: nf90_put_var
@@ -2003,7 +2002,7 @@ contains
        apar0,  apar2,  apar2_by_mode, &
        bpar0, bpar2, bpar2_by_mode, &
        omega, omegaavg, woutunits, write_omega)
-
+    
     use run_parameters, only: fphi, fapar, fbpar
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
@@ -2011,9 +2010,8 @@ contains
     use convert, only: c2r
     use fields_arrays, only: phi, apar, bpar
     use parameter_scan_arrays, only: write_scan_parameter,&
-                                     current_scan_parameter_value
+         current_scan_parameter_value
 
-!    use nf90_mod, only: nf90_put_var1, nf90_put_vara
 # ifdef NETCDF
     use netcdf, only: nf90_put_var, nf90_sync
 # endif
@@ -2034,67 +2032,66 @@ contains
     integer, dimension (2) :: startx, countx, starty, county, starts, counts
     integer :: status, it, ik
 
-
     !Added by EGH ; for writing phi_t, the whole potential vs time
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
     integer, dimension (5) :: start5, count5
-
+    
     start5(1) = 1
     start5(2) = 1
     start5(3) = 1
     start5(4) = 1
     start5(5) = nout
-  
+    
     count5(1) = 2
     count5(2) = 2*ntgrid+1
     count5(3) = ntheta0
     count5(4) = naky
     count5(5) = 1
-  
+    
     !End EGH
-
+    
     status = nf90_put_var (ncid, time_id, time, start=(/ nout /))
-
+    
     start(1) = 1
     start(2) = 1
     start(3) = nout
-
+    
     count(1) = ntheta0
     count(2) = naky
     count(3) = 1
-
+    
     start0(1) = 1
     start0(2) = 1
     start0(3) = 1
     start0(4) = nout
-
+    
     count0(1) = 2
     count0(2) = ntheta0
     count0(3) = naky
     count0(4) = 1
-
+    
     start4(1) = 1
     start4(2) = 1
     start4(3) = 1
     start4(4) = nout
-
+    
     count4(1) = ntheta0
     count4(2) = naky
     count4(3) = nspec
     count4(4) = 1
-
+    
     starty(1) = 1
     starty(2) = nout
-
+    
     county(1) = naky
     county(2) = 1
-
+    
     startx(1) = 1
     startx(2) = nout
-
+    
     countx(1) = ntheta0
     countx(2) = 1
-
+    
     starts(1) = 1
     starts(2) = nout
 
@@ -2111,29 +2108,26 @@ contains
 
     if (fphi > zero) then
 
-
-	!<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
-	if(write_phi_t) then
+       !<wkdoc> Write fields at the current timestep, if [[write_phi_over_time]], [[write_apar_over_time]], [[write_bpar_over_time]] are set in the input file</wkdoc>
+       if(write_phi_t) then
           call c2r (phi, ri3)
-          !ri_phi_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
-	end if
+       end if
 
-	if(write_apar_t) then
+       if(write_apar_t) then
           call c2r (apar, ri3)
           !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
-	end if
+       end if
 
-	if(write_bpar_t) then
+       if(write_bpar_t) then
           call c2r (bpar, ri3)
           !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
-	  status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
+          status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
-	end if
-
+       end if
 
        if (ntheta0 > 1) then
           do it = 1, ntheta0
@@ -2142,7 +2136,7 @@ contains
           status = nf90_put_var (ncid, phi2_by_kx_id, field2_by_kx, start=startx, count=countx)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi2_by_kx_id)
        end if
-
+       
        if (naky > 1) then
           do ik = 1, naky
              field2_by_ky(ik) = sum(phi2_by_mode(:,ik)*fluxfac(ik))
@@ -2150,7 +2144,7 @@ contains
           status = nf90_put_var (ncid, phi2_by_ky_id, field2_by_ky, start=starty, count=county)
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi2_by_ky_id)
        end if
-
+       
        call c2r (phi0, ri2) 
        status = nf90_put_var (ncid, phi0_id, ri2, start=start0, count=count0)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi0_id)
@@ -2159,9 +2153,9 @@ contains
        status = nf90_put_var (ncid, phi2_id, phi2, start=(/nout/))
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi2_id)
     end if
-
+    
     if (fapar > zero) then
-
+       
        if (ntheta0 > 1) then
           do it = 1, ntheta0
              field2_by_kx(it) = sum(apar2_by_mode(it,:)*fluxfac(:))

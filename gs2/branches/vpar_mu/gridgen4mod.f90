@@ -347,7 +347,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 ! Find all extrema.
       nextr = 0
       do i = 2, nbmag-2
-         if (bprime(i) == 0.0) then
+         if (abs(bprime(i)) < epsilon(0.)) then
             bextr(i) = bmagin(i)
             thetaextr(i) = thetain(i)
             nextr = nextr + 1
@@ -410,7 +410,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       essentialstart(:1+nextr) = .true.
       essentialstart(2+nextr:) = .false.
       thetastart(1) = -pi*n
-      thetastart(2:nextr+1) = pack(thetaextr,bextr /= 0.0)
+      thetastart(2:nextr+1) = pack(thetaextr,abs(bextr) > epsilon(0.))
       
       nstart = nextr + 1
       do i = 1, nbmag-1
@@ -446,7 +446,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       do i = 2, nbmag-2
          bprimel = bprimer
          bprimer = bmagp(thetain(i+1))
-         if (bprimel == 0.0) then
+         if (abs(bprimel) < epsilon(0.)) then
             call add_start (thetain(i), .true.)
          else if (bprimel < 0.0 .and. bprimer > 0.0) then
 ! 1.2.1 Find local minimum.
@@ -560,7 +560,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
             if (bmagstart(j) >= bmin(i) &
                  .and. bmagstart(j) <= bmax(i)) &
                  nsetsetmax = nsetsetmax + 1
-            if (bextr(i) /= 0 &
+            if (abs(bextr(i)) > epsilon(0.) &
                  .and. ((bmagstart(j) >= bmax(i) &
                  .and. bmagstart(j) <= bextr(i)) &
                  .or. (bmagstart(j) <= bmin(i) &
@@ -608,7 +608,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 !            if (iset == 1 .and. i == 1) cycle grid_interval
 ! modification 5.16.02:
             if (iset == 1 .and. (i == 1 .or. i == nbmag-1)) cycle grid_interval
-            if (bmagin(i) > bmagi .and. thetain(i) /= thetai) then
+            if (bmagin(i) > bmagi .and. abs(thetain(i)-thetai) > epsilon(0.)) then
 ! 3.1 Consider when the left grid point is greater than the target bmag.
 !    Then, there are three cases in which there are matching points.
 !    (1) The right grid point is equal to the target bmag, and the slope
@@ -618,7 +618,8 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 !        and the interval is concave down, and the minimum in
 !        this interval, which is guaranteed to exist, is less than
 !        the target bmag.
-               if ((bmagin(i+1) == bmagi .or. thetain(i+1) == thetai) &
+               if ((abs(bmagin(i+1)-bmagi) < epsilon(0.) &
+                    .or. abs(thetain(i+1)-thetai) < epsilon(0.)) &
                     .and. bprime(i+1) > 0.0) then
 ! 3.1.1 Consider when the right grid point is equal to the target bmag.
                   call add_setset_root (thetain(i+1),thetain(i),bmagi,iset,311)
@@ -658,7 +659,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 ! 3.1.3.3.1 If this interval is on the edge, there will not be any minimum.
                if (i == 1 .or. i == nbmag-1) cycle grid_interval
 ! 3.1.3.3.2 Find the minimum in this interval.
-               if (bextr(i) == 0.0) then
+               if (abs(bextr(i)) < epsilon(0.)) then
                   print *, "gridgen4.f90:gg4collect:3.1.3.3.2:"," missing extremum"
                   print *, "iset,i:",iset,i
                   print *, "bmagi:",bmagi
@@ -676,7 +677,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 ! 3.1.3.3.2.3 Collect the point right of the minimum.
                call add_setset_root (thetaextr(i),thetain(i+1),bmagi,iset,313323)
                cycle grid_interval
-            else if (bmagin(i) < bmagi .and. thetain(i) /= thetai) then
+            else if (bmagin(i) < bmagi .and. abs(thetain(i)-thetai) > epsilon(0.)) then
 ! 3.2 Consider then the left grid point is less than the target bmag.
 !     Then, there are three cases in which there are matching points.
 !     (1) The right grid point is equal to the target bmag, and the
@@ -687,7 +688,8 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 !         this interval, which is guaranteed to exist, is greater
 !         than the target bmag.
 ! 3.2.1 Consider when the right grid point is equal to the target bmag.
-               if ((bmagin(i+1) == bmagi .or. thetain(i+1) == thetai) &
+               if ((abs(bmagin(i+1)-bmagi) < epsilon(0.) &
+                    .or. abs(thetain(i+1)-thetai) < epsilon(0.)) &
                     .and. bprime(i+1) < -bpknob) then
                   call add_setset_root (thetain(i),thetain(i+1),bmagi,iset,321)
                   cycle grid_interval
@@ -726,7 +728,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 ! 3.2.3.3.1 If this interval is on the edge, there will not be any maximum.
                if (i == 1 .or. i == nbmag-1) cycle grid_interval
 ! 3.2.3.3.2 Find the maximum in this interval.
-               if (bextr(i) == 0.0) then
+               if (abs(bextr(i)) < epsilon(0.)) then
                   print *, "gridgen4.f90:gg4collect:3.2.3.3.2:"," missing extremum"
                   print *, "iset,i:",iset,i
                   print *, "bmagi:",bmagi
@@ -744,10 +746,11 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 ! 3.2.3.3.2.3 Collect the point right of the maximum.
                call add_setset_root (thetain(i+1),thetaextr(i),bmagi,iset,323323)
                cycle grid_interval
-            else if (bmagin(i) == bmagi .or. thetain(i) == thetai) then
+            else if (abs(bmagin(i)-bmagi) < epsilon(0.) &
+                 .or. abs(thetain(i)-thetai) < epsilon(0.)) then
 ! 3.3 Consider when then left grid point is equal to the target bmag.
 ! 3.3.1 Add the point if it is not the starting grid point.
-               if (thetai /= thetain(i)) then
+               if (abs(thetai-thetain(i)) > epsilon(0.)) then
                   call add_setset (thetain(i), iset, 331)
                end if
 ! 3.3.2 Check if there is another matching target bmag in the interval.
@@ -817,7 +820,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
          grid_interval: do i = 1, nbmag-1
 ! 3.0.1 Stoopid problems near -pi.
             if (nset == 1 .and. i == 1) cycle grid_interval
-            if (bmagin(i) > bmagi .and. thetain(i) /= thetai) then
+            if (bmagin(i) > bmagi .and. abs(thetain(i)-thetai) > epsilon(0.)) then
 ! 3.1 Consider when the left grid point is greater than the target bmag.
 !    Then, there are three cases in which there are matching points.
 !    (1) The right grid point is equal to the target bmag, and the slope
@@ -828,7 +831,8 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 !        this interval, which is guaranteed to exist, is less than
 !        the target bmag.
                bprimer = bmagp(thetain(i+1))
-               if ((bmagin(i+1) == bmagi .or. thetain(i+1) == thetai) &
+               if ((abs(bmagin(i+1)-bmagi) < epsilon(0.) &
+                    .or. abs(thetain(i+1)-thetai) < epsilon(0.)) &
                     .and. bprimer > 0.0) &
                     then
 ! 3.1.1 Consider when the right grid point is equal to the target bmag.
@@ -914,7 +918,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
                call add_setset_root (thetastart(imatch),thetain(i+1),&
                     bmagi,nset,313323)
                cycle grid_interval
-            else if (bmagin(i) < bmagi .and. thetain(i) /= thetai) then
+            else if (bmagin(i) < bmagi .and. abs(thetain(i)-thetai) > epsilon(0.)) then
 ! 3.2 Consider then the left grid point is less than the target bmag.
 !     Then, there are three cases in which there are matching points.
 !     (1) The right grid point is equal to the target bmag, and the
@@ -926,7 +930,8 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 !         than the target bmag.
                bprimer = bmagp(thetain(i+1))
 ! 3.2.1 Consider when the right grid point is equal to the target bmag.
-               if ((bmagin(i+1) == bmagi .or. thetain(i+1) == thetai) &
+               if ((abs(bmagin(i+1)-bmagi) < epsilon(0.) &
+                    .or. abs(thetain(i+1)-thetai) < epsilon(0.)) &
                     .and. bprimer < 0.0) &
                     then
                   call add_setset_root (thetain(i),thetain(i+1),bmagi,nset,321)
@@ -1011,10 +1016,11 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
                call add_setset_root (thetain(i+1),thetastart(imatch),&
                     bmagi,nset,323323)
                cycle grid_interval
-            else if (bmagin(i) == bmagi .or. thetain(i) == thetai) then
+            else if (abs(bmagin(i)-bmagi) < epsilon(0.) &
+                 .or. abs(thetain(i)-thetai) < epsilon(0.)) then
 ! 3.3 Consider when then left grid point is equal to the target bmag.
 ! 3.3.1 Add the point if it is not the starting grid point.
-               if (thetai /= thetain(i)) then
+               if (abs(thetai-thetain(i)) > epsilon(0.)) then
                   call add_setset (thetain(i), nset, 331)
 ! 3.3.2 Check if there is another matching target bmag in the interval.
                   bprime0 = bmagp(thetain(i))
@@ -1177,7 +1183,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       allocate (thetares(nset), alambdares(nset))
       
       do i = 1, nset
-         if (bmagset(i) /= 0.0) then
+         if (abs(bmagset(i)) > epsilon(0.)) then
             call get_thetares (i, thetares(i))
             call get_lambdares (i, alambdares(i))
          else
@@ -1228,7 +1234,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
             ileft = ileft - 1
             if (ileft < 1) cycle points_in_set
             if (ibmagsetset(ithetasort(ileft)) == 0) cycle
-            if (bmagset(ibmagsetset(ithetasort(ileft))) /= 0.0) exit
+            if (abs(bmagset(ibmagsetset(ithetasort(ileft)))) > epsilon(0.)) exit
          end do
 ! 2.2 Look for the point to the right.
          iright = i
@@ -1236,7 +1242,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
             iright = iright + 1
             if (iright > nsetset) cycle points_in_set
             if (ibmagsetset(ithetasort(iright)) == 0) cycle
-            if (bmagset(ibmagsetset(ithetasort(iright))) /= 0.0) exit
+            if (abs(bmagset(ibmagsetset(ithetasort(iright)))) > epsilon(0.)) exit
          end do
 ! 2.3 Add contribution from this interval.
          dthetal=abs(thetasetset(ithetasort(i))-thetasetset(ithetasort(ileft)))
@@ -1270,7 +1276,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
             alplus = 0.0
             do iplus = i-1, 1, -1
                if (ibmagsort(iplus) == 0) cycle
-               if (bmagset(ibmagsort(iplus)) /= 0.0) then
+               if (abs(bmagset(ibmagsort(iplus))) > epsilon(0.)) then
                   alplus = 1.0/bmagset(ibmagsort(iplus))
                   exit
                end if
@@ -1278,7 +1284,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
             alminus = 0.0
             do iminus = i+1, nset
                if (ibmagsort(iminus) == 0) cycle
-               if (bmagset(ibmagsort(iminus)) /= 0.0) then
+               if (abs(bmagset(ibmagsort(iminus))) > epsilon(0.)) then
                   alminus = 1.0/bmagset(ibmagsort(iminus))
                   exit
                end if
@@ -1295,7 +1301,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
               -sqrt(max(1.0-al*bmagin(i),0.0)))
          dalminus = abs(sqrt(max(1.0-alminus*bmagin(i),0.0)) &
               -sqrt(max(1.0-al*bmagin(i),0.0)))
-         if (dalplus+dalminus /= 0.0) then
+         if (abs(dalplus+dalminus) > epsilon(0.)) then
             npts = npts + 1
             res = res + dalplus*dalminus/(dalplus+dalminus+1e-20)
          end if
@@ -1323,7 +1329,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 ! 1 Find the set with the minimum resolution metric.
       do while (ntheta_left > ntheta .or. nlambda_left > nbset)
          work(1:1) = minloc(thetares(1:nset)+alknob*alambdares(1:nset), &
-              bmagset(1:nset) /= 0.0)
+              abs(bmagset(1:nset)) > epsilon(0.))
          idel = work(1)
          
 ! 2 Delete the set just found.
@@ -1349,13 +1355,13 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       do i = 1, nset
          if (ibmagsort(i) == idel) then
             do j = i-1, 1, -1
-               if (bmagset(ibmagsort(j)) /= 0.0) then
+               if (abs(bmagset(ibmagsort(j))) > epsilon(0.)) then
                   work(ibmagsort(j)) = ibmagsort(j)
                   exit
                end if
             end do
             do j = i+1, nset
-               if (bmagset(ibmagsort(j)) /= 0.0) then
+               if (abs(bmagset(ibmagsort(j))) > epsilon(0.)) then
                   work(ibmagsort(j)) = ibmagsort(j)
                   exit
                end if
@@ -1369,7 +1375,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       ntheta_left = 0
       do i = 1, nsetset
          if (ibmagsetset(ithetasort(i)) == 0) cycle
-         if (bmagset(ibmagsetset(ithetasort(i))) == 0.0) cycle
+         if (abs(bmagset(ibmagsetset(ithetasort(i)))) < epsilon(0.)) cycle
          if (ibmagsetset(ithetasort(i)) /= idel) then
             ntheta_left = ntheta_left + 1
             cycle
@@ -1379,7 +1385,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
          do j = i-1, 1, -1
             if (ibmagsetset(ithetasort(j)) == idel) cycle
             if (ibmagsetset(ithetasort(j)) == 0) cycle
-            if (bmagset(ibmagsetset(ithetasort(j))) == 0.0) cycle
+            if (abs(bmagset(ibmagsetset(ithetasort(j)))) < epsilon(0.)) cycle
             work(ibmagsetset(ithetasort(j))) = ibmagsetset(ithetasort(j))
             exit
          end do
@@ -1387,7 +1393,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
          do j = i+1, nsetset
             if (ibmagsetset(ithetasort(j)) == idel) cycle
             if (ibmagsetset(ithetasort(j)) == 0) cycle
-            if (bmagset(ibmagsetset(ithetasort(j))) == 0.0) cycle
+            if (abs(bmagset(ibmagsetset(ithetasort(j)))) < epsilon(0.)) cycle
             work(ibmagsetset(ithetasort(j))) = ibmagsetset(ithetasort(j))
             exit
          end do
@@ -1413,14 +1419,14 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       n = 0
       do i = 1, nsetset
          if (ibmagsetset(ithetasort(i)) == 0) cycle
-         if (bmagset(ibmagsetset(ithetasort(i))) == 0.0) cycle
+         if (abs(bmagset(ibmagsetset(ithetasort(i)))) < epsilon(0.)) cycle
          n = n + 1
          thetagrid(n) = thetasetset(ithetasort(i))
          bmaggrid(n) = bmagset(ibmagsetset(ithetasort(i)))
       end do
       
 ! Check point at +pi*iperiod
-      if (bmaggrid(n) /= bmaggrid(1)) then
+      if (abs(bmaggrid(n)-bmaggrid(1)) > epsilon(0.)) then
          n = n + 1
          thetagrid(n) = pi*iperiod
          bmaggrid(n) = bmaggrid(1)
@@ -1429,7 +1435,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 
       n = 0
       do i = nset, 1, -1
-         if (bmagset(ibmagsort(i)) == 0.0) cycle
+         if (abs(bmagset(ibmagsort(i))) < epsilon(0.)) cycle
          n = n + 1
          bset(n) = bmagset(ibmagsort(i))
       end do
@@ -1603,8 +1609,6 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     real :: var
 
     integer ifail
-
-    integer i
 
 ! these next arrays should be double precision, which we usually get with 
 ! compiler options
@@ -1788,7 +1792,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     if (var.gt.zero) avar = var*avdf*avdf
 !
 !---check for zero variance---
-    if (var.ne.zero) go to 10
+    if (abs(var)>epsilon(0.)) go to 10
     r1 = zero
     go to 90
 !
@@ -2020,8 +2024,8 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     rho1 = one + rho
     p = rho/rho1
     q = one/rho1
-    if (rho1.eq.one) p = zero
-    if (rho1.eq.rho) q = zero
+    if (abs(rho1-one)<epsilon(0.)) p = zero
+    if (abs(rho1-rho)<epsilon(0.)) q = zero
 !
 !---rational cholesky decomposition of p*c + q*t---
     f = zero

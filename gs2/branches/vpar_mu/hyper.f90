@@ -220,7 +220,7 @@ contains
              
           case (hyper_option_both) 
              write (unit, fmt="(' hyper_option = ',a)") '"both"'
-             if (D_hyperres == D_hypervisc) then
+             if (abs(D_hyperres - D_hypervisc) < epsilon(0.)) then
                 write (unit, fmt="(' D_hyper = ',e17.10)") D_hyper
              else
                 write (unit, fmt="(' D_hypervisc = ',e17.10)") D_hypervisc
@@ -385,7 +385,7 @@ contains
           hyper_on = .true.
           
           if (D_hyper < 0.) then
-             if (D_hyperres /= D_hyperres) then
+             if (abs(D_hyperres - D_hypervisc) > epsilon(0.)) then
                 write (ierr, *) 'WARNING: It is inconsistent to set D_hypervisc different from ', &
                      'D_hyperres.  Recommend: Set them equal.'
              end if
@@ -442,7 +442,6 @@ contains
 
   subroutine hyper_diff (g0, phi)
 
-    use mp, only: proc0
     use gs2_layouts, only: ik_idx, is_idx
     use theta_grid, only: ntgrid
     use run_parameters, only: fphi
@@ -457,8 +456,7 @@ contains
 
     real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, shear_rate_z, shear_rate_z_nz
 
-    integer :: iglo, ik, it, ige
-    integer :: ncall = 0 ! variables declared with value are automatically saved
+    integer :: iglo, ik, it
  
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
@@ -536,7 +534,7 @@ contains
          ik = ik_idx(g_lo, iglo)
 
          do it = 1, ntheta0
-            if(aky(ik) == 0.) then
+            if(aky(ik) < epsilon(0.)) then
                hypervisc_filter(:,it,ik) = exp(- (D_hypervisc * code_dt &
                     * ( shear_rate_z_nz(:) * akx(it) ** 4 / akx4_max )))
             else
@@ -574,7 +572,7 @@ contains
 
       do iglo = g_lo%llim_proc, g_lo%ulim_proc
          ik = ik_idx(g_lo, iglo)
-         if (damp_zonal_only .and. .not. aky(ik)==epsilon(0.0)) cycle
+         if (damp_zonal_only .and. aky(ik) > epsilon(0.0)) cycle
          do it = 1, ntheta0
             hypervisc_filter(:,it,ik) = exp(- ( D_hypervisc * code_dt &
                  * ( shear_rate_nz(:) *  (aky(ik) ** 2 + akx(it) ** 2 )**nexp / akperp4_max)))
