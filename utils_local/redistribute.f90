@@ -275,8 +275,10 @@ contains
 
   end subroutine init_redist
 
-  subroutine init_fill (f, char, to_low, to_high, to_list, &
-       from_low, from_high, from_list, ierr)
+  !  subroutine init_fill (f, char, to_low, to_high, to_list, &
+  !       from_low, from_high, from_list, ierr)
+  subroutine init_fill (f, char, to_low, to_list, &
+       from_low, from_list, ierr)
 
     use mp, only: nproc, proc0, iproc
     type (redist_type), intent (out) :: f
@@ -285,7 +287,8 @@ contains
 !    type (index_list_type), dimension (0:) :: to_list, from_list
     type (index_list_type), dimension (0:nproc-1), intent (in) :: to_list, from_list
 ! <TT
-    integer, dimension(:), intent (in) :: to_low, from_low, to_high, from_high
+    !    integer, dimension(:), intent (in) :: to_low, from_low, to_high, from_high
+        integer, dimension(:), intent (in) :: to_low, from_low
     integer, optional, intent (out) :: ierr
     
     integer :: j, ip, n_to, n_from, buff_size
@@ -498,8 +501,6 @@ contains
 
   subroutine c_redist_22 (r, from_here, to_here)
 
-    use mp, only: iproc
-
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -622,7 +623,6 @@ contains
                         r%to_low(2):), intent (in out) :: to_here
 
     integer :: i, idp, ipto, ipfrom, iadp
-    integer :: rank, ierror
 
     ! redistribute to idpth next processor from idpth preceding processor
     ! or redistribute from idpth preceding processor to idpth next processor
@@ -679,8 +679,6 @@ contains
 
   subroutine c_redist_22_inv (r, from_here, to_here)
 
-    use mp, only: iproc
-    
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%to_low(1):, &
@@ -780,7 +778,7 @@ contains
        itmax = min((itmin-1)+it_nlocal,nx)
        do it = itmin,itmax
           to_here(it,ixxf) = from_here(ik,iyxf)
-	    iyxf = iyxf + 1
+          iyxf = iyxf + 1
           i = i + 1
        end do
     end do
@@ -858,7 +856,6 @@ contains
 
   subroutine c_redist_32 (r, from_here, to_here)
 
-    use mp, only: iproc
     use job_manage, only: time_message
 
     type (redist_type), intent (in out) :: r
@@ -1102,7 +1099,7 @@ contains
     complex, dimension (r%to_low(1):, &
                         r%to_low(2):), intent (in out) :: to_here
 
-    integer :: i,j,k,t2,t1,f3,f2,f1
+    integer :: i,t2,t1,f3,f2,f1
     integer :: f3max,f3maxmultiple,f3incr,innermax,iincrem,iglomax,t1test
     integer :: innermaxmultiplier,outerf3limit,startf3
     real :: innermaxrealvalue,tempnaky
@@ -1336,7 +1333,6 @@ contains
 
   subroutine c_redist_32_inv (r, from_here, to_here)
 
-    use mp, only: iproc
     use job_manage, only: time_message
 
     type (redist_type), intent (in out) :: r
@@ -1481,17 +1477,17 @@ contains
     use mp, only: iproc
 
     type (redist_type), intent (in out) :: r
-
+    
     complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in) :: from_here
-
+         r%to_low(2):), intent (in) :: from_here
+    
     complex, dimension (r%from_low(1):, &
-                        r%from_low(2):, &
-                        r%from_low(3):), intent (in out) :: to_here
-
+         r%from_low(2):, &
+         r%from_low(3):), intent (in out) :: to_here
+    
     integer :: i,k,t2,t1,f3,f2,f1,fhigh,thigh,f2max
     real :: nakyrecip
-
+    
     i = 1
 !AJ We want to be able to divide by naky with floating point 
 !AJ arithmetic so we need to convert naky to a float (hence
@@ -1519,7 +1515,7 @@ contains
        do while (f2 .le. f2max)
 !AJ Get initial value of f1 (which equates to ig) and t2 (which equates
 !AJ to ixxf).
-       	  f1 = r%from(iproc)%k(i)
+          f1 = r%from(iproc)%k(i)
           t2 = r%to(iproc)%l(i)
 !AJ Work out the maximum value ixxf (t2) can have by calculating the range 
 !AJ of ixxf that this process owns.  We step through t2 by naky each iteration
@@ -1534,12 +1530,12 @@ contains
 !AJ Finally check the actual number of inner loop steps by ensuring that the 
 !AJ computed maximum bound of ig is not beyond the actual allowed maximum value 
 !AJ in r%from_high(1).
-	  fhigh = min(thigh,r%from_high(1))
-       	  do k = f1,fhigh
-	     i = i + 1
+          fhigh = min(thigh,r%from_high(1))
+          do k = f1,fhigh
+             i = i + 1
              to_here(k,f2,f3) = from_here(t1,t2)
-	     t2 = t2 + naky
-	  end do
+             t2 = t2 + naky
+          end do
 !AJ If at the end of the inner loop we still have theoretical iterations 
 !AJ left on ixxf (i.e. the calculated thigh is higher than the allowed 
 !AJ maximum of ig) then move to the next isgn.  If there aren't any 
@@ -1553,7 +1549,6 @@ contains
     end do
 
   end subroutine c_redist_32_inv_new_copy
-
 
   subroutine c_redist_32_inv_new_opt_copy(r, from_here, to_here)
 !=====================================================================
@@ -1591,7 +1586,7 @@ contains
                         r%from_low(2):, &
                         r%from_low(3):), intent (in out) :: to_here
 
-    integer :: i,j,k,t2,t1,f3,f2,f1
+    integer :: i,t2,t1,f3,f2,f1
     integer :: f3max,f3maxmultiple,f3incr,innermax,iincrem,iglomax,t1test
     integer :: innermaxmultiplier,outerf3limit,startf3
     real :: innermaxrealvalue,tempnaky
