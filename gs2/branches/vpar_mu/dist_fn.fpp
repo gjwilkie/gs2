@@ -6,6 +6,8 @@
 !!velocity shear and calculating the right-hand side of the field 
 !!equation, as well as a host of other functions.
 
+# include "define.inc"
+
 module dist_fn
 
   use redistribute, only: redist_type
