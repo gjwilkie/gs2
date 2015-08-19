@@ -92,9 +92,9 @@ contains
     implicit none
     logical, intent(in) :: randomize
     integer, intent(inout), dimension(:) :: init_seed
+# if RANDOM == _RANMT_
     real :: rnd
     
-# if RANDOM == _RANMT_    
     if (randomize) then
        !Use intrinsic function with randomized seed to generate seed for MT
        call random_seed()

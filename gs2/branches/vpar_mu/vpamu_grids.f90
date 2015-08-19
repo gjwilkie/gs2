@@ -206,7 +206,7 @@ contains
   ! integrave over v-space and sum over species
   subroutine integrate_species (g, weights, total)
 
-    use mp, only: nproc, sum_allreduce
+    use mp, only: sum_allreduce
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
     use theta_grid, only: ntgrid, bmag
 
