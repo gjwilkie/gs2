@@ -11,16 +11,17 @@ module matrix_inversion
   
 contains
 
-  subroutine invert_dmatrix (A)
+  subroutine invert_dmatrix (A, ipiv)
 
     implicit none
 
     double precision, dimension (:,:), intent (in out) :: A
-
+    integer, dimension (:), intent (out) :: ipiv
+    
     integer :: n, lwork, ierr
     double precision :: norm, rcond, dlange
 
-    integer, dimension (:), allocatable :: ipiv
+!    integer, dimension (:), allocatable :: ipiv
     integer, dimension (:), allocatable :: iwork
     double precision, dimension (:), allocatable :: work
 
@@ -28,7 +29,7 @@ contains
 
     lwork = 4*n
 
-    allocate (ipiv(n))
+!    allocate (ipiv(n))
     allocate (work(lwork))
     allocate (iwork(n))
 
@@ -53,27 +54,29 @@ contains
 !       write (*,*)
 !    end if
     
-    ! get inverse of A using LU factorization
-    ! obtained by dgetrf
-    call dgetri (n, A, n, ipiv, work, lwork, ierr)
-    if (ierr /=0 ) then
-       write (*,*) 'Error in dgetri: ', ierr
-    end if
+    ! ! get inverse of A using LU factorization
+    ! ! obtained by dgetrf
+    ! call dgetri (n, A, n, ipiv, work, lwork, ierr)
+    ! if (ierr /=0 ) then
+    !    write (*,*) 'Error in dgetri: ', ierr
+    ! end if
 
-    deallocate (ipiv, work, iwork)
+    ! deallocate (ipiv, work, iwork)
+    deallocate (work, iwork)
     
   end subroutine invert_dmatrix
 
-  subroutine invert_zmatrix (A)
+  subroutine invert_zmatrix (A, ipiv)
 
     implicit none
 
     complex (kind=8), dimension (:,:), intent (in out) :: A
-
+    integer, dimension (:), intent (out) :: ipiv
+    
     integer :: n, lwork, ierr
     double precision :: norm, rcond, zlange
 
-    integer, dimension (:), allocatable :: ipiv
+!    integer, dimension (:), allocatable :: ipiv
     double precision, dimension (:), allocatable :: rwork
     double precision, dimension (:), allocatable :: work
     complex (kind=8), dimension (:), allocatable :: cwork
@@ -82,20 +85,20 @@ contains
 
     lwork = 2*n
 
-    allocate (ipiv(n))
-    allocate (work(1)) ! dummy array not actually accessed
+!    allocate (ipiv(n))
+    allocate (work(1)) ; work(1) = 0. ! dummy array not actually accessed
     allocate (cwork(lwork))
     allocate (rwork(lwork))
 
+    norm = zlange ('1', n, n, A, n, work)
+!    write (*,*) 'norm: ', norm
+    
     ! get the LU factorization of A
     call zgetrf (n, n, A, n, ipiv, ierr)
     if (ierr /=0) then
        write (*,*) 'Error in zgetrf: ', ierr
     end if
-    
-    norm = zlange ('1', n, n, A, n, work)
-!    write (*,*) 'norm: ', norm
-    
+
     ! get reciprocal of condition number of matrix A
     ! from LU factorization obtained by dgetrf
     call zgecon ('1', n, A, n, norm, rcond, cwork, rwork, ierr)
@@ -103,19 +106,17 @@ contains
        write (*,*) 'Error in zgecon: ', ierr
     end if
     
-!    if (abs(rcond) > epsilon(0.0)) then
-!       write (*,*) 'condition number: ', 1./rcond
-!       write (*,*)
-!    end if
-    
-    ! get inverse of A using LU factorization
-    ! obtained by dgetrf
-    call zgetri (n, A, n, ipiv, cwork, lwork, ierr)
-    if (ierr /=0 ) then
-       write (*,*) 'Error in zgetri: ', ierr
-    end if
+!    write (*,*) 'response matrix condition number: ', 1./rcond
 
-    deallocate (ipiv, work, cwork, rwork)
+    ! ! get inverse of A using LU factorization
+    ! ! obtained by dgetrf
+    ! call zgetri (n, A, n, ipiv, cwork, lwork, ierr)
+    ! if (ierr /=0 ) then
+    !    write (*,*) 'Error in zgetri: ', ierr
+    ! end if
+
+    !    deallocate (ipiv, work, cwork, rwork)
+        deallocate (work, cwork, rwork)
     
   end subroutine invert_zmatrix
 
