@@ -100,8 +100,10 @@ module dist_fn
   complex, dimension (:,:,:,:), allocatable :: mppfac, mpmfac, mmpfac, mmmfac
   ! (-ntgrid:ntgird, -nvgrid:nvgrid, ntheta0, -g-layout-)
 
-  ! response matrix in g
-  complex, dimension (:,:,:,:), allocatable :: gresponse
+  ! response matrix (or LU decomposition thereof) in g
+  complex, dimension (:,:,:,:), allocatable :: gresponse, lu_gresponse
+  ! integer array containing pivoting information for response matrix inversion
+  integer, dimension (:,:,:), allocatable :: ipiv_gresponse
   ! matrix needed for reponse matrix approach
   complex, dimension (:,:,:,:), allocatable :: m_mat
   ! ((ntheta/2)*nseg_max+1, (ntheta/2)*nseg_max+1, neigen_max, -g-layout-)
@@ -221,7 +223,7 @@ contains
 
   subroutine init_dist_fn
 
-    use mp, only: proc0, finish_mp, mp_abort
+    use mp, only: proc0, finish_mp
     use species, only: init_species, nspec
     use theta_grid, only: init_theta_grid, ntgrid, ntheta, nperiod
     use kt_grids, only: init_kt_grids, naky, ntheta0
@@ -959,7 +961,9 @@ contains
     ntg = ntheta/2
 
     if (.not. allocated(gresponse)) then
+       allocate (lu_gresponse(nresponse,nresponse,neigen_max,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gresponse(nresponse,nresponse,neigen_max,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (ipiv_gresponse(nresponse,neigen_max,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (m_mat(nresponse,nresponse,neigen_max,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (source0(nseg_max,ntheta0,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (mu0_source(-ntgrid:ntgrid,ntheta0,naky,nspec)) ; mu0_source = 0.0
@@ -2180,14 +2184,16 @@ contains
           gresponse(:iup,:iup,it,iglo) = p_mat(:iup,:iup) &
                + matmul(m_mat(:iup,:iup,it,iglo),gresponse(:iup,:iup,it,iglo))
 
-!          write (*,*) 'entering invert_matrix'
-          call invert_matrix (gresponse(:iup,:iup,it,iglo))
+          lu_gresponse(:iup,:iup,it,iglo) = gresponse(:iup,:iup,it,iglo)
+
+          ! compute the LU factorization of the response matrix and store in lu_gresponse
+          call invert_matrix (lu_gresponse(:iup,:iup,it,iglo), ipiv_gresponse(:iup,it,iglo))
 
           p_mat = 0.0
 
        end do
     end do
-    
+
     deallocate (p_mat)
 
   end subroutine get_gresponse_matrix
@@ -2934,6 +2940,7 @@ contains
   subroutine implicit_solve (gfnc, gfncold, phi, phinew, &
        apar, aparnew, istep, equation)
 
+    use mp, only: mp_abort
     use gs2_layouts, only: g_lo, ik_idx, imu_idx
     use theta_grid, only: dbdthetc, ntgrid, ntheta
     use vpamu_grids, only: nvgrid
@@ -2949,12 +2956,14 @@ contains
     integer :: iglo, iseg, k, kmax, ntg, it, ik, iup, imu
 
     complex, dimension (:), allocatable :: source_mod, tmp
-
+    real, dimension (:), allocatable :: dum, rwork
+    complex, dimension (:), allocatable :: work
+    real :: condition_number, ferrest, berrest
+    integer :: ierr
+    
     ntg = ntheta/2
 
     if (.not. allocated(source_mod)) then
-!       allocate (tmp(ntg*nseg_max+1)) ; tmp = 0.0
-!       allocate (source_mod(ntg*nseg_max+1)) ; source_mod = 0.0
        allocate (tmp(nresponse)) ; tmp = 0.0
        allocate (source_mod(nresponse)) ; source_mod = 0.0
     end if
@@ -2987,6 +2996,12 @@ contains
        do it = 1, neigen(ik)
           
           iup = ir_up(it,ik)
+
+          ! dummy array needed (but not used) by
+          ! zgesvx when solving linear response system
+          allocate (dum(iup))
+          allocate (work(2*iup))
+          allocate (rwork(2*iup))
           
           ! treat mu=0 specially since different vpa points are not connected
 ! TMP FOR TESTING
@@ -2999,8 +3014,18 @@ contains
              call implicit_sweep (iglo, it, gfnc, source_mod=source_mod)
 
              ! get g^{n+1}(theta<=0,vpa=0), g^{n+1}(theta_min,vpa>0), and g^{n+1}(theta_max,vpa<0) using response matrix
-             tmp(:iup) = matmul(gresponse(:iup,:iup,it,iglo), source_mod(:iup))
+!             tmp(:iup) = matmul(gresponse_old(:iup,:iup,it,iglo), source_mod(:iup))
 
+             call zgesvx ('F', 'N', iup, 1, gresponse(:iup,:iup,it,iglo), iup, &
+                  lu_gresponse(:iup,:iup,it,iglo), iup, ipiv_gresponse(:iup,it,iglo), 'N', &
+                  dum, dum, source_mod(:iup), iup, tmp(:iup), iup, condition_number, &
+                  ferrest, berrest, work, rwork, ierr)
+
+             if (ierr /= 0) then
+                write (*,*) 'ierr=', ierr
+                call mp_abort ('Error in linear solve with zgesvx.  Aborting')
+             end if
+             
              k=1
              iseg=1 ; kmax=k+ntg
              gfnc(ig_low(iseg):ig_mid(iseg),0,itmod(iseg,it,ik),iglo) = tmp(k:kmax)
@@ -3035,6 +3060,8 @@ contains
 
           ! with g^{n+1}(theta=0,vpa>0) specified, sweep once more to get g^{n+1} everywhere else
           call implicit_sweep (iglo, it, gfnc)
+
+          deallocate (dum, work, rwork)
 
        end do
     end do
@@ -5689,6 +5716,7 @@ contains
     if (allocated(source0)) deallocate (source0)
     if (allocated(mu0_source)) deallocate (mu0_source)
     if (allocated(gresponse)) deallocate (gresponse)
+    if (allocated(ipiv_gresponse)) deallocate (ipiv_gresponse)
     if (allocated(m_mat)) deallocate (m_mat)
 
     if (allocated(pppfac)) then
