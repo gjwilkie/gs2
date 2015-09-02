@@ -842,6 +842,7 @@ contains
 
   !>A routine to reset the object
   subroutine sc_reset(self)
+    use mp, only: free_comm
     implicit none
     class(supercell_type), intent(inout) :: self
     integer :: ic
@@ -850,6 +851,17 @@ contains
     do ic=1,self%ncell
        call self%cells(ic)%reset
     enddo
+
+!AJ Free up communicators created for this supercell
+    if(self%sc_sub_not_full%nproc.gt.0) then
+       call free_comm(self%sc_sub_not_full)
+    end if
+    if(self%sc_sub_all%nproc.gt.0 .and. self%sc_sub_all%id.ne.self%parent_sub%id) then
+       call free_comm(self%sc_sub_all)
+    end if
+    if(self%sc_sub_pd%nproc.gt.0) then
+       call free_comm(self%sc_sub_pd)
+    end if
 
     !deallocate
     call self%deallocate
@@ -1484,6 +1496,7 @@ contains
 
   !>A routine to reset the object
   subroutine ky_reset(self)
+    use mp, only: free_comm!, mp_comm_null
     implicit none
     class(ky_type), intent(inout) :: self
     integer :: is
@@ -1492,6 +1505,14 @@ contains
     do is=1,self%nsupercell
        call self%supercells(is)%reset
     enddo
+
+
+    !AJ Free communicators associated with this ky block
+    !if(self%ky_sub_all%id .ne. self%parent_sub%id .and. self%ky_sub_all%nproc .gt. 0 .and. self%ky_sub_all%id .ne. mp_comm_null) then
+    !<DD> Don't have mp_comm_null in trunk yet
+    if(self%ky_sub_all%id .ne. self%parent_sub%id .and. self%ky_sub_all%nproc .gt. 0) then
+       call free_comm(self%ky_sub_all)
+    end if
 
     !deallocate
     call self%deallocate
@@ -2271,6 +2292,7 @@ contains
 
   !>A routine to reset the object
   subroutine fm_reset(self)
+    use mp, only: free_comm
     implicit none
     class(fieldmat_type), intent(inout) :: self
     integer :: ik
@@ -2282,7 +2304,11 @@ contains
 
     !deallocate
     call self%deallocate
-
+!AJ Free the communicators associated with this field matrix object.
+    if(self%fm_sub_headsc_p0%nproc.gt.0) then
+!       write(*,*) 'free comm fm',self%fm_sub_headsc_p0%id
+       call free_comm(self%fm_sub_headsc_p0)
+    end if
     !Could zero out variables but no real need
   end subroutine fm_reset
 
@@ -3591,6 +3617,7 @@ contains
     call pc%reset
     call fieldmat%reset
     !reinit = .true.
+    reinit = .false.
     initialised=.false.
   end subroutine finish_fields_local
 
