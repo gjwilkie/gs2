@@ -101,7 +101,7 @@ module dist_fn
   ! (-ntgrid:ntgird, -nvgrid:nvgrid, ntheta0, -g-layout-)
 
   ! response matrix (or LU decomposition thereof) in g
-  complex, dimension (:,:,:,:), allocatable :: gresponse, lu_gresponse
+  complex, dimension (:,:,:,:), allocatable :: gresponse
   ! integer array containing pivoting information for response matrix inversion
   integer, dimension (:,:,:), allocatable :: ipiv_gresponse
   ! matrix needed for reponse matrix approach
@@ -961,7 +961,6 @@ contains
     ntg = ntheta/2
 
     if (.not. allocated(gresponse)) then
-       allocate (lu_gresponse(nresponse,nresponse,neigen_max,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gresponse(nresponse,nresponse,neigen_max,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (ipiv_gresponse(nresponse,neigen_max,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (m_mat(nresponse,nresponse,neigen_max,g_lo%llim_proc:g_lo%ulim_alloc))
@@ -2078,7 +2077,7 @@ contains
     
     ! ensure that gnew and source are initialized to zero
     gnew = 0.0 ; source = 0.0 ; gresponse = 0.0 ; source0 = 0.0 ; mu0_source = 0.0
-
+    
     m_mat = 0.0
     allocate (p_mat(nresponse,nresponse)) ; p_mat = 0.0
 
@@ -2184,10 +2183,8 @@ contains
           gresponse(:iup,:iup,it,iglo) = p_mat(:iup,:iup) &
                + matmul(m_mat(:iup,:iup,it,iglo),gresponse(:iup,:iup,it,iglo))
 
-          lu_gresponse(:iup,:iup,it,iglo) = gresponse(:iup,:iup,it,iglo)
-
-          ! compute the LU factorization of the response matrix and store in lu_gresponse
-          call invert_matrix (lu_gresponse(:iup,:iup,it,iglo), ipiv_gresponse(:iup,it,iglo))
+          ! compute the LU factorization of the response matrix and store in gresponse
+          call invert_matrix (gresponse(:iup,:iup,it,iglo), ipiv_gresponse(:iup,it,iglo))
 
           p_mat = 0.0
 
@@ -2955,7 +2952,7 @@ contains
 
     integer :: iglo, iseg, k, kmax, ntg, it, ik, iup, imu
 
-    complex, dimension (:), allocatable :: source_mod, tmp
+    complex, dimension (:), allocatable :: source_mod
     real, dimension (:), allocatable :: dum, rwork
     complex, dimension (:), allocatable :: work
     real :: condition_number, ferrest, berrest
@@ -2963,10 +2960,7 @@ contains
     
     ntg = ntheta/2
 
-    if (.not. allocated(source_mod)) then
-       allocate (tmp(nresponse)) ; tmp = 0.0
-       allocate (source_mod(nresponse)) ; source_mod = 0.0
-    end if
+    if (.not. allocated(source_mod)) allocate (source_mod(nresponse)) ; source_mod = 0.0
     
     call get_source (gfncold, phi, phinew, apar, aparnew, istep)
     if (equation==1) then
@@ -3013,22 +3007,19 @@ contains
              ! as is g^{n+1} for particles with (theta_min,vpa>0) and (theta_max,vpa<0)
              call implicit_sweep (iglo, it, gfnc, source_mod=source_mod)
 
-             ! get g^{n+1}(theta<=0,vpa=0), g^{n+1}(theta_min,vpa>0), and g^{n+1}(theta_max,vpa<0) using response matrix
-!             tmp(:iup) = matmul(gresponse_old(:iup,:iup,it,iglo), source_mod(:iup))
-
-             call zgesvx ('F', 'N', iup, 1, gresponse(:iup,:iup,it,iglo), iup, &
-                  lu_gresponse(:iup,:iup,it,iglo), iup, ipiv_gresponse(:iup,it,iglo), 'N', &
-                  dum, dum, source_mod(:iup), iup, tmp(:iup), iup, condition_number, &
-                  ferrest, berrest, work, rwork, ierr)
+             ! solve Ax=b for x, where gresponse contains LU decomposition of A,
+             ! source_mod is 'b' on entry and 'x' on exit
+             call zgetrs ('N', iup, 1, gresponse(:iup,:iup,it,iglo), iup, &
+                  ipiv_gresponse(:iup,it,iglo), source_mod(:iup), iup, ierr)
 
              if (ierr /= 0) then
-                write (*,*) 'ierr=', ierr
-                call mp_abort ('Error in linear solve with zgesvx.  Aborting')
+                write (*,*) 'zgetrs ierr=', ierr
+                call mp_abort ('Error in linear solve with zgetrs.  Aborting')
              end if
              
              k=1
              iseg=1 ; kmax=k+ntg
-             gfnc(ig_low(iseg):ig_mid(iseg),0,itmod(iseg,it,ik),iglo) = tmp(k:kmax)
+             gfnc(ig_low(iseg):ig_mid(iseg),0,itmod(iseg,it,ik),iglo) = source_mod(k:kmax)
              
              k = kmax+1
              if (nsegments(it,ik) > 1) then
@@ -3038,19 +3029,20 @@ contains
                    gfnc(ig_low(iseg),0,itmod(iseg,it,ik),iglo) &
                         = gfnc(ig_up(iseg-1),0,itmod(iseg-1,it,ik),iglo)
                    ! fill in the remaining theta values in this segment
-                   gfnc(ig_low(iseg)+1:ig_mid(iseg),0,itmod(iseg,it,ik),iglo) = tmp(k:kmax)
+                   gfnc(ig_low(iseg)+1:ig_mid(iseg),0,itmod(iseg,it,ik),iglo) = source_mod(k:kmax)
                    k = kmax+1
                 end do
              end if
 
              if (periodic(ik)) then
                 kmax = k+nvgrid-1
-                gfnc(ntgrid,-nvgrid:-1,itmod(nsegments(it,ik),it,ik),iglo) = tmp(k:kmax)
+                gfnc(ntgrid,-nvgrid:-1,itmod(nsegments(it,ik),it,ik),iglo) = source_mod(k:kmax)
                 gfnc(ntgrid,-nvgrid,itmod(nsegments(it,ik),it,ik),iglo) &
                      = gfnc(ntgrid,-nvgrid+1,itmod(nsegments(it,ik),it,ik),iglo)*decay_fac
                 k = kmax+1
                 kmax = k+nvgrid-1
-                gfnc(-ntgrid,1:nvgrid,itmod(1,it,ik),iglo) = tmp(k:kmax)
+
+                gfnc(-ntgrid,1:nvgrid,itmod(1,it,ik),iglo) = source_mod(k:kmax)
 !                kmax = k+nvgrid
 !                gfnc(-ntgrid,0:nvgrid,itmod(1,it,ik),iglo) = tmp(k:kmax)
                 gfnc(-ntgrid,nvgrid,itmod(1,it,ik),iglo) = gfnc(-ntgrid,nvgrid-1,itmod(1,it,ik),iglo)*decay_fac
@@ -3066,7 +3058,7 @@ contains
        end do
     end do
 
-    if (allocated (tmp)) deallocate (source_mod, tmp)
+    if (allocated(source_mod)) deallocate (source_mod)
 
   end subroutine implicit_solve
 
