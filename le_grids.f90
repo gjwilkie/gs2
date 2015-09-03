@@ -129,33 +129,30 @@ contains
 
   end subroutine setvgrid
 
-  subroutine setvgrid_genquad (ne_int,vcut, negrid, epts, wgts, nesub)
+  subroutine setvgrid_genquad (vcut, negrid, epts, wgts, nesub)
 
-    use general_f0, only: calculate_f0_arrays, f0_values, eval_f0
-    use general_f0, only: set_current_f0_species
+    use mp, only: proc0, mp_abort, iproc
+    use general_f0, only: calculate_f0_arrays, f0_values, zogtemp, f0prim, df0dE, eval_f0, set_current_f0_species
+    use genquad, only: get_quadrature_rule
     use constants, only: pi => dpi
-    use general_quad, only: get_general_weights_from_func
-    use general_quad, only: get_general_weights_from_func_conv
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
     use species, only: nspec, spec, alpha_species, ion_species
-    use mp, only: mp_abort, proc0
 
     implicit none
     
-    integer, intent (in) :: negrid, ne_int
+    integer, intent (in) :: negrid
     real, intent (in) :: vcut
     integer, intent (in) :: nesub
     real, dimension(:,:), intent (out) :: epts
     real, dimension(:,:), intent (out) :: wgts
     real :: vcut_local, laguerre_fac
-    real, dimension(1:ne_int):: vpts_temp, wgts_temp, F0_temp
-    integer :: is, main_ion_species, js, ie, nesub_local
+    integer :: is,ie,js,main_ion_species, nesub_local
 
     call init_egrid (negrid)
 
     do is = 1,nspec
 
-      if (spec(is)%type .eq. alpha_species) then
+      if (.NOT. spec(is)%is_maxwellian ) then
         vcut_local = 1.0
         main_ion_species = -1
         do js = 1,nspec
@@ -176,63 +173,36 @@ contains
       end if
 
       call set_current_f0_species(is)
-
-      if (ne_int .LT. 0) then
-         call get_general_weights_from_func_conv (1.e-9,eval_f0, 0.0, vcut_local, &
-                                          nesub_local,epts(1:nesub_local,is),wgts(1:nesub_local,is))
-      else
-         call get_general_weights_from_func (ne_int,eval_f0, 0.0, vcut_local, &
-                                          nesub_local,epts(1:nesub_local,is),wgts(1:nesub_local,is))
-      end if
-          
-!      ! get grid points in v up to vcut (epts is not E yet)
-!      call get_legendre_grids_from_cheb (energy_0**0.5, vcut_local, epts(1:nesub,is), wgts(1:nesub, is))
-
+      
+      call get_quadrature_rule(eval_f0,negrid,0.0,999.0,epts(:,is),wgts(:,is),.false.,.true.)
+    
       ! change from v to E
-      epts(:nesub_local,is) = epts(:nesub_local,is)**2
+      epts(:,is) = epts(:,is)**2
 
       ! absorb exponential and volume element in weights
-      !wgts(:nesub_local) = wgts(:nesub_local)*epts(:nesub_local)*exp(-epts(:nesub_local))/sqrt(pi)
+      !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
       ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
       ! See eq. 4.12 of M. Barnes's thesis
-      !wgts(:nesub_local, is) = wgts(:nesub_local, is)*epts(:nesub_local,is)*2.0*pi
-      wgts(:nesub_local, is) = wgts(:nesub_local, is)*epts(:nesub_local,is)*pi**2.5
-
-      if (negrid > nesub_local) then
-
-         ! get grid points in y = E - vcut**2 (epts not E yet)
-         call get_laguerre_grids (epts(nesub_local+1:,is), wgts(nesub_local+1:, is))
-
-         ! change from y to E
-         epts(nesub_local+1:,is) = epts(nesub_local+1:,is)/laguerre_fac + vcut_local**2
-
-         ! absort exponential and volume element in weights
-         ! See eq. 4.13 of M. Barnes's thesis
-      !   wgts(nesub_local+1:) = wgts(nesub_local+1:)*0.5*sqrt(epts(nesub_local+1:)/pi)*exp(-vcut**2)
-
-         ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
-         ! Note that here this means adding an exponential e^y
-         ! See eq. 4.13 of M. Barnes's thesis
-         wgts(nesub_local+1:, is) = wgts(nesub_local+1:, is)*exp(-laguerre_fac*vcut_local**2)*pi*0.5*sqrt(epts(nesub_local+1:,is))/laguerre_fac
-
-      end if
+      wgts(:, is) = wgts(:, is)*4.0*pi*epts(:,is)
 
     end do
 
     call calculate_f0_arrays(epts, wgts, vcut,.true.)
+    
+!    do is = 1,nspec
+!       do ie = 1,negrid
+!          if (proc0) write(*,*) is, ie,epts(ie,is),f0_values(ie,is),df0dE(ie,is), f0prim(ie,is)
+!       end do
+!    end do
 
-    do is = 1,nspec
 
-       do ie = 1,negrid
-!          if (proc0) write(*,*) is,ie,epts(ie,is), wgts(ie,is) 
-       end do
-!       write(*,*) sum(wgts(:,is))
-    end do
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
     x0(:) = sqrt(epts(negrid,:))
 
   end subroutine setvgrid_genquad
+
+
 
 end module egrid
 
@@ -321,7 +291,6 @@ module le_grids
   integer :: ngauss, negrid, nesuper, nesub
   real :: bouncefuzz, vcut
   logical :: genquad = .false.
-  integer :: ne_int_genquad = 200
 
   integer :: nlambda, ng2, lmax, nxi
   logical :: accel_x = .false.
@@ -474,7 +443,6 @@ contains
     call broadcast (new_trap_int)
     call broadcast (nterp)
     call broadcast (genquad)
-    call broadcast (ne_int_genquad)
     !write (*,*) 'Broadcasting ', negrid
   end subroutine broadcast_parameters
 
@@ -574,7 +542,7 @@ contains
     namelist /le_grids_knobs/ ngauss, negrid, bouncefuzz, &
          nesuper, nesub, test, trapped_particles, &
          nmax, wgt_fac, new_trap_int, nterp, vcut, &
-         genquad, ne_int_genquad
+         genquad
 
     nesub = 8
     nesuper = 2
@@ -583,7 +551,6 @@ contains
     vcut = 2.5
     bouncefuzz = 1e-5
     genquad = .false.
-    ne_int_genquad = 200
 
     in_file=input_unit_exist("le_grids_knobs", exist)
     if (exist) read (unit=in_file, nml=le_grids_knobs)
@@ -1515,7 +1482,7 @@ contains
 
     allocate (energy(negrid,nspec), w(negrid,nspec))
     if (genquad) then
-       call setvgrid_genquad (ne_int_genquad, vcut, negrid, energy, w, nesub)
+       call setvgrid_genquad (vcut, negrid, energy, w, nesub)
     else
        call setvgrid (vcut, negrid, energy, w, nesub)
     end if

@@ -13,6 +13,7 @@ ball_mod = \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
+	 mp.o \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
@@ -37,6 +38,7 @@ eiktest_mod = \
 	 geq.o \
 	 ideq.o \
 	 leq.o \
+	 mp.o \
 	 netcdf_utils.o \
 	 peq.o \
 	 read_chease.o \
@@ -63,7 +65,7 @@ ffttester_mod = \
 	 file_utils.o \
 	 gauss_quad.o \
 	 general_f0.o \
-	 general_quad.o \
+	 genquad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -92,6 +94,7 @@ ffttester_mod = \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
+	 quadpack.o \
 	 ran.o \
 	 read_chease.o \
 	 redistribute.o \
@@ -126,7 +129,7 @@ gs2_mod = \
 	 file_utils.o \
 	 gauss_quad.o \
 	 general_f0.o \
-	 general_quad.o \
+	 genquad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -156,6 +159,7 @@ gs2_mod = \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
+	 quadpack.o \
 	 ran.o \
 	 read_chease.o \
 	 redistribute.o \
@@ -194,7 +198,7 @@ ingen_mod = \
 	 file_utils.o \
 	 gauss_quad.o \
 	 general_f0.o \
-	 general_quad.o \
+	 genquad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -222,6 +226,7 @@ ingen_mod = \
 	 parameter_scan_arrays.o \
 	 peq.o \
 	 prof.o \
+	 quadpack.o \
 	 ran.o \
 	 read_chease.o \
 	 redistribute.o \
@@ -409,6 +414,8 @@ general_f0.o: \
 	 unit_tests.o 
 general_quad.o: \
 	 gauss_quad.o 
+genquad.o: \
+	 quadpack.o 
 geometry.o: \
 	 ceq.o \
 	 deq.o \
@@ -629,7 +636,7 @@ le_grids.o: \
 	 file_utils.o \
 	 gauss_quad.o \
 	 general_f0.o \
-	 general_quad.o \
+	 genquad.o \
 	 gs2_layouts.o \
 	 kt_grids.o \
 	 layouts_type.o \
@@ -657,7 +664,8 @@ mp.o: \
 	 file_utils.o 
 netcdf_utils.o: \
 	 constants.o \
-	 file_utils.o 
+	 file_utils.o \
+	 mp.o 
 nonlinear_terms.o: \
 	 constants.o \
 	 dist_fn_arrays.o \
@@ -694,6 +702,7 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
+quadpack.o: 
 ran.o: 
 read_chease.o: 
 redistribute.o: \
@@ -718,19 +727,16 @@ species.o: \
 	 file_utils.o \
 	 mp.o \
 	 text_options.o 
-specnew.o: \
-	 constants.o \
-	 file_utils.o \
-	 mp.o \
-	 text_options.o 
 spfunc.o: \
 	 constants.o 
-spl.o: 
+spl.o: \
+	 mp.o 
 split_falpha.o: \
 	 constants.o \
 	 mp.o \
 	 unit_tests.o 
-text_options.o: 
+text_options.o: \
+	 mp.o 
 theta_grid.o: \
 	 constants.o \
 	 file_utils.o \
