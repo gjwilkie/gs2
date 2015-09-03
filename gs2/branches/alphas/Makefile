@@ -107,6 +107,8 @@ MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
 
+USE_LAPACK ?= on
+
 ifdef NPROCS
 	NTESTPROCS=$(NPROCS)
 else
@@ -171,6 +173,8 @@ MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
 FFT_LIB ?=
+LAPACK_INC ?=
+LAPACK_LIB ?=
 NETCDF_INC ?=
 NETCDF_LIB ?=
 HDF5_INC ?=
@@ -225,7 +229,7 @@ endif
 ifeq ($(MAKECMDGOALS),depend)
 # must invoke full functionality when make depend
 	MAKE += USE_HDF5=on USE_FFT=fftw USE_NETCDF=on USE_MPI=on \
-		USE_LOCAL_BESSEL=on USE_LOCAL_RAN=mt
+		USE_LOCAL_BESSEL=on USE_LOCAL_RAN=mt USE_LAPACK=on
 endif
 
 ifdef USE_SHMEM
@@ -260,6 +264,11 @@ endif
 ifeq ($(USE_FFT),fftw3)
 	CPPFLAGS += -DFFT=_FFTW3_ $(FFT_INC)
 	FFT_LIB ?= -lfftw -lrfftw
+endif
+
+ifdef USE_LAPACK
+	LAPACK_LIB ?= -llapack
+	CPPFLAGS += -DLAPACK
 endif
 
 ifeq ($(USE_FFT),mkl_fftw)
@@ -330,10 +339,10 @@ ifdef USE_LE_LAYOUT
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB) $(NAG_LIB)
+		$(IPM_LIB) $(NAG_LIB) $(LAPACK_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC)
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) $(LAPACK_INC)
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
