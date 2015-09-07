@@ -402,7 +402,7 @@ contains
     pflux_avg = 0.0 ; qflux_avg = 0.0 ; heat_avg = 0.0 ; vflux_avg = 0.0
 
     write (nspec_str,'(i3)') nspec
-    fluxes_str = trim('(a3,e17.10,a11,e11.4,a12,'//trim(nspec_str)//'(1x,e11.4),a11,'//trim(nspec_str)//'(1x,e11.4))')
+    fluxes_str = trim('(a3,e17.9,a11,e12.4,a13,'//trim(nspec_str)//'(1x,e12.4),a11,'//trim(nspec_str)//'(1x,e12.4))')
 
   end subroutine init_gs2_diagnostics
  
@@ -1607,13 +1607,13 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           if (fphi > epsilon(0.0)) then
              if (write_ascii) then
                 write (unit=out_unit, fmt=fluxes_str) &
-                     't=', t, '<phi**2>=', phi2, 'heat fluxes:', heat_fluxes(1:min(nspec,5)), &
+                     't=', t, '<phi**2>=', phi2, 'heat_fluxes:', heat_fluxes(1:min(nspec,5)), &
                      'qflux_avg:', qflux_avg(1:min(nspec,5))/(t+code_dt)
                 write (unit=out_unit, fmt=fluxes_str) &
-                     't=', t, '<phi**2>=', phi2, 'part fluxes:', part_fluxes(1:min(nspec,5)), &
+                     't=', t, '<phi**2>=', phi2, 'part_fluxes:', part_fluxes(1:min(nspec,5)), &
                      'pflux_avg:', pflux_avg(1:min(nspec,5))/(t+code_dt)
                 write (unit=out_unit, fmt=fluxes_str) &
-                     't=', t, '<phi**2>=', phi2, 'mom fluxes:', mom_fluxes(1:min(nspec,5)), &
+                     't=', t, '<phi**2>=', phi2, 'mom_fluxes:', mom_fluxes(1:min(nspec,5)), &
                      'vflux_avg:', vflux_avg(1:min(nspec,5))/(t+code_dt)
                 write (unit=out_unit, fmt=105) &
                      't=', t, '<phi**2>=', phi2, '<phip**2>=', phip2, &
