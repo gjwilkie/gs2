@@ -4798,49 +4798,53 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_flux
 
-  subroutine get_flux_emu (fld, flx, dnorm)
-    use theta_grid, only: ntgrid, delthet, grho
+  subroutine fsavg_keep_e (g,flx)
+  !< Integrates a function g over lambda, flux-surface-averages, returning to result to flx on proc0
+  !! Similar to get_flux_e
+    use theta_grid, only: ntgrid, delthet, grho, bmag, gradpar
+    use run_parameters, only: woutunits
     use kt_grids, only: ntheta0, aky, naky
-    use le_grids, only: negrid,nlambda,Bovervpar
+    use le_grids, only: negrid,nlambda,wl
     use species, only: nspec
     use mp, only: sum_reduce, proc0
     use gs2_layouts, only: g_lo,ie_idx,il_idx,is_idx,it_idx,ik_idx,isign_idx,yxf_lo
     implicit none
-    complex, dimension (-ntgrid:,:,:), intent (in) :: fld
-    real, dimension (:,:,:,:), intent (in out) :: flx
-    real, dimension (-ntgrid:,:,:) :: dnorm
-    real, dimension (:,:,:,:), allocatable :: total
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    real, dimension (:), intent (inout) :: flx
+    real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: dnorm
+    real, dimension (:,:), allocatable :: total
     real:: wgt,fac
     integer :: ik, it, is, ig, iglo, ie, il, isgn
 
-    allocate(total(negrid,nlambda,2,nspec))
+    allocate(total(negrid))
     total = 0.
+    
+    do ik = 1, naky
+       do it = 1, ntheta0
+         dnorm(:,it,ik) = delthet/bmag/gradpar*woutunits
+       end do
+    end do
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       fac = 0.5
+       fac =0.5
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        if (aky(ik) == 0.) fac = 1.0
 
        wgt = sum(dnorm(-ntgrid:,it,ik)*grho(-ntgrid:))
-       total(ie,il,1,is) = total(ie,il,1,is) + fac*& 
-          sum(aimag(g0(-ntgrid:,1,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
-          dnorm(-ntgrid:,it,ik) * aky(ik)) * Bovervpar(-ntgrid:,il)/wgt)
-       total(ie,il,2,is) = total(ie,il,2,is) + fac*& 
-          sum(aimag(g0(-ntgrid:,2,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
-          dnorm(-ntgrid:,it,ik) * aky(ik)) * Bovervpar(-ntgrid:,il)/wgt)
+       total(ie) = total(ie) + fac*sum((g0(-ntgrid:,1,iglo) + g0(-negrid:,2,iglo)) &
+                  * dnorm(-ntgrid:,it,ik) * wl(-ntgrid:,il)/wgt)
     end do
 
     call sum_reduce(total,0)
-
-    if (proc0) flx = 0.5*total    !< Reality condition from summing over ky
+    if (proc) flx = total
 
     deallocate(total)
 
-  end subroutine get_flux_emu
+  end subroutine fsavg_keep_e
+
 
   subroutine get_flux_e (fld, flx, dnorm)
     use theta_grid, only: ntgrid, delthet, grho
