@@ -4692,7 +4692,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine flux_emu
 
   subroutine flux_e (phi, apar, bpar, pflux, pmflux, pbflux)
-    use species, only: spec
+    use species, only: spec, nspec
     use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet, drhodpsi
     use theta_grid, only: qval, shat, gds21, gds22
     use kt_grids, only: naky, ntheta0, akx, theta0, aky
@@ -4724,10 +4724,18 @@ subroutine check_dist_fn(report_unit)
     end do
 
     if (fphi > epsilon(0.0)) then
-       do isgn = 1, 2
-          g0(:,isgn,:) = gnew(:,isgn,:)*aj0
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          it = it_idx(g_lo,iglo)
+          ik = ik_idx(g_lo,iglo)
+          do isgn = 1, 2
+             g0(:,isgn,iglo) = aimag(gnew(:,isgn,iglo)*aj0(:,iglo)*aky(ik)*conjg(phi(:,it,ik)))
+          end do
        end do
-       call get_flux_e (phi, pflux, dnorm)
+!       call get_flux_e (phi, pflux, dnorm)
+       do is = 1,nspec
+          call fsavg_keep_e(g0,pflux(:,is))
+       end do
+      
 
     else
        pflux = 0.
@@ -4812,7 +4820,7 @@ subroutine check_dist_fn(report_unit)
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, dimension (:), intent (inout) :: flx
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: dnorm
-    real, dimension (:,:), allocatable :: total
+    real, dimension (:), allocatable :: total
     real:: wgt,fac
     integer :: ik, it, is, ig, iglo, ie, il, isgn
 
@@ -4821,7 +4829,7 @@ subroutine check_dist_fn(report_unit)
     
     do ik = 1, naky
        do it = 1, ntheta0
-         dnorm(:,it,ik) = delthet/bmag/gradpar*woutunits
+         dnorm(-ntgrid:,it,ik) = delthet/bmag/gradpar*woutunits(ik)
        end do
     end do
 
@@ -4839,7 +4847,7 @@ subroutine check_dist_fn(report_unit)
     end do
 
     call sum_reduce(total,0)
-    if (proc) flx = total
+    if (proc0) flx = total
 
     deallocate(total)
 
@@ -4889,6 +4897,52 @@ subroutine check_dist_fn(report_unit)
     deallocate(total)
 
   end subroutine get_flux_e
+
+  subroutine get_flux_emu (fld, flx, dnorm)
+    use theta_grid, only: ntgrid, delthet, grho
+    use kt_grids, only: ntheta0, aky, naky
+    use le_grids, only: negrid,nlambda,Bovervpar
+    use species, only: nspec
+    use mp, only: sum_reduce, proc0
+    use gs2_layouts, only: g_lo,ie_idx,il_idx,is_idx,it_idx,ik_idx,isign_idx,yxf_lo
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: fld
+    real, dimension (:,:,:,:), intent (in out) :: flx
+    real, dimension (-ntgrid:,:,:) :: dnorm
+    real, dimension (:,:,:,:), allocatable :: total
+    real:: wgt,fac
+    integer :: ik, it, is, ig, iglo, ie, il, isgn
+
+    allocate(total(negrid,nlambda,2,nspec))
+    total = 0.
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       fac = 0.5
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       if (aky(ik) == 0.) fac = 1.0
+
+       wgt = sum(dnorm(-ntgrid:,it,ik)*grho(-ntgrid:))
+       total(ie,il,1,is) = total(ie,il,1,is) + fac*& 
+          sum(aimag(g0(-ntgrid:,1,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
+          dnorm(-ntgrid:,it,ik) * aky(ik)) * Bovervpar(-ntgrid:,il)/wgt)
+       total(ie,il,2,is) = total(ie,il,2,is) + fac*& 
+          sum(aimag(g0(-ntgrid:,2,iglo)*conjg(fld(-ntgrid:,it,ik)) * &
+          dnorm(-ntgrid:,it,ik) * aky(ik)) * Bovervpar(-ntgrid:,il)/wgt)
+    end do
+
+    call sum_reduce(total,0)
+
+    if (proc0) flx = 0.5*total    !< Reality condition from summing over ky
+
+    deallocate(total)
+
+  end subroutine get_flux_emu
+
+
 
   subroutine eexchange (phi, exchange)
 
