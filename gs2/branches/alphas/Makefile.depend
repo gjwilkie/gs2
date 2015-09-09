@@ -88,6 +88,7 @@ ffttester_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -153,6 +154,7 @@ gs2_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -221,6 +223,7 @@ ingen_mod = \
 	 le_grids.o \
 	 leq.o \
 	 mp.o \
+	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -336,6 +339,32 @@ drive.o: \
 ediff.o: 
 eeq.o: \
 	 spl.o 
+emu.o: \
+	 antenna.o \
+	 collisions.o \
+	 constants.o \
+	 dist_fn_arrays.o \
+	 fields_arrays.o \
+	 file_utils.o \
+	 general_f0.o \
+	 geometry.o \
+	 gs2_heating.o \
+	 gs2_layouts.o \
+	 gs2_time.o \
+	 gs2_transforms.o \
+	 hyper.o \
+	 kt_grids.o \
+	 le_derivatives.o \
+	 le_grids.o \
+	 mp.o \
+	 nonlinear_terms.o \
+	 prof.o \
+	 redistribute.o \
+	 run_parameters.o \
+	 species.o \
+	 spfunc.o \
+	 text_options.o \
+	 theta_grid.o 
 et.o: \
 	 geometry.o 
 fft_work.o: \
@@ -441,6 +470,7 @@ gs2_diagnostics.o: \
 	 fields.o \
 	 fields_arrays.o \
 	 file_utils.o \
+	 general_f0.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -662,6 +692,7 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o \
@@ -703,7 +734,8 @@ pgplot_utils.o: \
 	 constants.o 
 prof.o: 
 quadpack.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \

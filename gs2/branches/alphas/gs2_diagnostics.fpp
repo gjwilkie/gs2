@@ -96,7 +96,9 @@ module gs2_diagnostics
   type (heating_diagnostics), save :: h
   type (heating_diagnostics), dimension(:), save, allocatable :: h_hist
   type (heating_diagnostics), dimension(:,:), save, allocatable :: hk
+  type (heating_diagnostics), dimension(:), save, allocatable :: he
   type (heating_diagnostics), dimension(:,:,:), save, allocatable :: hk_hist
+  type (heating_diagnostics), dimension(:,:), save, allocatable :: he_hist
   !GGH J_external
   real, dimension(:,:,:), allocatable ::  j_ext_hist
 
@@ -362,7 +364,7 @@ contains
     use gs2_heating, only: init_htype
     use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
-    use le_grids, only: init_weights, init_le_grids
+    use le_grids, only: init_weights, init_le_grids, negrid
 
     implicit none
     logical, intent (in) :: list
@@ -438,14 +440,21 @@ contains
        allocate (hk_hist(ntheta0,naky,0:navg-1))
        call init_htype (hk_hist, nspec)
 
+       allocate (he_hist(negrid,0:navg-1))
+       call init_htype (he_hist, nspec)
+
        call init_htype (h,  nspec)
 
        allocate (hk(ntheta0, naky))
        call init_htype (hk, nspec)
+
+       allocate (he(negrid))
+       call init_htype (he, nspec)
     else
        allocate (h_hist(0))
        allocate (hk(1,1))
        allocate (hk_hist(1,1,0))
+       allocate (he_hist(1,0))
     end if
        
 !GGH Allocate density and velocity perturbation diagnostic structures
@@ -1367,8 +1376,10 @@ contains
        call del_htype (h_hist)
        call del_htype (hk_hist)
        call del_htype (hk)
+       call del_htype (he)
+       call del_htype (he_hist)
     end if
-    if (allocated(h_hist)) deallocate (h_hist, hk_hist, hk)
+    if (allocated(h_hist)) deallocate (h_hist, hk_hist, hk, he, he_hist)
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
     if (allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
@@ -1525,7 +1536,7 @@ contains
        call broadcast (exit)
 !    endif
 
-    if (write_hrate) call heating (istep, h, hk)
+    if (write_hrate) call heating (istep, h, hk, he)
 
 !>GGH
     !Write Jexternal vs. time
@@ -2041,7 +2052,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                phinew(igomega,:,:), phi2, phi2_by_mode, &
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
                bparnew(igomega,:,:), bpar2, bpar2_by_mode, &
-               h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
+               h, hk, he, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
 ! below line gives out-of-bounds array for runs inside trinity
 !               scan_phi2_tot(nout) = phi2
                scan_phi2_tot(mod(nout-1,nstep/nwrite+1)+1) = phi2
@@ -2682,7 +2693,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 if (debug) write(6,*) "loop_diagnostics: done"
   end subroutine loop_diagnostics
 
-  subroutine heating (istep, h, hk)
+  subroutine heating (istep, h, hk, he)
 
     use mp, only: proc0, iproc
     use dist_fn, only: get_heat
@@ -2692,19 +2703,23 @@ if (debug) write(6,*) "loop_diagnostics: done"
     use theta_grid, only: ntgrid, delthet, jacob
     use nonlinear_terms, only: nonlin
     use dist_fn_arrays, only: c_rate
-    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, zero_htype
+    use le_grids, only: negrid, w
+    use gs2_heating, only: heating_diagnostics, avg_h, avg_hk, avg_he, zero_htype
+    use general_f0, only: df0dE
     implicit none
     integer, intent (in) :: istep
     type (heating_diagnostics) :: h
     type (heating_diagnostics), dimension(:,:) :: hk
+    type (heating_diagnostics), dimension(:) :: he
 
     real, dimension(-ntgrid:ntgrid) :: wgt
     real :: fac
-    integer :: is, ik, it, ig
+    integer :: is, ik, it, ig, ie
     
     !Zero out variables for heating diagnostics
     call zero_htype(h)
     call zero_htype(hk)
+    call zero_htype(he)
 
     if (proc0) then
        
@@ -2736,13 +2751,15 @@ if (debug) write(6,*) "loop_diagnostics: done"
                 h % imp_colls(is)  = h % imp_colls(is)  + hk(it, ik) % imp_colls(is)
              end do
           end do
+
        end do
     end if
 
-    call get_heat (h, hk, phi, apar, bpar, phinew, aparnew, bparnew)    
+    call get_heat (h, hk,he, phi, apar, bpar, phinew, aparnew, bparnew)    
 
     call avg_h(h, h_hist, istep, navg)
     call avg_hk(hk, hk_hist, istep, navg)
+    call avg_he(he, he_hist, istep, navg)
 
   end subroutine heating
 !=============================================================================
