@@ -4731,10 +4731,10 @@ subroutine check_dist_fn(report_unit)
              g0(:,isgn,iglo) = aimag(gnew(:,isgn,iglo)*aj0(:,iglo)*aky(ik)*conjg(phi(:,it,ik)))
           end do
        end do
-!       call get_flux_e (phi, pflux, dnorm)
-       do is = 1,nspec
-          call fsavg_keep_e(g0,pflux(:,is))
-       end do
+       call get_flux_e (phi, pflux, dnorm)
+!       do is = 1,nspec
+!          call fsavg_keep_e(g0,pflux(:,is))
+!       end do
       
 
     else
@@ -4809,7 +4809,7 @@ subroutine check_dist_fn(report_unit)
   subroutine fsavg_keep_e (g,flx)
   !< Integrates a function g over lambda, flux-surface-averages, returning to result to flx on proc0
   !! Similar to get_flux_e
-    use theta_grid, only: ntgrid, delthet, grho, bmag, gradpar
+    use theta_grid, only: ntgrid, delthet, grho, bmag, gradpar, jacob
     use run_parameters, only: woutunits
     use kt_grids, only: ntheta0, aky, naky
     use le_grids, only: negrid,nlambda,wl
@@ -4818,20 +4818,21 @@ subroutine check_dist_fn(report_unit)
     use gs2_layouts, only: g_lo,ie_idx,il_idx,is_idx,it_idx,ik_idx,isign_idx,yxf_lo
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
-    real, dimension (:), intent (inout) :: flx
+    complex, dimension (:,:), intent (inout) :: flx
     real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: dnorm
-    real, dimension (:), allocatable :: total
-    real:: wgt,fac
+    complex, dimension (:,:), allocatable :: total
+    real, dimension (-ntgrid:ntgrid) :: wgt
+    real:: fac
     integer :: ik, it, is, ig, iglo, ie, il, isgn
 
-    allocate(total(negrid))
+    allocate(total(negrid,nspec))
     total = 0.
     
-    do ik = 1, naky
-       do it = 1, ntheta0
-         dnorm(-ntgrid:,it,ik) = delthet/bmag/gradpar*woutunits(ik)
-       end do
+    wgt(-ntgrid:) = 0.0
+    do ig=-ntgrid,ntgrid-1
+       wgt(ig) = delthet(ig)*(jacob(ig)+jacob(ig+1))*0.5
     end do
+    wgt(-ntgrid:) = wgt(-ntgrid:) / sum(wgt)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        fac =0.5
@@ -4839,11 +4840,12 @@ subroutine check_dist_fn(report_unit)
        il = il_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
        if (aky(ik) == 0.) fac = 1.0
 
-       wgt = sum(dnorm(-ntgrid:,it,ik)*grho(-ntgrid:))
-       total(ie) = total(ie) + fac*sum((g0(-ntgrid:,1,iglo) + g0(-negrid:,2,iglo)) &
-                  * dnorm(-ntgrid:,it,ik) * wl(-ntgrid:,il)/wgt)
+       total(ie,is) = total(ie,is) + fac*sum((g0(-ntgrid:,1,iglo) + g0(-ntgrid:,2,iglo)) &
+                  * dnorm(-ntgrid:,it,ik) * wl(-ntgrid:,il)*wgt(-ntgrid:))
+
     end do
 
     call sum_reduce(total,0)
@@ -5267,7 +5269,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine get_jext
 !<GGH
 !=============================================================================
-  subroutine get_heat (h, hk, phi, apar, bpar, phinew, aparnew, bparnew)
+  subroutine get_heat (h, hk, he, phi, apar, bpar, phinew, aparnew, bparnew)
     use mp, only: proc0, iproc
     use constants, only: pi, zi
     use kt_grids, only: ntheta0, naky, aky, akx
@@ -5277,7 +5279,8 @@ subroutine check_dist_fn(report_unit)
     use dist_fn_arrays, only: vpa, vpac, aj0, aj1, vperp2, g, gnew, kperp2, g_adjust
     use gs2_heating, only: heating_diagnostics
     use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
-    use le_grids, only: integrate_moment
+    use le_grids, only: integrate_moment, negrid
+    use general_f0, only: df0dE
     use species, only: spec, nspec,has_electron_species
     use theta_grid, only: jacob, delthet, ntgrid
     use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tite
@@ -5289,9 +5292,11 @@ subroutine check_dist_fn(report_unit)
     implicit none
     type (heating_diagnostics) :: h
     type (heating_diagnostics), dimension(:,:) :: hk
+    type (heating_diagnostics), dimension(:) :: he
 !    complex, dimension (-ntgrid:,:,:), pointer :: hh, hnew
     complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
     complex, dimension(:,:,:,:), allocatable :: tot
+    complex, dimension(:,:), allocatable :: tote
 !    complex, dimension (:,:,:), allocatable :: epar
     complex, dimension(:,:,:), allocatable :: bpardot, apardot, phidot, j_ext
     complex :: chi, havg
@@ -5331,6 +5336,7 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo, iglo)
        it = it_idx(g_lo, iglo)
        ik = ik_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
        if (nonlin .and. it == 1 .and. ik == 1) cycle
        dtinv = 1./(code_dt*tunits(ik))
        do isgn=1,2
@@ -5354,7 +5360,7 @@ subroutine check_dist_fn(report_unit)
 ! First term on RHS and LHS of Eq B-10 of H1:
 
              g0(ig,isgn,iglo) = spec(is)%dens*conjg(havg)* &
-                  (chidot*spec(is)%z-hdot*spec(is)%temp)
+                  (chidot*spec(is)%z+hdot*(1.0/df0dE(ie,is)))
 
           end do
        end do
@@ -5363,8 +5369,10 @@ subroutine check_dist_fn(report_unit)
     deallocate (phidot, apardot, bpardot)
 
     allocate (tot(-ntgrid:ntgrid, ntheta0, naky, nspec))
+    allocate (tote(negrid, nspec))
 
     call integrate_moment (g0, tot)
+    call fsavg_keep_e (g0, tote)
 
     if (proc0) then
        allocate (wgt(-ntgrid:ntgrid))
@@ -5388,6 +5396,10 @@ subroutine check_dist_fn(report_unit)
                 end do
                 h % heating(is) = h % heating(is) + hk(it,ik) % heating(is)
              end do
+          end do
+          do ie = 1,negrid
+             he(ie) % heating(is) = he(ie) % heating(is) &
+                   + real(tote(ie,is))
           end do
        end do
     end if
@@ -5473,12 +5485,17 @@ subroutine check_dist_fn(report_unit)
           end do
        else
           hk % antenna = 0.
+          he % antenna = 0.
           h  % antenna = 0.
           hk % energy_dot = 0.
+          he % energy_dot = 0.
           hk % energy = 0.
+          he % energy = 0.
           hk % eapar = 0.
+          he % eapar = 0.
           h  % eapar = 0.
           hk % ebpar = 0.
+          he % ebpar = 0.
           h  % ebpar = 0.
        end if
        deallocate (j_ext)
@@ -5650,6 +5667,7 @@ subroutine check_dist_fn(report_unit)
     end do
 
     call integrate_moment (g0, tot)
+   call fsavg_keep_e (g0, tote)
 
     if (proc0) then
        do is = 1, nspec
@@ -5664,6 +5682,10 @@ subroutine check_dist_fn(report_unit)
                 end do
                 h % gradients(is) = h % gradients(is) + hk(it,ik) % gradients(is)
              end do
+          end do
+          do ie = 1,negrid
+             he(ie) % gradients(is) = he(ie) % gradients(is) &
+                + real(tote(ie,is))
           end do
        end do
     end if
@@ -5795,6 +5817,7 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo, iglo)
        it = it_idx(g_lo, iglo)
        ik = ik_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
        if (nonlin .and. it == 1 .and. ik == 1) cycle
        do isgn=1,2
 
@@ -5805,12 +5828,13 @@ subroutine check_dist_fn(report_unit)
                           gnew(ig  ,isgn,iglo), &
                           gnew(ig+1,isgn,iglo))
 
-             g0(ig,isgn,iglo) = 0.5*spec(is)%temp*spec(is)%dens*(conjg(havg)*havg)
+             g0(ig,isgn,iglo) = -0.5*(1.0/df0dE(ie,is))*spec(is)%dens*(conjg(havg)*havg)
           end do
        end do
     end do
 
     call integrate_moment (g0, tot)
+    call fsavg_keep_e (g0, tote)
 
     if (proc0) then
        do ik = 1, naky
@@ -5829,6 +5853,9 @@ subroutine check_dist_fn(report_unit)
              end do
              h % hs2(:) = h % hs2(:) + hk(it,ik) % hs2(:)
           end do
+       end do
+       do ie = 1,negrid
+          he(ie) % hs2(:) = he(ie) % hs2(:) + real(tote(ie,:))
        end do
     end if
 
@@ -5895,6 +5922,7 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo, iglo)
        it = it_idx(g_lo, iglo)
        ik = ik_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
        if (nonlin .and. it == 1 .and. ik == 1) cycle
        do isgn=1,2
 
@@ -5915,7 +5943,7 @@ subroutine check_dist_fn(report_unit)
                              phinew(ig  ,it,ik), &
                              phinew(ig+1,it,ik)) * fphi * spec(is)%zt
 
-             g0(ig,isgn,iglo) = 0.5*spec(is)%temp*spec(is)%dens*(conjg(havg)*havg &
+             g0(ig,isgn,iglo) = -0.5*(1.0/df0dE(ie,is))*spec(is)%dens*(conjg(havg)*havg &
                   + conjg(phi_avg)*phi_avg &
                   - conjg(j0phiavg)*havg &
                   - conjg(havg)*j0phiavg)
@@ -5924,6 +5952,7 @@ subroutine check_dist_fn(report_unit)
     end do
 
     call integrate_moment (g0, tot)
+    call fsavg_keep_e (g0, tote)
 
     if (proc0) then
        do ik = 1, naky
@@ -5945,10 +5974,14 @@ subroutine check_dist_fn(report_unit)
              h % delfs2(:) = h % delfs2(:) + hk(it,ik) % delfs2(:)
           end do
        end do
+       do ie = 1,negrid
+          he(ie) % delfs2(:) = he(ie) % delfs2(:) + real(tote(ie,:))
+       end do
        deallocate (wgt)
     end if
 
     deallocate (tot)
+    deallocate (tote)
 
 !!
 !! Put g, gnew back to their usual meanings

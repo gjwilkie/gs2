@@ -5,8 +5,8 @@ module gs2_heating
 
   public :: heating_diagnostics
   public :: init_htype, zero_htype, del_htype
-  public :: avg_h, avg_hk
-  public :: hk_repack
+  public :: avg_h, avg_hk, avg_he
+  public :: hk_repack, he_repack
   !GGH Density-velocity perturbations
   public :: dens_vel_diagnostics
   public :: init_dvtype, zero_dvtype, del_dvtype
@@ -517,6 +517,72 @@ contains
 
   end subroutine avg_hk
 
+  subroutine avg_he (he, he_hist, istep, navg)
+
+    use mp, only: proc0
+    use species, only: nspec
+    type (heating_diagnostics), dimension(:) :: he
+    type (heating_diagnostics), dimension (:,0:) :: he_hist
+    integer, intent (in) :: istep, navg
+    integer :: is, i, m, n, mmax, nmax
+
+    nmax = size(he, 1)
+
+    if (proc0) then
+       if (navg > 1) then
+          if (istep > 1) then
+             he_hist(:,mod(istep,navg)) % energy     = he % energy
+             he_hist(:,mod(istep,navg)) % energy_dot = he % energy_dot
+             he_hist(:,mod(istep,navg)) % antenna    = he % antenna
+             he_hist(:,mod(istep,navg)) % eapar      = he % eapar
+             he_hist(:,mod(istep,navg)) % ebpar      = he % ebpar
+            do n=1,nmax
+                do is = 1,nspec
+                   he_hist(n,mod(istep,navg)) % delfs2(is)     = he(n) % delfs2(is)
+                   he_hist(n,mod(istep,navg)) % hs2(is)        = he(n) % hs2(is)
+                   he_hist(n,mod(istep,navg)) % phis2(is)      = he(n) % phis2(is)
+                   he_hist(n,mod(istep,navg)) % hypervisc(is)  = he(n) % hypervisc(is)
+                   he_hist(n,mod(istep,navg)) % hyperres(is)   = he(n) % hyperres(is)
+                   he_hist(n,mod(istep,navg)) % hypercoll(is)  = he(n) % hypercoll(is)
+                   he_hist(n,mod(istep,navg)) % collisions(is) = he(n) % collisions(is)
+                   he_hist(n,mod(istep,navg)) % imp_colls(is)  = he(n) % imp_colls(is)
+                   he_hist(n,mod(istep,navg)) % gradients(is)  = he(n) % gradients(is)
+!                  he_hist(n,mod(istep,navg)) % curvature(is)  = he(n) % curvature(is)
+                   he_hist(n,mod(istep,navg)) % heating(is)    = he(n) % heating(is)
+                end do
+             end do
+          end if
+          
+          if (istep >= navg) then
+             call zero_htype (he)
+             do n=1,nmax
+                do i=0,navg-1
+                   he(n) % energy     = he(n)%energy     + he_hist(n,i) % energy / real(navg)
+                   he(n) % energy_dot = he(n)%energy_dot + he_hist(n,i) % energy_dot / real(navg)
+                   he(n) % antenna    = he(n)%antenna    + he_hist(n,i) % antenna / real(navg)
+                   he(n) % eapar      = he(n)%eapar      + he_hist(n,i) % eapar / real(navg)
+                   he(n) % ebpar      = he(n)%ebpar      + he_hist(n,i) % ebpar / real(navg)
+                   do is = 1,nspec
+                      he(n)%delfs2(is)     = he(n)%delfs2(is)    + he_hist(n,i) % delfs2(is) / real(navg)
+                      he(n)%hs2(is)        = he(n)%hs2(is)       + he_hist(n,i) % hs2(is) / real(navg)
+                      he(n)%phis2(is)      = he(n)%phis2(is)     + he_hist(n,i) % phis2(is) / real(navg)
+                      he(n)%hypervisc(is)  = he(n)%hypervisc(is) + he_hist(n,i) % hypervisc(is) / real(navg)
+                      he(n)%hyperres(is)   = he(n)%hyperres(is)  + he_hist(n,i) % hyperres(is) / real(navg)
+                      he(n)%hypercoll(is)  = he(n)%hypercoll(is) + he_hist(n,i) % hypercoll(is) / real(navg)
+                      he(n)%collisions(is) = he(n)%collisions(is)+ he_hist(n,i) % collisions(is) / real(navg)
+                      he(n)%imp_colls(is)  = he(n)%imp_colls(is) + he_hist(n,i) % imp_colls(is) / real(navg)
+                      he(n)%gradients(is)  = he(n)%gradients(is) + he_hist(n,i) % gradients(is) / real(navg)
+!                     he(n)%curvature(is)  = he(n)%curvature(is) + he_hist(n,i) % curvature(is) / real(navg)
+                      he(n)%heating(is)    = he(n)%heating(is)   + he_hist(n,i) % heating(is) / real(navg)
+                   end do
+                end do
+             end do
+          end if
+       end if
+    end if
+
+  end subroutine avg_he
+
   subroutine hk_repack (hk, i, tmp)
 
     use species, only: nspec
@@ -612,6 +678,85 @@ contains
     end select
     
   end subroutine hk_repack
+
+
+  subroutine he_repack (he, i, tmp)
+
+    use species, only: nspec
+    type (heating_diagnostics), dimension (:), intent(in) :: he
+    real, dimension(:,:), intent (out) :: tmp
+    integer, intent (in) :: i
+    integer :: is, m, n, mmax, nmax
+
+    nmax = size(tmp, 1)
+
+    select case (i)
+    case (1) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%hypervisc(is)
+          end do
+       end do
+    case (2) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%hyperres(is)
+          end do
+       end do
+    case (3) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%collisions(is)
+          end do
+       end do
+    case (4) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%gradients(is)
+          end do
+       end do
+    case (5) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%heating(is)
+          end do
+       end do
+    case (6) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%hypercoll(is)
+          end do
+       end do
+    case (7) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%delfs2(is)
+          end do
+       end do
+    case (8) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%hs2(is)
+          end do
+       end do
+    case (9) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%phis2(is)
+          end do
+       end do
+    case (10) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%imp_colls(is)
+          end do
+       end do
+
+    end select
+    
+    
+  end subroutine he_repack
+
 !=============================================================================
 !<GGH
 ! Density velocity perturbation routines
