@@ -4819,7 +4819,6 @@ subroutine check_dist_fn(report_unit)
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (:,:), intent (inout) :: flx
-    real, dimension (-ntgrid:ntgrid,ntheta0,naky) :: dnorm
     complex, dimension (:,:), allocatable :: total
     real, dimension (-ntgrid:ntgrid) :: wgt
     real:: fac
@@ -4844,7 +4843,7 @@ subroutine check_dist_fn(report_unit)
        if (aky(ik) == 0.) fac = 1.0
 
        total(ie,is) = total(ie,is) + fac*sum((g0(-ntgrid:,1,iglo) + g0(-ntgrid:,2,iglo)) &
-                  * dnorm(-ntgrid:,it,ik) * wl(-ntgrid:,il)*wgt(-ntgrid:))
+                  * wl(-ntgrid:,il)*wgt(-ntgrid:))
 
     end do
 
