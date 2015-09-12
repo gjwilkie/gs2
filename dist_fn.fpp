@@ -4724,18 +4724,10 @@ subroutine check_dist_fn(report_unit)
     end do
 
     if (fphi > epsilon(0.0)) then
-       do iglo = g_lo%llim_proc, g_lo%ulim_proc
-          it = it_idx(g_lo,iglo)
-          ik = ik_idx(g_lo,iglo)
-          do isgn = 1, 2
-             g0(:,isgn,iglo) = aimag(gnew(:,isgn,iglo)*aj0(:,iglo)*aky(ik)*conjg(phi(:,it,ik)))
-          end do
+       do isgn = 1, 2
+          g0(:,isgn,:) = gnew(:,isgn,:)*aj0
        end do
        call get_flux_e (phi, pflux, dnorm)
-!       do is = 1,nspec
-!          call fsavg_keep_e(g0,pflux(:,is))
-!       end do
-      
 
     else
        pflux = 0.
