@@ -195,10 +195,10 @@ contains
    write(*,*) "You must link to LAPACK for genquad to work."
    stop 1
 #endif
-
   end subroutine get_quadrature_rule
 
 #ifdef LAPACK
+
    subroutine set_poly_type()
      implicit none
 
@@ -300,8 +300,10 @@ contains
     end if
 
     do i = 1,N 
-       abscissae(i) = a_use(N-i)
-       wgts(i) = b_poly(0)* eigenvectors(1,N-i+1)**2
+!       abscissae(i) = a_use(N-i)
+!       wgts(i) = b_poly(0)* eigenvectors(1,N-i+1)**2
+       abscissae(i) = a_use(i-1)
+       wgts(i) = b_poly(0)* eigenvectors(1,i)**2
     end do
 
   end subroutine
