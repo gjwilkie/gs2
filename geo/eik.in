@@ -2,23 +2,23 @@
  &stuff
  bishop=4
 
- s_hat_input = 3.0
+ s_hat_input = 0.512
 
 ! -------------------------------------
- nperiod=20
+ nperiod=5
  ntheta = 128
- rhoc = 0.77
+ rhoc = 0.33
 
- irho = 3  ! flux label definition
+ irho = 2  ! flux label definition
 
- rmaj=1.0
- r_geo=1.0
- shift = .354
- qinp= 3.03
- akappa=1.66
- akappri=1.16
- tri = .416
- tripri = 1.246
+ rmaj=3.0
+ r_geo=3.0
+ shift = .2252
+ qinp= 1.735
+ akappa=0.0
+ akappri=0.0
+ tri = 0.0
+ tripri = 0.0
 
 
 ! -------------------------------------
