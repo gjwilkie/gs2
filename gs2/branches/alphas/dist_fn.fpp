@@ -19,7 +19,7 @@ module dist_fn
   public :: timeadv, exb_shear, g_exb
   public :: getfieldeq, getan, getmoms, getemoms
   public :: flux, lf_flux, eexchange
-  public :: get_epar, get_heat
+  public :: get_epar, get_heat, get_heat_e
   public :: t0, omega0, gamma0, source0
   public :: reset_init, write_f, reset_physics, write_poly
   public :: M_class, N_class, i_class, par_spectrum
@@ -4729,6 +4729,7 @@ subroutine check_dist_fn(report_unit)
        end do
        call get_flux_e (phi, pflux, dnorm)
 
+
     else
        pflux = 0.
     end if
@@ -4820,10 +4821,11 @@ subroutine check_dist_fn(report_unit)
     total = 0.
     
     wgt(-ntgrid:) = 0.0
-    do ig=-ntgrid,ntgrid-1
-       wgt(ig) = delthet(ig)*(jacob(ig)+jacob(ig+1))*0.5
+    do ig=-ntgrid,ntgrid
+!       wgt(ig) = delthet(ig)*(jacob(ig)+jacob(ig+1))*0.5
+       wgt(ig) = delthet(ig)*jacob(ig)
     end do
-    wgt(-ntgrid:) = wgt(-ntgrid:) / sum(wgt)
+    wgt(-ntgrid:) = wgt(-ntgrid:) / (sum(wgt)*grho(-ntgrid:))
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        fac =0.5
@@ -4840,7 +4842,7 @@ subroutine check_dist_fn(report_unit)
     end do
 
     call sum_reduce(total,0)
-    if (proc0) flx = total
+    if (proc0) flx = 0.5*total
 
     deallocate(total)
 
@@ -5258,9 +5260,11 @@ subroutine check_dist_fn(report_unit)
     deallocate (j_extz)
 
   end subroutine get_jext
+
 !<GGH
 !=============================================================================
-  subroutine get_heat (h, hk, he, phi, apar, bpar, phinew, aparnew, bparnew)
+
+  subroutine get_heat (h, hk, phi, apar, bpar, phinew, aparnew, bparnew)
     use mp, only: proc0, iproc
     use constants, only: pi, zi
     use kt_grids, only: ntheta0, naky, aky, akx
@@ -5283,7 +5287,6 @@ subroutine check_dist_fn(report_unit)
     implicit none
     type (heating_diagnostics) :: h
     type (heating_diagnostics), dimension(:,:) :: hk
-    type (heating_diagnostics), dimension(:) :: he
 !    complex, dimension (-ntgrid:,:,:), pointer :: hh, hnew
     complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
     complex, dimension(:,:,:,:), allocatable :: tot
@@ -5360,10 +5363,8 @@ subroutine check_dist_fn(report_unit)
     deallocate (phidot, apardot, bpardot)
 
     allocate (tot(-ntgrid:ntgrid, ntheta0, naky, nspec))
-    allocate (tote(negrid, nspec))
 
     call integrate_moment (g0, tot)
-    call fsavg_keep_e (g0, tote)
 
     if (proc0) then
        allocate (wgt(-ntgrid:ntgrid))
@@ -5387,10 +5388,6 @@ subroutine check_dist_fn(report_unit)
                 end do
                 h % heating(is) = h % heating(is) + hk(it,ik) % heating(is)
              end do
-          end do
-          do ie = 1,negrid
-             he(ie) % heating(is) = he(ie) % heating(is) &
-                   + real(tote(ie,is))
           end do
        end do
     end if
@@ -5476,17 +5473,12 @@ subroutine check_dist_fn(report_unit)
           end do
        else
           hk % antenna = 0.
-          he % antenna = 0.
           h  % antenna = 0.
           hk % energy_dot = 0.
-          he % energy_dot = 0.
           hk % energy = 0.
-          he % energy = 0.
           hk % eapar = 0.
-          he % eapar = 0.
           h  % eapar = 0.
           hk % ebpar = 0.
-          he % ebpar = 0.
           h  % ebpar = 0.
        end if
        deallocate (j_ext)
@@ -5658,7 +5650,6 @@ subroutine check_dist_fn(report_unit)
     end do
 
     call integrate_moment (g0, tot)
-   call fsavg_keep_e (g0, tote)
 
     if (proc0) then
        do is = 1, nspec
@@ -5673,10 +5664,6 @@ subroutine check_dist_fn(report_unit)
                 end do
                 h % gradients(is) = h % gradients(is) + hk(it,ik) % gradients(is)
              end do
-          end do
-          do ie = 1,negrid
-             he(ie) % gradients(is) = he(ie) % gradients(is) &
-                + real(tote(ie,is))
           end do
        end do
     end if
@@ -5825,7 +5812,6 @@ subroutine check_dist_fn(report_unit)
     end do
 
     call integrate_moment (g0, tot)
-    call fsavg_keep_e (g0, tote)
 
     if (proc0) then
        do ik = 1, naky
@@ -5844,9 +5830,6 @@ subroutine check_dist_fn(report_unit)
              end do
              h % hs2(:) = h % hs2(:) + hk(it,ik) % hs2(:)
           end do
-       end do
-       do ie = 1,negrid
-          he(ie) % hs2(:) = he(ie) % hs2(:) + real(tote(ie,:))
        end do
     end if
 
@@ -5943,7 +5926,6 @@ subroutine check_dist_fn(report_unit)
     end do
 
     call integrate_moment (g0, tot)
-    call fsavg_keep_e (g0, tote)
 
     if (proc0) then
        do ik = 1, naky
@@ -5965,14 +5947,10 @@ subroutine check_dist_fn(report_unit)
              h % delfs2(:) = h % delfs2(:) + hk(it,ik) % delfs2(:)
           end do
        end do
-       do ie = 1,negrid
-          he(ie) % delfs2(:) = he(ie) % delfs2(:) + real(tote(ie,:))
-       end do
        deallocate (wgt)
     end if
 
     deallocate (tot)
-    deallocate (tote)
 
 !!
 !! Put g, gnew back to their usual meanings
@@ -5981,6 +5959,222 @@ subroutine check_dist_fn(report_unit)
     call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
 
   end subroutine get_heat
+
+  subroutine get_heat_e (he, phi, apar, bpar, phinew, aparnew, bparnew)
+    use mp, only: proc0, iproc
+    use constants, only: pi, zi
+    use kt_grids, only: ntheta0, naky, aky, akx
+#ifdef LOWFLOW
+    use dist_fn_arrays, only: hneoc
+#endif
+    use dist_fn_arrays, only: vpa, vpac, aj0, aj1, vperp2, g, gnew, kperp2, g_adjust
+    use gs2_heating, only: heating_diagnostics
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx, ie_idx
+    use le_grids, only: integrate_moment, negrid
+    use general_f0, only: df0dE
+    use species, only: spec, nspec,has_electron_species
+    use theta_grid, only: jacob, delthet, ntgrid
+    use run_parameters, only: fphi, fapar, fbpar, tunits, beta, tite
+    use gs2_time, only: code_dt
+    use nonlinear_terms, only: nonlin
+    use antenna, only: antenna_apar, a_ext_data
+    use hyper, only: D_v, D_eta, nexp, hypervisc_filter
+
+    implicit none
+    type (heating_diagnostics), dimension(:) :: he
+!    complex, dimension (-ntgrid:,:,:), pointer :: hh, hnew
+    complex, dimension (-ntgrid:,:,:) :: phi, apar, bpar, phinew, aparnew, bparnew
+    complex, dimension(:,:,:,:), allocatable :: tot
+    complex, dimension(:,:), allocatable :: tote
+!    complex, dimension (:,:,:), allocatable :: epar
+    complex, dimension(:,:,:), allocatable :: bpardot, apardot, phidot, j_ext
+    complex :: chi, havg
+    complex :: chidot, j0phiavg, j1bparavg, j0aparavg
+!    complex :: pstar, pstardot, gdot
+    complex :: phi_m, apar_m, bpar_m, hdot
+    complex :: phi_avg, bpar_avg, bperp_m, bperp_avg
+    complex :: de, denew
+    complex :: dgdt_hypervisc
+    real, dimension (:), allocatable :: wgt
+    real :: fac2, dtinv, akperp4
+    integer :: isgn, iglo, ig, is, ik, it, ie
+
+    g0(ntgrid,:,:) = 0.
+
+! ==========================================================================
+! Ion/Electron heating------------------------------------------------------
+! ==========================================================================
+
+    allocate ( phidot(-ntgrid:ntgrid, ntheta0, naky))
+    allocate (apardot(-ntgrid:ntgrid, ntheta0, naky))
+    allocate (bpardot(-ntgrid:ntgrid, ntheta0, naky))
+
+    allocate (tote(negrid, nspec))
+
+    call dot ( phi,  phinew,  phidot, fphi)
+    call dot (apar, aparnew, apardot, fapar)
+    call dot (bpar, bparnew, bpardot, fbpar)
+
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!! Next two calls make the variables g, gnew = h, hnew 
+!!! until the end of this procedure!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    call g_adjust (g,    phi,    bpar,    fphi, fbpar)
+    call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
+
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo, iglo)
+       it = it_idx(g_lo, iglo)
+       ik = ik_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
+       if (nonlin .and. it == 1 .and. ik == 1) cycle
+       dtinv = 1./(code_dt*tunits(ik))
+       do isgn=1,2
+          
+          do ig=-ntgrid, ntgrid-1
+             
+             chidot = aj0(ig,iglo)*(phidot(ig,it,ik) &
+                  - vpac(ig,isgn,iglo) * spec(is)%stm * apardot(ig,it,ik)) &
+                  + aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bpardot(ig,it,ik)*spec(is)%tz
+             
+             hdot = fdot (g   (ig  ,isgn,iglo), &
+                          g   (ig+1,isgn,iglo), &
+                          gnew(ig  ,isgn,iglo), &
+                          gnew(ig+1,isgn,iglo), dtinv)
+             
+             havg = favg (g   (ig  ,isgn,iglo), &
+                          g   (ig+1,isgn,iglo), &
+                          gnew(ig  ,isgn,iglo), &
+                          gnew(ig+1,isgn,iglo))
+             
+             g0(ig,isgn,iglo) = -spec(is)%dens*conjg(havg)*chidot*spec(is)%z*df0dE(ie,is)
+
+          end do
+       end do
+    end do
+
+    call fsavg_keep_e (g0, tote)
+
+    if (proc0) then
+
+       do is = 1, nspec
+          do ie = 1,negrid
+             he(ie) % heating(is) = he(ie) % heating(is) &
+                   + real(tote(ie,is))
+          end do
+       end do
+    end if
+
+
+
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo, iglo)
+       it = it_idx(g_lo, iglo)
+       ik = ik_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
+       if (nonlin .and. it == 1 .and. ik == 1) cycle
+       dtinv = 1./(code_dt*tunits(ik))
+       do isgn=1,2
+          
+          do ig=-ntgrid, ntgrid-1
+             
+             chidot = aj0(ig,iglo)*(phidot(ig,it,ik) &
+                  - vpac(ig,isgn,iglo) * spec(is)%stm * apardot(ig,it,ik)) &
+                  + aj1(ig,iglo)*2.0*vperp2(ig,iglo)*bpardot(ig,it,ik)*spec(is)%tz
+             
+             hdot = fdot (g   (ig  ,isgn,iglo), &
+                          g   (ig+1,isgn,iglo), &
+                          gnew(ig  ,isgn,iglo), &
+                          gnew(ig+1,isgn,iglo), dtinv)
+             
+             havg = favg (g   (ig  ,isgn,iglo), &
+                          g   (ig+1,isgn,iglo), &
+                          gnew(ig  ,isgn,iglo), &
+                          gnew(ig+1,isgn,iglo))
+             
+             g0(ig,isgn,iglo) = spec(is)%dens*conjg(havg)*hdot
+
+          end do
+       end do
+    end do
+
+    deallocate (phidot, apardot, bpardot)
+
+    call fsavg_keep_e (g0, tote)
+
+    if (proc0) then
+
+       do is = 1, nspec
+          do ie = 1,negrid
+             he(ie) % hs2(is) = he(ie) % hs2(is) &
+                   + real(tote(ie,is))
+          end do
+       end do
+    end if
+
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo, iglo)
+       it = it_idx(g_lo, iglo)
+       ik = ik_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
+       if (nonlin .and. it == 1 .and. ik == 1) cycle
+
+       do isgn=1,2
+          do ig=-ntgrid, ntgrid-1
+
+             chi = favg (aj0(ig  ,iglo)*phi   (ig  ,it,ik),  &
+                         aj0(ig+1,iglo)*phi   (ig+1,it,ik),  &
+                         aj0(ig  ,iglo)*phinew(ig  ,it,ik),  &
+                         aj0(ig+1,iglo)*phinew(ig+1,it,ik)) &
+                         *fphi
+
+!!GGH Bug fix: The apar part should be subtracted (because chi= phi - v|| A|| + B||)
+             chi = chi - &
+                  favg (aj0(ig  ,iglo)*apar   (ig  ,it,ik)*vpac(ig  ,isgn,iglo),  &
+                        aj0(ig+1,iglo)*apar   (ig+1,it,ik)*vpac(ig+1,isgn,iglo),  &
+                        aj0(ig  ,iglo)*aparnew(ig  ,it,ik)*vpac(ig  ,isgn,iglo),  &
+                        aj0(ig+1,iglo)*aparnew(ig+1,it,ik)*vpac(ig+1,isgn,iglo)) &
+                        *spec(is)%stm*fapar
+                
+             chi = chi + &
+                  favg (aj1(ig  ,iglo)*2.0*bpar   (ig  ,it,ik)*vperp2(ig  ,iglo),  &
+                        aj1(ig+1,iglo)*2.0*bpar   (ig+1,it,ik)*vperp2(ig+1,iglo),  &
+                        aj1(ig  ,iglo)*2.0*bparnew(ig  ,it,ik)*vperp2(ig  ,iglo),  &
+                        aj1(ig+1,iglo)*2.0*bparnew(ig+1,it,ik)*vperp2(ig+1,iglo)) &
+                        *spec(is)%tz*fbpar
+
+             havg = favg (g   (ig  ,isgn,iglo), &
+                          g   (ig+1,isgn,iglo), &
+                          gnew(ig  ,isgn,iglo), &
+                          gnew(ig+1,isgn,iglo))
+
+             g0(ig,isgn,iglo) = 2.0*zi * wstar(ik,ie,is)/code_dt * conjg(havg)*chi * spec(is)%dens
+            
+          end do
+       end do
+    end do
+
+    call fsavg_keep_e (g0, tote)
+
+    if (proc0) then
+       do is = 1, nspec
+          do ie = 1,negrid
+             he(ie) % gradients(is) = he(ie) % gradients(is) &
+                + real(tote(ie,is))
+          end do
+       end do
+    end if
+
+    deallocate (tote)
+
+!!
+!! Put g, gnew back to their usual meanings
+!!
+    call g_adjust (g,    phi,    bpar,    -fphi, -fbpar)
+    call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
+
+  end subroutine get_heat_e
 
   subroutine reset_init
 

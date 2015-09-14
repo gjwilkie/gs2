@@ -11,6 +11,7 @@ module gs2_heating
   public :: dens_vel_diagnostics
   public :: init_dvtype, zero_dvtype, del_dvtype
   public :: avg_dv, avg_dvk
+  public :: init_hetype, zero_hetype, del_hetype
    
   interface init_htype
      module procedure init_htype_0, init_htype_1, init_htype_2, init_htype_3
@@ -22,6 +23,18 @@ module gs2_heating
 
   interface del_htype
      module procedure del_htype_0, del_htype_1, del_htype_2, del_htype_3
+  end interface
+
+  interface init_hetype
+     module procedure init_hetype_1, init_hetype_2
+  end interface
+
+  interface zero_hetype
+     module procedure zero_hetype_1, zero_hetype_2
+  end interface
+
+  interface del_hetype
+     module procedure del_hetype_1, del_hetype_2
   end interface
 
   !GGH
@@ -175,7 +188,46 @@ contains
     call zero_htype (h)
 
   end subroutine init_htype_3
+ 
+  subroutine init_hetype_1 (h, nspec)
+
+    type (heating_diagnostics), dimension(:) :: h
+    integer, intent (in) :: nspec
+    integer :: n, nmax
+
+    nmax = size(h)
     
+    do n=1,nmax
+       allocate (h(n) % hs2(nspec))      
+       allocate (h(n) % gradients(nspec))   
+       allocate (h(n) % heating(nspec))     
+    end do
+
+    call zero_hetype (h)
+
+  end subroutine init_hetype_1
+
+  subroutine init_hetype_2 (h, nspec)
+
+    type (heating_diagnostics), dimension(:,:) :: h
+    integer, intent (in) :: nspec
+    integer :: n, nmax, m, mmax
+
+    mmax = size(h,1)
+    nmax = size(h,2)
+    
+    do n=1,nmax
+    do m=1,mmax
+       allocate (h(m,n) % hs2(nspec))      
+       allocate (h(m,n) % gradients(nspec))   
+       allocate (h(m,n) % heating(nspec))     
+    end do
+    end do
+
+    call zero_hetype (h)
+
+  end subroutine init_hetype_2
+
   subroutine zero_htype_0 (h)
 
     type (heating_diagnostics) :: h
@@ -292,6 +344,40 @@ contains
 
   end subroutine zero_htype_3
 
+  subroutine zero_hetype_1 (h)
+
+    type (heating_diagnostics), dimension(:) :: h
+    integer :: n, nmax
+
+    nmax = size(h)
+    
+    do n=1,nmax
+       h(n) % hs2 = 0. 
+       h(n) % gradients = 0. 
+       h(n) % heating = 0.   
+    end do
+
+  end subroutine zero_hetype_1
+
+
+  subroutine zero_hetype_2 (h)
+
+    type (heating_diagnostics), dimension(:,:) :: h
+    integer :: n, nmax, m, mmax
+
+    mmax = size(h,1)
+    nmax = size(h,2)
+    
+    do n=1,nmax
+    do m=1,mmax
+       h(m,n) % hs2 = 0. 
+       h(m,n) % gradients = 0. 
+       h(m,n) % heating = 0.   
+    end do
+    end do
+
+  end subroutine zero_hetype_2
+
   subroutine del_htype_0 (h)
 
     type (heating_diagnostics) :: h
@@ -387,6 +473,39 @@ contains
     end do
 
   end subroutine del_htype_3
+
+  subroutine del_hetype_1 (h)
+
+    type (heating_diagnostics), dimension(:) :: h
+    integer :: m, mmax
+    
+    mmax = size (h, 1)
+    
+    do m=1,mmax
+       deallocate (h(m) % hs2)
+       deallocate (h(m) % gradients)
+       deallocate (h(m) % heating)
+    end do
+
+  end subroutine del_hetype_1
+
+  subroutine del_hetype_2 (h)
+
+    type (heating_diagnostics), dimension(:,:) :: h
+    integer :: m, mmax, n, nmax
+    
+    mmax = size (h, 1)
+    nmax = size (h, 2)
+    
+    do n=1,nmax
+    do m=1,mmax
+       deallocate (h(m,n) % hs2)
+       deallocate (h(m,n) % gradients)
+       deallocate (h(m,n) % heating)
+    end do
+    end do
+
+  end subroutine del_hetype_2
 
   subroutine avg_h (h, h_hist, istep, navg)
 
@@ -526,53 +645,27 @@ contains
     integer, intent (in) :: istep, navg
     integer :: is, i, m, n, mmax, nmax
 
-    nmax = size(he, 1)
+    nmax = size(he)
 
     if (proc0) then
        if (navg > 1) then
           if (istep > 1) then
-             he_hist(:,mod(istep,navg)) % energy     = he % energy
-             he_hist(:,mod(istep,navg)) % energy_dot = he % energy_dot
-             he_hist(:,mod(istep,navg)) % antenna    = he % antenna
-             he_hist(:,mod(istep,navg)) % eapar      = he % eapar
-             he_hist(:,mod(istep,navg)) % ebpar      = he % ebpar
             do n=1,nmax
                 do is = 1,nspec
-                   he_hist(n,mod(istep,navg)) % delfs2(is)     = he(n) % delfs2(is)
                    he_hist(n,mod(istep,navg)) % hs2(is)        = he(n) % hs2(is)
-                   he_hist(n,mod(istep,navg)) % phis2(is)      = he(n) % phis2(is)
-                   he_hist(n,mod(istep,navg)) % hypervisc(is)  = he(n) % hypervisc(is)
-                   he_hist(n,mod(istep,navg)) % hyperres(is)   = he(n) % hyperres(is)
-                   he_hist(n,mod(istep,navg)) % hypercoll(is)  = he(n) % hypercoll(is)
-                   he_hist(n,mod(istep,navg)) % collisions(is) = he(n) % collisions(is)
-                   he_hist(n,mod(istep,navg)) % imp_colls(is)  = he(n) % imp_colls(is)
                    he_hist(n,mod(istep,navg)) % gradients(is)  = he(n) % gradients(is)
-!                  he_hist(n,mod(istep,navg)) % curvature(is)  = he(n) % curvature(is)
                    he_hist(n,mod(istep,navg)) % heating(is)    = he(n) % heating(is)
                 end do
              end do
           end if
           
           if (istep >= navg) then
-             call zero_htype (he)
+             call zero_hetype (he)
              do n=1,nmax
                 do i=0,navg-1
-                   he(n) % energy     = he(n)%energy     + he_hist(n,i) % energy / real(navg)
-                   he(n) % energy_dot = he(n)%energy_dot + he_hist(n,i) % energy_dot / real(navg)
-                   he(n) % antenna    = he(n)%antenna    + he_hist(n,i) % antenna / real(navg)
-                   he(n) % eapar      = he(n)%eapar      + he_hist(n,i) % eapar / real(navg)
-                   he(n) % ebpar      = he(n)%ebpar      + he_hist(n,i) % ebpar / real(navg)
                    do is = 1,nspec
-                      he(n)%delfs2(is)     = he(n)%delfs2(is)    + he_hist(n,i) % delfs2(is) / real(navg)
                       he(n)%hs2(is)        = he(n)%hs2(is)       + he_hist(n,i) % hs2(is) / real(navg)
-                      he(n)%phis2(is)      = he(n)%phis2(is)     + he_hist(n,i) % phis2(is) / real(navg)
-                      he(n)%hypervisc(is)  = he(n)%hypervisc(is) + he_hist(n,i) % hypervisc(is) / real(navg)
-                      he(n)%hyperres(is)   = he(n)%hyperres(is)  + he_hist(n,i) % hyperres(is) / real(navg)
-                      he(n)%hypercoll(is)  = he(n)%hypercoll(is) + he_hist(n,i) % hypercoll(is) / real(navg)
-                      he(n)%collisions(is) = he(n)%collisions(is)+ he_hist(n,i) % collisions(is) / real(navg)
-                      he(n)%imp_colls(is)  = he(n)%imp_colls(is) + he_hist(n,i) % imp_colls(is) / real(navg)
                       he(n)%gradients(is)  = he(n)%gradients(is) + he_hist(n,i) % gradients(is) / real(navg)
-!                     he(n)%curvature(is)  = he(n)%curvature(is) + he_hist(n,i) % curvature(is) / real(navg)
                       he(n)%heating(is)    = he(n)%heating(is)   + he_hist(n,i) % heating(is) / real(navg)
                    end do
                 end do
@@ -694,61 +787,19 @@ contains
     case (1) 
        do is=1,nspec
           do n=1,nmax
-             tmp(n,is) = he(n)%hypervisc(is)
+             tmp(n,is) = he(n)%gradients(is)
           end do
        end do
     case (2) 
        do is=1,nspec
           do n=1,nmax
-             tmp(n,is) = he(n)%hyperres(is)
+             tmp(n,is) = he(n)%heating(is)
           end do
        end do
     case (3) 
        do is=1,nspec
           do n=1,nmax
-             tmp(n,is) = he(n)%collisions(is)
-          end do
-       end do
-    case (4) 
-       do is=1,nspec
-          do n=1,nmax
-             tmp(n,is) = he(n)%gradients(is)
-          end do
-       end do
-    case (5) 
-       do is=1,nspec
-          do n=1,nmax
-             tmp(n,is) = he(n)%heating(is)
-          end do
-       end do
-    case (6) 
-       do is=1,nspec
-          do n=1,nmax
-             tmp(n,is) = he(n)%hypercoll(is)
-          end do
-       end do
-    case (7) 
-       do is=1,nspec
-          do n=1,nmax
-             tmp(n,is) = he(n)%delfs2(is)
-          end do
-       end do
-    case (8) 
-       do is=1,nspec
-          do n=1,nmax
              tmp(n,is) = he(n)%hs2(is)
-          end do
-       end do
-    case (9) 
-       do is=1,nspec
-          do n=1,nmax
-             tmp(n,is) = he(n)%phis2(is)
-          end do
-       end do
-    case (10) 
-       do is=1,nspec
-          do n=1,nmax
-             tmp(n,is) = he(n)%imp_colls(is)
           end do
        end do
 

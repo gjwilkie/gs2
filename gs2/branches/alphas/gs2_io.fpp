@@ -127,7 +127,7 @@ module gs2_io
 contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, &
-      write_hrate, write_final_antot, write_eigenfunc, &
+      write_hrate, write_hrate_e, write_final_antot, write_eigenfunc, &
       make_movie, nmovie_tot, write_verr, write_fields, &
       write_moments,&
       write_full_moments_notgc, write_sym, write_correlation, nwrite_big_tot, &
@@ -154,7 +154,7 @@ contains
 !    logical :: write_nl_flux, write_omega, write_hrate, make_movie
 !    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega, write_flux_emu, write_flux_e
-    logical, intent(in) :: write_hrate, make_movie, write_fields, write_moments
+    logical, intent(in) :: write_hrate, make_movie, write_fields, write_moments, write_hrate_e
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_correlation_extend
@@ -239,7 +239,7 @@ contains
     if (proc0) then
        call define_dims (nmovie_tot, nwrite_big_tot)
        call define_vars (write_nl_flux, write_omega, &
-            write_hrate, write_final_antot, write_eigenfunc, write_verr, &
+            write_hrate, write_hrate_e, write_final_antot, write_eigenfunc, write_verr, &
             write_fields, write_moments, write_full_moments_notgc, write_sym, write_correlation, &
             write_correlation_extend,write_flux_emu,write_flux_e)
        call nc_grids
@@ -500,7 +500,7 @@ contains
   end subroutine save_input
 
   subroutine define_vars (write_nl_flux, write_omega, &
-       write_hrate, write_final_antot, write_eigenfunc, write_verr, &
+       write_hrate, write_hrate_e, write_final_antot, write_eigenfunc, write_verr, &
        write_fields, write_moments, write_full_moments_notgc, write_sym, write_correlation, &
        write_correlation_extend,write_flux_emu,write_flux_e)
 
@@ -519,7 +519,7 @@ contains
 !    logical :: write_nl_flux, write_omega, write_hrate
 !    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega, write_flux_emu, write_flux_e
-    logical, intent(in) :: write_hrate, write_final_antot
+    logical, intent(in) :: write_hrate, write_final_antot, write_hrate_e
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields, write_moments
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_correlation_extend
@@ -1359,35 +1359,13 @@ contains
        status = nf90_put_att (ncid, hk_heating_id, 'long_name', 'Total heating by species and mode')
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, hk_heating_id, att='long_name')
 
-       status = nf90_def_var (ncid, 'he_energy', netcdf_real, energyt_dim, he_energy_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='h_heating')
-       status = nf90_def_var (ncid, 'he_energy_dot', netcdf_real, energyt_dim, he_energy_dot_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='h_heating')
-       status = nf90_def_var (ncid, 'he_antenna', netcdf_real, energyt_dim, he_antenna_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='h_heating')
-       status = nf90_def_var (ncid, 'he_eapar', netcdf_real, energyt_dim, he_eapar_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='h_heating')
-       status = nf90_def_var (ncid, 'he_ebpar', netcdf_real, energyt_dim, he_ebpar_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='h_heating')
+    end if
 
-       status = nf90_def_var (ncid, 'he_delfs2', netcdf_real, flux_e_dim, he_delfs2_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='he_delfs2')
+    if (write_hrate_e) then
        status = nf90_def_var (ncid, 'he_hs2', netcdf_real, flux_e_dim, he_hs2_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='he_hs2')
-       status = nf90_def_var (ncid, 'he_phis2', netcdf_real, flux_e_dim, he_phis2_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='he_phis2')
-       status = nf90_def_var (ncid, 'he_hypervisc', netcdf_real, flux_e_dim, he_hypervisc_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='he_hypervisc')
-       status = nf90_def_var (ncid, 'he_hyperres', netcdf_real, flux_e_dim, he_hyperres_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='he_hyperres')
-       status = nf90_def_var (ncid, 'he_collisions', netcdf_real, flux_e_dim, he_collisions_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='he_collisions')
        status = nf90_def_var (ncid, 'he_gradients', netcdf_real, flux_e_dim, he_gradients_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='he_gradients')
-       status = nf90_def_var (ncid, 'he_imp_colls', netcdf_real, flux_e_dim, he_imp_colls_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='he_imp_colls')
-       status = nf90_def_var (ncid, 'he_hypercoll', netcdf_real, flux_e_dim, he_hypercoll_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='he_hypercoll')
        status = nf90_def_var (ncid, 'he_heating', netcdf_real, flux_e_dim, he_heating_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='he_heating')
        status = nf90_put_att (ncid, he_heating_id, 'long_name', 'Total heating by species and energy')
@@ -2357,7 +2335,7 @@ contains
        phi0,   phi2,   phi2_by_mode, &
        apar0,  apar2,  apar2_by_mode, &
        bpar0, bpar2, bpar2_by_mode, &
-       h, hk, he, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
+       h, hk, he, omega, omegaavg, woutunits, phitot, write_omega, write_hrate, write_hrate_e)
 
     use gs2_heating, only: heating_diagnostics, hk_repack, he_repack
     use run_parameters, only: fphi, fapar, fbpar
@@ -2383,7 +2361,7 @@ contains
     type(heating_diagnostics), intent (in) :: h
     type(heating_diagnostics), dimension(:,:), intent (in) :: hk
     type(heating_diagnostics), dimension(:), intent (in) :: he
-    logical :: write_omega, write_hrate
+    logical :: write_omega, write_hrate, write_hrate_e
 # ifdef NETCDF
     real, dimension (ntheta0) :: field2_by_kx
     real, dimension (naky) :: field2_by_ky
@@ -2672,46 +2650,20 @@ contains
        status = nf90_put_var (ncid, hk_imp_colls_id, tmps, start=start4, count=count4)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, hk_imp_colls_id)
 
+    end if
 
+    if (write_hrate_e) then
        call he_repack (he, 1, tmps_e)
-       status = nf90_put_var (ncid, he_hypervisc_id, tmps_e, start=starte, count=counte)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, hk_hypervisc_id)
-
-       call he_repack (he, 2, tmps_e)
-       status = nf90_put_var (ncid, he_hyperres_id, tmps_e, start=starte, count=counte)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_hyperres_id)
-
-       call he_repack (he, 3, tmps_e)
-       status = nf90_put_var (ncid, he_collisions_id, tmps_e, start=starte, count=counte)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_collisions_id)
-
-       call he_repack (he, 4, tmps_e)
        status = nf90_put_var (ncid, he_gradients_id, tmps_e, start=starte, count=counte)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_gradients_id)
 
-       call he_repack (he, 5, tmps_e)
+       call he_repack (he, 2, tmps_e)
        status = nf90_put_var (ncid, he_heating_id, tmps_e, start=starte, count=counte)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_heating_id)
 
-       call he_repack (he, 6, tmps_e)
-       status = nf90_put_var (ncid, he_hypercoll_id, tmps_e, start=starte, count=counte)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_hypercoll_id)
-
-       call he_repack (he, 7, tmps_e)
-       status = nf90_put_var (ncid, he_delfs2_id, tmps_e, start=starte, count=counte)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_delfs2_id)
-
-       call he_repack (he, 8, tmps_e)
+       call he_repack (he, 3, tmps_e)
        status = nf90_put_var (ncid, he_hs2_id, tmps_e, start=starte, count=counte)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_hs2_id)
-
-       call he_repack (he, 9, tmps_e)
-       status = nf90_put_var (ncid, he_phis2_id, tmps_e, start=starte, count=counte)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_phis2_id)
-
-       call he_repack (he, 10, tmps_e)
-       status = nf90_put_var (ncid, he_imp_colls_id, tmps_e, start=starte, count=counte)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_imp_colls_id)
 
     end if
 

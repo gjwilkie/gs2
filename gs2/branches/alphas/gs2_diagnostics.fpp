@@ -47,7 +47,7 @@ module gs2_diagnostics
   logical, public :: write_moments, write_final_db
   logical, public :: write_full_moments_notgc, write_cross_phase = .false.
   logical, public :: write_final_epar, write_kpar
-  logical, public :: write_hrate, write_lorentzian
+  logical, public :: write_hrate, write_lorentzian, write_hrate_e
   logical, public :: write_nl_flux
   logical, public :: write_verr, write_cerr, write_max_verr
   logical, public :: exit_when_converged
@@ -72,7 +72,7 @@ module gs2_diagnostics
   namelist /gs2_diagnostics_knobs/ print_line, print_flux_line, &
          write_line, write_flux_line, &
          write_omega, write_omavg, write_ascii, write_kpar, &
-         write_gs, write_gyx, write_g, write_gg, write_hrate, write_lpoly, &
+         write_gs, write_gyx, write_g, write_gg, write_hrate, write_hrate_e, write_lpoly, &
          write_eigenfunc, write_fields, write_final_fields, write_final_antot, &
          write_final_epar, write_moments, write_final_moments, write_cerr, &
          write_verr, write_max_verr, write_nl_flux, write_final_db, &
@@ -154,6 +154,7 @@ contains
           write (unit, fmt="(' write_omavg = ',L1)") write_omavg
        end if
        write (unit, fmt="(' write_hrate = ',L1)") write_hrate
+       write (unit, fmt="(' write_hrate_e = ',L1)") write_hrate_e
        write (unit, fmt="(' write_lorentzian = ',L1)") write_lorentzian
        write (unit, fmt="(' write_eigenfunc = ',L1)") write_eigenfunc
        write (unit, fmt="(' write_final_fields = ',L1)") write_final_fields
@@ -361,7 +362,7 @@ contains
     use dist_fn, only: init_dist_fn
     use init_g, only: init_init_g
     use gs2_io, only: init_gs2_io
-    use gs2_heating, only: init_htype
+    use gs2_heating, only: init_htype, init_hetype
     use collisions, only: collision_model_switch, init_lorentz_error
     use mp, only: broadcast, proc0
     use le_grids, only: init_weights, init_le_grids, negrid
@@ -415,6 +416,7 @@ contains
 
     call broadcast (ntg_out)
     call broadcast (write_hrate)
+    call broadcast (write_hrate_e)
     call broadcast (write_lorentzian)
     call broadcast (write_eigenfunc)
     call broadcast (write_flux_emu)
@@ -440,28 +442,33 @@ contains
        allocate (hk_hist(ntheta0,naky,0:navg-1))
        call init_htype (hk_hist, nspec)
 
-       allocate (he_hist(negrid,0:navg-1))
-       call init_htype (he_hist, nspec)
-
        call init_htype (h,  nspec)
 
        allocate (hk(ntheta0, naky))
        call init_htype (hk, nspec)
 
-       allocate (he(negrid))
-       call init_htype (he, nspec)
     else
        allocate (h_hist(0))
        allocate (hk(1,1))
        allocate (hk_hist(1,1,0))
+    end if
+
+    if (write_hrate_e) then
+       allocate (he_hist(negrid,0:navg-1))
+       call init_hetype (he_hist,  nspec)
+
+       allocate (he(negrid))
+       call init_hetype (he, nspec)
+    else
        allocate (he_hist(1,0))
+       allocate (he(1))
     end if
        
 !GGH Allocate density and velocity perturbation diagnostic structures
     if (write_jext) allocate (j_ext_hist(ntheta0, naky,0:navg-1)) 
 
     call init_gs2_io (write_nl_flux, write_omega, &
-         write_hrate, write_final_antot, &
+         write_hrate, write_hrate_e, write_final_antot, &
          write_eigenfunc, make_movie, nmovie_tot, write_verr, &
          write_fields, write_moments, write_full_moments_notgc, &
          write_symmetry, &
@@ -614,6 +621,7 @@ contains
        write_flux_line = .true.
        write_kpar = .false.
        write_hrate = .false.
+       write_hrate_e = .false.
        write_gs = .false.
        write_g = .false.
        write_gyx = .false.
@@ -687,7 +695,7 @@ contains
             .or. write_nl_flux  .or. write_flux_emu .or. write_flux_e
        dump_any = dump_check1  .or. dump_fields_periodically &
             .or.  dump_check2 .or. make_movie .or. print_summary &
-            .or.  write_full_moments_notgc
+            .or.  write_full_moments_notgc .or. write_hrate_e
 
        ntg_out = ntheta/2 + (nperiod-1)*ntheta
     end if 
@@ -718,7 +726,7 @@ contains
     use gs2_io, only: nc_final_moments, nc_finish
     use antenna, only: dump_ant_amp
     use splines, only: fitp_surf1, fitp_surf2
-    use gs2_heating, only: del_htype
+    use gs2_heating, only: del_htype, del_hetype
 !    use gs2_dist_io, only: write_dist
     implicit none
     integer, intent (in) :: istep
@@ -1376,10 +1384,13 @@ contains
        call del_htype (h_hist)
        call del_htype (hk_hist)
        call del_htype (hk)
-       call del_htype (he)
-       call del_htype (he_hist)
     end if
-    if (allocated(h_hist)) deallocate (h_hist, hk_hist, hk, he, he_hist)
+    if (write_hrate_e) then
+       call del_hetype (he)
+       call del_hetype (he_hist)
+    end if
+    if (allocated(h_hist)) deallocate (h_hist, hk_hist, hk)
+    if (allocated(he_hist)) deallocate (he_hist, he)
     if (allocated(j_ext_hist)) deallocate (j_ext_hist)
     if (allocated(omegahist)) deallocate (omegahist)
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
@@ -1536,7 +1547,9 @@ contains
        call broadcast (exit)
 !    endif
 
-    if (write_hrate) call heating (istep, h, hk, he)
+    if (write_hrate) call heating (istep, h, hk)
+
+    if (write_hrate_e) call heating_e (istep, he)
 
 !>GGH
     !Write Jexternal vs. time
@@ -2052,7 +2065,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
                phinew(igomega,:,:), phi2, phi2_by_mode, &
                aparnew(igomega,:,:), apar2, apar2_by_mode, &
                bparnew(igomega,:,:), bpar2, bpar2_by_mode, &
-               h, hk, he, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
+               h, hk, he, omega, omegaavg, woutunits, phitot, write_omega, write_hrate, write_hrate_e)
 ! below line gives out-of-bounds array for runs inside trinity
 !               scan_phi2_tot(nout) = phi2
                scan_phi2_tot(mod(nout-1,nstep/nwrite+1)+1) = phi2
@@ -2693,7 +2706,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
 if (debug) write(6,*) "loop_diagnostics: done"
   end subroutine loop_diagnostics
 
-  subroutine heating (istep, h, hk, he)
+  subroutine heating (istep, h, hk)
 
     use mp, only: proc0, iproc
     use dist_fn, only: get_heat
@@ -2710,7 +2723,6 @@ if (debug) write(6,*) "loop_diagnostics: done"
     integer, intent (in) :: istep
     type (heating_diagnostics) :: h
     type (heating_diagnostics), dimension(:,:) :: hk
-    type (heating_diagnostics), dimension(:) :: he
 
     real, dimension(-ntgrid:ntgrid) :: wgt
     real :: fac
@@ -2719,7 +2731,6 @@ if (debug) write(6,*) "loop_diagnostics: done"
     !Zero out variables for heating diagnostics
     call zero_htype(h)
     call zero_htype(hk)
-    call zero_htype(he)
 
     if (proc0) then
        
@@ -2755,13 +2766,28 @@ if (debug) write(6,*) "loop_diagnostics: done"
        end do
     end if
 
-    call get_heat (h, hk,he, phi, apar, bpar, phinew, aparnew, bparnew)    
+    call get_heat (h, hk, phi, apar, bpar, phinew, aparnew, bparnew)    
 
     call avg_h(h, h_hist, istep, navg)
     call avg_hk(hk, hk_hist, istep, navg)
-    call avg_he(he, he_hist, istep, navg)
 
   end subroutine heating
+
+  subroutine heating_e(istep,he)
+    use dist_fn, only: get_heat_e
+    use fields, only: phi, apar, bpar, phinew, aparnew, bparnew
+    use gs2_heating, only: heating_diagnostics, avg_he, zero_hetype
+    implicit none
+    integer, intent (in) :: istep
+    type (heating_diagnostics), dimension(:) :: he
+
+    !Zero out variables for heating diagnostics
+    call zero_hetype(he)
+
+    call get_heat_e (he, phi, apar, bpar, phinew, aparnew, bparnew)    
+    call avg_he(he, he_hist, istep, navg)
+
+  end subroutine heating_e
 !=============================================================================
 ! Density: Calculate Density perturbations
 !=============================================================================
