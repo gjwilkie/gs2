@@ -7,12 +7,14 @@ module vpamu_grids
   public :: integrate_mu
   public :: vpa, nvgrid, wgts_vpa, dvpa, vpac
   public :: mu, nmu, wgts_mu, vpa_imp
-  public :: vperp2, energy, anon, anonc
-
+  public :: vperp2, energy, anon, anonc, anon_thetac
+  public :: use_gaussian_quadrature
+  
   integer :: nvgrid
   integer :: nmu
   real :: vpa_imp, mu_max, vpa_max
-
+  logical :: use_gaussian_quadrature
+  
   ! arrays that are filled in vpamu_grids
   real, dimension (:), allocatable :: mu, wgts_mu
   real, dimension (:), allocatable :: vpa, wgts_vpa, dvpa
@@ -22,6 +24,7 @@ module vpamu_grids
   ! but allocated and filled elsewhere because they depend on theta, etc.
   real, dimension (:,:), allocatable :: vperp2
   real, dimension (:,:,:), allocatable :: energy, anon, anonc
+  real, dimension (:,:), allocatable :: anon_thetac
 
 contains
 
@@ -48,7 +51,8 @@ contains
 
     implicit none
 
-    namelist /vpamu_grids_parameters/ nvgrid, nmu, vpa_max, mu_max, vpa_imp
+    namelist /vpamu_grids_parameters/ nvgrid, nmu, vpa_max, mu_max, vpa_imp, &
+         use_gaussian_quadrature
 
     integer :: in_file
     logical :: exist
@@ -60,6 +64,7 @@ contains
        nmu = 16
        mu_max = 4.5
        vpa_imp = 0.6
+       use_gaussian_quadrature = .true.
 
        in_file = input_unit_exist("vpamu_grids_parameters", exist)
        if (exist) read (unit=in_file, nml=vpamu_grids_parameters)
@@ -71,6 +76,7 @@ contains
     call broadcast (nmu)
     call broadcast (mu_max)
     call broadcast (vpa_imp)
+    call broadcast (use_gaussian_quadrature)
 
   end subroutine read_parameters
 
@@ -252,7 +258,8 @@ contains
   subroutine init_mu_grid
 
     use constants, only: pi
-
+    use gauss_quad, only: get_laguerre_grids
+    
     implicit none
 
     integer :: imu, iseg, nmu_seg, idx, i
@@ -266,50 +273,52 @@ contains
     end if
 
     allocate (dmu(nmu-1)) ; dmu = 0.0
+    
+    if (use_gaussian_quadrature) then
+       ! use Gauss-Laguerre quadrature in mu
+       call get_laguerre_grids (mu, wgts_mu)
+       wgts_mu = wgts_mu*exp(mu)
+    else
 
-    ! construct mu grid
-    ! first get sqrt(mu) grid to be equally spaced
-    do imu = 1, nmu
-       mu(imu) = real(imu-1)*sqrt(mu_max)/(nmu-1)
-    end do
-    dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
-    ! do imu = 1, nmu
-    !    mu(imu) = real(imu-1)*mu_max/(nmu-1)
-    ! end do
-    ! dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
+       ! construct mu grid
+       ! first get sqrt(mu) grid to be equally spaced
+       do imu = 1, nmu
+          mu(imu) = real(imu-1)*sqrt(mu_max)/(nmu-1)
+       end do
+       dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
 
-    ! get integration weights corresponding to mu grid points
-    ! for now use Simpson's rule; 
-    ! i.e. subdivide grid into 3-point segments, with each segment spanning mu_low to mu_up
-    ! then the contribution of each segment to the integral is
-    ! (mu_up - mu_low) * (f1 + 4*f2 + f3) / 6
-    ! inner boundary points are used in two segments, so they get double the weight
+       ! get integration weights corresponding to mu grid points
+       ! for now use Simpson's rule; 
+       ! i.e. subdivide grid into 3-point segments, with each segment spanning mu_low to mu_up
+       ! then the contribution of each segment to the integral is
+       ! (mu_up - mu_low) * (f1 + 4*f2 + f3) / 6
+       ! inner boundary points are used in two segments, so they get double the weight
 
-    ! first get number of segments with 3 points.  If nmu is even, there will be 
-    ! an extra segment with only 2 points that we will treat separately
-    nmu_seg = (nmu-1)/2
-    do iseg = 1, nmu_seg
-       idx = (iseg-1)*2 + 1
-       del = (dmu(idx)+dmu(idx+1))/6.
-       wgts_mu(idx) = wgts_mu(idx) + del*mu(idx)
-       wgts_mu(idx+1) = wgts_mu(idx+1) + 4.*del*mu(idx+1)
-       wgts_mu(idx+2) = wgts_mu(idx+2) + del*mu(idx+2)
-    end do
-    ! if there is an extra segment with only 2 points in it,
-    ! assign weights using trapezoid rule
-    if (mod(nmu,2)==0) wgts_mu(nmu-1:) = wgts_mu(nmu-1:) + dmu(nmu-1)*0.5*mu(nmu-1)
+       ! first get number of segments with 3 points.  If nmu is even, there will be 
+       ! an extra segment with only 2 points that we will treat separately
+       nmu_seg = (nmu-1)/2
+       do iseg = 1, nmu_seg
+          idx = (iseg-1)*2 + 1
+          del = (dmu(idx)+dmu(idx+1))/6.
+          wgts_mu(idx) = wgts_mu(idx) + del*mu(idx)
+          wgts_mu(idx+1) = wgts_mu(idx+1) + 4.*del*mu(idx+1)
+          wgts_mu(idx+2) = wgts_mu(idx+2) + del*mu(idx+2)
+       end do
+       ! if there is an extra segment with only 2 points in it,
+       ! assign weights using trapezoid rule
+       if (mod(nmu,2)==0) wgts_mu(nmu-1:) = wgts_mu(nmu-1:) + dmu(nmu-1)*0.5*mu(nmu-1)
 
+       ! now convert from sqrt(mu) to mu
+       mu = mu**2
+       dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
+    end if
+       
     ! factor of 2./sqrt(pi) necessary to account for 2pi from 
     ! integration over gyro-angle and 1/pi^(3/2) normalization
     ! of velocity space Jacobian
     ! note that a factor of bmag is missing and will have to be
     ! applied when doing integrals
     wgts_mu = wgts_mu*4./sqrt(pi)
-!    wgts_mu = wgts_mu*2./sqrt(pi)
-
-    ! now convert from sqrt(mu) to mu
-    mu = mu**2
-    dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
 
     deallocate (dmu)
 

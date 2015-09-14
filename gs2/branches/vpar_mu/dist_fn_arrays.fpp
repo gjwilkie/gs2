@@ -6,7 +6,8 @@ module dist_fn_arrays
 
   public :: g, gnew, gold, kx_shift, theta0_shift, source
   public :: gpnew, gpold!, ghnew, ghold
-  public :: vpar, aj0, aj1, vparp, aj0p
+  public :: vpar, vpar_thetac
+  public :: aj0, aj1, vparp, aj0p
   public :: apar_ext, kperp2, dkperp2dr
   public :: g_adjust
 #ifdef LOWFLOW
@@ -22,7 +23,7 @@ module dist_fn_arrays
   real, dimension(:), allocatable :: kx_shift, theta0_shift
   ! (naky)
 
-  real, dimension (:,:,:), allocatable :: vpar, vparp
+  real, dimension (:,:,:), allocatable :: vpar, vpar_thetac, vparp
   ! (-ntgrid:ntgrid, -nvgrid:nvgrid, nspec)
 
   real, dimension (:,:,:), allocatable :: aj0, aj1, aj0p

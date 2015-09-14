@@ -396,6 +396,9 @@ contains
     zero = zz
     wgt = real(zz / (n+1)**2 / laguerre_l(n+1,zz)**2)
 
+    write (*,*) 'zero', zero
+    write (*,*)
+    
     deallocate (zz)
 
     ! roundoff correction
@@ -432,7 +435,7 @@ contains
     !  [see comment in find_zero_bisect_newton above.]
     ! </doc>
 
-    eps = sqrt(epsilon(eps)*epsilon(x1)) * 2.0
+    eps = sqrt(epsilon(eps)*epsilon(x1)) * 4.0
     x1 = xold
     x2 = xnew
     p1 = pold
@@ -460,14 +463,17 @@ contains
        p1 = laguerre_l(n,x1)
        zz = x1 - p1 / laguerre_lp(n,x1)
        pz = laguerre_l(n,zz)
-       if (debug) write (*,'(a,4es15.5e3)') &
-            'newton ', zz, pz, x1, p1
+       if (debug) write (*,'(a,5es15.5e3)') &
+            'newton ', zz, pz, x1, p1, eps
        if (min(abs(zz/x1-1.0), abs(pz)) < eps) exit
     end do
 
-    if (i==maxit+1) write (error_unit(),*) &
+    if (i==maxit+1) then
+       write (error_unit(),*) &
          & 'WARNING: too many iterations in get_laguerre_grids'
-
+       stop 1
+    end if
+       
   end subroutine find_zero
 
   elemental function laguerre_l (n, x)
