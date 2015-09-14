@@ -396,9 +396,6 @@ contains
     zero = zz
     wgt = real(zz / (n+1)**2 / laguerre_l(n+1,zz)**2)
 
-    write (*,*) 'zero', zero
-    write (*,*)
-    
     deallocate (zz)
 
     ! roundoff correction

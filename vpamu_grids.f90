@@ -318,7 +318,8 @@ contains
     ! of velocity space Jacobian
     ! note that a factor of bmag is missing and will have to be
     ! applied when doing integrals
-    wgts_mu = wgts_mu*4./sqrt(pi)
+    !    wgts_mu = wgts_mu*4./sqrt(pi)
+    wgts_mu = wgts_mu*2./sqrt(pi)
 
     deallocate (dmu)
 
