@@ -84,9 +84,11 @@ module dist_fn
 
   ! can probably do away with a full array for wstar at grid points,
   ! as it is only needed in limited region of phase space
-  real, dimension (:,:,:), allocatable :: wstar, wstarc, wstarp, wstarpc
+  real, dimension (:,:,:), allocatable :: wstar, wstarc
+  real, dimension (:,:,:), allocatable :: wstarp, wstarpc
   ! (-ntgrid:ntgrid, -nvgrid:nvgrid, -g-layout-)
-
+  real, dimension (:,:,:,:), allocatable :: wstar_thetac
+  
   ! fieldeq
   real, dimension (:,:,:), allocatable :: gamtot, gamtot1, gamtot2, gamtot3
   real, dimension (:,:,:), allocatable :: gamtota
@@ -653,11 +655,11 @@ contains
 
     use centering, only: get_cell_value
     use gs2_time, only: code_dt
-    use dist_fn_arrays, only: vpar, vparp
+    use dist_fn_arrays, only: vpar, vparp, vpar_thetac
     use species, only: spec, nspec
     use theta_grid, only: ntgrid, bmag, thet_imp, dbdthetc, gradparc, delthet
     use theta_grid, only: dgradpardrhoc, dgradparbdrhoc
-    use vpamu_grids, only: vperp2, nmu, mu, energy, anon, anonc
+    use vpamu_grids, only: vperp2, nmu, mu, energy, anon, anonc, anon_thetac
     use vpamu_grids, only: vpa, vpac, vpa_imp, nvgrid, dvpa
 
     implicit none
@@ -669,7 +671,9 @@ contains
        allocate (energy(-ntgrid:ntgrid,-nvgrid:nvgrid,nmu)) ; energy = 0.
        allocate (anon(-ntgrid:ntgrid,-nvgrid:nvgrid,nmu)) ; anon = 0.
        allocate (anonc(-ntgrid:ntgrid,-nvgrid:nvgrid,nmu)) ; anonc = 0.
+       allocate (anon_thetac(-ntgrid:ntgrid,-nvgrid:nvgrid)) ; anon_thetac = 0.
        allocate (vpar(-ntgrid:ntgrid,-nvgrid:nvgrid,nspec)) ; vpar = 0.
+       allocate (vpar_thetac(-ntgrid:ntgrid,-nvgrid:nvgrid,nspec)) ; vpar_thetac = 0.
        allocate (vparp(-ntgrid:ntgrid,-nvgrid:nvgrid,nspec)) ; vparp = 0.
        allocate (mirror(-ntgrid:ntgrid,-nvgrid:nvgrid,nmu,nspec)) ; mirror = 0.
        allocate (streamfac(-ntgrid:ntgrid,2)) ; streamfac = 0.
@@ -686,7 +690,12 @@ contains
        call get_cell_value (thet_imp, vpa_imp, anon(:,:,imu), anonc(:,:,imu), &
             -ntgrid, -nvgrid)
     end do
-    
+    ! need anon centered in theta only (at vpa grid points) for mu=0
+    ! since d/dvpa term does not appear to couple different vpars
+    do iv = -nvgrid, nvgrid
+       call get_cell_value (thet_imp, anon(:,iv,1), anon_thetac(:,iv), -ntgrid)
+    end do
+       
     ! get the proper upwinded cell value for the parallel velocity
     do is = 1, nspec
        do iv = -nvgrid, -1
@@ -697,6 +706,8 @@ contains
              vpar(:ntgrid-1,iv,is) = vpac(iv,2)*code_dt*spec(is)%zstm*gradparc(:ntgrid-1,1)/delthet(:ntgrid-1)
              vparp(:ntgrid-1,iv,is) = vpac(iv,2)*code_dt*spec(is)%stm*dgradpardrhoc(:ntgrid-1,1)/delthet(:ntgrid-1)
           end where
+          ! center in theta but not in vpa (needed for mu=0)
+          vpar_thetac(:ntgrid-1,iv,is) = vpa(iv)*code_dt*spec(is)%zstm*gradparc(:ntgrid-1,1)/delthet(:ntgrid-1)
        end do
        do iv = 0, nvgrid-1
           where (dbdthetc(:ntgrid-1,2) < 0.0)
@@ -706,8 +717,10 @@ contains
              vpar(:ntgrid-1,iv,is) = vpac(iv,2)*code_dt*spec(is)%zstm*gradparc(:ntgrid-1,2)/delthet(:ntgrid-1)
              vparp(:ntgrid-1,iv,is) = vpac(iv,2)*code_dt*spec(is)%stm*dgradpardrhoc(:ntgrid-1,2)/delthet(:ntgrid-1)
           end where
+          ! center in theta but not in vpa (needed for mu=0)
+          vpar_thetac(:ntgrid-1,iv,is) = vpa(iv)*code_dt*spec(is)%zstm*gradparc(:ntgrid-1,2)/delthet(:ntgrid-1)
        end do
-
+       
        do imu = 1, nmu
           ! this factor will be needed for the mirror term appearing as a source in the gprim equation
           mirror(:ntgrid-1,-nvgrid:-1,imu,is) = -code_dt*spec(is)%stm*mu(imu) &
@@ -729,6 +742,7 @@ contains
     use species, only: spec, nspec
     use theta_grid, only: ntgrid, thet_imp, itor_over_b, dBdrho, drhodpsi
     use vpamu_grids, only: nvgrid, vpa, vpa_imp, nmu, energy, mu
+    use kt_grids, only: naky
     use run_parameters, only: wunits
     use gs2_time, only: code_dt
     use gs2_layouts, only: is_idx, ik_idx, imu_idx, g_lo
@@ -740,6 +754,7 @@ contains
     if (.not. allocated(wstar)) then
        allocate (wstar(-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc)) ; wstar = 0.0
        allocate (wstarc(-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc)) ; wstarc = 0.0
+       allocate (wstar_thetac(-ntgrid:ntgrid,-nvgrid:nvgrid,naky,nspec)) ; wstar_thetac = 0.0
        allocate (wstarp(-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc)) ; wstarp = 0.0
        allocate (wstarpc(-ntgrid:ntgrid,-nvgrid:nvgrid,g_lo%llim_proc:g_lo%ulim_alloc)) ; wstarpc = 0.0
        allocate (varfac(-ntgrid:ntgrid,-nvgrid:nvgrid,nmu,nspec)) ; varfac = 0.0
@@ -772,6 +787,12 @@ contains
             wstar(:,:,iglo), wstarc(:,:,iglo), -ntgrid, -nvgrid)
        call get_cell_value (thet_imp, vpa_imp, &
             wstarp(:,:,iglo), wstarpc(:,:,iglo), -ntgrid, -nvgrid)
+       ! need wstar centered in theta but not vpa for mu=0
+       if (imu==1) then
+          do iv = -nvgrid, nvgrid
+             call get_cell_value (thet_imp, wstar(:,iv,iglo), wstar_thetac(:,iv,ik,is), -ntgrid)
+          end do
+       end if
     end do
 
     ! open (unit=1007,file='wstarp.out',status='unknown')
@@ -940,6 +961,7 @@ contains
     use species, only: spec, nspec
     use theta_grid, only: ntgrid, dbdthetc, gradparc, thet_imp, ntheta
     use vpamu_grids, only: nvgrid, vpa_imp, dvpa, vpa, mu
+    use vpamu_grids, only: use_gaussian_quadrature
     use kt_grids, only: naky, ntheta0
     use centering, only: get_cell_value
 
@@ -1016,7 +1038,7 @@ contains
        ! TMP FOR TESTING -- MAB
 !       stm = spec(2)%stm
          
-       if (imu == 1) then
+       if (imu == 1 .and. .not.use_gaussian_quadrature) then
           where (dum1 > 0.0)
              dum2 = thet_imp
           elsewhere
@@ -2242,18 +2264,8 @@ contains
        ! fill in cotribution from jth segment to ith column of initial 
        ! (ntheta/2*nsegment+1) x (ntheta/2*nsegment+1) x (nmu) response matrix          
        ! again, must treat left-most segment specially
-!       ! RESPONSE CHANGE
-!!       j = 1 ; k = 1 ; kmax = k+ntheta/2
-!       j = 1 ; k = 1 ; kmax = k+ntheta/2-1
        j = 1 ; k = 1 ; kmax = k+ntheta/2
 
-!       ! RESPONSE CHANGE
-!       ! for leftmost theta of leftmost segment, use periodicity
-!       iglow = ig_low(j)
-!       if (periodic(ik)) iglow = ig_low(j)+1
-!       ! RESPONSE CHANGE
-!!       response(k:kmax,i) = gnew(ig_low(j):ig_mid(j),-1,itmod(j,it,ik),iglo)
-!       response(k:kmax,i) = gnew(iglow:ig_mid(j),-1,itmod(j,it,ik),iglo)
        ! this is R_{11} from GS3 notes
        response(k:kmax,i) = gnew(ig_low(j):ig_mid(j),-1,itmod(j,it,ik),iglo)
        k = kmax + 1
@@ -2266,21 +2278,14 @@ contains
           end do
        end if
 
-!       ! if this ky has a periodic BC in theta, get response of g for vpa>0 at theta=theta_max-delthet
        ! if this ky has a periodic BC in theta, get response of g for vpa>=0 at theta=theta_max-delthet
        ! and for vpa<0 at theta=theta_min+delthet
        if (periodic(ik)) then
 
-          ! RESPONSE CHANGE
-!          kmax = k+nvgrid-1
-!          response(k:kmax,i) = gnew(-ntgrid+1,-nvgrid:-1,itmod(1,it,ik),iglo)
           ! this is R_{31} from GS3 notes
           kmax = k+nvgrid-2
           response(k:kmax,i) = gnew(-ntgrid+1,-nvgrid:-2,itmod(1,it,ik),iglo)
           k = kmax + 1
-          ! RESPONSE CHANGE
-!          kmax = k+nvgrid-1
-!          response(k:kmax,i) = gnew(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
           ! this is R_{21} from GS3 notes
           kmax = k+nvgrid
           response(k:kmax,i) = gnew(ntgrid-1,0:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
@@ -2325,33 +2330,12 @@ contains
              ! if this ky has a periodic BC in theta, get response of g for vpa>0 at theta=theta_max-delthet
              ! and for vpa<0 at theta=theta_min+delthet
              if (periodic(ik)) then
-!                kmax = k+nvgrid-1
-!                response(k:kmax,i,it,iglo) = gnew(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-!                k = kmax + 1
-!                kmax = k+nvgrid-1
-!                response(k:kmax,i,it,iglo) = gnew(-ntgrid+1,-1:-nvgrid:-1,itmod(1,it,ik),iglo)
-                ! TMP FOR TESTING - MAB
-!                response(k:k+1,i,it,iglo) = gnew(ntgrid-1,-nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-!                k = kmax + 1
-
-                ! RESPONSE CHANGE
-!                kmax = k+nvgrid-1
-!                response(k:kmax,i) = gnew(-ntgrid+1,-nvgrid:-1,itmod(1,it,ik),iglo)
                 kmax = k+nvgrid-2
                 response(k:kmax,i) = gnew(-ntgrid+1,-nvgrid:-2,itmod(1,it,ik),iglo)
                 k = kmax + 1
-                ! RESPONSE CHANGE
-!                kmax = k+nvgrid-1
-!                response(k:kmax,i) = gnew(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
+
                 kmax = k+nvgrid
                 response(k:kmax,i) = gnew(ntgrid-1,0:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-!                kmax = k+nvgrid
-!                response(k:kmax,i) = gnew(ntgrid-1,0:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-
-                ! TMP FOR TESTING - MAB
-!                k = kmax + 1
-!                response(k:k+1,i,it,iglo) = gnew(-ntgrid+1,nvgrid,itmod(1,it,ik),iglo)
-                
              end if
              
              do j = 1, nsegments(it,ik)
@@ -2371,26 +2355,15 @@ contains
     ! to get g(ntgrid-1,vpa>0) for unit impulses at g(-ntgrid,vpa>0)
     ! and g(-ntgrid+1,vpa<0) for unit impulses at g(ntgrid,vpa<0)
     if (periodic(ik)) then
-!       ! for iseg=1 (the left-most segment), g(theta=-pi,vpa=0) is not known
-!       ! for subsequent segments, g(theta=-pi,vpa=0) will have been solved for
-!       ! thus iseg=1 must be treated specially
-!       iseg = 1
 
        ! put blank column in for vpa=vpa_min, where vpa BC determines g
        i = i + 1
 
        ! for negative vpa, BC is at rightmost theta
        ! vpa BC at vpa_min determines g there
-       ! TMP FOR TESTING -- MAB
-!       do iv = -nvgrid, -1
        do iv = -nvgrid+1, -1
-!       do iv = -1, -nvgrid+1, -1
           ! give a unit impulse to g at this vpa and leftmost theta
           gnew(ntgrid,iv,itmod(nsegments(it,ik),it,ik),iglo) = impulse
-          ! TMP FOR TESTING -- MAB
-          ! note that we are imposing vpa BC at rightmost theta and vpa_min
-!          if (iv==-nvgrid+1 .and. (.not.vpa_bc_zero)) &
-!               gnew(ntgrid,-nvgrid,itmod(nsegments(it,ik),it,ik),iglo) = impulse*decay_fac
 
           ! sweep over entire (theta,vpa) plane and get values of gnew
           ! for particles with vpa<0 at the leftmost theta
@@ -2412,25 +2385,12 @@ contains
 
           ! this ky has a periodic BC in theta, so get response of g for vpa>0 at theta=theta_max-delthet
           ! and for vpa<0 at theta=theta_min+delthet
-          ! TMP FOR TESTING -- MAB
-!          response(k:k+1,i,it,iglo) = gnew(ntgrid-1,-nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-!          k = kmax + 1
-
-          ! RESPONSE CHANGE
-!          kmax = k+nvgrid-1
-!          response(k:kmax,i) = gnew(-ntgrid+1,-nvgrid:-1,itmod(1,it,ik),iglo) 
           kmax = k+nvgrid-2
           response(k:kmax,i) = gnew(-ntgrid+1,-nvgrid:-2,itmod(1,it,ik),iglo)
           k = kmax + 1
-          ! RESPONSE CHANGE
-!          kmax = k+nvgrid-1
-!          response(k:kmax,i) = gnew(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
+
           kmax = k+nvgrid
           response(k:kmax,i) = gnew(ntgrid-1,0:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-
-          ! TMP FOR TESTING -- MAB
-!          k = kmax + 1
-!          response(k:k+1,i,it,iglo) = gnew(-ntgrid+1,nvgrid,itmod(1,it,ik),iglo)
 
           do j = 1, nsegments(it,ik)
              ! reset g to zero everywhere
@@ -2442,14 +2402,9 @@ contains
        
        ! for positive vpa, BC is at leftmost theta
        ! we know gnew(theta>0,vpa_max) via vpa BC
-       ! TMP FOR TESTING -- MAB
        do iv = 1, nvgrid-1
-!       do iv = 1, nvgrid
           ! give a unit impulse to g at this vpa and leftmost theta
           gnew(-ntgrid,iv,itmod(1,it,ik),iglo) = impulse
-          ! TMP FOR TESTING -- MAB
-          ! note that we are imposing vpa BC at leftmost theta and vpa_max
-!          if (iv==nvgrid-1 .and. (.not.vpa_bc_zero)) gnew(-ntgrid,nvgrid,itmod(1,it,ik),iglo) = impulse*decay_fac
 
           ! sweep over entire (theta,vpa) plane and get values of gnew
           ! for particles with vpa>0 at the rightmost theta
@@ -2469,27 +2424,12 @@ contains
              end do
           end if
 
-          ! this ky has a periodic BC in theta, so get response of g for vpa>0 at theta=theta_max-delthet
-          ! and for vpa<0 at theta=theta_min+delthet
-          ! TMP FOR TESTING -- MAB
-!          response(k:k+1,i,it,iglo) = gnew(ntgrid-1,-nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-!          k = kmax + 1
-
-          ! RESPONSE CHANGE
-!          kmax = k+nvgrid-1
-!          response(k:kmax,i) = gnew(-ntgrid+1,-nvgrid:-1,itmod(1,it,ik),iglo)
           kmax = k+nvgrid-2
           response(k:kmax,i) = gnew(-ntgrid+1,-nvgrid:-2,itmod(1,it,ik),iglo)
           k = kmax + 1
-          ! RESPONSE CHANGE
-!          kmax = k+nvgrid-1
-!          response(k:kmax,i) = gnew(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
+
           kmax = k+nvgrid
           response(k:kmax,i) = gnew(ntgrid-1,0:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-
-          ! TMP FOR TESTING -- MAB
-!          k = kmax + 1
-!          response(k:k+1,i,it,iglo) = gnew(-ntgrid+1,nvgrid,itmod(1,it,ik),iglo)
 
           do j = 1, nsegments(it,ik)
              ! reset g to zero everywhere
@@ -2501,84 +2441,6 @@ contains
        ! put blank column in for vpa=vpa_max, where vpa BC determines g
        i = i + 1
 
-
-!        if (nsegments(it,ik) > 1) then
-!           do iseg = 2, nsegments(it,ik)
-!              do iv = 1, nvgrid
-!                 ! give a unit impulse to g at this vpa
-!                 gnew(-ntgrid,iv,itmod(1,it,ik),iglo) = impulse
-                
-!                 ! sweep over (theta,vpa) plane and get values of gnew for theta<0, vpa=-dvpa
-!                 call implicit_sweep (iglo, it, gnew)
-                
-!                 ! fill in cotribution from jth segment to ith column of initial 
-!                 ! (ntheta/2*nsegment+1) x (ntheta/2*nsegment+1) x (nmu) response matrix          
-!                 ! again, must treat left-most segment specially
-!                 j = 1 ; k = 1 ; kmax = k+ntheta/2
-!                 response(k:kmax,i,it,iglo) = gnew(ig_low(j):ig_mid(j),-1,itmod(j,it,ik),iglo)
-!                 k = kmax + 1
-!                 if (nsegments(it,ik) > 1) then
-!                    do j = 2, nsegments(it,ik)
-!                       kmax = k+ntheta/2-1
-!                       response(k:kmax,i,it,iglo) = gnew(ig_low(j)+1:ig_mid(j),-1,itmod(j,it,ik),iglo)
-!                       k = kmax + 1
-!                    end do
-!                 end if
-                
-!                 ! if this ky has a periodic BC in theta, get response of g for vpa>0 at theta=theta_max-delthet
-!                 ! and for vpa<0 at theta=theta_min+delthet
-!                 kmax = k+nvgrid-1
-!                 response(k:kmax,i,it,iglo) = gnew(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-!                 k = kmax + 1
-!                 kmax = k+nvgrid-1
-!                 response(k:kmax,i,it,iglo) = gnew(-ntgrid+1,-1:-nvgrid:-1,itmod(1,it,ik),iglo)
-                
-!                 do j = 1, nsegments(it,ik)
-!                    ! reset g to zero everywhere
-!                    gnew(:,:,itmod(j,it,ik),iglo) = 0.0
-!                 end do
-                
-!                 i = i + 1
-!              end do
-! !             do iv = -nvgrid, -1
-!              do iv = -1, -nvgrid, -1
-!                 ! give a unit impulse to g at this vpa
-!                 gnew(ntgrid,iv,itmod(nsegments(it,ik),it,ik),iglo) = impulse
-                
-!                 ! sweep over (theta,vpa) plane and get values of gnew for theta<0, vpa=-dvpa
-!                 call implicit_sweep (iglo, it, gnew)
-                
-!                 ! fill in cotribution from jth segment to ith column of initial 
-!                 ! (ntheta/2*nsegment+1) x (ntheta/2*nsegment+1) x (nmu) response matrix          
-!                 ! again, must treat left-most segment specially
-!                 j = 1 ; k = 1 ; kmax = k+ntheta/2
-!                 response(k:kmax,i,it,iglo) = gnew(ig_low(j):ig_mid(j),-1,itmod(j,it,ik),iglo)
-!                 k = kmax + 1
-!                 if (nsegments(it,ik) > 1) then
-!                    do j = 2, nsegments(it,ik)
-!                       kmax = k+ntheta/2-1
-!                       response(k:kmax,i,it,iglo) = gnew(ig_low(j)+1:ig_mid(j),-1,itmod(j,it,ik),iglo)
-!                       k = kmax + 1
-!                    end do
-!                 end if
-                
-!                 ! if this ky has a periodic BC in theta, get response of g for vpa>0 at theta=theta_max-delthet
-!                 ! and for vpa<0 at theta=theta_min+delthet
-!                 kmax = k+nvgrid-1
-!                 response(k:kmax,i,it,iglo) = gnew(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
-!                 k = kmax + 1
-!                 kmax = k+nvgrid-1
-!                 response(k:kmax,i,it,iglo) = gnew(-ntgrid+1,-1:-nvgrid:-1,itmod(1,it,ik),iglo)
-                
-!                 do j = 1, nsegments(it,ik)
-!                    ! reset g to zero everywhere
-!                    gnew(:,:,itmod(j,it,ik),iglo) = 0.0
-!                 end do
-                
-!                 i = i + 1
-!              end do
-!           end do
-!        end if
     end if
 
   end subroutine fill_response
@@ -2664,15 +2526,10 @@ contains
        end if
 
        if (periodic(ik)) then
-          ! RESPONSE CHANGE
-!          kmax = k+nvgrid-1
-!          dgdgn(k:kmax) = gfnc(-ntgrid+1,-nvgrid:-1,itmod(1,it,ik),iglo)
           kmax = k+nvgrid-2
           dgdgn(k:kmax) = gfnc(-ntgrid+1,-nvgrid:-2,itmod(1,it,ik),iglo)
           k = kmax+1
-          ! RESPONSE CHANGE
-!          kmax = k+nvgrid-1
-!          dgdgn(k:kmax) = gfnc(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
+
           kmax = k+nvgrid
           dgdgn(k:kmax) = gfnc(ntgrid-1,0:nvgrid,itmod(nsegments(it,ik),it,ik),iglo)
        end if
@@ -2701,19 +2558,13 @@ contains
 
        if (periodic(ik)) then
           kmax = k+nvgrid-1
-!          source_mod(k:kmax) = source(-ntgrid+1,-nvgrid:-1,itmod(1,it,ik),iglo) &
           source_mod(k) = 0.
           source_mod(k+1:kmax) = source(-ntgrid,-nvgrid:-2,itmod(1,it,ik),iglo) &
                - dgdgn(k+1:kmax)
           k = kmax+1
           kmax = k+nvgrid-1
-!          source_mod(k:kmax) = source(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo) &
           source_mod(k:kmax-1) = source(ntgrid-1,1:nvgrid-1,itmod(nsegments(it,ik),it,ik),iglo) &
                - dgdgn(k:kmax-1)
-!          kmax = k+nvgrid
-!!          source_mod(k:kmax) = source(ntgrid-1,1:nvgrid,itmod(nsegments(it,ik),it,ik),iglo) &
-!          source_mod(k:kmax-1) = source(ntgrid-1,0:nvgrid-1,itmod(nsegments(it,ik),it,ik),iglo) &
-!               - dgdgn(k:kmax-1)
           source_mod(kmax) = 0.
        end if
 
@@ -2742,6 +2593,7 @@ contains
     use gs2_layouts, only: ik_idx, is_idx, g_lo
     use theta_grid, only: ntgrid
     use vpamu_grids, only: nvgrid
+    use vpamu_grids, only: use_gaussian_quadrature
     use dist_fn_arrays, only: source
 
     implicit none
@@ -2751,7 +2603,6 @@ contains
 
     integer :: ig, iv, iv_low, igup
 
-    ! RESPONSE CHANGE
     ! do not solve for rightmost theta of rightmost segment if periodic
     ! instead is set equal to leftmost theta of leftmost segment earlier
     igup = ig_up(iseg)
@@ -2763,7 +2614,7 @@ contains
     end if
 
     ! treat mu=0 specially since it means different vpars are uncoupled
-    if (imu == 1) then
+    if (imu == 1 .and. .not.use_gaussian_quadrature) then
        iv_low = 1
 
        ! first get gfnc(theta,vpa=0,mu=0), which is decoupled from other points
@@ -2810,12 +2661,6 @@ contains
        end do
     end do
 
-    ! TMP FOR TESTING -- MAB
-    ! might need to worry about periodicity for ig_up(nsegments(it,ik)),nvgrid,it,iglo
-    ! deal with vpa = vpa_max BC for theta > 0
-!    gfnc(ig_mid(iseg)+1:ig_up(iseg),nvgrid,it,iglo) &
-!         = gfnc(ig_mid(iseg)+1:ig_up(iseg),nvgrid-1,it,iglo)*decay_fac
-
   end subroutine implicit_sweep_right
 
   ! implicit_sweep starts with a boundary condition for g^{n+1} along the line (theta>0,vpa=0)
@@ -2856,8 +2701,6 @@ contains
     ! boundary condition for vpa < 0 is g(theta=infinity) = 0
     ! boundary condition for theta < 0 (dvpa/dt > 0) is g(vpa=-infinity)=0
     iv = -nvgrid
-    ! RESPONSE CHANGE
-!    do ig = ig_mid(iseg)-1, ig_low(iseg), -1
     do ig = ig_mid(iseg)-1, iglow, -1
        gfnc(ig,iv+1,it,iglo) = (source(ig,iv,it,iglo) - (gfnc(ig+1,iv+1,it,iglo)*pppfac(ig,iv,it,iglo) &
             + gfnc(ig+1,iv,it,iglo)*ppmfac(ig,iv,it,iglo) &
@@ -2868,8 +2711,6 @@ contains
    end do
 
     do iv = -nvgrid+1, -2
-       ! RESPONSE CHANGE
-!       do ig = ig_mid(iseg)-1, ig_low(iseg), -1
        do ig = ig_mid(iseg)-1, iglow, -1
           gfnc(ig,iv+1,it,iglo) = (source(ig,iv,it,iglo) - (gfnc(ig+1,iv+1,it,iglo)*pppfac(ig,iv,it,iglo) &
                + gfnc(ig+1,iv,it,iglo)*ppmfac(ig,iv,it,iglo) &
@@ -2877,11 +2718,6 @@ contains
        end do
     end do
 
-    ! may need to deal with ig_low(1),-nvgrid,it,iglo
-    ! deal with vpa = -vpa_max BC for theta < 0
-!    gfnc(ig_low(iseg):ig_mid(iseg)-1,-nvgrid,it,iglo) &
-!         = gfnc(ig_low(iseg):ig_mid(iseg)-1,-nvgrid+1,it,iglo)*decay_fac
-    
   end subroutine implicit_sweep_left
 
   ! subroutine reset_gfnc (gfnc, iglo, it)
@@ -3043,12 +2879,8 @@ contains
                 kmax = k+nvgrid-1
 
                 gfnc(-ntgrid,1:nvgrid,itmod(1,it,ik),iglo) = source_mod(k:kmax)
-!                kmax = k+nvgrid
-!                gfnc(-ntgrid,0:nvgrid,itmod(1,it,ik),iglo) = tmp(k:kmax)
                 gfnc(-ntgrid,nvgrid,itmod(1,it,ik),iglo) = gfnc(-ntgrid,nvgrid-1,itmod(1,it,ik),iglo)*decay_fac
              end if
-
-!          end if
 
           ! with g^{n+1}(theta=0,vpa>0) specified, sweep once more to get g^{n+1} everywhere else
           call implicit_sweep (iglo, it, gfnc)
@@ -3066,12 +2898,16 @@ contains
 
     use constants, only: zi
     use centering, only: get_cell_value
-    use dist_fn_arrays, only: aj0, vpar, source
+    use dist_fn_arrays, only: aj0, source
+    use dist_fn_arrays, only: vpar, vpar_thetac
     use gs2_time, only: code_dt
     use species, only: spec
     use run_parameters, only: t_imp, fapar
     use theta_grid, only: ntgrid, thet_imp
-    use vpamu_grids, only: nvgrid, anon, vpac, anonc, vpa_imp
+    use vpamu_grids, only: anon, anonc, anon_thetac
+    use vpamu_grids, only: nvgrid, vpa_imp
+    use vpamu_grids, only: vpa, vpac
+    use vpamu_grids, only: use_gaussian_quadrature
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
     use nonlinear_terms, only: nonlin
     use kt_grids, only: ntheta0
@@ -3083,7 +2919,8 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: aparfnc, aparnewfnc
     integer, intent (in) :: istep
 
-    integer :: ig, iv, iglo, iseg, it, ik, idx, imu, is
+    integer :: ig, iv, iglo, iseg, it, ik, imu, is
+    integer, dimension (:), allocatable :: ig_idx, iv_idx
     complex, dimension (:), allocatable :: phi_m
     complex, dimension (:,:), allocatable :: phic
     complex, dimension (:,:), allocatable :: apar_m
@@ -3095,6 +2932,9 @@ contains
     allocate (aparc(-ntgrid:ntgrid,2))
     allocate (apar_m(-ntgrid:ntgrid,2))
 
+    allocate (iv_idx(-nvgrid:nvgrid-1))
+    allocate (ig_idx(-ntgrid:ntgrid-1))
+    
     if (fapar < epsilon(0.0)) then
        aparc = 0.
        apar_m = 0.
@@ -3110,10 +2950,6 @@ contains
        imu = imu_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
 
-!       do ie = 1, neigen(ik)
-
-!          do iseg = 1, nsegments(ie,ik)
-!             it = itmod(iseg,ie,ik)
        do it = 1, ntheta0
           ! get space-time cell values for J0*phi.  where to evaluate in 
           ! spatial cell depends on vpa in order to get upwinding right
@@ -3146,63 +2982,62 @@ contains
 
 !             aparc(-ntgrid:ntgrid-1,:) = vpc*aparc(-ntgrid:ntgrid-1,:)
              
-             ! TMP FOR TESTING -- MAB
-!             apar_m = 0.
-!             aparc = 0.
           end if
 
-          do iv = -nvgrid, nvgrid-1
-             ! idx needed to distinguish between +/- vpar for upwinding
-             if (iv < 0) then
-                idx = 1
-             else
-                idx = 2
-             end if
-             
-!             do ig = ig_low(iseg), ig_up(iseg)-1
-             do ig = -ntgrid, -1
-                source(ig,iv,it,iglo) = -(gfnc(ig+1,iv+1,it,iglo)*mppfac(ig,iv,it,iglo) &
-                     + gfnc(ig+1,iv,it,iglo)*mpmfac(ig,iv,it,iglo) &
-                     + gfnc(ig,iv+1,it,iglo)*mmpfac(ig,iv,it,iglo) &
-                     + gfnc(ig,iv,it,iglo)*mmmfac(ig,iv,it,iglo)) &
-                     ! from here on are actual source terms (not contributions from g at old time level)
-                     - anonc(ig,iv,imu)*(vpar(ig,iv,is)*phi_m(ig) &
-                     + zi*(wdriftc(ig,iv,it,iglo)*phic(ig,idx) &
-                     - wstarc(ig,iv,iglo)*(phic(ig,idx)-vpac(iv,1)*aparc(ig,1))) &
-                     + vpac(iv,1)*apar_m(ig,1))
-             end do
-             do ig = 0, ntgrid-1
-                source(ig,iv,it,iglo) = -(gfnc(ig+1,iv+1,it,iglo)*mppfac(ig,iv,it,iglo) &
-                     + gfnc(ig+1,iv,it,iglo)*mpmfac(ig,iv,it,iglo) &
-                     + gfnc(ig,iv+1,it,iglo)*mmpfac(ig,iv,it,iglo) &
-                     + gfnc(ig,iv,it,iglo)*mmmfac(ig,iv,it,iglo)) &
-                     ! from here on are actual source terms (not contributions from g at old time level)
-                     - anonc(ig,iv,imu)*(vpar(ig,iv,is)*phi_m(ig) &
-                     + zi*(wdriftc(ig,iv,it,iglo)*phic(ig,idx) &
-                     - wstarc(ig,iv,iglo)*(phic(ig,idx)-vpac(iv,2)*aparc(ig,2))) &
-                     + vpac(iv,2)*apar_m(ig,2))
-             end do
-          end do
+          call get_gold_source_contribution (it, iglo, gfnc, source)
 
+          ! iv_idx needed to distinguish between +/- vpar for upwinding
+          iv_idx(-nvgrid:-1) = 1
+          iv_idx(0:nvgrid-1) = 2
+          ! ig_idx needed to distinguish between +/- theta for upwinding          
+          ig_idx(-ntgrid:-1) = 1
+          ig_idx(0:ntgrid-1) = 2
+          
+          if (imu == 1 .and. .not.use_gaussian_quadrature) then
+             ! for mu=0, source is centered in theta but not vpa
+             ! because the d/dvpa term is zero and thus there is
+             ! no coupling in vpa
+             do iv = -nvgrid, nvgrid-1
+                do ig = -ntgrid, ntgrid-1
+                   ! actual source terms (not contributions from g at old time level)
+                   source(ig,iv,it,iglo) = source(ig,iv,it,iglo) &
+                        - anon_thetac(ig,iv)*(vpar_thetac(ig,iv,is)*phi_m(ig) &
+                        + zi*(wdriftc(ig,iv,it,iglo)*phic(ig,iv_idx(iv)) &
+                        - wstar_thetac(ig,iv,ik,is)*(phic(ig,iv_idx(iv))-vpa(iv)*aparc(ig,ig_idx(ig)))) &
+                        + vpa(iv)*apar_m(ig,ig_idx(ig)))
+                end do
+             end do
+          else
+             do iv = -nvgrid, nvgrid-1
+                do ig = -ntgrid, ntgrid-1
+                   ! actual source terms (not contributions from g at old time level)
+                   source(ig,iv,it,iglo) = source(ig,iv,it,iglo) &
+                        - anonc(ig,iv,imu)*(vpar(ig,iv,is)*phi_m(ig) &
+                        + zi*(wdriftc(ig,iv,it,iglo)*phic(ig,iv_idx(iv)) &
+                        - wstarc(ig,iv,iglo)*(phic(ig,iv_idx(iv))-vpac(iv,ig_idx(ig))*aparc(ig,ig_idx(ig)))) &
+                        + vpac(iv,ig_idx(ig))*apar_m(ig,ig_idx(ig)))
+                end do
+             end do
+          end if
+
+!             call add_explicit_source_contribution (source(ig,iv,it,iglo))
+             
           if (nonlin) then
              select case (istep)
              case (0)
                 ! do nothing
              case (1)
                 do ig = -ntgrid, ntgrid-1
-!                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*gexp_1(ig,:,it,iglo)
                    source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*gexp_1(ig,:,it,iglo)
                 end do
              case (2)
                 do ig = -ntgrid, ntgrid-1
                    source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*( &
-!                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*( &
                         1.5*gexp_1(ig,:,it,iglo) - 0.5*gexp_2(ig,:,it,iglo))
                 end do
              case default
                 do ig = -ntgrid, ntgrid-1
                    source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*( &
-!                   source(ig,:,it,iglo) = source(ig,:,it,iglo) + 0.5*code_dt*( &
                         (23./12.)*gexp_1(ig,:,it,iglo) &
                         - (4./3.)*gexp_2(ig,:,it,iglo) &
                         + (5./12.)*gexp_3(ig,:,it,iglo))
@@ -3216,7 +3051,7 @@ contains
           end if
 
           ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
-          if (imu==1) then
+          if (imu==1 .and. .not.use_gaussian_quadrature) then
              
              mu0_source(:,it,ik,is) = gfnc(:,0,it,iglo) + zi*anon(:,0,imu) &
                   * (wstar(:,0,iglo)-wdrift(:,0,it,iglo))*phic(:,3)
@@ -3226,24 +3061,15 @@ contains
                 case (0)
                    ! do nothing
                 case (1)
-!                   do ig = -ntgrid, ntgrid-1
                    mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*gexp_1(:,0,it,iglo)
-!                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*gexp_1(:,0,it,iglo)
-!                   end do
                 case (2)
-!                   do ig = -ntgrid, ntgrid-1
                    mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*( &
-!                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*( &
                         1.5*gexp_1(:,0,it,iglo) - 0.5*gexp_2(:,0,it,iglo))
-!                   end do
                 case default
-!                   do ig = -ntgrid, ntgrid-1
                    mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*( &
-!                   mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + 0.5*code_dt*( &
                         (23./12.)*gexp_1(:,0,it,iglo) &
                         - (4./3.)*gexp_2(:,0,it,iglo) &
                         + (5./12.)*gexp_3(:,0,it,iglo))
-!                   end do
                 end select
              end if
                 
@@ -3266,14 +3092,11 @@ contains
                    ! do nothing
                 case (1)
                    source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)
-!                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)
                 case (2)
                    source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*( &
-!                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*( &
                         1.5*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) - 0.5*gexp_2(ig_mid(iseg),0,itmod(iseg,it,ik),iglo))
                 case default
                    source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*( &
-!                   source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + 0.5*code_dt*( &
                         (23./12.)*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) &
                         - (4./3.)*gexp_2(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) &
                         + (5./12.)*gexp_3(ig_mid(iseg),0,itmod(iseg,it,ik),iglo))
@@ -3285,9 +3108,64 @@ contains
     end do
     
     deallocate (phic, phi_m, aparc, apar_m)
-
+    deallocate (iv_idx, ig_idx)
+    
   end subroutine get_source
 
+  subroutine get_gold_source_contribution (it, iglo, g_old, source_out)
+
+    use gs2_layouts, only: g_lo
+    use theta_grid, only: ntgrid
+    use vpamu_grids, only: nvgrid
+    
+    implicit none
+    
+    integer, intent (in) :: it, iglo
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: g_old
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: source_out
+    
+    source_out(:ntgrid-1,:nvgrid-1,it,iglo) &
+         = -(g_old(-ntgrid+1:,-nvgrid+1:,it,iglo)*mppfac(:ntgrid-1,:nvgrid-1,it,iglo) &
+         + g_old(-ntgrid+1:,:nvgrid-1,it,iglo)*mpmfac(:ntgrid-1,:nvgrid-1,it,iglo) &
+         + g_old(:ntgrid-1,-nvgrid+1:,it,iglo)*mmpfac(:ntgrid-1,:nvgrid-1,it,iglo) &
+         + g_old(:ntgrid-1,:nvgrid-1,it,iglo)*mmmfac(:ntgrid-1,:nvgrid-1,it,iglo))
+    
+  end subroutine get_gold_source_contribution
+
+  ! subroutine add_explicit_source_contribution (istep, source_inout)
+
+  !   use nonlinear_terms, only: nonlin
+    
+  !   implicit none
+
+  !   integer, intent (in) :: istep
+  !   complex, intent (in out) :: source_inout
+    
+  !   if (nonlin) then
+  !      select case (istep)
+  !      case (0)
+  !         ! do nothing
+  !      case (1)
+  !         do ig = -ntgrid, ntgrid-1
+  !                  source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*gexp_1(ig,:,it,iglo)
+  !               end do
+  !            case (2)
+  !               do ig = -ntgrid, ntgrid-1
+  !                  source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*( &
+  !                       1.5*gexp_1(ig,:,it,iglo) - 0.5*gexp_2(ig,:,it,iglo))
+  !               end do
+  !            case default
+  !               do ig = -ntgrid, ntgrid-1
+  !                  source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*( &
+  !                       (23./12.)*gexp_1(ig,:,it,iglo) &
+  !                       - (4./3.)*gexp_2(ig,:,it,iglo) &
+  !                       + (5./12.)*gexp_3(ig,:,it,iglo))
+  !               end do
+  !            end select
+  !         end if
+
+  !       end subroutine add_explicit_source_contribution
+          
   subroutine add_gprim_source
 
     use constants, only: zi
@@ -3299,6 +3177,7 @@ contains
     use centering, only: get_cell_value
     use theta_grid, only: ntgrid, dbdthet, thet_imp
     use vpamu_grids, only: nvgrid, vpa_imp, anonc, anon
+    use vpamu_grids, only: use_gaussian_quadrature
     use kt_grids, only: ntheta0
 
     implicit none
@@ -3410,7 +3289,7 @@ contains
                * spread(jpphic(:ntgrid-1,2),2,nvgrid)) ) ! <-- end anonc multiplication
           
           ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
-          if (imu==1) then
+          if (imu==1 .and. .not.use_gaussian_quadrature) then
              mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) &
                   + zi &  ! <-- begin zi multiplication
                   * ( -wdriftp(:,0,it,iglo)*spec(is)%tz*gtc(:,0) & ! <--remove )
@@ -3452,6 +3331,7 @@ contains
     use run_parameters, only: t_imp
     use theta_grid, only: ntgrid, thet_imp
     use vpamu_grids, only: nvgrid, anon, anonc, vpa_imp
+    use vpamu_grids, only: use_gaussian_quadrature
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
     use kt_grids, only: ntheta0
 
@@ -3505,7 +3385,7 @@ contains
           end do
           
           ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
-          if (imu==1) then
+          if (imu==1 .and. .not.use_gaussian_quadrature) then
              mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) &
                   - wdriftmod(:,0,imu)*(gptc(:,0)*spec(is)%tz &
                   + anon(:,0,imu)*phipc(:,3))
@@ -5182,7 +5062,7 @@ contains
 
     do iglo = g_lo%llim_world, g_lo%ulim_world
        ! writing out g(vpar,vperp) at ik=it=is=1, ig=0
-       ik = ik_idx(g_lo, iglo) ; if (ik /= 1) cycle
+       ik = ik_idx(g_lo, iglo) ; if (ik /= 2) cycle
        is = is_idx(g_lo, iglo) !; if (is /= 1) cycle
        imu = imu_idx(g_lo, iglo) 
        ig = 1 ; it = 1
@@ -5663,9 +5543,11 @@ contains
   
   subroutine finish_dist_fn
 
-    use vpamu_grids, only: vperp2, energy, anon, anonc
+    use vpamu_grids, only: anon, anonc, anon_thetac
+    use vpamu_grids, only: vperp2, energy
     use dist_fn_arrays, only: aj0, aj1, aj0p, kperp2, dkperp2dr
-    use dist_fn_arrays, only: g, gnew, kx_shift, source, vpar
+    use dist_fn_arrays, only: g, gnew, kx_shift, source
+    use dist_fn_arrays, only: vpar, vpar_thetac
     use dist_fn_arrays, only: gpnew, vparp, gpold, gold !ghnew, ghold
 
     implicit none
@@ -5681,8 +5563,10 @@ contains
     if (allocated(wdriftp)) deallocate (wdriftp, wdriftpc)
     if (allocated(wdriftmod)) deallocate (wdriftmod, wdriftmodc)
     if (allocated(wstarp)) deallocate (wstarp, wstarpc)
-    if (allocated(vperp2)) deallocate (vperp2, energy, anon, anonc, streamfac)
-    if (allocated(wstar)) deallocate (wstar, wstarc, varfac, varfacc)
+    if (allocated(anon)) deallocate (anon, anonc, anon_thetac)
+    if (allocated(vperp2)) deallocate (vperp2, energy, streamfac)
+    if (allocated(wstar)) deallocate (wstar, wstarc, wstar_thetac)
+    if (allocated(varfac)) deallocate (varfac, varfacc)
     if (allocated(aj0)) deallocate (aj0, aj1)
     if (allocated(aj0p)) deallocate (aj0p)
     if (allocated(kperp2)) deallocate (kperp2)
@@ -5728,7 +5612,7 @@ contains
        deallocate (ig_up)
     end if
 
-    if (allocated(vpar)) deallocate (vpar)
+    if (allocated(vpar)) deallocate (vpar, vpar_thetac)
     if (allocated(mirror)) deallocate (mirror)
     if (allocated(vparp)) deallocate (vparp)
     if (allocated(omega_prime)) deallocate (omega_prime)

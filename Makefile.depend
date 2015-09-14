@@ -61,6 +61,7 @@ ffttester_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -81,7 +82,6 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inversion.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -117,6 +117,7 @@ gs2_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -138,7 +139,6 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inversion.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
@@ -178,6 +178,7 @@ ingen_mod = \
 	 fields_implicit.o \
 	 fields_test.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 geometry.o \
 	 geq.o \
 	 gridgen4mod.o \
@@ -198,7 +199,6 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inversion.o \
 	 mp.o \
-	 mt19937.o \
 	 netcdf_utils.o \
 	 nonlinear_terms.o \
 	 parameter_scan_arrays.o \
@@ -601,7 +601,6 @@ mds.o: \
 mp.o: \
 	 constants.o \
 	 file_utils.o 
-mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -640,8 +639,7 @@ peq.o: \
 	 spl.o 
 pgplot_utils.o: \
 	 constants.o 
-ran.o: \
-	 mt19937.o 
+ran.o: 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -687,6 +685,7 @@ vpamu_grids.o: \
 	 centering.o \
 	 constants.o \
 	 file_utils.o \
+	 gauss_quad.o \
 	 gs2_layouts.o \
 	 mp.o \
 	 species.o \
