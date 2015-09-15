@@ -259,6 +259,7 @@ contains
 
     use constants, only: pi
     use gauss_quad, only: get_laguerre_grids
+    use theta_grid, only: bmag
     
     implicit none
 
@@ -275,9 +276,14 @@ contains
     allocate (dmu(nmu-1)) ; dmu = 0.0
     
     if (use_gaussian_quadrature) then
-       ! use Gauss-Laguerre quadrature in mu
+       ! dvpe * vpe = d(2*mu*B(theta=0)) * B/2B(theta=0)
+
+       ! use Gauss-Laguerre quadrature in 2*mu*bmag(theta=0)
        call get_laguerre_grids (mu, wgts_mu)
-       wgts_mu = wgts_mu*exp(mu)
+       wgts_mu = wgts_mu*exp(mu)/(2.*bmag(0))
+
+       ! get mu grid from grid in 2*mu*bmag(theta=0)
+       mu = mu/(2.*bmag(0))
     else
 
        ! construct mu grid
@@ -287,7 +293,7 @@ contains
        end do
        dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
 
-       ! get integration weights corresponding to mu grid points
+       ! get integration weights corresponding to sqrt(mu) grid points
        ! for now use Simpson's rule; 
        ! i.e. subdivide grid into 3-point segments, with each segment spanning mu_low to mu_up
        ! then the contribution of each segment to the integral is
@@ -308,6 +314,9 @@ contains
        ! assign weights using trapezoid rule
        if (mod(nmu,2)==0) wgts_mu(nmu-1:) = wgts_mu(nmu-1:) + dmu(nmu-1)*0.5*mu(nmu-1)
 
+       ! converting from sqrt(mu) * d sqrt(mu) to dvpe * vpe
+       wgts_mu = wgts_mu*2.
+       
        ! now convert from sqrt(mu) to mu
        mu = mu**2
        dmu = (/ (mu(i+1)-mu(i), i=1,nmu-1) /)
@@ -318,7 +327,6 @@ contains
     ! of velocity space Jacobian
     ! note that a factor of bmag is missing and will have to be
     ! applied when doing integrals
-    !    wgts_mu = wgts_mu*4./sqrt(pi)
     wgts_mu = wgts_mu*2./sqrt(pi)
 
     deallocate (dmu)

@@ -237,7 +237,8 @@ contains
 
     implicit none
 
-    logical:: debug=.false.
+    logical :: debug = .false.
+    logical :: testing = .false.
 
     if (initialized) return
     initialized = .true.
@@ -256,7 +257,7 @@ contains
 
     if (debug) write(6,*) "init_dist_fn: init_vpamu_grids"
     call init_vpamu_grids
-
+    
     if (debug) write(6,*) "init_dist_fn: read_parameters"
     call read_parameters
 
@@ -320,6 +321,8 @@ contains
     call init_hyper
 
     ntg_out = ntheta/2 + (nperiod-1)*ntheta
+
+    if (testing) call test_vspace_integral
 
   end subroutine init_dist_fn
 
@@ -2791,7 +2794,6 @@ contains
     complex, dimension (:), allocatable :: source_mod
     real, dimension (:), allocatable :: dum, rwork
     complex, dimension (:), allocatable :: work
-    real :: condition_number, ferrest, berrest
     integer :: ierr
     
     ntg = ntheta/2
@@ -5938,6 +5940,48 @@ contains
   end subroutine init_lowflow
 #endif
 
+  subroutine test_vspace_integral
+    
+    use gs2_layouts, only: g_lo, imu_idx
+    use theta_grid, only: ntgrid
+    use vpamu_grids, only: nvgrid
+    use vpamu_grids, only: energy, anon
+    use vpamu_grids, only: integrate_moment
+    use kt_grids, only: ntheta0, naky
+    use species, only: nspec
+    
+    implicit none
+    
+    integer :: iglo, imu
+    real :: error
+    complex, dimension (:,:,:,:), allocatable :: gtest
+    complex, dimension (:,:,:,:), allocatable :: integral
+    
+    allocate (gtest(-ntgrid:ntgrid,-nvgrid:nvgrid,ntheta0,g_lo%llim_proc:g_lo%ulim_alloc))
+    allocate (integral(-ntgrid:ntgrid,ntheta0,naky,nspec))
+    
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       imu = imu_idx(g_lo,iglo)
+       ! g = exp(-v^2/vt^2)
+       gtest(:,:,:,iglo) = spread(anon(:,:,imu),3,ntheta0)
+    end do
+    call integrate_moment (gtest, integral)
+    error = maxval(abs(integral-1.0))
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       imu = imu_idx(g_lo,iglo)
+       ! g = v^2*exp(-v^2/vt^2)
+       gtest(:,:,:,iglo) = spread(energy(:,:,imu)*anon(:,:,imu),3,ntheta0)
+    end do
+    call integrate_moment (gtest, integral)
+    error = max(error,maxval(abs(integral-1.5)))
+
+    write (*,'(a37,e12.4)') 'vspace_integral_test: max error = ', error
+    
+    deallocate (gtest, integral)
+    
+  end subroutine test_vspace_integral
+  
   ! subroutine write_connectinfo
 
   !   use mp, only: proc0, send, receive, nproc, iproc, mp_gather, barrier
