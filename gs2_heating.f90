@@ -69,6 +69,7 @@ module gs2_heating
      real, dimension(:), pointer :: gradients  => null()
 !     real, dimension(:), pointer :: curvature  => null()
      real, dimension(:), pointer :: heating    => null()
+     real, dimension(:), pointer :: dh2dt    => null()
   end type heating_diagnostics
 
 !GGH>
@@ -198,6 +199,7 @@ contains
     nmax = size(h)
     
     do n=1,nmax
+       allocate (h(n) % dh2dt(nspec))      
        allocate (h(n) % hs2(nspec))      
        allocate (h(n) % gradients(nspec))   
        allocate (h(n) % heating(nspec))     
@@ -218,6 +220,7 @@ contains
     
     do n=1,nmax
     do m=1,mmax
+       allocate (h(m,n) % dh2dt(nspec))      
        allocate (h(m,n) % hs2(nspec))      
        allocate (h(m,n) % gradients(nspec))   
        allocate (h(m,n) % heating(nspec))     
@@ -352,6 +355,7 @@ contains
     nmax = size(h)
     
     do n=1,nmax
+       h(n) % dh2dt = 0. 
        h(n) % hs2 = 0. 
        h(n) % gradients = 0. 
        h(n) % heating = 0.   
@@ -370,6 +374,7 @@ contains
     
     do n=1,nmax
     do m=1,mmax
+       h(m,n) % dh2dt = 0. 
        h(m,n) % hs2 = 0. 
        h(m,n) % gradients = 0. 
        h(m,n) % heating = 0.   
@@ -482,6 +487,7 @@ contains
     mmax = size (h, 1)
     
     do m=1,mmax
+       deallocate (h(m) % dh2dt)
        deallocate (h(m) % hs2)
        deallocate (h(m) % gradients)
        deallocate (h(m) % heating)
@@ -499,6 +505,7 @@ contains
     
     do n=1,nmax
     do m=1,mmax
+       deallocate (h(m,n) % dh2dt)
        deallocate (h(m,n) % hs2)
        deallocate (h(m,n) % gradients)
        deallocate (h(m,n) % heating)
@@ -800,6 +807,12 @@ contains
        do is=1,nspec
           do n=1,nmax
              tmp(n,is) = he(n)%hs2(is)
+          end do
+       end do
+    case (4) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%dh2dt(is)
           end do
        end do
 
