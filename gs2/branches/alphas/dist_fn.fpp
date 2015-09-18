@@ -6066,7 +6066,39 @@ subroutine check_dist_fn(report_unit)
        end do
     end if
 
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       is = is_idx(g_lo, iglo)
+       it = it_idx(g_lo, iglo)
+       ik = ik_idx(g_lo, iglo)
+       ie = ie_idx(g_lo, iglo)
+       if (nonlin .and. it == 1 .and. ik == 1) cycle
+       dtinv = 1./(code_dt*tunits(ik))
+       do isgn=1,2
+          
+          do ig=-ntgrid, ntgrid-1
+                         
+             havg = favg (g   (ig  ,isgn,iglo), &
+                          g   (ig+1,isgn,iglo), &
+                          gnew(ig  ,isgn,iglo), &
+                          gnew(ig+1,isgn,iglo))
+             
+             g0(ig,isgn,iglo) = 0.5*spec(is)%dens*conjg(havg)*havg
 
+          end do
+       end do
+    end do
+
+    call fsavg_keep_e (g0, tote)
+
+    if (proc0) then
+
+       do is = 1, nspec
+          do ie = 1,negrid
+             he(ie) % hs2(is) = he(ie) % hs2(is) &
+                   + real(tote(ie,is))
+          end do
+       end do
+    end if
 
     do iglo=g_lo%llim_proc, g_lo%ulim_proc
        is = is_idx(g_lo, iglo)
@@ -6107,7 +6139,7 @@ subroutine check_dist_fn(report_unit)
 
        do is = 1, nspec
           do ie = 1,negrid
-             he(ie) % hs2(is) = he(ie) % hs2(is) &
+             he(ie) % dh2dt(is) = he(ie) % dh2dt(is) &
                    + real(tote(ie,is))
           end do
        end do
