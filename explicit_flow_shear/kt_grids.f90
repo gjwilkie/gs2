@@ -44,10 +44,8 @@ contains
 
   subroutine broadcast_akx_in
     use mp, only: broadcast, iproc
-    write (*,*) "Broadcasting akx_in ", akx_in, "... ", iproc
     call broadcast(akx_in)
     call broadcast(aky)
-    write (*,*) "Broadcasted akx_in ", akx_in, "... ", iproc
   end subroutine broadcast_akx_in
 
   !> Assign actual values to kx. The value of kx may change in time if
@@ -59,7 +57,6 @@ contains
     use theta_grid, only: shat
     real, intent(in) :: g_exb, shear_time
     akx = akx_in - g_exb * aky * shear_time
-    if (proc0) write(*,*) "Calculating kgrids: akx=", akx
     if (aky .eq. 0.0) then 
       theta0 = 0.0
     else
