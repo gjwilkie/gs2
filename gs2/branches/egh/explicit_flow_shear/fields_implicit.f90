@@ -336,10 +336,6 @@ contains
 
     if (abs(g_exb)<epsilon(0.0)) return
 
-    write (*,*) 'Running exb_shear'
-  
-    
-    
     gdt = 0.5*(code_dt + code_dt_old)
 
     if (single) then
@@ -436,8 +432,6 @@ contains
       call calculate_kt_grids(g_exb, code_time - wait_time)
       ! set akx in kt_grids equal to akx in kt_grids_single
       !akx = single_akx
-      write (*,*) "Calculated kx: ", akx, "theta0: ", theta0, "ky: ", aky, &
-      "...", iproc, 'g_exb ', g_exb, 'code_time ', code_time, 'wt', wait_time
       
       !call init_kperp2
       call init_bessel

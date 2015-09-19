@@ -3355,7 +3355,7 @@ endif
   subroutine allocate_arrays
     use kt_grids, only: naky,  box
     use theta_grid, only: ntgrid, shat
-    use dist_fn_arrays, only: g, gnew
+    use dist_fn_arrays, only: g, gnew, g_store
     use dist_fn_arrays, only: kx_shift, theta0_shift   ! MR
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
@@ -3367,6 +3367,7 @@ endif
     if (.not. allocated(g)) then
        allocate (g    (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gnew (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+       allocate (g_store (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (g0   (-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        if(opt_source)then
           if(fapar.gt.0)then
@@ -8868,7 +8869,7 @@ endif
     use redistribute, only: delete_redist
     use dist_fn_arrays, only: ittp, vpa, vpac, vperp2, vpar
     use dist_fn_arrays, only: aj0, aj1   
-    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
+    use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift, g_store
 #ifdef LOWFLOW
     use lowflow, only: finish_lowflow_terms
     use dist_fn_arrays, only: hneoc, vparterm, wdfac, wstarfac, wdttpfac
@@ -8894,7 +8895,7 @@ endif
     if (allocated(itleft)) deallocate (itleft, itright)
     if (allocated(connections)) deallocate (connections)
     if (allocated(g_adj)) deallocate (g_adj)
-    if (allocated(g)) deallocate (g, gnew, g0)
+    if (allocated(g)) deallocate (g, gnew, g0, g_store)
     if (allocated(source_coeffs)) deallocate(source_coeffs)
     if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
     if (allocated(g_h)) deallocate (g_h, save_h)
