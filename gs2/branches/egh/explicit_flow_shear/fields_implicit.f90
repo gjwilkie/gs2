@@ -361,7 +361,6 @@ contains
       if (g_exb_error_limit .lt. 0.0) g_exb_error_check_cycle = 2
 
       if (g_exb_error_check_cycle .eq. 3) then ! test error
-        if (proc0) write (*,*) "Calculating Error"
         ! phi_store was calculated without updating response matrix
         phi_temp = phinew - phi_store
         !phi_temp = phinew*conjg(phinew) - phi_store*conjg(phi_store)
@@ -390,41 +389,31 @@ contains
         end if
         if (n_recalc_response .eq. 0) n_recalc_response = 1
         if (n_recalc_response .gt. max_n) n_recalc_response = max_n
-        if (proc0) write (*,*) "max_n: " , max_n
-        if (proc0) write (*,*) "n_recalc_response: ", n_recalc_response
         g_exb_error_check_cycle = 0 ! Normal
 
 
       end if
 
-      write (*,*) 'istep', istep, n_recalc_response
       if (mod(istep, n_recalc_response) .eq. 0) then
         recalc_response = .true.
-        if (proc0) write (*,*) "istep: ", istep, " recalc_response: ", recalc_response
-        if (proc0) write (*,*) "n_recalc_response", n_recalc_response 
       else
         recalc_response = .false.
       end if
       
       if (recalc_response .and. g_exb_error_check_cycle .eq. 0) then
-        if (proc0) write (*,*) "Saving old arrays"
         g_exb_error_check_cycle = 1 ! Calculate without recalculating response 
         g_store = gnew
         phi_store = phinew; apar_store = aparnew; bpar_store = bparnew
-        if (proc0) write (*,*) "Calling Error check step"
         call advance_implicit(istep, .false.)
-        if (proc0) write (*,*) "Finished Error check step"
         g_exb_error_check_cycle = 2 ! Calculate with response
         gnew = g_store 
         phi = phinew; apar = aparnew; bpar = bparnew
         phinew = phi_store; aparnew = apar_store; bparnew = bpar_store
         phi_store = phi; apar_store = apar; bpar_store = bpar
-        if (proc0) write (*,*) "Reassigned functions"
       end if
 
 
       if (recalc_response .and. g_exb_error_check_cycle == 2 ) then
-        if (proc0) write (*,*) "Resetting init"
         g_store = gnew; phi_temp = phinew; apar_temp =  aparnew;
         bpar_temp =  bparnew
         call reset_init
@@ -437,7 +426,6 @@ contains
       call init_bessel
       call init_fieldeq
       if (recalc_response .and. g_exb_error_check_cycle .eq. 2  ) then
-        if (proc0) write (*,*) "Recalculating response"
         call init_response_matrix
         gnew = g_store; phinew = phi_temp; aparnew = apar_temp; bparnew =  bpar_temp
         g_exb_error_check_cycle = 3 ! Test error 
