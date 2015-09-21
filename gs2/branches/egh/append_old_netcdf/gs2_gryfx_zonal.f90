@@ -406,13 +406,13 @@ contains
     use species, only: nspec
     use nonlinear_terms, only: gryfx_zonal
     use gs2_main, only: evolve_equations
-    use dist_fn, only: getmoms_gryfx
+    use dist_fn, only: getmoms_gryfx_dist 
     use mp, only: proc0, broadcast
 
     implicit none
-    complex*8, dimension (naky*ntheta0*2*ntgrid*nspec), intent (inout) :: &
+    complex*8, dimension (:), intent (inout) :: &
                     dens_ky0, upar_ky0, tpar_ky0, tprp_ky0, qpar_ky0, qprp_ky0
-    complex*8, dimension (naky*ntheta0*2*ntgrid), intent (out) :: phi_ky0
+    complex*8, dimension (:), intent (inout) :: phi_ky0
     logical, intent (in) :: first_half_step
     integer, intent (in) :: istep
 
@@ -456,7 +456,9 @@ contains
     ! getmoms_gryfx takes moments of g and puts results into arguments.
     ! since these are the same arguments that are passed into 
     ! advance_gs2_gryfx, we don't need to copy them like on the way in
-    call getmoms_gryfx(dens_ky0, upar_ky0, tpar_ky0, &
+
+    !write (*,*) 'Calling getmoms_gryfx'
+    call getmoms_gryfx_dist(dens_ky0, upar_ky0, tpar_ky0, &
                  tprp_ky0, qpar_ky0, qprp_ky0, phi_ky0)
 
     call interpolate_theta(gs2_2_gryfx_grid, dens_ky0, .false.)
@@ -502,7 +504,7 @@ contains
   subroutine getmoms_gryfx_c (dens_ky0, upar_ky0, tpar_ky0, tprp_ky0, &
                               qpar_ky0, qprp_ky0, phi_ky0) &
                                    bind(c, name='getmoms_gryfx')
-    use dist_fn, only: getmoms_gryfx
+    use dist_fn, only: getmoms_gryfx_dist
     use theta_grid, only: ntgrid
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
@@ -522,7 +524,7 @@ contains
                                 qprp_ky0(naky*ntheta0*2*ntgrid*nspec)
     complex (c_float_complex), intent (out) :: phi_ky0(naky*ntheta0*2*ntgrid)
     
-    call getmoms_gryfx(dens_ky0, upar_ky0, tpar_ky0, &
+    call getmoms_gryfx_dist(dens_ky0, upar_ky0, tpar_ky0, &
             tprp_ky0, qpar_ky0, qprp_ky0, phi_ky0)
 
     call interpolate_theta(gs2_2_gryfx_grid, dens_ky0, .false.)

@@ -63,7 +63,7 @@ module dist_fn
   public :: g_exb_error_limit
   public :: g_exb_start_timestep, g_exb_start_time
   public :: init_bessel, init_fieldeq
-  public :: getfieldeq, getan, getmoms, getemoms, getmoms_gryfx
+  public :: getfieldeq, getan, getmoms, getemoms, getmoms_gryfx_dist
   public :: getfieldeq_nogath
   public :: flux, lf_flux, eexchange
   public :: get_epar, get_heat
@@ -5959,7 +5959,7 @@ endif
     call prof_leaving ("getmoms", "dist_fn")
   end subroutine getmoms
 
-  subroutine getmoms_gryfx (density_gryfx, upar_gryfx, tpar_gryfx, tperp_gryfx, qpar_gryfx, qperp_gryfx, phi_gryfx)
+  subroutine getmoms_gryfx_dist (density_gryfx, upar_gryfx, tpar_gryfx, tperp_gryfx, qpar_gryfx, qperp_gryfx, phi_gryfx)
     use dist_fn_arrays, only: vpa, vperp2, aj0, aj1, gnew, g_adjust
     use gs2_layouts, only: is_idx, ie_idx, g_lo, ik_idx, it_idx
     use species, only: nspec, spec
@@ -5973,9 +5973,9 @@ endif
 
     implicit none
     integer :: ik, it, isgn, ie, is, iglo, ig, iz, index_gryfx
-    complex*8, dimension(naky*ntheta0*2*ntgrid*nspec), intent(out) :: density_gryfx, upar_gryfx, &
+    complex*8, dimension(:), intent(out) :: density_gryfx, upar_gryfx, &
          tpar_gryfx, tperp_gryfx, qpar_gryfx, qperp_gryfx
-    complex*8, dimension(naky*ntheta0*2*ntgrid), intent(out) :: phi_gryfx       
+    complex*8, dimension(:), intent(out) :: phi_gryfx       
     complex, dimension(:,:,:,:), allocatable :: total
 
     !real :: densfac_lin, uparfac_lin, tparfac_lin, tprpfac_lin, qparfac_lin, qprpfac_lin, phifac_lin
@@ -6191,7 +6191,7 @@ endif
     deallocate(total)
 
 
-  end subroutine getmoms_gryfx
+  end subroutine getmoms_gryfx_dist
 
 
   subroutine getemoms (phinew, bparnew, ntot, tperp)

@@ -119,7 +119,7 @@
  delt = 0.05 ! Time step
  nstep = 50 ! Maximum number of timesteps
  avail_cpu_time = 302
- use_old_diagnostics = .true.
+ use_old_diagnostics = .false.
 /
 
 !==============================
