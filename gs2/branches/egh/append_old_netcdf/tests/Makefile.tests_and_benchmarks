@@ -34,8 +34,8 @@ endif
 export TEST_LEVEL
 
 ifdef SIMPLEDATAIO_LIB_DIR_ABS
-SDATIO_LINK=-L$(SIMPLEDATAIO_LIB_DIR_ABS)
-SDATIO_LIB=-lsimpledataio
+      SDATIO_LINK=-L$(SIMPLEDATAIO_LIB_DIR_ABS)
+      SDATIO_LIB=-lsimpledataio
 endif
 
 # To save time you can set test deps yourself on the command line:
@@ -44,9 +44,8 @@ endif
 # UPDATE: Tests link against libgs2 now, so you can't choose 
 # which dependencies to build any more. EGH 04/03/2015
 # UPDATE: we now build and test the gs2 exec as well. EGH 14/03/15
-TEST_DEPS=libgs2.a functional_tests.o benchmarks.o gs2
+TEST_DEPS?=libgs2.a functional_tests.o benchmarks.o gs2
 TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD) $(SDATIO_LINK)" LIBS=" -lgs2 $(SDATIO_LIB) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
-
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 
 export TESTCOMMAND
@@ -71,7 +70,7 @@ endef
 
 define RUN_TESTS
 	@find $(TEST_DIR)/$(1) -name results_of_test.txt | xargs rm -f
-	cd $(TEST_DIR)/$(1) && time ${MAKETESTS} 
+	@cd $(TEST_DIR)/$(1) && time ${MAKETESTS} 
 endef
 
 clean_tests:
