@@ -54,9 +54,9 @@
 
 program gs2
 
-! make_lib is a compiler flag used if running with 
-! an old version of trinity (coupled flux tube code)
-! MAKE_LIB is now deprecated.
+  ! make_lib is a compiler flag used if running with 
+  ! an old version of trinity (coupled flux tube code)
+  ! MAKE_LIB is now deprecated.
 
 # ifndef MAKE_LIB 
   !use optimisation_config, only: optimisation_type
