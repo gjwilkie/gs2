@@ -1321,6 +1321,7 @@ contains
        ht = 0.0
        vf = 0.0
      end do
+       !time_interval = user_time-start_time
      time_interval = 1.0
    else 
      if (use_old_diagnostics) then
@@ -1818,29 +1819,56 @@ subroutine run_gs2 (mpi_comm, job_id, filename, nensembles, &
     override_miller_geometry = .false.
   end subroutine old_interface_set_overrides
 
-  subroutine determine_gs2spec_from_trin(ntspec)
+  subroutine determine_gs2spec_from_trin(ntspec, trin_multispec_in)
     use species, only: determine_species_order, spec, nspec, impurity, ions
     use species, only: electrons
     use mp, only: mp_abort
     integer, intent(in) :: ntspec
+    !> This is true if we are using multispecies post Sep-2105 Trinity 
+    !! In this case the electrons in Trinity are the first species
+    !! rather than the second
+    logical, intent(in), optional :: trin_multispec_in
+    logical :: trin_multispec
+
+    if (present(trin_multispec_in)) then
+      trin_multispec = trin_multispec_in
+    else
+      trin_multispec = .false.
+    end if
+
     call determine_species_order
     if (.not. allocated(gs2spec_from_trin)) allocate(gs2spec_from_trin(ntspec))
     !write (*,*) 'IONS', ions, 'ELECTRONS', electrons, 'IMPURITY', impurity
-    if (nspec==1) then
+    if (ntspec==1) then
+      ! This is never the case in multispecies Trinity 
       gs2spec_from_trin(1) = ions
       ! ref temp is always ions (trin spec 1)
       ! For one species, reference dens is ions
       densrefspec = 1
-    else if (nspec==2) then 
-      gs2spec_from_trin(1) = ions
-      gs2spec_from_trin(2) = electrons
-      ! For two species or more, ref dens is electrons (trin spec 2)
-      densrefspec = 2
-    else if (nspec==3) then
-      gs2spec_from_trin(1) = ions
-      gs2spec_from_trin(2) = electrons
-      gs2spec_from_trin(3) = impurity
-      densrefspec = 2
+    else if (ntspec==2) then 
+      if (trin_multispec) then
+        gs2spec_from_trin(1) = electrons
+        gs2spec_from_trin(2) = ions
+        densrefspec = 2 ! The ref density is now the main ions
+      else
+        gs2spec_from_trin(1) = ions
+        gs2spec_from_trin(2) = electrons
+        ! For two species or more, ref dens is electrons (trin spec 2)
+        densrefspec = 2
+      end if
+    else if (ntspec==3) then
+      if (trin_multispec) then
+        gs2spec_from_trin(1) = electrons
+        gs2spec_from_trin(2) = ions
+        gs2spec_from_trin(3) = impurity
+        densrefspec = 2 ! The ref density is now the main ions
+      else
+        gs2spec_from_trin(1) = ions
+        gs2spec_from_trin(2) = electrons
+        gs2spec_from_trin(3) = impurity
+        ! For two species or more, ref dens is electrons (trin spec 2)
+        densrefspec = 2
+      end if
     else
       call mp_abort("Can't handle more than 3 species in &
        & determine_gs2spec_from_trin", .true.)
