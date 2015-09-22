@@ -118,7 +118,10 @@ USE_AUTOTOOLS ?= off
 
 HAS_ISO_C_BINDING ?= on
 
-
+# If on, build with position independent code, needed if GS2 is going to be included
+# in a shared library or linked dynamically (e.g. it's needed by GRYFX).
+# This *may* have performance implications, but it hasn't been tested yet.
+USE_FPIC ?= 
 
 #
 # * Targets:
@@ -142,12 +145,12 @@ MPIFC		?= mpif90
 H5FC		?= h5fc
 H5FC_par	?= h5pfc
 F90FLAGS	=
-F90OPTFLAGS	= -fPIC
+F90OPTFLAGS	= 
 CC		= cc
 MPICC		?= mpicc
 H5CC		?= h5cc
 H5CC_par	?= h5pcc
-CFLAGS		= -fPIC
+CFLAGS		= 
 COPTFLAGS 	=
 LD 		= $(FC)
 LDFLAGS 	= $(F90FLAGS)
@@ -278,6 +281,11 @@ endif
 
 ifeq ($(USE_NEW_DIAG),on)
 	CPPFLAGS+=-DNEW_DIAG
+endif
+
+ifeq ($(USE_FPIC),on)
+	CFLAGS+=-fPIC
+	F90FLAGS += -fPIC
 endif
 
 ifdef USE_SHMEM
