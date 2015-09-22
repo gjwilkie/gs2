@@ -191,7 +191,7 @@ subroutine aaaa
 !        integrator available, qawf.
 !
   return
-end
+end subroutine
 subroutine qag ( f, a, b, epsabs, epsrel, key, result, abserr, neval, ier )
 
 !*****************************************************************************80
@@ -298,7 +298,7 @@ subroutine qag ( f, a, b, epsabs, epsrel, key, result, abserr, neval, ier )
     ier, alist, blist, rlist, elist, iord, last )
 
   return
-end
+end subroutine
 subroutine qage ( f, a, b, epsabs, epsrel, key, limit, result, abserr, neval, &
   ier, alist, blist, rlist, elist, iord, last )
 
@@ -665,7 +665,7 @@ subroutine qage ( f, a, b, epsabs, epsrel, key, limit, result, abserr, neval, &
   end if
 
   return
-end
+end subroutine
 subroutine qagi ( f, bound, inf, epsabs, epsrel, result, abserr, neval, ier )
 
 !*****************************************************************************80
@@ -1212,7 +1212,7 @@ subroutine qagi ( f, bound, inf, epsabs, epsrel, result, abserr, neval, ier )
   end if
 
   return
-end
+end subroutine
 subroutine qagp ( f, a, b, npts2, points, epsabs, epsrel, result, abserr, &
   neval, ier )
 
@@ -1881,7 +1881,7 @@ subroutine qagp ( f, a, b, npts2, points, epsabs, epsrel, result, abserr, &
   result = result * sign
 
   return
-end
+end subroutine
 subroutine qags ( f, a, b, epsabs, epsrel, result, abserr, neval, ier )
 
 !*****************************************************************************80
@@ -2408,7 +2408,7 @@ subroutine qags ( f, a, b, epsabs, epsrel, result, abserr, neval, ier )
   neval = 42*last-21
 
   return
-end
+end subroutine
 subroutine qawc ( f, a, b, c, epsabs, epsrel, result, abserr, neval, ier )
 
 !*****************************************************************************80
@@ -2522,7 +2522,7 @@ subroutine qawc ( f, a, b, c, epsabs, epsrel, result, abserr, neval, ier )
     alist, blist, rlist, elist, iord, last )
 
   return
-end
+end subroutine
 subroutine qawce ( f, a, b, c, epsabs, epsrel, limit, result, abserr, neval, &
   ier, alist, blist, rlist, elist, iord, last )
 
@@ -2879,7 +2879,7 @@ subroutine qawce ( f, a, b, c, epsabs, epsrel, limit, result, abserr, neval, &
   end if
 
   return
-end
+end subroutine
 subroutine qawf ( f, a, omega, integr, epsabs, result, abserr, neval, ier )
 
 !*****************************************************************************80
@@ -3015,7 +3015,7 @@ subroutine qawf ( f, a, omega, integr, epsabs, result, abserr, neval, ier )
     rlist, elist, iord, nnlog, chebmo )
 
   return
-end
+end subroutine
 subroutine qawfe ( f, a, omega, integr, epsabs, limlst, limit, maxp1, &
   result, abserr, neval, ier, rslst, erlst, ierlst, lst, alist, blist, &
   rlist, elist, iord, nnlog, chebmo )
@@ -3466,7 +3466,7 @@ subroutine qawfe ( f, a, omega, integr, epsabs, limlst, limit, maxp1, &
   abserr = errsum + drl
 
   return
-end
+end subroutine
 subroutine qawo ( f, a, b, omega, integr, epsabs, epsrel, result, abserr, &
   neval, ier )
 
@@ -3608,7 +3608,7 @@ subroutine qawo ( f, a, b, omega, integr, epsabs, epsrel, result, abserr, &
     momcom, chebmo )
 
   return
-end
+end subroutine
 subroutine qaws ( f, a, b, alfa, beta, integr, epsabs, epsrel, result, &
   abserr, neval, ier )
 
@@ -3733,7 +3733,7 @@ subroutine qaws ( f, a, b, alfa, beta, integr, epsabs, epsrel, result, &
     abserr, neval, ier, alist, blist, rlist, elist, iord, last )
 
   return
-end
+end subroutine
 subroutine qawse ( f, a, b, alfa, beta, integr, epsabs, epsrel, limit, &
   result, abserr, neval, ier, alist, blist, rlist, elist, iord, last )
 
@@ -4124,7 +4124,7 @@ subroutine qawse ( f, a, b, alfa, beta, integr, epsabs, epsrel, limit, &
   abserr = errsum
 
   return
-end
+end subroutine
 subroutine qc25c ( f, a, b, c, result, abserr, krul, neval )
 
 !*****************************************************************************80
@@ -4305,7 +4305,7 @@ subroutine qc25c ( f, a, b, c, result, abserr, krul, neval )
   abserr = abs ( res24 - res12 )
 
   return
-end
+end subroutine
 subroutine qc25o ( f, a, b, omega, integr, nrmom, maxp1, ksave, result, &
   abserr, neval, resabs, resasc, momcom, chebmo )
 
@@ -4752,7 +4752,7 @@ subroutine qc25o ( f, a, b, omega, integr, nrmom, maxp1, ksave, result, &
   end if
 
   return
-end
+end subroutine
 subroutine qc25s ( f, a, b, bl, br, alfa, beta, ri, rj, rg, rh, result, &
   abserr, resasc, integr, neval )
 
@@ -5137,7 +5137,7 @@ subroutine qc25s ( f, a, b, bl, br, alfa, beta, ri, rj, rg, rh, result, &
 270 continue
 
   return
-end
+end subroutine
 subroutine qcheb ( x, fval, cheb12, cheb24 )
 
 !*****************************************************************************80
@@ -5300,7 +5300,7 @@ subroutine qcheb ( x, fval, cheb12, cheb24 )
   cheb24(25) = 0.5E+00 * alam*cheb24(25)
 
   return
-end
+end subroutine
 subroutine qextr ( n, epstab, result, abserr, res3la, nres )
 
 !*****************************************************************************80
@@ -5529,7 +5529,7 @@ subroutine qextr ( n, epstab, result, abserr, res3la, nres )
   abserr = max ( abserr,0.5e+00* epsilon ( result ) *abs(result))
 
   return
-end
+end subroutine
 subroutine qfour ( f, a, b, omega, integr, epsabs, epsrel, limit, icall, &
   maxp1, result, abserr, neval, ier, alist, blist, rlist, elist, iord, &
   nnlog, momcom, chebmo )
@@ -6192,7 +6192,7 @@ subroutine qfour ( f, a, b, omega, integr, epsabs, epsrel, limit, icall, &
   end if
 
   return
-end
+end subroutine
 subroutine qk15 ( f, a, b, result, abserr, resabs, resasc )
 
 !*****************************************************************************80
@@ -6367,7 +6367,7 @@ subroutine qk15 ( f, a, b, result, abserr, resabs, resasc )
   end if
 
   return
-end
+end subroutine
 subroutine qk15i ( f, boun, inf, a, b, result, abserr, resabs, resasc )
 
 !*****************************************************************************80
@@ -6567,7 +6567,7 @@ subroutine qk15i ( f, boun, inf, a, b, result, abserr, resabs, resasc )
   end if
 
   return
-end
+end subroutine
 subroutine qk15w ( f, w, p1, p2, p3, p4, kp, a, b, result, abserr, resabs, &
   resasc )
 
@@ -6764,7 +6764,7 @@ subroutine qk15w ( f, w, p1, p2, p3, p4, kp, a, b, result, abserr, resabs, &
   end if
 
   return
-end
+end subroutine
 subroutine qk21 ( f, a, b, result, abserr, resabs, resasc )
 
 !*****************************************************************************80
@@ -6949,7 +6949,7 @@ subroutine qk21 ( f, a, b, result, abserr, resabs, resasc )
   end if
 
   return
-end
+end subroutine
 subroutine qk31 ( f, a, b, result, abserr, resabs, resasc )
 
 !*****************************************************************************80
@@ -7137,7 +7137,7 @@ subroutine qk31 ( f, a, b, result, abserr, resabs, resasc )
   end if
 
   return
-end
+end subroutine
 subroutine qk41 ( f, a, b, result, abserr, resabs, resasc )
 
 !*****************************************************************************80
@@ -7333,7 +7333,7 @@ subroutine qk41 ( f, a, b, result, abserr, resabs, resasc )
   end if
 
   return
-end
+end subroutine
 subroutine qk51 ( f, a, b, result, abserr, resabs, resasc )
 
 !*****************************************************************************80
@@ -7538,7 +7538,7 @@ subroutine qk51 ( f, a, b, result, abserr, resabs, resasc )
   end if
 
   return
-end
+end subroutine
 subroutine qk61 ( f, a, b, result, abserr, resabs, resasc ) 
 
 !*****************************************************************************80
@@ -7754,7 +7754,7 @@ subroutine qk61 ( f, a, b, result, abserr, resabs, resasc )
   end if
 
   return
-end
+end subroutine
 subroutine qmomo ( alfa, beta, ri, rj, rg, rh, integr )
 
 !*****************************************************************************80
@@ -7909,7 +7909,7 @@ subroutine qmomo ( alfa, beta, ri, rj, rg, rh, integr )
 !  90 continue
 
   return
-end
+end subroutine
 subroutine qng ( f, a, b, epsabs, epsrel, result, abserr, neval, ier )
 
 !*****************************************************************************80
@@ -8277,7 +8277,7 @@ subroutine qng ( f, a, b, epsabs, epsrel, result, abserr, neval, ier )
   end do
 
   return
-end
+end subroutine
 subroutine qsort ( limit, last, maxerr, ermax, elist, iord, nrmax )
 
 !*****************************************************************************80
@@ -8438,7 +8438,7 @@ subroutine qsort ( limit, last, maxerr, ermax, elist, iord, nrmax )
   ermax = elist(maxerr)
 
   return
-end
+end subroutine
 function qwgtc ( x, c, p2, p3, p4, kp )
 
 !*****************************************************************************80
@@ -8486,7 +8486,7 @@ function qwgtc ( x, c, p2, p3, p4, kp )
   qwgtc = 1.0E+00 / ( x - c )
 
   return
-end
+end function
 function qwgto ( x, omega, p2, p3, p4, integr )
 
 !*****************************************************************************80
@@ -8536,7 +8536,7 @@ function qwgto ( x, omega, p2, p3, p4, integr )
   end if
 
   return
-end
+end function
 function qwgts ( x, a, b, alfa, beta, integr )
 
 !*****************************************************************************80
@@ -8592,7 +8592,7 @@ function qwgts ( x, a, b, alfa, beta, integr )
   end if
 
   return
-end
+end function
 subroutine timestamp ( )
 
 !*****************************************************************************80
@@ -8670,6 +8670,6 @@ subroutine timestamp ( )
     d, trim ( month(m) ), y, h, ':', n, ':', s, '.', mm, trim ( ampm )
 
   return
-end
+end subroutine
 
 end module quadpack
