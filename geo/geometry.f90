@@ -1146,7 +1146,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
 !    if (nperiod ==1) call plotdata (rgrid, seik, grads, dpsidrho)
     call plotdata (rgrid, seik, grads, dpsidrho)
 
-    write (*,*) 'gbdrift is ', gbdrift
+    !write (*,*) 'gbdrift is ', gbdrift
 
     Bpol = bpolmag
 
