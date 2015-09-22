@@ -70,6 +70,7 @@ module gs2_heating
 !     real, dimension(:), pointer :: curvature  => null()
      real, dimension(:), pointer :: heating    => null()
      real, dimension(:), pointer :: dh2dt    => null()
+     real, dimension(:), pointer :: parstream    => null()
   end type heating_diagnostics
 
 !GGH>
@@ -203,6 +204,7 @@ contains
        allocate (h(n) % hs2(nspec))      
        allocate (h(n) % gradients(nspec))   
        allocate (h(n) % heating(nspec))     
+       allocate (h(n) % parstream(nspec))     
     end do
 
     call zero_hetype (h)
@@ -224,6 +226,7 @@ contains
        allocate (h(m,n) % hs2(nspec))      
        allocate (h(m,n) % gradients(nspec))   
        allocate (h(m,n) % heating(nspec))     
+       allocate (h(m,n) % parstream(nspec))     
     end do
     end do
 
@@ -359,6 +362,7 @@ contains
        h(n) % hs2 = 0. 
        h(n) % gradients = 0. 
        h(n) % heating = 0.   
+       h(n) % parstream = 0.   
     end do
 
   end subroutine zero_hetype_1
@@ -378,6 +382,7 @@ contains
        h(m,n) % hs2 = 0. 
        h(m,n) % gradients = 0. 
        h(m,n) % heating = 0.   
+       h(m,n) % parstream = 0.   
     end do
     end do
 
@@ -491,6 +496,7 @@ contains
        deallocate (h(m) % hs2)
        deallocate (h(m) % gradients)
        deallocate (h(m) % heating)
+       deallocate (h(m) % parstream)
     end do
 
   end subroutine del_hetype_1
@@ -509,6 +515,7 @@ contains
        deallocate (h(m,n) % hs2)
        deallocate (h(m,n) % gradients)
        deallocate (h(m,n) % heating)
+       deallocate (h(m,n) % parstream)
     end do
     end do
 
@@ -813,6 +820,12 @@ contains
        do is=1,nspec
           do n=1,nmax
              tmp(n,is) = he(n)%dh2dt(is)
+          end do
+       end do
+    case (5) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%parstream(is)
           end do
        end do
 

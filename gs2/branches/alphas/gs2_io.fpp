@@ -109,7 +109,7 @@ module gs2_io
   integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_imp_colls_id
   integer :: he_energy_id, he_energy_dot_id, he_antenna_id
   integer :: he_eapar_id, he_ebpar_id
-  integer :: he_delfs2_id, he_hs2_id, he_phis2_id, he_dh2dt_id
+  integer :: he_delfs2_id, he_hs2_id, he_phis2_id, he_dh2dt_id, he_parstream_id
   integer :: he_hypervisc_id, he_hyperres_id, he_collisions_id
   integer :: he_gradients_id, he_hypercoll_id, he_heating_id, he_imp_colls_id
   integer :: es_flux_emu_id, apar_flux_emu_id, bpar_flux_emu_id
@@ -1372,6 +1372,8 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, var='he_heating')
        status = nf90_put_att (ncid, he_heating_id, 'long_name', 'Total heating by species and energy')
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_heating_id, att='long_name')
+       status = nf90_def_var (ncid, 'he_parstream', netcdf_real, flux_e_dim, he_heating_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='he_parstream')
 
     end if
 
@@ -2670,6 +2672,10 @@ contains
        call he_repack (he, 4, tmps_e)
        status = nf90_put_var (ncid, he_dh2dt_id, tmps_e, start=starte, count=counte)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_dh2dt_id)
+
+       call he_repack (he, 5, tmps_e)
+       status = nf90_put_var (ncid, he_parstream_id, tmps_e, start=starte, count=counte)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_parstream_id)
 
     end if
 
