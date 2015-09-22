@@ -92,52 +92,60 @@ contains
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_config, only: diagnostics_type
     use diagnostics_dimensions, only: dim_string
+    use unit_tests, only: debug_message
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     integer :: is
 
+    call debug_message(4, 'diagnostics_fluxes::calculate_fluxes starting')
     gnostics%current_results%total_heat_flux = 0.0
     gnostics%current_results%total_momentum_flux = 0.0
     gnostics%current_results%total_particle_flux = 0.0
     gnostics%current_results%species_heat_flux = 0.0
     gnostics%current_results%species_momentum_flux = 0.0
     gnostics%current_results%species_particle_flux = 0.0
+       
+    !write(*,*) 'starting fluxxxx'
 
     if (nonlinear_mode_switch .eq. nonlinear_mode_none) &
          call write_diffusive_estimates(gnostics)
 
-    call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
-    call flux (phinew, aparnew, bparnew, &
-         pflux,  qheat,  vflux, vflux_par, vflux_perp, &
-         pmflux, qmheat, vmflux, pbflux, qbheat, vbflux, pflux_tormom)
+    if (.not. gnostics%replay) then
+      call g_adjust (gnew, phinew, bparnew, fphi, fbpar)
+      call flux (phinew, aparnew, bparnew, &
+           pflux,  qheat,  vflux, vflux_par, vflux_perp, &
+           pmflux, qmheat, vmflux, pbflux, qbheat, vbflux, pflux_tormom)
 
 #ifdef LOWFLOW
-    !lowflow terms only implemented in electrostatic limit at present
-    call lf_flux (phinew, vflux0, vflux1)
+      !lowflow terms only implemented in electrostatic limit at present
+      call lf_flux (phinew, vflux0, vflux1)
 #endif
 
-    call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
-    call eexchange (phinew, phi, exchange1, exchange)
-    
-    if (fphi > epsilon(0.0)) then
-       do is = 1, nspec
-          qheat(:,:,is,1) = qheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
-          qheat(:,:,is,2) = qheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
-          qheat(:,:,is,3) = qheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
-          
-          pflux(:,:,is) = pflux(:,:,is) * spec(is)%dens
-          pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
-          
-          vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
-          vflux_par(:,:,is) = vflux_par(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
-          vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
-          exchange(:,:,is) = exchange(:,:,is) * spec(is)%dens*spec(is)%z
-          
+      call g_adjust (gnew, phinew, bparnew, -fphi, -fbpar)
+      call eexchange (phinew, phi, exchange1, exchange)
+    end if ! if (.not. gnostics%replay)
+      
+      !write (*,*) 'fphi is', fphi
+      if (fphi > epsilon(0.0)) then
+         do is = 1, nspec
+            qheat(:,:,is,1) = qheat(:,:,is,1) * spec(is)%dens*spec(is)%temp
+            qheat(:,:,is,2) = qheat(:,:,is,2) * spec(is)%dens*spec(is)%temp
+            qheat(:,:,is,3) = qheat(:,:,is,3) * spec(is)%dens*spec(is)%temp
+            
+            pflux(:,:,is) = pflux(:,:,is) * spec(is)%dens
+            pflux_tormom(:,:,is) = pflux_tormom(:,:,is) * spec(is)%dens  
+            
+            vflux(:,:,is) = vflux(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+            vflux_par(:,:,is) = vflux_par(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+            vflux_perp(:,:,is) = vflux_perp(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%stm
+            exchange(:,:,is) = exchange(:,:,is) * spec(is)%dens*spec(is)%z
+            
 #ifdef LOWFLOW
-          vflux0(:,:,is) = vflux0(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
-          vflux1(:,:,is) = vflux1(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
+            vflux0(:,:,is) = vflux0(:,:,is) * spec(is)%dens*sqrt(spec(is)%mass*spec(is)%temp)
+            vflux1(:,:,is) = vflux1(:,:,is) * spec(is)%dens*spec(is)%mass*spec(is)%temp/spec(is)%z
 #endif
-       end do
+         end do
+       !write(*,*) 'continuing fluxxxx'
        call calculate_standard_flux_properties(gnostics, &
             'es_heat_flux',  'Turbulent flux of heat', 'Q_gB = ', qheat(:,:,:,1), gnostics%distributed)
        call calculate_standard_flux_properties(gnostics, &
@@ -220,12 +228,15 @@ contains
     end if
     
     ! Update averages
-    gnostics%current_results%species_heat_flux_avg = gnostics%current_results%species_heat_flux_avg + & 
-         gnostics%current_results%species_heat_flux * (gnostics%user_time-gnostics%user_time_old)
-    gnostics%current_results%species_particle_flux_avg = gnostics%current_results%species_particle_flux_avg + & 
-         gnostics%current_results%species_particle_flux * (gnostics%user_time-gnostics%user_time_old)
-    gnostics%current_results%species_momentum_flux_avg = gnostics%current_results%species_momentum_flux_avg + & 
-         gnostics%current_results%species_momentum_flux * (gnostics%user_time-gnostics%user_time_old)
+    !if (.not. gnostics%replay .or. gnostics%reed) then
+      !write (*,*) 'Setting averages in fluxxxx', gnostics%current_results%species_heat_flux_avg, gnostics%current_results%species_heat_flux, (gnostics%user_time-gnostics%user_time_old)
+      gnostics%current_results%species_heat_flux_avg = gnostics%current_results%species_heat_flux_avg + & 
+           gnostics%current_results%species_heat_flux * (gnostics%user_time-gnostics%user_time_old)
+      gnostics%current_results%species_particle_flux_avg = gnostics%current_results%species_particle_flux_avg + & 
+           gnostics%current_results%species_particle_flux * (gnostics%user_time-gnostics%user_time_old)
+      gnostics%current_results%species_momentum_flux_avg = gnostics%current_results%species_momentum_flux_avg + & 
+           gnostics%current_results%species_momentum_flux * (gnostics%user_time-gnostics%user_time_old)
+       !end if
     ! Don't need to broadcast them any more as fluxes are now calculated on all
     ! processors
     
@@ -317,6 +328,9 @@ contains
           end if
        end do
     end do
+     
+    
+    !if (gnostics%reed) write (*,*) 'diffusivity_by_k', maxval(diffusivity_by_k), gnostics%istep
     
     if (gnostics%distributed) call sum_allreduce(diffusivity_by_k)
 
@@ -343,20 +357,24 @@ contains
     if (gnostics%write_fluxes) then
        call create_and_write_variable(gnostics, gnostics%rtype, "es_heat_flux_diff_max", &
             dim_string([gnostics%dims%species,gnostics%dims%time]), &
-            " A turbulent estimate of the heat flux, as a function of species and time", &
+            " A linear estimate of the heat flux, as a function of species and time", &
             "Q_gB", heat_flux_max_by_spec)
        call create_and_write_variable(gnostics, gnostics%rtype, "heat_flux_diff_max", &
             dim_string([gnostics%dims%time]), &
-            " A turbulent estimate of the heat flux, as a function of  time", &
+            " A linear estimate of the heat flux, as a function of  time", &
             "Q_gB", heat_flux_max)
        call create_and_write_variable(gnostics, gnostics%rtype, "es_particle_flux_diff_max", &
             dim_string([gnostics%dims%species,gnostics%dims%time]), &
-            " A turbulent estimate of the particle flux, as a function of species and time", &
+            " A linear estimate of the particle flux, as a function of species and time", &
             "Q_gB", particle_flux_max_by_spec)
        call create_and_write_variable(gnostics, gnostics%rtype, "particle_flux_diff_max", &
             dim_string([gnostics%dims%time]), &
-            " A turbulent estimate of the particle flux, as a function of  time", &
+            " A linear estimate of the particle flux, as a function of  time", &
             "Q_gB", particle_flux_max)
+       call create_and_write_variable(gnostics, gnostics%rtype, "diffusivity", &
+            dim_string([gnostics%dims%time]), &
+            " A linear estimate of the diffusivity", &
+            "TBC", gnostics%current_results%diffusivity)
     end if
   end subroutine write_diffusive_estimates
 
@@ -367,6 +385,7 @@ contains
     use kt_grids, only: ntheta0, naky
     use species, only: nspec
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_create_and_write, only: create_and_write_variable_noread
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
     use fields_parallelization, only: field_k_local
     use diagnostics_dimensions, only: dim_string
@@ -377,7 +396,7 @@ contains
     type(diagnostics_type), intent(inout) :: gnostics
     character(*), intent(in) :: flux_name, flux_description, flux_units
     real, dimension(ntheta0,naky,nspec), intent(inout) :: flux_value
-    real, dimension(ntheta0,naky,nspec) :: flux_value_temp
+    !real, dimension(ntheta0,naky,nspec) :: flux_value_temp
     logical, intent(in) :: distributed
     real, dimension(ntheta0, naky) :: total_flux_by_mode
     real, dimension(naky) :: total_flux_by_ky
@@ -385,13 +404,13 @@ contains
     real, dimension(nspec) :: flux_by_species
     integer :: is, ik, it
 
-    call broadcast(flux_value)
+    !call broadcast(flux_value)
 
     call average_all(flux_value, flux_by_species, distributed) 
 
-    flux_value_temp = flux_value
+    !flux_value_temp = flux_value
 
-    call broadcast(flux_value_temp)
+    !call broadcast(flux_value_temp)
 
     total_flux_by_mode = 0.
     do ik = 1,naky
@@ -428,7 +447,7 @@ contains
             flux_description//" summed over species and averaged over ky, as a function of kx and time", &
             flux_units, total_flux_by_kx)
        
-       call create_and_write_variable(gnostics, gnostics%rtype, "total_"//flux_name, &
+       call create_and_write_variable_noread(gnostics, gnostics%rtype, "total_"//flux_name, &
             dim_string([gnostics%dims%time]), &
             flux_description//" summed over species and averaged over kx and ky, as a function of time", &
             flux_units, sum(total_flux_by_kx))
@@ -447,8 +466,10 @@ contains
           
        end if
     end if
+    !write(*,*) 'flux_by_species', flux_by_species
     
     if (flux_name .eq. 'es_heat_flux') gnostics%current_results%species_es_heat_flux = flux_by_species
+    !write (*,*) 'setting heat flux'
     if (flux_name .eq. 'es_energy_exchange') gnostics%current_results%species_energy_exchange = flux_by_species
     if (flux_name .eq. 'apar_heat_flux') gnostics%current_results%species_apar_heat_flux = flux_by_species
     if (flux_name .eq. 'bpar_heat_flux') gnostics%current_results%species_bpar_heat_flux = flux_by_species

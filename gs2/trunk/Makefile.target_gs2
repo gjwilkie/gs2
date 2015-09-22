@@ -100,7 +100,7 @@ libgs2_all: libgs2.a
 
 #libgs2.a: $(LIBGS2_OBJ)
 #libgs2.a: $(gs2_mod)
-libgs2.a: $(filter-out gs2.o simpledataiof.o simpledataio_write.o, $(gs2_mod))
+libgs2.a: $(filter-out gs2.o simpledataiof.o simpledataio_write.o, $(gs2_mod)) gs2_gryfx_zonal.o
 	$(ARCH) $(ARCHFLAGS) $@ $^
 	$(RANLIB) $@
 # endif

@@ -49,7 +49,7 @@ class GenerateInit
         'dist_fn_layouts', 'run_parameters', 'dist_fn_level_3']],
     ['nonlinear_terms' ,
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 'le_grids',
-        'dist_fn_layouts']],
+        'dist_fn_layouts', 'override_optimisations']],
     ['gs2_layouts' , []],
     ['set_initial_values', ['fields', 'init_g', 'override_initial_values']],
     ['le_grids' ,
@@ -58,12 +58,13 @@ class GenerateInit
     ['theta_grid' , ['theta_grid_params', 'override_miller_geometry']],
     ['normalisations', []],
     ['theta_grid_params' , []],
-    ['kt_grids' , ['theta_grid']],
+    ['kt_grids_parameters' , ['theta_grid']],
+    ['kt_grids' , ['theta_grid', 'kt_grids_parameters', 'override_kt_grids']],
     ['gs2_save' , []],
     ['run_parameters' , ['kt_grids']],
     ['hyper' , ['kt_grids', 'gs2_layouts']],
     ['init_g' , ['gs2_layouts']],
-    ['species' , []],
+    ['species' , ['kt_grids']],
     ['dist_fn_parameters' , 
       ['gs2_layouts', 'species', 'theta_grid', 'kt_grids', 'le_grids'   ]],
     ['dist_fn_arrays' , 
@@ -74,6 +75,8 @@ class GenerateInit
 
     ['dist_fn_level_2' , ['dist_fn_level_1', 'override_profiles']], 
     
+    ['override_kt_grids' , ['kt_grids_parameters']],
+    ['override_optimisations' , ['gs2_layouts']],
     ['override_miller_geometry' , ['theta_grid_params']],
     # Override tprim, fprim, vnewk, temp and dens in species
     ['override_profiles' , ['species']],
@@ -128,6 +131,8 @@ class GenerateInit
                      'gs2_layouts' 
                    when /^dist_fn_*/
                      'dist_fn'
+                   when /^kt_grids*/
+                     'kt_grids'
                    else
                      @level_name
                    end
@@ -144,10 +149,10 @@ class GenerateInit
   # Code for determining if the module should
   # be initialized.
   def up
-    "if (up() .and. current%level .lt. init_level_list%#@level_name) call #@level_sub_name"
+    "if (up() .and. current%level == init_level_list%#@level_name-1) call #@level_sub_name"
   end  
   def down
-    "if (down () .and. current%level .le. init_level_list%#@level_name) call #@level_sub_name"
+    "if (down () .and. current%level == init_level_list%#@level_name) call #@level_sub_name"
   end  
   def subroutine
     return <<EOF
@@ -157,6 +162,18 @@ class GenerateInit
         case @level_name
         when 'full', 'override_timestep', 'override_initial_values'
           str = "\n"
+        when /override_kt_grids/
+          str = <<EOF2
+          use kt_grids, only: ktso=>set_overrides
+          if (up() .and. current%kt_ov%init) call ktso(current%kt_ov)
+
+EOF2
+        when /override_optimisations/
+          str = <<EOF2
+          use gs2_layouts, only: lso=>set_overrides
+          if (up() .and. current%opt_ov%init) call lso(current%opt_ov)
+
+EOF2
         when /override_miller_geometry/
           str = <<EOF2
           use theta_grid_params, only: tgpso=>set_overrides

@@ -35,6 +35,10 @@ module gs2_layouts
 ! HJL>
   public :: finish_layouts
 ! <HJL
+
+! EGH
+  public :: set_overrides
+
   public :: finish_fields_layouts, finish_jfields_layouts
 
   public :: init_fields_layouts
@@ -402,13 +406,17 @@ contains
 
     if (initialized_layouts) return
     initialized_layouts = .true.
+
+    !write(*,*) 'INITGS2', initialized_x_transform
     
     if (proc0) call read_parameters
     call broadcast_results
 
   end subroutine init_gs2_layouts
 
+
   subroutine finish_gs2_layouts
+    call finish_layouts
     initialized_layouts = .false.
   end subroutine finish_gs2_layouts
 
@@ -474,6 +482,21 @@ contains
     opt_redist_persist_overlap=opt_redist_persist_overlap.and.opt_redist_persist
     call get_wisdom_file(fft_wisdom_file)
   end subroutine read_parameters
+
+  subroutine set_overrides(opt_ov)
+    use overrides, only: optimisations_overrides_type
+    use redistribute, only: opt_redist_nbk, opt_redist_persist, opt_redist_persist_overlap
+    type(optimisations_overrides_type), intent(in) :: opt_ov
+    if (opt_ov%override_layout) layout = opt_ov%layout
+    if (opt_ov%override_opt_redist_nbk) &
+      opt_redist_nbk = opt_ov%opt_redist_nbk
+    if (opt_ov%override_opt_redist_persist) &
+      opt_redist_persist = opt_ov%opt_redist_persist
+    !Disable settings if dependent settings not set
+    opt_redist_persist=opt_redist_persist.and.opt_redist_nbk
+    opt_redist_persist_overlap=opt_redist_persist_overlap.and.opt_redist_persist
+  end subroutine set_overrides
+
     
 
   !> Set the fft_wisdom_file based on the value set in the namelist (if any)
@@ -3468,6 +3491,7 @@ contains
     integer :: nprocset, ngroup, nblock, ntgridtotal, nsign
     real :: unbalanced_amount
 
+    !write (*,*) 'INIT_X_TR', initialized_x_transform
     if (initialized_x_transform) return
     initialized_x_transform = .true.
 
@@ -3490,6 +3514,8 @@ contains
     xxf_lo%nspec = nspec
     xxf_lo%llim_world = 0
     xxf_lo%ulim_world = naky*(2*ntgrid+1)*2*nlambda*negrid*nspec - 1
+
+    !write (*,*) 'XXF_LO%ulim_world', xxf_lo%ulim_world
 
 !<DD>See g_lo init
     select case (layout)
@@ -3629,6 +3655,7 @@ contains
        ! decomposition.
        if (.not. unbalanced_xxf) then
 
+          !write (*,*) 'XXF_LO%ulim_world', xxf_lo%ulim_world, nproc
           xxf_lo%blocksize = xxf_lo%ulim_world/nproc + 1
           xxf_lo%llim_proc = xxf_lo%blocksize*iproc
           xxf_lo%ulim_proc &

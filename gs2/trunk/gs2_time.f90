@@ -5,12 +5,14 @@ module gs2_time
   private
 
   public :: user_dt, code_dt, update_time, code_dt_old
+  public :: code_dt_prev1, code_dt_prev2
   public :: user_time, code_time, check_time_step_too_large
   public :: save_dt_min, save_dt, save_dt_cfl, write_dt
   public :: init_tstart, init_delt
   public :: code_dt_cfl, code_dt_min, user2code
 
   real :: user_dt, code_dt 
+  real :: code_dt_prev1, code_dt_prev2
   real :: user_tstart, code_tstart
   real :: user_dt_cfl = -1.
   real :: code_dt_cfl = -1.
@@ -44,6 +46,9 @@ contains
 ! 
     user_dt = delt
     code_dt = delt
+    code_dt_prev1 = delt
+    code_dt_prev2 = delt
+
 
   end subroutine init_delt
 
@@ -55,10 +60,16 @@ contains
   end subroutine check_time_step_too_large
 
   subroutine update_time
+! for using a changing-timestep AB3 algorithm for the nonlinear term  
+    code_dt_prev2 = code_dt_prev1
+    code_dt_prev1 = code_dt
+
+
 ! MAB+CMR, 21/5/09: set code_dt_old to code_dt BEFORE any changes in timestep
     code_dt_old = code_dt
     code_time = code_time + code_dt
     user_time = user_time + user_dt
+  
 
   end subroutine update_time
 

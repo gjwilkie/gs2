@@ -338,10 +338,12 @@ contains
     use antenna, only: antenna_amplitudes, no_driver
     use dist_fn, only: timeadv, exb_shear
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift
+    use unit_tests, only: debug_message
     implicit none
     integer :: diagnostics = 1
     integer, intent (in) :: istep
     logical, intent (in) :: remove_zonal_flows_switch
+    integer, parameter :: verb=4
 
     !GGH NOTE: apar_ext is initialized in this call
     if(.not.no_driver) call antenna_amplitudes (apar_ext)
@@ -353,11 +355,14 @@ contains
     apar = aparnew 
     bpar = bparnew       
     
+    call debug_message(4, 'fields_implicit::advance_implicit calling timeadv 1')
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep)
+    call debug_message(4, 'fields_implicit::advance_implicit called timeadv 1')
     if(reset) return !Return is resetting
 
     if(.not.no_driver) aparnew = aparnew + apar_ext 
     
+    call debug_message(4, 'fields_implicit::advance_implicit calling getfield')
     call getfield (phinew, aparnew, bparnew)
     
     phinew   = phinew  + phi
@@ -366,7 +371,9 @@ contains
 
     if (remove_zonal_flows_switch) call remove_zonal_flows
     
+    call debug_message(4, 'fields_implicit::advance_implicit calling timeadv')
     call timeadv (phi, apar, bpar, phinew, aparnew, bparnew, istep, diagnostics)
+    call debug_message(4, 'fields_implicit::advance_implicit called timeadv')
     
   end subroutine advance_implicit
 

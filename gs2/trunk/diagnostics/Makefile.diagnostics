@@ -35,11 +35,14 @@ SIMPLEDATAIO_VPATH=:diagnostics/simpledataio/src/:../diagnostics/simpledataio/sr
 
 diagnostics: libsimpledataio.a
 
-libsimpledataio.a: simpledataio_write.o simpledataiof.o simpledataio.o
+libsimpledataio.a: simpledataio_write.o simpledataiof.o simpledataio.o simpledataio_read.o
 	$(ARCH) $(ARCHFLAGS) $@ $^
 	$(RANLIB) $@
 
 simpledataio_write.o: simpledataio_write.f90 simpledataiof.o
+	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
+
+simpledataio_read.o: simpledataio_read.f90 simpledataiof.o simpledataio_write.o
 	$(FC) $(subst $(DBLEFLAGS),,$(F90FLAGS)) $(F90FLAGS_SFXJUNK) -c $<
 
 simpledataiof.o: simpledataiof.f90 simpledataio.o 
@@ -52,6 +55,8 @@ simpledataio.o: diagnostics/simpledataio/include/definitions.h diagnostics/simpl
 #endif
 
 diagnostics/simpledataio/src/simpledataio_write.F90: diagnostics/simpledataio/src/generate_simpledataio_write.rb
+	$(call RUBY_GENERATE,$@,$<)
+diagnostics/simpledataio/src/simpledataio_read.F90: diagnostics/simpledataio/src/generate_simpledataio_read.rb
 	$(call RUBY_GENERATE,$@,$<)
 
 

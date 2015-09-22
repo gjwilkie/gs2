@@ -142,12 +142,12 @@ MPIFC		?= mpif90
 H5FC		?= h5fc
 H5FC_par	?= h5pfc
 F90FLAGS	=
-F90OPTFLAGS	=
+F90OPTFLAGS	= -fPIC
 CC		= cc
 MPICC		?= mpicc
 H5CC		?= h5cc
 H5CC_par	?= h5pcc
-CFLAGS		=
+CFLAGS		= -fPIC
 COPTFLAGS 	=
 LD 		= $(FC)
 LDFLAGS 	= $(F90FLAGS)
@@ -404,14 +404,15 @@ diagnostics:
 simpledataio:
 endif
 
-LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
+LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(NETCDF_LIB) $(HDF5_LIB) $(FFT_LIB) \
 		$(IPM_LIB) $(NAG_LIB) $(EIG_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
+	   $(DEFAULT_INC) $(MPI_INC) $(NETCDF_INC) $(HDF5_INC)  $(FFT_INC)\
 		 $(SIMPLEDATAIO_INC) $(EIG_INC)
 CFLAGS += $(COPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) 
+	   $(DEFAULT_INC) $(MPI_INC) $(NETCDF_INC) $(HDF5_INC) $(FFT_INC) 
+
 
 DATE=$(shell date +%y%m%d)
 TARDIR=$(GK_PROJECT)_$(DATE)
@@ -465,7 +466,9 @@ FORTFROMRUBY+= gs2_init.f90 overrides.f90
 F90FROMFPP = $(patsubst %.fpp,%.f90,$(notdir $(wildcard *.fpp */*.fpp)))
 F90FROMFPP += tests/unit_tests/nonlinear_terms/test_nonlinear_terms.f90
 F90FROMFPP += tests/unit_tests/gs2_diagnostics_new/test_gs2_diagnostics_new.f90
+ifdef USE_NEW_DIAG
 F90FROMFPP += simpledataiof.f90 simpledataio_write.f90
+endif
 ifdef SCAL
    FC:= scalasca -instrument $(FC)
 endif
@@ -557,7 +560,7 @@ help: helplocal
 
 .PHONY: depend clean distclean tar test_make diagnostics simpledataio
 
-depend: $(FORTFROMRUBY)
+depend: $(FORTFROMRUBY) $(F90FROMFPP)
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=1 $(VPATH)
 
 # Make sure template dependencies are specified
@@ -690,6 +693,8 @@ unlink:
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
+
+geometry_c_interface.o: geometry_c_interface.h
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 

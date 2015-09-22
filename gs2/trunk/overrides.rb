@@ -16,6 +16,7 @@ class Generator
     logical :: init = .false.
     #{parameter_list.map{|p| p.switch}.join("\n    ")}
     #{parameter_list.map{|p| p.value}.join("\n    ")}
+    #{name == 'optimisations' ? "integer :: old_comm" : ""}
   end type #{name}_overrides_type
 
 EOF
@@ -115,6 +116,24 @@ parameter_list_profs = [
 ['real', 'mach'],
 ].compact.map{|p| Generator.new(p)}
 
+parameter_list_optimisations = [
+['integer', 'nproc'],
+['logical', 'opt_redist_nbk'],
+['logical', 'opt_redist_persist'],
+['character(len=5)', 'layout'],
+].compact.map{|p| Generator.new(p)}
+
+parameter_list_kt_grids = [
+['integer', 'ny'],
+['integer', 'naky'],
+['integer', 'nx'],
+['integer', 'ntheta0'],
+['real', 'y0'],
+['real', 'x0'],
+['integer', 'jtwist'],
+['logical', 'gryfx'],
+].compact.map{|p| Generator.new(p)}
+
 
 
 string = <<EOF
@@ -138,6 +157,13 @@ module overrides
 !! size nspec and you must set the override switches 
 !! individually for each species.
 #{Generator.generate_type('profiles', parameter_list_profs)}
+
+!> A type for containing overrides to the processor layout
+!! and optimisation flags for gs2. 
+#{Generator.generate_type('optimisations', parameter_list_optimisations)}
+
+!> A type for containing overrides to the perpendicular grids (x and y). 
+#{Generator.generate_type('kt_grids', parameter_list_kt_grids)}
 
 !> A type for storing overrides of the intial
 !! values of the fields and distribution function.
@@ -191,6 +217,10 @@ contains
 #{Generator.generate_finish('miller_geometry', parameter_list_geo)}
 #{Generator.generate_initialize('profiles', parameter_list_profs)}
 #{Generator.generate_finish('profiles', parameter_list_profs)}
+#{Generator.generate_initialize('optimisations', parameter_list_optimisations)}
+#{Generator.generate_finish('optimisations', parameter_list_optimisations)}
+#{Generator.generate_initialize('kt_grids', parameter_list_kt_grids)}
+#{Generator.generate_finish('kt_grids', parameter_list_kt_grids)}
 
 !> Warning: You can't change the value of overrides%force_maxwell_reinit 
 !! or overrides%in_memory after calling this function

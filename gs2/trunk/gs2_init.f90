@@ -30,7 +30,9 @@
 module gs2_init
   use overrides, only: miller_geometry_overrides_type
   use overrides, only: profiles_overrides_type
+  use overrides, only: kt_grids_overrides_type
   use overrides, only: initial_values_overrides_type
+  use overrides, only: optimisations_overrides_type
   public :: init_type
   !> A list of possible intialization levels.
   public :: init_level_list
@@ -78,28 +80,31 @@ module gs2_init
     integer :: theta_grid_params = 4
     integer :: gs2_save = 5
     integer :: init_g = 6
-    integer :: species = 7
+    integer :: override_optimisations = 7
     integer :: override_miller_geometry = 8
     integer :: theta_grid = 9
-    integer :: kt_grids = 10
-    integer :: le_grids = 11
-    integer :: run_parameters = 12
-    integer :: hyper = 13
-    integer :: dist_fn_parameters = 14
-    integer :: dist_fn_layouts = 15
-    integer :: nonlinear_terms = 16
-    integer :: dist_fn_arrays = 17
-    integer :: dist_fn_level_1 = 18
-    integer :: override_profiles = 19
-    integer :: antenna = 20
-    integer :: dist_fn_level_2 = 21
-    integer :: override_timestep = 22
-    integer :: dist_fn_level_3 = 23
-    integer :: collisions = 24
-    integer :: fields = 25
-    integer :: override_initial_values = 26
-    integer :: set_initial_values = 27
-    integer :: full = 28
+    integer :: kt_grids_parameters = 10
+    integer :: override_kt_grids = 11
+    integer :: kt_grids = 12
+    integer :: run_parameters = 13
+    integer :: hyper = 14
+    integer :: species = 15
+    integer :: le_grids = 16
+    integer :: dist_fn_parameters = 17
+    integer :: dist_fn_layouts = 18
+    integer :: nonlinear_terms = 19
+    integer :: dist_fn_arrays = 20
+    integer :: dist_fn_level_1 = 21
+    integer :: override_profiles = 22
+    integer :: antenna = 23
+    integer :: dist_fn_level_2 = 24
+    integer :: override_timestep = 25
+    integer :: dist_fn_level_3 = 26
+    integer :: collisions = 27
+    integer :: fields = 28
+    integer :: override_initial_values = 29
+    integer :: set_initial_values = 30
+    integer :: full = 31
   end type init_level_list_type
 
   type(init_level_list_type) :: init_level_list
@@ -125,6 +130,14 @@ module gs2_init
     !! before setting these overrides. See 
     !! documentation for the overrides::profiles_overrides_type
     !! for more information.
+    type(kt_grids_overrides_type) :: kt_ov
+    !> An object for overriding all or selected
+    !! kt_grids parameters such as ny, nx, y0, jtwist etc.
+    !! You must call
+    !! gs2_main::prepare_kt_grids_overrides 
+    !! before setting these overrides. See 
+    !! documentation for the overrides::kt_grids_overrides_type
+    !! for more information.
     type(profiles_overrides_type) :: prof_ov
     !> An object for overriding the initial values of 
     !! the fields and distribution function. You must call
@@ -134,6 +147,12 @@ module gs2_init
     !! documentation for the overrides::initial_values_overrides_type
     !! for more information.
     type(initial_values_overrides_type) :: initval_ov
+
+    !> An object for overriding non physics parameters which
+    !! may alter run time and efficiency. You must call
+    !! gs2_main::prepare_optimisations_overrides 
+    !! before setting these overrides. 
+    type(optimisations_overrides_type) :: opt_ov
 
 
     !> A list of possible init levels
@@ -168,61 +187,67 @@ contains
       return
     else
       if (up()) then 
-        if (up() .and. current%level .lt. init_level_list%gs2_layouts) call gs2_layouts_subroutine
-        if (up() .and. current%level .lt. init_level_list%normalisations) call normalisations_subroutine
-        if (up() .and. current%level .lt. init_level_list%theta_grid_params) call theta_grid_params_subroutine
-        if (up() .and. current%level .lt. init_level_list%gs2_save) call gs2_save_subroutine
-        if (up() .and. current%level .lt. init_level_list%init_g) call init_g_subroutine
-        if (up() .and. current%level .lt. init_level_list%species) call species_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_miller_geometry) call override_miller_geometry_subroutine
-        if (up() .and. current%level .lt. init_level_list%theta_grid) call theta_grid_subroutine
-        if (up() .and. current%level .lt. init_level_list%kt_grids) call kt_grids_subroutine
-        if (up() .and. current%level .lt. init_level_list%le_grids) call le_grids_subroutine
-        if (up() .and. current%level .lt. init_level_list%run_parameters) call run_parameters_subroutine
-        if (up() .and. current%level .lt. init_level_list%hyper) call hyper_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_parameters) call dist_fn_parameters_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_layouts) call dist_fn_layouts_subroutine
-        if (up() .and. current%level .lt. init_level_list%nonlinear_terms) call nonlinear_terms_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_arrays) call dist_fn_arrays_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_level_1) call dist_fn_level_1_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_profiles) call override_profiles_subroutine
-        if (up() .and. current%level .lt. init_level_list%antenna) call antenna_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_level_2) call dist_fn_level_2_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_timestep) call override_timestep_subroutine
-        if (up() .and. current%level .lt. init_level_list%dist_fn_level_3) call dist_fn_level_3_subroutine
-        if (up() .and. current%level .lt. init_level_list%collisions) call collisions_subroutine
-        if (up() .and. current%level .lt. init_level_list%fields) call fields_subroutine
-        if (up() .and. current%level .lt. init_level_list%override_initial_values) call override_initial_values_subroutine
-        if (up() .and. current%level .lt. init_level_list%set_initial_values) call set_initial_values_subroutine
-        if (up() .and. current%level .lt. init_level_list%full) call full_subroutine
+        if (up() .and. current%level == init_level_list%gs2_layouts-1) call gs2_layouts_subroutine
+        if (up() .and. current%level == init_level_list%normalisations-1) call normalisations_subroutine
+        if (up() .and. current%level == init_level_list%theta_grid_params-1) call theta_grid_params_subroutine
+        if (up() .and. current%level == init_level_list%gs2_save-1) call gs2_save_subroutine
+        if (up() .and. current%level == init_level_list%init_g-1) call init_g_subroutine
+        if (up() .and. current%level == init_level_list%override_optimisations-1) call override_optimisations_subroutine
+        if (up() .and. current%level == init_level_list%override_miller_geometry-1) call override_miller_geometry_subroutine
+        if (up() .and. current%level == init_level_list%theta_grid-1) call theta_grid_subroutine
+        if (up() .and. current%level == init_level_list%kt_grids_parameters-1) call kt_grids_parameters_subroutine
+        if (up() .and. current%level == init_level_list%override_kt_grids-1) call override_kt_grids_subroutine
+        if (up() .and. current%level == init_level_list%kt_grids-1) call kt_grids_subroutine
+        if (up() .and. current%level == init_level_list%run_parameters-1) call run_parameters_subroutine
+        if (up() .and. current%level == init_level_list%hyper-1) call hyper_subroutine
+        if (up() .and. current%level == init_level_list%species-1) call species_subroutine
+        if (up() .and. current%level == init_level_list%le_grids-1) call le_grids_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_parameters-1) call dist_fn_parameters_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_layouts-1) call dist_fn_layouts_subroutine
+        if (up() .and. current%level == init_level_list%nonlinear_terms-1) call nonlinear_terms_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_arrays-1) call dist_fn_arrays_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_level_1-1) call dist_fn_level_1_subroutine
+        if (up() .and. current%level == init_level_list%override_profiles-1) call override_profiles_subroutine
+        if (up() .and. current%level == init_level_list%antenna-1) call antenna_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_level_2-1) call dist_fn_level_2_subroutine
+        if (up() .and. current%level == init_level_list%override_timestep-1) call override_timestep_subroutine
+        if (up() .and. current%level == init_level_list%dist_fn_level_3-1) call dist_fn_level_3_subroutine
+        if (up() .and. current%level == init_level_list%collisions-1) call collisions_subroutine
+        if (up() .and. current%level == init_level_list%fields-1) call fields_subroutine
+        if (up() .and. current%level == init_level_list%override_initial_values-1) call override_initial_values_subroutine
+        if (up() .and. current%level == init_level_list%set_initial_values-1) call set_initial_values_subroutine
+        if (up() .and. current%level == init_level_list%full-1) call full_subroutine
       else if (down()) then
-        if (down () .and. current%level .le. init_level_list%full) call full_subroutine
-        if (down () .and. current%level .le. init_level_list%set_initial_values) call set_initial_values_subroutine
-        if (down () .and. current%level .le. init_level_list%override_initial_values) call override_initial_values_subroutine
-        if (down () .and. current%level .le. init_level_list%fields) call fields_subroutine
-        if (down () .and. current%level .le. init_level_list%collisions) call collisions_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_level_3) call dist_fn_level_3_subroutine
-        if (down () .and. current%level .le. init_level_list%override_timestep) call override_timestep_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_level_2) call dist_fn_level_2_subroutine
-        if (down () .and. current%level .le. init_level_list%antenna) call antenna_subroutine
-        if (down () .and. current%level .le. init_level_list%override_profiles) call override_profiles_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_level_1) call dist_fn_level_1_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_arrays) call dist_fn_arrays_subroutine
-        if (down () .and. current%level .le. init_level_list%nonlinear_terms) call nonlinear_terms_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_layouts) call dist_fn_layouts_subroutine
-        if (down () .and. current%level .le. init_level_list%dist_fn_parameters) call dist_fn_parameters_subroutine
-        if (down () .and. current%level .le. init_level_list%hyper) call hyper_subroutine
-        if (down () .and. current%level .le. init_level_list%run_parameters) call run_parameters_subroutine
-        if (down () .and. current%level .le. init_level_list%le_grids) call le_grids_subroutine
-        if (down () .and. current%level .le. init_level_list%kt_grids) call kt_grids_subroutine
-        if (down () .and. current%level .le. init_level_list%theta_grid) call theta_grid_subroutine
-        if (down () .and. current%level .le. init_level_list%override_miller_geometry) call override_miller_geometry_subroutine
-        if (down () .and. current%level .le. init_level_list%species) call species_subroutine
-        if (down () .and. current%level .le. init_level_list%init_g) call init_g_subroutine
-        if (down () .and. current%level .le. init_level_list%gs2_save) call gs2_save_subroutine
-        if (down () .and. current%level .le. init_level_list%theta_grid_params) call theta_grid_params_subroutine
-        if (down () .and. current%level .le. init_level_list%normalisations) call normalisations_subroutine
-        if (down () .and. current%level .le. init_level_list%gs2_layouts) call gs2_layouts_subroutine
+        if (down () .and. current%level == init_level_list%full) call full_subroutine
+        if (down () .and. current%level == init_level_list%set_initial_values) call set_initial_values_subroutine
+        if (down () .and. current%level == init_level_list%override_initial_values) call override_initial_values_subroutine
+        if (down () .and. current%level == init_level_list%fields) call fields_subroutine
+        if (down () .and. current%level == init_level_list%collisions) call collisions_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_level_3) call dist_fn_level_3_subroutine
+        if (down () .and. current%level == init_level_list%override_timestep) call override_timestep_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_level_2) call dist_fn_level_2_subroutine
+        if (down () .and. current%level == init_level_list%antenna) call antenna_subroutine
+        if (down () .and. current%level == init_level_list%override_profiles) call override_profiles_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_level_1) call dist_fn_level_1_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_arrays) call dist_fn_arrays_subroutine
+        if (down () .and. current%level == init_level_list%nonlinear_terms) call nonlinear_terms_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_layouts) call dist_fn_layouts_subroutine
+        if (down () .and. current%level == init_level_list%dist_fn_parameters) call dist_fn_parameters_subroutine
+        if (down () .and. current%level == init_level_list%le_grids) call le_grids_subroutine
+        if (down () .and. current%level == init_level_list%species) call species_subroutine
+        if (down () .and. current%level == init_level_list%hyper) call hyper_subroutine
+        if (down () .and. current%level == init_level_list%run_parameters) call run_parameters_subroutine
+        if (down () .and. current%level == init_level_list%kt_grids) call kt_grids_subroutine
+        if (down () .and. current%level == init_level_list%override_kt_grids) call override_kt_grids_subroutine
+        if (down () .and. current%level == init_level_list%kt_grids_parameters) call kt_grids_parameters_subroutine
+        if (down () .and. current%level == init_level_list%theta_grid) call theta_grid_subroutine
+        if (down () .and. current%level == init_level_list%override_miller_geometry) call override_miller_geometry_subroutine
+        if (down () .and. current%level == init_level_list%override_optimisations) call override_optimisations_subroutine
+        if (down () .and. current%level == init_level_list%init_g) call init_g_subroutine
+        if (down () .and. current%level == init_level_list%gs2_save) call gs2_save_subroutine
+        if (down () .and. current%level == init_level_list%theta_grid_params) call theta_grid_params_subroutine
+        if (down () .and. current%level == init_level_list%normalisations) call normalisations_subroutine
+        if (down () .and. current%level == init_level_list%gs2_layouts) call gs2_layouts_subroutine
       end if
     end if
   contains
@@ -314,21 +339,20 @@ contains
         end if
       end subroutine init_g_subroutine
 
-      subroutine species_subroutine
+      subroutine override_optimisations_subroutine
         use unit_tests, only: debug_message
-        use species, only: init_species
-        use species, only: finish_species
-        if (up()) call init_species
-        if (down()) call finish_species
+          use gs2_layouts, only: lso=>set_overrides
+          if (up() .and. current%opt_ov%init) call lso(current%opt_ov)
+
        
         if (up()) then
-          call debug_message(1, 'gs2_init::init reached init level... species   ')
+          call debug_message(1, 'gs2_init::init reached init level... override_optimisations   ')
           current%level = 7
         else if (down()) then  ! (down)
-          call debug_message(1, 'gs2_init::init left init level... species   ')
+          call debug_message(1, 'gs2_init::init left init level... override_optimisations   ')
           current%level = 7 - 1
         end if
-      end subroutine species_subroutine
+      end subroutine override_optimisations_subroutine
 
       subroutine override_miller_geometry_subroutine
         use unit_tests, only: debug_message
@@ -361,6 +385,37 @@ contains
         end if
       end subroutine theta_grid_subroutine
 
+      subroutine kt_grids_parameters_subroutine
+        use unit_tests, only: debug_message
+        use kt_grids, only: init_kt_grids_parameters
+        use kt_grids, only: finish_kt_grids_parameters
+        if (up()) call init_kt_grids_parameters
+        if (down()) call finish_kt_grids_parameters
+       
+        if (up()) then
+          call debug_message(1, 'gs2_init::init reached init level... kt_grids_parameters   ')
+          current%level = 10
+        else if (down()) then  ! (down)
+          call debug_message(1, 'gs2_init::init left init level... kt_grids_parameters   ')
+          current%level = 10 - 1
+        end if
+      end subroutine kt_grids_parameters_subroutine
+
+      subroutine override_kt_grids_subroutine
+        use unit_tests, only: debug_message
+          use kt_grids, only: ktso=>set_overrides
+          if (up() .and. current%kt_ov%init) call ktso(current%kt_ov)
+
+       
+        if (up()) then
+          call debug_message(1, 'gs2_init::init reached init level... override_kt_grids   ')
+          current%level = 11
+        else if (down()) then  ! (down)
+          call debug_message(1, 'gs2_init::init left init level... override_kt_grids   ')
+          current%level = 11 - 1
+        end if
+      end subroutine override_kt_grids_subroutine
+
       subroutine kt_grids_subroutine
         use unit_tests, only: debug_message
         use kt_grids, only: init_kt_grids
@@ -370,29 +425,12 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... kt_grids   ')
-          current%level = 10
+          current%level = 12
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... kt_grids   ')
-          current%level = 10 - 1
+          current%level = 12 - 1
         end if
       end subroutine kt_grids_subroutine
-
-      subroutine le_grids_subroutine
-        use unit_tests, only: debug_message
-        use le_grids, only: init_le_grids
-        use le_grids, only: finish_le_grids
-        logical :: dummy1, dummy2
-        if (up()) call init_le_grids(dummy1, dummy2)
-        if (down()) call finish_le_grids
-       
-        if (up()) then
-          call debug_message(1, 'gs2_init::init reached init level... le_grids   ')
-          current%level = 11
-        else if (down()) then  ! (down)
-          call debug_message(1, 'gs2_init::init left init level... le_grids   ')
-          current%level = 11 - 1
-        end if
-      end subroutine le_grids_subroutine
 
       subroutine run_parameters_subroutine
         use unit_tests, only: debug_message
@@ -403,10 +441,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... run_parameters   ')
-          current%level = 12
+          current%level = 13
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... run_parameters   ')
-          current%level = 12 - 1
+          current%level = 13 - 1
         end if
       end subroutine run_parameters_subroutine
 
@@ -419,12 +457,45 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... hyper   ')
-          current%level = 13
+          current%level = 14
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... hyper   ')
-          current%level = 13 - 1
+          current%level = 14 - 1
         end if
       end subroutine hyper_subroutine
+
+      subroutine species_subroutine
+        use unit_tests, only: debug_message
+        use species, only: init_species
+        use species, only: finish_species
+        if (up()) call init_species
+        if (down()) call finish_species
+       
+        if (up()) then
+          call debug_message(1, 'gs2_init::init reached init level... species   ')
+          current%level = 15
+        else if (down()) then  ! (down)
+          call debug_message(1, 'gs2_init::init left init level... species   ')
+          current%level = 15 - 1
+        end if
+      end subroutine species_subroutine
+
+      subroutine le_grids_subroutine
+        use unit_tests, only: debug_message
+        use le_grids, only: init_le_grids
+        use le_grids, only: finish_le_grids
+        logical :: dummy1, dummy2
+        if (up()) call init_le_grids(dummy1, dummy2)
+        if (down()) call finish_le_grids
+       
+        if (up()) then
+          call debug_message(1, 'gs2_init::init reached init level... le_grids   ')
+          current%level = 16
+        else if (down()) then  ! (down)
+          call debug_message(1, 'gs2_init::init left init level... le_grids   ')
+          current%level = 16 - 1
+        end if
+      end subroutine le_grids_subroutine
 
       subroutine dist_fn_parameters_subroutine
         use unit_tests, only: debug_message
@@ -435,10 +506,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... dist_fn_parameters   ')
-          current%level = 14
+          current%level = 17
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... dist_fn_parameters   ')
-          current%level = 14 - 1
+          current%level = 17 - 1
         end if
       end subroutine dist_fn_parameters_subroutine
 
@@ -454,10 +525,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... dist_fn_layouts   ')
-          current%level = 15
+          current%level = 18
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... dist_fn_layouts   ')
-          current%level = 15 - 1
+          current%level = 18 - 1
         end if
       end subroutine dist_fn_layouts_subroutine
 
@@ -470,10 +541,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... nonlinear_terms   ')
-          current%level = 16
+          current%level = 19
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... nonlinear_terms   ')
-          current%level = 16 - 1
+          current%level = 19 - 1
         end if
       end subroutine nonlinear_terms_subroutine
 
@@ -486,10 +557,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... dist_fn_arrays   ')
-          current%level = 17
+          current%level = 20
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... dist_fn_arrays   ')
-          current%level = 17 - 1
+          current%level = 20 - 1
         end if
       end subroutine dist_fn_arrays_subroutine
 
@@ -502,10 +573,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... dist_fn_level_1   ')
-          current%level = 18
+          current%level = 21
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... dist_fn_level_1   ')
-          current%level = 18 - 1
+          current%level = 21 - 1
         end if
       end subroutine dist_fn_level_1_subroutine
 
@@ -519,10 +590,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... override_profiles   ')
-          current%level = 19
+          current%level = 22
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... override_profiles   ')
-          current%level = 19 - 1
+          current%level = 22 - 1
         end if
       end subroutine override_profiles_subroutine
 
@@ -535,10 +606,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... antenna   ')
-          current%level = 20
+          current%level = 23
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... antenna   ')
-          current%level = 20 - 1
+          current%level = 23 - 1
         end if
       end subroutine antenna_subroutine
 
@@ -551,10 +622,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... dist_fn_level_2   ')
-          current%level = 21
+          current%level = 24
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... dist_fn_level_2   ')
-          current%level = 21 - 1
+          current%level = 24 - 1
         end if
       end subroutine dist_fn_level_2_subroutine
 
@@ -564,10 +635,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... override_timestep   ')
-          current%level = 22
+          current%level = 25
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... override_timestep   ')
-          current%level = 22 - 1
+          current%level = 25 - 1
         end if
       end subroutine override_timestep_subroutine
 
@@ -580,10 +651,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... dist_fn_level_3   ')
-          current%level = 23
+          current%level = 26
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... dist_fn_level_3   ')
-          current%level = 23 - 1
+          current%level = 26 - 1
         end if
       end subroutine dist_fn_level_3_subroutine
 
@@ -596,10 +667,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... collisions   ')
-          current%level = 24
+          current%level = 27
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... collisions   ')
-          current%level = 24 - 1
+          current%level = 27 - 1
         end if
       end subroutine collisions_subroutine
 
@@ -616,10 +687,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... fields   ')
-          current%level = 25
+          current%level = 28
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... fields   ')
-          current%level = 25 - 1
+          current%level = 28 - 1
         end if
       end subroutine fields_subroutine
 
@@ -629,10 +700,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... override_initial_values   ')
-          current%level = 26
+          current%level = 29
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... override_initial_values   ')
-          current%level = 26 - 1
+          current%level = 29 - 1
         end if
       end subroutine override_initial_values_subroutine
 
@@ -642,10 +713,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... set_initial_values   ')
-          current%level = 27
+          current%level = 30
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... set_initial_values   ')
-          current%level = 27 - 1
+          current%level = 30 - 1
         end if
       end subroutine set_initial_values_subroutine
 
@@ -655,10 +726,10 @@ contains
        
         if (up()) then
           call debug_message(1, 'gs2_init::init reached init level... full   ')
-          current%level = 28
+          current%level = 31
         else if (down()) then  ! (down)
           call debug_message(1, 'gs2_init::init left init level... full   ')
-          current%level = 28 - 1
+          current%level = 31 - 1
         end if
       end subroutine full_subroutine
 

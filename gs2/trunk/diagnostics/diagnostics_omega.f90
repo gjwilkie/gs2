@@ -69,6 +69,13 @@ contains
          dim_string([gnostics%dims%ri,gnostics%dims%kx,gnostics%dims%ky,gnostics%dims%time]), &
          "Complex frequency, averaged over navg timesteps, as a function of kx, ky and time", "a/v_thr", &
          omega_average_woutunits)
+
+     if (gnostics%replay) then 
+       do ik=1,naky
+         omegahist(:,:,ik) = omegahist_woutunits(:,:,ik) / woutunits(ik)
+         omega_average(:,ik) = omega_average_woutunits(:,ik) / woutunits(ik)
+       end do
+     end if
     
 !Is this dead?
     !if (gnostics%wryte) then
@@ -100,6 +107,7 @@ contains
     use gs2_time, only: code_dt
     use constants, only: zi
     use diagnostics_config, only: diagnostics_type
+    use mp, only: proc0
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     real :: fac
@@ -143,7 +151,7 @@ contains
        if (all(sqrt(sum(abs(domega)**2/real(gnostics%navg),dim=1)) &
             .le. min(abs(omega_average),1.0)*gnostics%omegatol)) &
        then
-          write (*, "('*** omega converged')")
+          if (proc0) write (gnostics%ascii_files%out, "('*** omega converged')")
           gnostics%exit = gnostics%exit_when_converged
        end if
        

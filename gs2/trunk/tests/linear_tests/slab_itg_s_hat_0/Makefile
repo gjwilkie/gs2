@@ -12,6 +12,7 @@ all:
 else
 all: slab_itg_s_hat_0_low_res 
 	$(call RUNCOMMAND,slab_itg_s_hat_0_low_res,slab_itg_s_hat_0_low_res.in)
+	$(call RUNCOMMAND,../../../gs2,slab_itg_s_hat_0_low_res.in)
 endif
 
 slab_itg_s_hat_0_low_res.o:  ${TEST_MODS} 

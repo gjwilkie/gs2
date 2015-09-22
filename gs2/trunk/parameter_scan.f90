@@ -54,13 +54,13 @@ module parameter_scan
   real :: target_val
   integer :: scan_output_file
   real :: current_target_value = 0.0
+    logical :: initialized = .false.
 
 contains
   subroutine init_parameter_scan
     use gs2_save, only: restore_current_scan_parameter_value 
     use init_g, only: init_init_g
     use file_utils, only: open_output_file
-    logical, save :: initialized = .false.
     !write (*,*) "initializing parameter_scan"
 
     if (initialized) return
@@ -146,6 +146,7 @@ contains
     use file_utils, only: close_output_file
     call deallocate_target_arrays
     call close_output_file(scan_output_file)
+    initialized = .false.
   end subroutine finish_parameter_scan
   
   subroutine update_scan_parameter_value(istep, reset, exit)

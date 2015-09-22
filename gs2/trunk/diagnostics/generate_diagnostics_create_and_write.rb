@@ -1,7 +1,8 @@
 class Generator
-  def initialize(type, dimsize)
+  def initialize(type, dimsize, noread)
     @dimsize = dimsize
     @type = type
+    @noread = noread
     if dimsize==0
       @dimension = ""
     else
@@ -9,7 +10,7 @@ class Generator
     end
   end
   def procedure_name
-    "create_and_write_variable_#{@type.gsub(' ', '_')}_#{@dimsize}"
+    "create_and_write_variable_#{@type.gsub(' ', '_')}_#{@dimsize}#{@noread?"_nr":""}"
   end
   def val_get
     "val(#{@dimsize.times.map{|i| "starts(#{i+1}):"}.join(",")})"
@@ -19,6 +20,7 @@ class Generator
   subroutine #{procedure_name}(gnostics, variable_type, variable_name, dimension_list, variable_description, variable_units, val)
     use simpledataio, only: create_variable
     use simpledataio_write, only: write_variable
+    use simpledataio_read, only: read_variable
     use diagnostics_config, only: diagnostics_type
     type(diagnostics_type), intent(in) :: gnostics
     integer, intent(in) :: variable_type
@@ -26,15 +28,17 @@ class Generator
     character(*), intent(in) :: dimension_list
     character(*), intent(in) :: variable_description
     character(*), intent(in) :: variable_units
-    #{@type.sub(/_/, '*')}, intent(in)#{@dimension} :: val
+    #{@type.sub(/_/, '*')}, intent(#{@noread?"in":"inout"})#{@dimension} :: val
  
     if (gnostics%create) then 
        call create_variable(gnostics%sfile, variable_type, variable_name, trim(dimension_list), variable_description, variable_units)
     end if
 
-    if (gnostics%create .or. .not. gnostics%wryte) return
 
-    call write_variable(gnostics%sfile, variable_name, val)
+    #{@noread ? nil : "if (gnostics%reed) call read_variable(gnostics%sfile, variable_name, val)"}
+
+    if (gnostics%wryte) call write_variable(gnostics%sfile, variable_name, val)
+
   end subroutine #{procedure_name}
 EOF
   end
@@ -64,6 +68,7 @@ class GeneratorDistributed
     use simpledataio, only: create_variable, set_start, set_count
     use simpledataio, only: set_independent, set_collective
     use simpledataio_write, only: write_variable, write_variable_with_offset
+    use simpledataio_read, only: read_variable, read_variable_with_offset
     use diagnostics_config, only: diagnostics_type
     use diagnostics_dimensions, only: dim_string
     use mp, only: mp_abort,barrier
@@ -81,7 +86,7 @@ class GeneratorDistributed
     integer :: xdim, idim, i, count, dimlistlength
     integer :: id, it, ik
     integer :: i1 !, i2, i3
-    #{@type.sub(/_/, '*')}, intent(in)#{@dimension} :: val
+    #{@type.sub(/_/, '*')}, intent(inout)#{@dimension} :: val
     #{@type.sub(/_/, '*')} :: dummy
    
     !return 
@@ -128,9 +133,11 @@ class GeneratorDistributed
     !write (*,*) 'Finished create variable', variable_name
 
 
-    if (gnostics%wryte) then
+    if (gnostics%wryte .or. gnostics%reed) then
        if (.not.  gnostics%distributed) then
-          call write_variable(gnostics%sfile, variable_name, val)
+          if (gnostics%wryte) call write_variable(gnostics%sfile, variable_name, val)
+          if (gnostics%reed) call read_variable(gnostics%sfile, variable_name, val)
+
        else
           ! For some reason every process has to make at least
           ! one write to a variable with an infinite dimension.
@@ -142,7 +149,7 @@ class GeneratorDistributed
              call set_count(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
              !call set_start(gnostics%sfile, variable_name, trim(dimension_names(id)), 1)
           end do
-          call write_variable(gnostics%sfile, variable_name, dummy)
+          if (gnostics%wryte) call write_variable(gnostics%sfile, variable_name, dummy)
           do id = 1,idim
              !! Reset the starts and counts
              if (trim(dimension_names(id)) .eq. trim(dim_string(gnostics%dims%time))) cycle
@@ -171,11 +178,13 @@ class GeneratorDistributed
                             !<DD>Should this be an mp_abort?
                             
                          else
-                            call write_variable_with_offset(gnostics%sfile, variable_name, val)
+                            if (gnostics%wryte) call write_variable_with_offset(gnostics%sfile, variable_name, val)
+                            if (gnostics%reed) call read_variable_with_offset(gnostics%sfile, variable_name, val)
                          end if
                       end do 
                    else
-                      call write_variable_with_offset(gnostics%sfile, variable_name, val)
+                      if (gnostics%wryte) call write_variable_with_offset(gnostics%sfile, variable_name, val)
+                      if (gnostics%reed) call read_variable_with_offset(gnostics%sfile, variable_name, val)
                    end if
                 end if
              end do
@@ -207,10 +216,12 @@ rescue
   end
 end
 generators = []
+generators_noread = []
 distributed_generators = []
 ['real', 'integer', 'character', 'double precision', 'complex', 'complex_16'].each do |type| # 
   (0..$max_dims).each do |dimsize|
-    generators.push Generator.new(type, dimsize)
+    generators.push Generator.new(type, dimsize, false)
+    generators_noread.push Generator.new(type, dimsize, true)
     next if dimsize < 2
     distributed_generators.push GeneratorDistributed.new(type, dimsize)
   end
@@ -235,6 +246,13 @@ module diagnostics_create_and_write
   !! of the flags gnostics%create and gnostics%wryte
   public :: create_and_write_variable
 
+  !> Create and/or write the given variable depending on the values
+  !! of the flags gnostics%create and gnostics%wryte
+  !! This version will not attempt to read the variable during a
+  !! replay, useful for constants such as input parameters, 
+  !! normalisations
+  public :: create_and_write_variable_noread
+
   !> These are a set of subroutines for writing variables which 
   !! have the dimensions kx and ky (for example, fields, moments or 
   !! fluxes) which may be distributed, ie. different kx,ky combinations
@@ -246,6 +264,10 @@ module diagnostics_create_and_write
 #{generators.map{|g| "     "+"module procedure " + g.procedure_name}.join("\n")}
   end interface create_and_write_variable
 
+  interface create_and_write_variable_noread
+#{generators_noread.map{|g| "     "+"module procedure " + g.procedure_name}.join("\n")}
+  end interface create_and_write_variable_noread
+
   interface create_and_write_distributed_fieldlike_variable
 #{distributed_generators.map{|g| "     "+"module procedure " + g.procedure_name}.join("\n")}
   end interface create_and_write_distributed_fieldlike_variable
@@ -253,6 +275,8 @@ module diagnostics_create_and_write
 contains
 
 #{generators.map{|g| g.function_string}.join("\n")}
+
+#{generators_noread.map{|g| g.function_string}.join("\n")}
 
 #{distributed_generators.map{|g| g.function_string}.join("\n")}
 
