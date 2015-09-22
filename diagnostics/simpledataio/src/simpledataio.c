@@ -17,6 +17,7 @@
 
 #include "include/simpledataio.h"
 
+int sdatio_debug=0;
 
 #define ERRCODE 2
 #define ERR(e) {printf("Error: %s\n", nc_strerror(e)); exit(ERRCODE);}
@@ -107,6 +108,36 @@ void sdatio_create_file(struct sdatio_file * sfile )  {
   sdatio_end_definitions(sfile);
 }
 
+/* Private */
+void sdatio_append_dimension(struct sdatio_file * sfile, struct sdatio_dimension * sdim){
+  int ndims;
+  struct sdatio_dimension ** new_dimensions; 
+  int i;
+  ndims = sfile->n_dimensions + 1;
+    
+
+  new_dimensions = (struct sdatio_dimension **) malloc(sizeof(struct sdatio_dimension *)*ndims);
+
+  DEBUG_MESS("Setting dimensions; %d, %d\n", ndims, sfile->n_dimensions);
+
+  for (i=0; i < ndims-1; i++){
+    DEBUG_MESS("i %d\n", i);
+    new_dimensions[i] = sfile->dimensions[i];
+  }
+
+  DEBUG_MESS("Setting new\n");
+
+  new_dimensions[ndims-1] = sdim;
+
+  DEBUG_MESS("About to deallocate old dimensions\n");
+
+  if (sfile->n_dimensions > 0) free(sfile->dimensions);
+  sfile->n_dimensions = ndims;
+
+  sfile->dimensions = new_dimensions;
+  
+}
+
 
 
 void sdatio_add_standard_metadata(struct sdatio_file * sfile){
@@ -127,38 +158,6 @@ void sdatio_add_standard_metadata(struct sdatio_file * sfile){
   
 }
 
-/*void sdatio_create_file_parallel_fortran(struct sdatio_file * sfile, char * fname, MPI_Fint  fcomm)  {*/
-/*#ifdef PARALLEL*/
-/*MPI_Comm comm = MPI_Comm_f2c(fcomm);*/
-/*sdatio_create_file_parallel(sfile, fname, &comm);*/
-/*#else */
-
-/*#endif*/
-/*}*/
-
-/*void sdatio_create_file_with_mode(struct sdatio_file * sfile, int mode, char * fname)  {*/
-/**//*printf("called\n");*/
-/*int retval;*/
-/**//*if (0){}*/
-/**//*else {*/
-/*if ((retval = nc_create(fname, NC_CLOBBER, &(sfile->nc_file_id)))) ERR(retval);*/
-/**//*}*/
-/*sdatio_end_definitions(sfile);*/
-/*}*/
-/*void sdatio_create_file(struct sdatio_file * sfile, char * fname)  {*/
-/*sdatio_create_file_with_mode(sfile, NC_CLOBBER|NC_NETCDF4, fname);*/
-/**//*printf("called\n");*/
-/**//*int retval;*/
-/**//**//*if (0){}*/
-/**//**//*else {*/
-/**//*if ((retval = nc_create(fname, NC_CLOBBER, &(sfile->nc_file_id)))) ERR(retval);*/
-/**//**//*}*/
-/**//*sfile->n_dimensions = 0;*/
-/**//*sfile->n_variables = 0;*/
-/**//*sfile->is_parallel = 0;*/
-/**//*sfile->data_written = 0;*/
-/**//*sdatio_end_definitions(sfile);*/
-/*}*/
 
 int sdatio_netcdf_variable_type(int type){
   switch (type){
@@ -170,6 +169,25 @@ int sdatio_netcdf_variable_type(int type){
     return NC_DOUBLE;
   case SDATIO_CHAR:
     return NC_CHAR;
+    /*case */
+    /*case SDATIO_COMPLEX_DOUBLE:*/
+    /*printf("Can't do complex yet\n");*/
+    /*abort();*/
+  default:
+    printf("Unknown data type for simple data io\n");
+    abort();
+  }
+}
+int sdatio_sdatio_variable_type(int type){
+  switch (type){
+  case NC_INT:
+    return SDATIO_INT;
+  case NC_FLOAT:
+    return SDATIO_FLOAT;
+  case NC_DOUBLE:
+    return SDATIO_DOUBLE;
+  case NC_CHAR:
+    return SDATIO_CHAR;
     /*case */
     /*case SDATIO_COMPLEX_DOUBLE:*/
     /*printf("Can't do complex yet\n");*/
@@ -201,35 +219,6 @@ void sdatio_add_metadata(struct sdatio_file * sfile, const int metadata_type, co
  **********************************************************/
 
 
-/* Private */
-void sdatio_append_dimension(struct sdatio_file * sfile, struct sdatio_dimension * sdim){
-  int ndims;
-  struct sdatio_dimension ** new_dimensions; 
-  int i;
-  ndims = sfile->n_dimensions + 1;
-    
-
-  new_dimensions = (struct sdatio_dimension **) malloc(sizeof(struct sdatio_dimension *)*ndims);
-
-  DEBUG_MESS("Setting dimensions; %d, %d\n", ndims, sfile->n_dimensions);
-
-  for (i=0; i < ndims-1; i++){
-    DEBUG_MESS("i %d\n", i);
-    new_dimensions[i] = sfile->dimensions[i];
-  }
-
-  DEBUG_MESS("Setting new\n");
-
-  new_dimensions[ndims-1] = sdim;
-
-  DEBUG_MESS("About to deallocate old dimensions\n");
-
-  if (sfile->n_dimensions > 0) free(sfile->dimensions);
-  sfile->n_dimensions = ndims;
-
-  sfile->dimensions = new_dimensions;
-  
-}
 
 void sdatio_add_dimension(struct sdatio_file * sfile, 
                           char * dimension_name, 
@@ -284,6 +273,31 @@ void sdatio_increment_start(struct sdatio_file * sfile, char * dimension_name){
       }   
       found = 1;
       (sdim->start)++;
+    }
+  }
+  if (!found) {
+    printf("Couldn't find dimension %s in sdatio_increment_count\n", dimension_name);
+    abort();
+  }
+}
+
+/* Set the start of an unlimited dimension*/
+void sdatio_set_dimension_start(struct sdatio_file * sfile, char * dimension_name, int start){
+
+  int found, j;
+  struct sdatio_dimension * sdim;
+
+  found = 0;
+  for (j=0;j<sfile->n_dimensions;j++){
+    sdim = sfile->dimensions[j];
+    if (!strcmp(sdim->name, dimension_name)){
+      /*if (sdim->size != SDATIO_UNLIMITED) {*/
+      /*printf("Dimension %s does not have unlimited size.\n", dimension_name);*/
+      /*abort();*/
+      /*}   */
+      found = 1;
+      sdim->start = start;
+      printf("Start for dimension %s is %d\n", sdim->name, sdim->start);
     }
   }
   if (!found) {
@@ -373,6 +387,76 @@ void sdatio_get_dimension_ids(struct sdatio_file * sfile, char * dimension_list,
     free(dim_name);
   }
   svar->dimension_ids = dimension_ids;
+
+
+}
+void sdatio_get_dimension_list(struct sdatio_file * sfile, int * dimension_ids, struct sdatio_variable * svar){
+  int ndims;
+  int i,j, loop;
+  /*char dim_name[2];*/
+  /*char * dim_name;*/
+  char * dimension_list;
+  struct sdatio_dimension * sdim;
+  int dim_name_length;
+  int counter;
+  int sep_size;
+  ndims  = svar->ndims;
+  DEBUG_MESS("ndims %d\n", ndims);
+  /* In the first iteration, we calculate
+   * the length of the dimension list string.
+   * In the second iteration, we copy the names*/
+  for (loop=0; loop<2; loop++){
+    if (loop==1) dimension_list = (char *) malloc(sizeof(char)*(counter+1));
+    counter = 0;
+    for (i=0;i<ndims;i++){
+      /* First we find the dimension object*/
+      for (j=0;j<sfile->n_dimensions+1;j++){
+        if (j==sfile->n_dimensions) {
+          printf("ERROR: dimension with nc_id %d not found for variable %s\n", 
+              dimension_ids[i], svar->name);
+          abort();
+        }
+        if (sfile->dimensions[j]->nc_id==dimension_ids[i]) break;
+      }
+      sdim = sfile->dimensions[j];
+      /* In the next section we set counter to 
+       * the beginning of the dimension name and
+       * dim_name_length to the size of the name*/
+      if (sfile->has_long_dim_names){
+        sep_size = 1;
+        dim_name_length = strlen(sdim->name);
+      }
+      else {
+        sep_size = 0;
+        dim_name_length = 1;
+        if (strlen(sdim->name)!=1){
+          printf("Fatal logic error: dim_name_length!=1 for but not has_long_dim_names\n");
+          abort();
+        }
+      }
+      if (dim_name_length < 1){
+        printf("ERROR: zero length dimension name in sdatio_open_file \n");
+        abort();
+      }
+      DEBUG_MESS("In sdatio_get_dimension_list, dim id %d, has name %s, with counter %d\n",
+          i, sdim->name, counter);
+
+      /*dim_name[0] = dimension_list[i];*/
+      /*dim_name[1] = dimension_list[ndims];*/
+
+      /* Copy the name of the current dimension to the dimension_list*/
+      if (loop==1) strncpy(dimension_list+counter, sdim->name, dim_name_length);
+      counter = counter + dim_name_length;
+      if (i<(ndims-1)){
+        if (loop==1 && sep_size==1) strncpy(dimension_list+counter, ",", sep_size);
+        counter = counter + sep_size;
+      }
+    }
+  }
+  dimension_list[counter] = '\0';
+
+    /*dim_name[dim_name_length] = '\0';*/
+  svar->dimension_list = dimension_list;
 
 
 }
@@ -563,6 +647,7 @@ void sdatio_get_counts_and_starts(struct sdatio_file * sfile, struct sdatio_vari
     for (j=0;j<sfile->n_dimensions;j++){
       sdim = sfile->dimensions[j];
       if (sdim->nc_id == svar->dimension_ids[i]){
+        /*printf("Start for dimension %s is %d\n", sdim->name, sdim->start);*/
         if (svar->manual_starts[i] == -1) starts[i] = sdim->start;
         else starts[i] = svar->manual_starts[i];
         found = 1;
@@ -911,6 +996,183 @@ void sdatio_sync(struct sdatio_file * sfile){
     /*}*/
 }
 
+
+/* Has to be at the bottom because it uses many
+ * other functions */
+void sdatio_open_file(struct sdatio_file * sfile )  {
+  /*printf("called\n");*/
+  int retval;
+  int ndims, nvars;
+  int i, j;
+  struct sdatio_dimension * sdim;
+  struct sdatio_variable * svar;
+  size_t lengthp;
+  int nunlimdims;
+  int *unlimdims;
+  int is_unlimited;
+  char * name_tmp;
+  int * vardimids;
+  char * dimension_list;
+  nc_type vartype;
+  int vartypeint;
+  int dummy;
+  int *nunlim;
+
+  DEBUG_MESS("starting sdatio_open_file\n");
+
+  retval = 0;
+
+  if (sfile->is_open){
+    printf("ERROR: The supplied sdatio_file struct corresponds to an already open file.\n");
+    abort();
+  }
+
+  /* We make the choice to always open the file in readwrite mode*/
+  sfile->mode = sfile->mode|NC_WRITE;
+
+  DEBUG_MESS("sdatio_open_file opening file\n");
+  /* Open the file*/
+  if (sfile->is_parallel) {
+#ifdef PARALLEL 
+    if ((retval = nc_open_par(sfile->name, sfile->mode, *(sfile->communicator), MPI_INFO_NULL,  &(sfile->nc_file_id)))) ERR(retval);
+#else
+    printf("sdatio was built without --enable-parallel, sdatio_create_file will not work for parallel files\n");
+    abort();
+#endif
+  }
+  else {
+    if ((retval = nc_open(sfile->name, sfile->mode, &(sfile->nc_file_id)))) ERR(retval);
+  }
+  DEBUG_MESS("sdatio_open_file opened file\n");
+  /*Initialize object file data*/
+  sfile->is_open = 1;
+  sfile->n_dimensions = 0;
+  sfile->n_variables = 0;
+  sfile->data_written = 0;
+  /* Get number of dimensions in the file*/
+  if ((retval = nc_inq_ndims(sfile->nc_file_id, &ndims))) ERR(retval);
+  /* Allocate some temp storate*/
+  name_tmp = (char*)malloc(sizeof(char*)*(NC_MAX_NAME+1));
+  /* Get a list of unlimited dimensions*/
+  if ((retval = nc_inq_unlimdims(sfile->nc_file_id, &nunlimdims, NULL))) ERR(retval);
+  unlimdims = (int*)malloc(sizeof(int*)*nunlimdims);
+  if ((retval = nc_inq_unlimdims(sfile->nc_file_id, &nunlimdims, unlimdims))) ERR(retval);
+  /* Add each dimension to the sfile object*/
+  for (i=0; i<ndims; i++){
+    if ((retval = nc_inq_dim(sfile->nc_file_id, i, name_tmp, &lengthp))) ERR(retval);
+    sdim = (struct sdatio_dimension *) malloc(sizeof(struct sdatio_dimension));
+    /*if ((retval = nc_def_dim(sfile->nc_file_id, dimension_name, size, &(sdim->nc_id)))) ERR(retval);*/
+    /*}*/
+    /*sdatio_end_definitions(sfile);*/
+    is_unlimited = 0;
+    for(j=0; j<nunlimdims; j++) if (unlimdims[j] == i) is_unlimited = 1;
+    if (is_unlimited) {
+      sdim->size = SDATIO_UNLIMITED;
+      /* We choose the first write to unlimited variables to be the last
+       * existing record. Users can easily move to the next by
+       * calling sdatio_increment_start before writing anything */
+      sdim->start = lengthp-1;
+    }
+    else {
+      sdim->size = lengthp;
+      sdim->start = 0;
+    }
+    if (strlen(name_tmp)>1){
+      sfile->has_long_dim_names = 1;
+      /*printf("Dimension names can only be one character long!\n");*/
+      /*abort();*/
+    }
+    sdim->nc_id = i;
+    sdim->name = (char *)malloc(sizeof(char)*(strlen(name_tmp)+1));
+    strcpy(sdim->name, name_tmp);
+    sdatio_append_dimension(sfile, sdim);
+  }
+  DEBUG_MESS("Finished reading dimensions\n");
+  /* Get the number of variables in the file*/
+  if ((retval = nc_inq_nvars(sfile->nc_file_id, &nvars))) ERR(retval);
+  /* Add each variable to the sfile object*/
+  for (i=0; i<nvars; i++){
+    if ((retval = nc_inq_varndims(sfile->nc_file_id, i, &ndims))) ERR(retval);
+    vardimids = (int*)malloc(sizeof(int)*ndims);
+    if ((retval = nc_inq_var(sfile->nc_file_id, i, name_tmp, &vartype,
+                            &ndims, vardimids, &dummy))) ERR(retval);
+    vartypeint = vartype;
+    vartypeint = sdatio_sdatio_variable_type(vartypeint);
+    svar = (struct sdatio_variable *) malloc(sizeof(struct sdatio_variable));
+
+    /*Set variable id*/
+    svar->nc_id = i;
+
+    /* Set variable name*/
+    svar->name = (char *)malloc(sizeof(char)*(strlen(name_tmp)+1));
+    strcpy(svar->name, name_tmp);
+
+    /*ndims = strlen(dimension_list);*/
+    svar->ndims = ndims;
+    DEBUG_MESS("ndims = %d for variable %s\n", ndims, name_tmp);
+
+    /* Set the dimension_ids*/
+    svar->dimension_ids = vardimids;
+
+    /*sdatio_get_dimension_ids(sfile, dimension_list, svar);*/
+    sdatio_get_dimension_list(sfile, vardimids, svar);
+    /*svar->dimension_ids = dimension_ids;*/
+
+
+    DEBUG_MESS("Setting type for variable %s\n", svar->name);
+    switch (vartypeint){
+      case SDATIO_INT:
+        svar->type_size = sizeof(int);
+        break;
+      case SDATIO_FLOAT:
+        svar->type_size = sizeof(float);
+        break;
+      case SDATIO_DOUBLE:
+        svar->type_size = sizeof(double);
+        break;
+      case SDATIO_CHAR:
+        svar->type_size = sizeof(char);
+        break;
+      default:
+        printf("Unknown type in sdatio_create_variable\n");
+        abort();
+    }
+
+    
+    svar->type = vartypeint;
+
+    DEBUG_MESS("Allocating manual starts and counts for variable %s; ndims %d\n", svar->name, ndims);
+    svar->manual_starts=(int*)malloc(sizeof(int)*ndims);
+    svar->manual_counts=(int*)malloc(sizeof(int)*ndims);
+    svar->manual_offsets=(int*)malloc(sizeof(int)*ndims);
+
+    DEBUG_MESS("Setting manual starts and counts for variable %s\n", svar->name);
+    for (j=0;j<ndims;j++){
+      svar->manual_starts[j]=-1;
+      svar->manual_counts[j]=-1;
+      svar->manual_offsets[j]=-1;
+    }
+
+    DEBUG_MESS("Starting sdatio_append_variable\n");
+
+    sdatio_append_variable(sfile, svar);
+
+    DEBUG_MESS("Ending sdatio_append_variable\n");
+
+#ifdef PARALLEL
+    if (sfile->is_parallel){
+      sdatio_number_of_unlimited_dimensions(sfile, svar->name, &nunlim);
+      if (nunlim > 0)
+        if ((retval = nc_var_par_access(sfile->nc_file_id, svar->nc_id, NC_COLLECTIVE))) ERR(retval);
+    }
+#endif
+    /*vartypeint = */
+  }
+  DEBUG_MESS("Finished reading variables\n");
+  
+  free(unlimdims);
+  free(name_tmp);
+}
 
 
 

@@ -11,6 +11,7 @@ module gs2_save
   use netcdf, only: NF90_HDF5,NF90_MPIIO
   use netcdf, only: nf90_var_par_access, NF90_COLLECTIVE
   use netcdf, only: nf90_put_att, NF90_GLOBAL, nf90_get_att
+  use netcdf, only: nf90_create_par
 # endif
   use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR, NF90_UNLIMITED
   use netcdf, only: nf90_create, nf90_open, nf90_sync, nf90_close
@@ -249,7 +250,7 @@ contains
           call debug_message(verb, &
             'gs2_save::gs2_save_for_restart called barrier before opening')
 ! If using netcdf version 4.1.2 or older replace NF90_MPIIO with NF90_CLOBBER
-          istatus = nf90_create (file_proc, IOR(NF90_HDF5,NF90_MPIIO), ncid, comm=mp_comm, info=mp_info)
+          istatus = nf90_create_par (file_proc, IOR(NF90_HDF5,NF90_MPIIO), ncid=ncid, comm=mp_comm, info=mp_info)
        end if
 # endif
 

@@ -44,7 +44,7 @@ contains
          dim_string([gnostics%dims%theta]), &
          "Values of gds2, ", "TBC", gds2)
     call create_and_write_variable(gnostics, gnostics%rtype, "gds21", &
-         dim_string([gnostics%dims%theta]), &
+         "theta", &
          "Values of gds21, ", "TBC", gds21)
     call create_and_write_variable(gnostics, gnostics%rtype, "gds22", &
          dim_string([gnostics%dims%theta]), &

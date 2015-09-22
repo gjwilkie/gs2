@@ -15,16 +15,21 @@ void sdatio_set_parallel(struct sdatio_file * sfile, MPI_Comm * comm);
  * of the file.*/
 void sdatio_create_file(struct sdatio_file * sfile);
 
+/* Open an existing datafile for reading and/or appending data. fname is the name of the file 
+ * The struct sfile is used to store the state information
+ * of the file.*/
+void sdatio_open_file(struct sdatio_file * sfile);
+
 /* Write metadata to the file (as a netcdf global attribute)*/
 void sdatio_add_metadata(struct sdatio_file * sfile, const int metadata_type, const char * key, const void * value);
 
 /* Create a new dimension in the file sfile. Dimension names must
  * be a single letter. */
 void sdatio_add_dimension(struct sdatio_file * sfile, 
-													 char * dimension_name, 
-													 int size,
-													 char * description,
-													 char * units);
+                           char * dimension_name, 
+                           int size,
+                           char * description,
+                           char * units);
 
 /* Print out a nice list of all the dimensions defined so far*/
 void sdatio_print_dimensions(struct sdatio_file * sfile);
@@ -43,11 +48,11 @@ void sdatio_sync(struct sdatio_file * sfile);
  * is a character string listing (in order) the dimension names
  * (which are all single characters) e.g. "xyx".*/
 void sdatio_create_variable(struct sdatio_file * sfile,
-														int variable_type,
-														char * variable_name,
-														char * dimension_list,
-														char * description,
-														char * units);
+                            int variable_type,
+                            char * variable_name,
+                            char * dimension_list,
+                            char * description,
+                            char * units);
 
 /* Write to the given variable. address should be the address of the start of the array */
 void sdatio_write_variable(struct sdatio_file * sfile, char * variable_name, void * address);

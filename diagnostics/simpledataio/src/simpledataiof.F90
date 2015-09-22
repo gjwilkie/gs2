@@ -38,50 +38,50 @@ module simpledataio
 
 #ifdef ISO_C_BINDING
   type,bind(c) :: sdatio_dimension 
-     type(c_ptr) :: name
-     integer(c_int) :: size
-     integer(c_int) :: nc_id
-     integer(c_int) :: start
+    type(c_ptr) :: name
+    integer(c_int) :: size
+    integer(c_int) :: nc_id
+    integer(c_int) :: start
   end type sdatio_dimension
 
 
   type,bind(c) :: sdatio_variable 
-     !character, dimension(:), allocatable :: name
-     type(c_ptr) :: name
-     integer(c_int) :: nc_id
-     integer(c_int) :: type
-     type(c_ptr) :: dimension_list
-     type(c_ptr) :: dimension_ids
-     integer(c_int) :: type_size
-     type(c_ptr) :: manual_counts
-     type(c_ptr) :: manual_starts
-     type(c_ptr) :: manual_offsets
+    !character, dimension(:), allocatable :: name
+    type(c_ptr) :: name
+    integer(c_int) :: nc_id
+    integer(c_int) :: type
+    type(c_ptr) :: dimension_list
+    type(c_ptr) :: dimension_ids
+    integer(c_int) :: type_size
+    type(c_ptr) :: manual_counts
+    type(c_ptr) :: manual_starts
+    type(c_ptr) :: manual_offsets
     integer(c_int) :: ndims
   end type sdatio_variable
 
   type, bind(c) :: sdatio_file 
-     integer(c_int) :: nc_file_id
-     integer(c_int):: is_parallel
-     integer(c_int):: is_open
-     integer(c_int) :: n_dimensions
-     type(c_ptr) ::  dimensions
-     integer(c_int)  :: n_variables
-     type(c_ptr) :: variables
-     integer(c_int) :: data_written
-     type(c_ptr) :: communicator
-     integer(c_int) :: mode
-     type(c_ptr) :: name
+    integer(c_int) :: nc_file_id
+    integer(c_int):: is_parallel
+    integer(c_int):: is_open
+    integer(c_int) :: n_dimensions
+    type(c_ptr) ::  dimensions
+    integer(c_int)  :: n_variables
+    type(c_ptr) :: variables
+    integer(c_int) :: data_written
+    type(c_ptr) :: communicator
+    integer(c_int) :: mode
+    type(c_ptr) :: name
     integer(c_int) :: has_long_dim_names
   end type sdatio_file
 
 #else
 
   type :: sdatio_file
-     integer :: nc_file_id
-     integer :: is_parallel
-     integer :: n_dimensions  
-     integer :: n_variables
-     integer :: data_written
+    integer :: nc_file_id
+    integer :: is_parallel
+    integer :: n_dimensions  
+    integer :: n_variables
+    integer :: data_written
   end type sdatio_file
 
 #endif
@@ -116,7 +116,7 @@ end interface add_metadata
 
 contains 
 
-  !/* Open a new datafile for writing. fname is the name of the file 
+  !/* Initialise the sfile object. fname is the name of the file 
   !* The stuct sfile is used to store the state information
   !* of the file.*/
   subroutine sdatio_init(sfile, fname)
@@ -167,6 +167,7 @@ contains
 #endif
   end subroutine sdatio_free
 
+  !/* Open a new file for writing.*/
   subroutine create_file(sfile)
     type(sdatio_file), intent(out) :: sfile
 #ifdef ISO_C_BINDING
@@ -182,6 +183,27 @@ contains
 #endif
 #endif
   end subroutine create_file
+
+  !> /*Open an existing file to append to it 
+  !! All variables and dimensions are read into
+  !! the object and you can carry on as if the file
+  !! had never been closed.*/
+  subroutine open_file(sfile)
+    type(sdatio_file), intent(out) :: sfile
+#ifdef ISO_C_BINDING
+#ifdef FORTRAN_NETCDF
+    interface
+       subroutine sdatio_open_file(sfile) bind(c, name='sdatio_open_file')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+       end subroutine sdatio_open_file
+    end interface
+    !write (*,*) 'opening file'
+    call sdatio_open_file(sfile)
+#endif
+#endif
+  end subroutine open_file
 
 !#ifdef PARALLEL 
   subroutine set_parallel(sfile, comm)
@@ -297,12 +319,6 @@ contains
   !/* Define a variable in the given file. Dimension list 
   !* is a character string listing (in order) the dimension names
   !* (which are all single characters) e.g. "xyx".*/
-  !void sdatio_create_variable(struct sdatio_file * sfile,
-  !int variable_type,
-  !char * variable_name,
-  !char * dimension_list,
-  !char * description,
-  !char * units)
   subroutine create_variable(sfile, variable_type, variable_name, dimension_list, description, units)
     implicit none
     type(sdatio_file), intent(in) :: sfile
@@ -378,28 +394,6 @@ contains
     !end if
   end subroutine create_variable
 
-  !/* Return a pointer the struct containing all the metadata of the given variable */
-  !struct sdatio_variable * sdatio_find_variable(struct sdatio_file * sfile, char * variable_name)
-  !/* Return a pointer the struct containing all the metadata of the given dimension */
-  !struct sdatio_dimension * sdatio_find_dimension(struct sdatio_file * sfile, char * dimension_name)
-  !function find_variable(sfile,variable_name)
-  !type(sdatio_file), intent(in) :: sfile
-  !character(*), intent(in) :: variable_name
-  !type(sdatio_variable), pointer :: find_variable
-  !interface
-  !type(c_ptr) function sdatio_find_variable(sfile, variable_name) &
-  !bind(c, name='sdatio_find_variable' )
-  !use iso_c_binding
-  !import sdatio_file
-  !import sdatio_variable
-  !type(sdatio_file) :: sfile
-  !character(c_char) :: variable_name(*)
-  !!type(sdatio_variable) :: sdatio_find_variable
-  !end function sdatio_find_variable
-  !end interface 
-  !write (*,*) 'calling'
-  !call c_f_pointer(sdatio_find_variable(sfile, variable_name//c_null_char), find_variable)
-  !end function find_variable
 
   subroutine set_offset(sfile, variable_name, dimension_name, offset)
     type(sdatio_file), intent(in) :: sfile
@@ -583,6 +577,28 @@ contains
     call sdatio_increment_start(sfile, dimension_name//c_null_char)
 #endif
   end subroutine increment_start
+
+  !/* Set the start of the specified infinite dimension */
+  !void sdatio_increment_start(struct sdatio_file * sfile, char * dimension_name)
+  subroutine set_dimension_start(sfile, dimension_name, start)
+    type(sdatio_file), intent(in) :: sfile
+    character(*), intent(in) :: dimension_name
+    integer, intent(in) :: start
+#ifdef ISO_C_BINDING
+    interface
+       subroutine sdatio_set_dimension_start(sfile, dimension_name, start) &
+           bind(c, name='sdatio_set_dimension_start')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         character(c_char) :: dimension_name(*)
+         integer(c_int), value :: start
+       end subroutine sdatio_set_dimension_start
+    end interface
+    write (*,*) 'setting dimension start for', dimension_name, start
+    call sdatio_set_dimension_start(sfile, dimension_name//c_null_char, start-1)
+#endif
+  end subroutine set_dimension_start
 
   !>/* Set parallel access collective*/
   subroutine set_collective(sfile, variable_name)

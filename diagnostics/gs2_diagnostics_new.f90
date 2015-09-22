@@ -23,6 +23,7 @@ module gs2_diagnostics_new
      logical :: default_double
      logical :: initialized
      logical :: is_trinity_run
+     logical :: replay
   end type diagnostics_init_options_type
 
   type(diagnostics_type) :: gnostics 
@@ -45,26 +46,38 @@ contains
     use nonlinear_terms, only: nonlin
     use gs2_save, only: save_many
     use file_utils, only: run_name, error_unit
-    use mp, only: mp_comm, proc0
+    use mp, only: mp_comm, proc0, broadcast, mp_abort
     use kt_grids, only: naky, aky
     !This reference needs removing to allow compilation on systems without netcdf
     !It should probably be moved to simpledataio as the rest of the diagnostics
     !doesn't know what backend simpledataio is using (i.e. if it is netcdf or not).
     use netcdf, only: NF90_CLOBBER
     use simpledataio, only: SDATIO_DOUBLE, SDATIO_FLOAT, SDATIO_INT
+    !use simpledataio, only: print_dimensions
     use simpledataio, only: sdatio_init, simpledataio_functional
-    use simpledataio, only: set_parallel, create_file
+    use simpledataio, only: set_parallel, create_file, open_file
+    use simpledataio, only: set_dimension_start
     use diagnostics_metadata, only: write_metadata
     use diagnostics_metadata, only: read_input_file_and_get_size
+    use unit_tests, only: debug_message
     implicit none
     type(diagnostics_init_options_type), intent(in) :: init_options
+    logical :: ex
     
-    if(proc0.and.debug) write (*,*) 'initializing new diagnostics'
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new starting')
     call init_diagnostics_config(gnostics)
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new initialized config')
     call check_parameters
-    call check_restart_file_writeable
+    !call check_restart_file_writeable
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new  checked restart file')
     
     call init_volume_averages
+
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new inialized vol avgs')
     
     ! Eventually we will remove this as we want the new diagnostics
     ! module to be built even if netCDF is not available.
@@ -149,17 +162,56 @@ contains
           gnostics%sfile%mode = NF90_CLOBBER
        end if
     end if
+
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new opening file')
     if (gnostics%parallel.or.proc0) then 
-       call create_file(gnostics%sfile)
-       call write_metadata(gnostics)
+       inquire(file=trim(run_name)//'.out.nc', exist=ex)
+       if (init_options%replay) then
+         if (ex) then
+          call debug_message(gnostics%verbosity, &
+            'gs2_diagnostics_new::init_gs2_diagnostics_new replaying')
+           call open_file(gnostics%sfile)
+          call debug_message(gnostics%verbosity, &
+            'gs2_diagnostics_new::init_gs2_diagnostics_new opened replay')
+           call set_dimension_start(gnostics%sfile, "t", 1)
+          call debug_message(gnostics%verbosity, &
+            'gs2_diagnostics_new::init_gs2_diagnostics_new set dimension start')
+           !call print_dimensions(gnostics%sfile)
+         else 
+           call mp_abort("replay set to true but no file exists", .true.)
+         end if
+         gnostics%appending=.false.
+       else if (gnostics%append_old .and. ex) then
+         gnostics%appending=.true.
+         call open_file(gnostics%sfile)
+       else
+         gnostics%appending=.false.
+         call create_file(gnostics%sfile)
+         call write_metadata(gnostics)
+         call debug_message(gnostics%verbosity, &
+           'gs2_diagnostics_new::init_gs2_diagnostics_new written metadata')
+       end if
     end if
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new opened file')
+    call broadcast(gnostics%appending)
+
+    gnostics%replay = init_options%replay
 
     !All procs initialise dimension data but if not parallel IO
     !only proc0 has to add them to file.
-    call create_dimensions(gnostics%parallel.or.proc0)
+    call create_dimensions(&
+      (gnostics%parallel.or.proc0).and..not.gnostics%appending &
+      .and. .not. init_options%replay)
+
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new created dimensions')
 
     if (nonlin.and.gnostics%use_nonlin_convergence) call init_nonlinear_convergence(gnostics)
 
+    call debug_message(gnostics%verbosity, &
+      'gs2_diagnostics_new::init_gs2_diagnostics_new finished')
     
     if(proc0.and.debug) write (*,*) 'finished initializing new diagnostics'
   end subroutine init_gs2_diagnostics_new
@@ -251,13 +303,15 @@ contains
     integer, parameter :: verb=3
     if (.not. gnostics%write_any) return
     
-    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
-      & calling save_restart_dist_fn')
-    call save_restart_dist_fn
-    
-    call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
-      & calling run_old_final_routines')
-    call run_old_final_routines
+    if (.not. gnostics%replay) then
+      call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+        & calling save_restart_dist_fn')
+      call save_restart_dist_fn
+      
+      call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
+        & calling run_old_final_routines')
+      call run_old_final_routines
+    end if
     
     deallocate(gnostics%fluxfac)
     call debug_message(verb, 'gs2_diagnostics_new::finish_gs2_diagnostics_new &
@@ -333,9 +387,10 @@ contains
   !! istep=-1 --> Create all netcdf variables
   !! istep=0 --> Write constant arrays/parameters (e.g. aky) and initial values
   !! istep>0 --> Write variables
-  subroutine run_diagnostics(istep, exit)
+  subroutine run_diagnostics(istep, exit, read_existing)
     use gs2_time, only: user_time
     use mp, only: proc0
+    use simpledataio, only: print_dimensions
     use diagnostics_printout, only: print_flux_line, print_line
     use diagnostics_printout, only: write_flux_line, write_line
     use diagnostics_fluxes, only: calculate_fluxes, write_symmetry, write_parity
@@ -360,11 +415,19 @@ contains
     use species, only: spec, has_electron_species
     use simpledataio, only: increment_start, syncfile, closefile, set_parallel, create_file
     use diagnostics_metadata, only: write_input_file
+    use unit_tests, only: debug_message
+    use mp,  only: broadcast
     implicit none
     integer, intent(in) :: istep
     logical, intent(inout) :: exit
+    logical, intent(in) :: read_existing
+    integer, parameter :: verb=3
     
     if (.not. gnostics%write_any) return
+    
+    call broadcast(exit)
+
+    call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics starting')
     
     gnostics%istep = istep
     gnostics%exit = exit
@@ -373,12 +436,21 @@ contains
     ! otherwise, only proc0. Also, creation of variables
     ! happens when istep == -1
     if (gnostics%parallel .or. proc0) then
-       gnostics%create = (istep==-1)
-       gnostics%wryte = (istep>-1)
+      if (read_existing ) then
+       gnostics%create = .false.
+       gnostics%wryte = .false.
+       gnostics%reed = (istep>-1)
+     else
+       gnostics%reed = .false.
+       gnostics%create = (istep==-1).and..not.gnostics%appending
+       gnostics%wryte = (istep>-1) .and. .not. gnostics%replay
+     end if
     else
+       gnostics%reed = .false.
        gnostics%create=.false.
        gnostics%wryte=.false.
     end if
+
     
     !gnostics%wryte = .false.
     
@@ -393,6 +465,9 @@ contains
          .or.  gnostics%print_flux_line &
          .or.  gnostics%write_flux_line &
          .or.  gnostics%is_trinity_run)
+
+
+    !write (*,*) 'gnostics calculate_fluxes', gnostics%calculate_fluxes
     
     gnostics%user_time = user_time
     if (istep .eq. 0) gnostics%start_time = user_time
@@ -405,26 +480,43 @@ contains
        call write_input_file(gnostics)
     end if
     
-    if (istep > 0) then
+    if (istep > 0 .and. .not. gnostics%replay) then
        call calculate_omega(gnostics)
        if (gnostics%write_heating) call calculate_heating (gnostics)
     end if
+    call broadcast(gnostics%exit)
+
+    call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics calculated &
+      & omega and heating')
 
     ! EGH to be reinstated when old diagnostics removed.
     !if (mod(istep, gnostics%nsave).eq.0.or.exit) then
       !call save_restart_dist_fn
     !end if
 
-    if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.exit) then
+    if (istep==-1.or.mod(istep, gnostics%nwrite).eq.0.or.gnostics%exit) then
+       ! Finally, write time value and update time index
+       call create_and_write_variable(gnostics, gnostics%rtype, "t", &
+            trim(dim_string(gnostics%dims%time)), &
+            "Values of the time coordinate", "a/v_thr", user_time) 
+       gnostics%user_time = user_time
        gnostics%vary_vnew_only = .false.
+       call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics starting write sequence')
        if (gnostics%write_omega)  call write_omega (gnostics)
+       call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics written omega')
        if (gnostics%write_fields) call write_fields(gnostics)
+       call debug_message(verb, &
+         'gs2_diagnostics_new::run_diagnostics written fields')
        if (gnostics%dump_fields_periodically) call dump_fields_periodically(gnostics)
        if (gnostics%calculate_fluxes) call calculate_fluxes(gnostics) ! NB  also writes fluxes if on
+       call debug_message(verb, &
+         'gs2_diagnostics_new::run_diagnostics calculated fluxes')
        if (gnostics%write_symmetry) call write_symmetry(gnostics)
        if (gnostics%write_parity) call write_parity(gnostics)
        if (gnostics%write_verr) call write_velocity_space_checks(gnostics)
        if (gnostics%write_cerr) call write_collision_error(gnostics) ! NB only ascii atm
+       call debug_message(verb, &
+         'gs2_diagnostics_new::run_diagnostics writing moments')
        if (gnostics%write_moments) call write_moments(gnostics)
        if (gnostics%write_full_moments_notgc) call write_full_moments_notgc(gnostics)
        if (gnostics%make_movie) call write_movie(gnostics)
@@ -444,16 +536,21 @@ contains
        end if
        call run_diagnostics_to_be_updated
 
-       ! Finally, write time value and update time index
-       call create_and_write_variable(gnostics, gnostics%rtype, "t", &
-            trim(dim_string(gnostics%dims%time)), &
-            "Values of the time coordinate", "a/v_thr", user_time) 
-       if (gnostics%wryte) call increment_start(gnostics%sfile, &
+       call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics updating time')
+       !if (gnostics%wryte .or. (gnostics%reed .and. istep==0)) call increment_start(gnostics%sfile, &
+         !trim(dim_string(gnostics%dims%time)))
+       !if (.not. read_existing) call increment_start(gnostics%sfile, &
+         !trim(dim_string(gnostics%dims%time)))
+       !call print_dimensions(gnostics%sfile)
+       if (gnostics%wryte .or. gnostics%reed) call increment_start(gnostics%sfile, &
          trim(dim_string(gnostics%dims%time)))
        if (gnostics%wryte) call syncfile(gnostics%sfile)
        if (proc0 .and. gnostics%write_ascii) call flush_output_files(gnostics%ascii_files)
        
        ! Update time used for time averages
+       !write (*,*) 'updating user_time_old', gnostics%user_time
+       !if ((.not. gnostics%replay .and. .not. read_existing) .or. (gnostics%replay .and. read_existing)) gnostics%user_time_old = gnostics%user_time
+       !if (.not. read_existing) gnostics%user_time_old = gnostics%user_time
        gnostics%user_time_old = gnostics%user_time
     else if (mod(istep, gnostics%ncheck).eq.0) then
        ! These lines cause the automated checking of velocity space resolution
@@ -462,7 +559,9 @@ contains
        if (gnostics%write_verr .and. vary_vnew) call write_velocity_space_checks(gnostics)
     end if
     
+    call debug_message(verb, 'gs2_diagnostics_new::run_diagnostics finished')
     exit = gnostics%exit
+    call broadcast(exit)
   end subroutine run_diagnostics
 
   !> Reset cumulative flux and heating averages
@@ -570,9 +669,11 @@ contains
     if(add_to_file) call gnostics%dims%theta%add_to_file(gnostics%sfile)
     if (box) then 
        !What is this used for?
+       if(jtwist_out .ne. 0) then
        call gnostics%dims%theta_ext%init("theta_ext", (2*ntgrid+1)*((ntheta0-1)/jtwist_out+1), &
             "The theta (parallel) dimension along the extended domain", "")
        if(add_to_file) call gnostics%dims%theta_ext%add_to_file(gnostics%sfile)
+       endif
     end if
     !/Real space
     ! Since these are generated by using the transform2

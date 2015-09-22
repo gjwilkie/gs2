@@ -210,6 +210,7 @@ contains
     use mp, only: proc0, broadcast
     use gs2_save, only: init_dt, init_vnm
     use text_options, only: text_option, get_option_value
+    use kt_grids, only: gryfx
     implicit none
     type (text_option), dimension (4), parameter :: eqzipopts = &
          (/ text_option('none', eqzip_option_none), &
@@ -236,13 +237,17 @@ contains
          use_old_diagnostics
 
     if (proc0) then
-       fbpar = -1.0
-       faperp = 0.0
        beta = 0.0
        zeff = 1.0
        tite = 1.0
        teti = -100.0
        rhostar = 3.e-3
+       user_comments = ''
+       k0 = 1.
+
+       fbpar = -1.0
+       faperp = 0.0
+
 !       include_lowflow = .false.
        neo_test = .false.
        wstar_units = .false.
@@ -251,7 +256,6 @@ contains
        secondary = .true.
        tertiary = .false.
        harris = .false.
-       k0 = 1.
        delt_option = 'default'
        margin = 0.05
        avail_cpu_time = 1.e10
@@ -259,7 +263,6 @@ contains
        trinity_linear_fluxes = .false.
        do_eigsolve = .false.
        immediate_reset = .true.
-       user_comments = ''
        use_old_diagnostics = .false.
        
        in_file = input_unit_exist("parameters", rpexist)
@@ -328,6 +331,13 @@ contains
 !!$       end if
 
     end if
+    
+    ! FOR GRYFX 
+    if (gryfx()) then
+      delt = sqrt(2.0)*delt/2.0
+      nstep = nstep*2
+    end if
+
 
     call broadcast (delt_option_switch)
     call broadcast (delt)

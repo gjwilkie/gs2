@@ -22,7 +22,7 @@ contains
     type(diagnostics_type), intent(in) :: gnostics
     complex, dimension(:,:), allocatable :: phi_corr_2pi
     allocate (phi_corr_2pi(-ntgrid:ntgrid,naky))
-    call correlation (phi_corr_2pi)
+    if (.not. gnostics%replay) call correlation (phi_corr_2pi)
     call create_and_write_variable(gnostics, gnostics%rtype, "phi_corr_2pi", &
          dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%ky,gnostics%dims%time]), &
          "2 point correlation function calculated from the electric potential &
@@ -62,6 +62,7 @@ contains
     use gs2_io, only: nc_loop_corr_extend
     use diagnostics_config, only: diagnostics_type
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_create_and_write, only: create_and_write_variable_noread
     use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
@@ -90,7 +91,7 @@ contains
     call correlation_extend (phi_corr, phi2_extend)
     phicorr_sum = phicorr_sum + phi_corr*(t-t_old)
     phiextend_sum = phiextend_sum + phi2_extend*(t-t_old)
-    call create_and_write_variable(gnostics, gnostics%rtype, "phi_corr", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, "phi_corr", &
          dim_string([gnostics%dims%ri,gnostics%dims%theta_ext,gnostics%dims%kx,&
          gnostics%dims%ky,gnostics%dims%time]), &
          "2 point correlation function calculated from the electric potential &

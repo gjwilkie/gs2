@@ -31,17 +31,19 @@ program test_gs2_diagnostics_new
     use mp, only: broadcast
     use gs2_diagnostics, only: finish_gs2_diagnostics
     use gs2_diagnostics, only: pflux_avg, qflux_avg, heat_avg, vflux_avg
+    use gs2_diagnostics, only: diffusivity
 #ifdef NEW_DIAG
     use gs2_diagnostics_new, only: finish_gs2_diagnostics_new
     use gs2_diagnostics_new, only: gnostics
 #endif
-    use run_parameters, only: use_old_diagnostics
+    use run_parameters, only: use_old_diagnostics, nstep
     use species, only: nspec
     implicit none
     integer :: n_vars, n_file_names
     integer :: i
     real :: eps
     real, dimension(:), allocatable :: pfluxav, qfluxav, heatav, vfluxav
+    real :: diff
     !real :: vfluxav
 
     character(len=40), dimension(200) :: variables, new_variables, n_lines, file_names, n_lines_files
@@ -159,32 +161,78 @@ program test_gs2_diagnostics_new
         write(120349, *) pflux_avg
         write(120349, *) vflux_avg
         write(120349, *) heat_avg
+        write(120349, *) diffusivity()
         close(120349)
       else
-        allocate(qfluxav(nspec), pfluxav(nspec), heatav(nspec), vfluxav(nspec))
-        open(120349, file='averages.dat')
-        read(120349, *) qfluxav
-        read(120349, *) pfluxav
-        read(120349, *) vfluxav
-        read(120349, *) heatav
-        close(120349)
-        call announce_test("average heat flux")
-        call process_test( &
-          agrees_with(gnostics%current_results%species_heat_flux_avg, qfluxav, eps), &
-          "average heat flux")
-        call announce_test("average momentum flux")
-        call process_test( &
-          agrees_with(gnostics%current_results%species_momentum_flux_avg, vfluxav, eps), &
-          "average momentum flux")
-        call announce_test("average particle flux")
-        call process_test( &
-          agrees_with(gnostics%current_results%species_particle_flux_avg, pfluxav, eps), &
-          "average particle flux")
+        if (nstep.eq.200) then
+          allocate(qfluxav(nspec), pfluxav(nspec), heatav(nspec), vfluxav(nspec))
+          open(120349, file='averages.dat')
+          read(120349, *) qfluxav
+          read(120349, *) pfluxav
+          read(120349, *) vfluxav
+          read(120349, *) heatav
+          read(120349, *) diff
+          close(120349)
+          call announce_test("average heat flux")
+          call process_test( &
+            agrees_with(gnostics%current_results%species_heat_flux_avg, qfluxav, eps), &
+            "average heat flux")
+          call announce_test("average momentum flux")
+          call process_test( &
+            agrees_with(gnostics%current_results%species_momentum_flux_avg, vfluxav, eps), &
+            "average momentum flux")
+          call announce_test("average particle flux")
+          call process_test( &
+            agrees_with(gnostics%current_results%species_particle_flux_avg, pfluxav, eps), &
+            "average particle flux")
+          call announce_test("diffusivity")
+          call process_test( &
+            agrees_with(gnostics%current_results%diffusivity, diff, eps), &
+            "diffusivity")
+        else
+          call announce_test("Size of t array")
+        end if
       end if
     end if
 #endif
 
 
+
+
+#ifdef NEW_DIAG
+    if (proc0 .and. .not. use_old_diagnostics) then
+      if (nstep==200) then 
+        do i = 1,n_vars
+          call announce_test("value of "//trim(new_variables(i)))
+          call process_test(test_variable(trim(variables(i)), trim(new_variables(i)), &
+            trim(n_lines(i))), &
+            "value of "//trim(new_variables(i)))
+        end do
+      else if (gnostics%appending) then 
+        do i = 1,n_vars
+          ! omega and omega_average won't work because the 
+          ! history is not stored in the restart file
+          if (i.eq.14.or.i.eq.15) cycle
+          call announce_test("value of "//trim(new_variables(i)))
+          call process_test(&
+            test_variable(trim(new_variables(i)), trim(new_variables(i)), &
+            trim(n_lines(i))), &
+            "value of "//trim(new_variables(i)))
+        end do
+      end if
+      if (nstep==200) then 
+        ! Note that heat and heat2 no longer pass because the comparison
+        ! is no longer between files output from the same run but between
+        ! files output from two successive runs. This causes changes greater
+        ! than the precision of the heat and heat2 files. EGH
+        do i = 3,n_file_names
+          call announce_test("content of "//trim(file_names(i)))
+          call process_test(test_file(trim(file_names(i)), trim(n_lines_files(i))), &
+            "content of "//trim(file_names(i)))
+        end do
+      end if
+    end if
+#endif
 
     if (use_old_diagnostics) then
       call finish_gs2_diagnostics(ilast_step)
@@ -196,25 +244,6 @@ program test_gs2_diagnostics_new
     end if
     call finish_gs2
 
-    if (proc0 .and. .not. use_old_diagnostics) then
-      do i = 1,n_vars
-        call announce_test("value of "//trim(new_variables(i)))
-        call process_test(test_variable(trim(variables(i)), trim(new_variables(i)), &
-          trim(n_lines(i))), &
-          "value of "//trim(new_variables(i)))
-      end do
-      ! Note that heat and heat2 no longer pass because the comparison
-      ! is no longer between files output from the same run but between
-      ! files output from two successive runs. This causes changes greater
-      ! than the precision of the heat and heat2 files. EGH
-      do i = 3,n_file_names
-        call announce_test("content of "//trim(file_names(i)))
-        call process_test(test_file(trim(file_names(i)), trim(n_lines_files(i))), &
-          "content of "//trim(file_names(i)))
-      end do
-    end if
-
-
    call close_module_test("gs2_diagnostics_new")
 
     call finish_mp
@@ -222,6 +251,9 @@ program test_gs2_diagnostics_new
 contains
   
   function test_variable(var_name, new_var_name, n_lines)
+#ifdef NEW_DIAG
+    use gs2_diagnostics_new, only: gnostics
+#endif
     use unit_tests, only: should_print
     character(*), intent(in) :: var_name, new_var_name, n_lines
     logical :: test_variable
@@ -239,9 +271,17 @@ contains
 !         '"',"test_gs2_diagnostics_new.cdf",new_var_name,'"',"'T'"
     
     command = ''
-    write(command,'("./compare ",A,A," ",A,A," ",A,A," ",A,A," ",A,A)') &
+    if (gnostics%append_old) then 
+      ! Here we are comparing the new diagnostics 200 step run with 
+      ! a 100-step run with an appended 100 step run.
+      write(command,'("./compare ",A,A," ",A,A," ",A,A," ",A,A," ",A,A)') &
+         '"',"test_gs2_diagnostics_new.out.nc",var_name,'"',&
+         '"',"test_gs2_diagnostics_new_append.out.nc",new_var_name,'"'
+    else 
+      write(command,'("./compare ",A,A," ",A,A," ",A,A," ",A,A," ",A,A)') &
          '"',"old_diagnostics/test_gs2_diagnostics_new.out.nc",var_name,'"',&
          '"',"test_gs2_diagnostics_new.out.nc",new_var_name,'"'
+     end if
     
     if (should_print(3)) write(*,*) trim(command)
     call system(" echo ""F"" > tmpdata.dat")

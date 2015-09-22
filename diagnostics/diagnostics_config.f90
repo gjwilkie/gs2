@@ -5,7 +5,7 @@
 !> A module for handling the configuration of the diagnostics
 !! module via the namelist diagnostics_config.
 module diagnostics_config
-  use simpledataio, only: sdatio_file
+  use simpledataio, only: sdf=>sdatio_file
   use diagnostics_ascii, only: diagnostics_ascii_type
   use diagnostics_dimensions, only: diagnostics_dimension_list_type
   implicit none
@@ -30,27 +30,27 @@ module diagnostics_config
      real :: diffusivity
 
      ! Individual heat fluxes
-     real, dimension(:), allocatable :: species_es_heat_flux
-     real, dimension(:), allocatable :: species_apar_heat_flux
-     real, dimension(:), allocatable :: species_bpar_heat_flux
+     real, dimension(:), pointer :: species_es_heat_flux
+     real, dimension(:), pointer :: species_apar_heat_flux
+     real, dimension(:), pointer :: species_bpar_heat_flux
 
      ! Total fluxes
-     real, dimension(:), allocatable :: species_heat_flux
-     real, dimension(:), allocatable :: species_momentum_flux
-     real, dimension(:), allocatable :: species_particle_flux
-     real, dimension(:), allocatable :: species_energy_exchange
+     real, dimension(:), pointer :: species_heat_flux
+     real, dimension(:), pointer :: species_momentum_flux
+     real, dimension(:), pointer :: species_particle_flux
+     real, dimension(:), pointer :: species_energy_exchange
 
      ! Average total fluxes
-     real, dimension(:), allocatable :: species_heat_flux_avg
-     real, dimension(:), allocatable :: species_momentum_flux_avg
-     real, dimension(:), allocatable :: species_particle_flux_avg
+     real, dimension(:), pointer :: species_heat_flux_avg
+     real, dimension(:), pointer :: species_momentum_flux_avg
+     real, dimension(:), pointer :: species_particle_flux_avg
 
      ! Heating
-     real, dimension(:), allocatable :: species_heating
-     real, dimension(:), allocatable :: species_heating_avg
+     real, dimension(:), pointer :: species_heating
+     real, dimension(:), pointer :: species_heating_avg
 
      ! Growth rates
-     complex, dimension(:,:), allocatable :: omega_average
+     complex, dimension(:,:), pointer :: omega_average
 
   end type results_summary_type
 
@@ -58,7 +58,7 @@ module diagnostics_config
   !! a reference to the output file, and current 
   !! results of the simulation
   type diagnostics_type
-     type(sdatio_file) :: sfile
+     type(sdf) :: sfile
      type(diagnostics_ascii_type) :: ascii_files
      type(results_summary_type) :: current_results
      type(diagnostics_dimension_list_type) :: dims
@@ -67,21 +67,26 @@ module diagnostics_config
      integer :: rtype
      integer :: itype
      integer :: istep
+     integer :: verbosity = 3
      logical :: create
      logical :: wryte
+     logical :: reed
+     logical :: replay
      logical :: distributed
      logical :: parallel
      logical :: exit
      logical :: vary_vnew_only
      logical :: calculate_fluxes
      logical :: is_trinity_run
+     logical :: appending
      real :: user_time
      real :: user_time_old
      real :: start_time
-     real, dimension(:), allocatable :: fluxfac
+     real, dimension(:), pointer :: fluxfac
      integer :: nwrite
      integer :: nwrite_mult
      logical :: write_any
+     logical :: append_old
      logical :: enable_parallel
      logical :: serial_netcdf4
      integer :: igomega
@@ -161,15 +166,20 @@ module diagnostics_config
 
 contains
   subroutine init_diagnostics_config(gnostics)
+    use unit_tests, only: debug_message
     implicit none
-    type(diagnostics_type), intent(out) :: gnostics
+    type(diagnostics_type), intent(inout) :: gnostics
+    call debug_message(3, 'diagnostics_config::init_diagnostics_config &
+      & starting')
     call read_parameters(gnostics)
+    call debug_message(3, 'diagnostics_config::init_diagnostics_config &
+      & read_parameters')
     call allocate_current_results(gnostics)
   end subroutine init_diagnostics_config
 
   subroutine finish_diagnostics_config(gnostics)
     implicit none
-    type(diagnostics_type), intent(out) :: gnostics
+    type(diagnostics_type), intent(inout) :: gnostics
     call deallocate_current_results(gnostics)
   end subroutine finish_diagnostics_config
 
@@ -198,19 +208,11 @@ contains
   subroutine deallocate_current_results(gnostics)
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
-    ! This routine needs to be fixed: I don't know 
-    ! how to correctly deallocate the derived type
-    !<DD>What's written below should work fine, just need to
-    !deallocate anything explicitly allocated.
-    ! EGH: I know what the problem is, the results should be pointers
-    ! and not allocatable because they are in a derived type. Will
-    ! fix shortly.
-    return
+   
+    deallocate(gnostics%current_results%species_es_heat_flux)
+    deallocate(gnostics%current_results%species_apar_heat_flux)
+    deallocate(gnostics%current_results%species_bpar_heat_flux)
     
-    ! One call deallocates gnostics and all allocatable arrays 
-    ! within it
-    !deallocate(gnostics%current_results)
-    write (*,*) "DEALLOCATING"
     deallocate(gnostics%current_results%species_heat_flux)
     deallocate(gnostics%current_results%species_momentum_flux)
     deallocate(gnostics%current_results%species_particle_flux)
@@ -219,18 +221,21 @@ contains
     deallocate(gnostics%current_results%species_particle_flux_avg)
     deallocate(gnostics%current_results%species_heating)
     deallocate(gnostics%current_results%species_heating_avg)
+    deallocate(gnostics%current_results%omega_average)
   end subroutine deallocate_current_results
 
 
   subroutine read_parameters(gnostics)
     use file_utils, only: input_unit, error_unit, input_unit_exist
     use text_options, only: text_option, get_option_value
-    use mp, only: proc0, broadcast
+    use mp, only: proc0, broadcast, nproc, iproc
+    use unit_tests, only: debug_message
     implicit none
     type(diagnostics_type), intent(out) :: gnostics
     integer :: nwrite
     integer :: nwrite_mult
     logical :: write_any
+    logical :: append_old
     logical :: enable_parallel
     logical :: serial_netcdf4
     integer :: igomega
@@ -305,6 +310,7 @@ contains
          nwrite, &
          nwrite_mult, &
          write_any, &
+         append_old, &
          enable_parallel, &
          serial_netcdf4, &
          igomega, &
@@ -383,6 +389,7 @@ contains
        nwrite = 10
        nwrite_mult = 10
        write_any = .true.
+       append_old = .false.
        enable_parallel = .false.
        serial_netcdf4 = .false.
        igomega = 0
@@ -460,6 +467,7 @@ contains
        gnostics%nwrite = nwrite
        gnostics%nwrite_mult = nwrite_mult
        gnostics%write_any = write_any
+       gnostics%append_old = append_old
        gnostics%enable_parallel = enable_parallel
        gnostics%serial_netcdf4 = serial_netcdf4
        gnostics%igomega = igomega
@@ -533,9 +541,13 @@ contains
 
     end if
 
+    call debug_message(3, 'diagnostics_config::read_parameters broadcast')
+    
+
     call broadcast (gnostics%nwrite)
     call broadcast (gnostics%nwrite_mult)
     call broadcast (gnostics%write_any)
+    call broadcast (gnostics%append_old)
     call broadcast (gnostics%enable_parallel)
     call broadcast (gnostics%serial_netcdf4)
     call broadcast (gnostics%igomega)

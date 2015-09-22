@@ -56,6 +56,7 @@ contains
     use species, only: spec
     use diagnostics_config, only: diagnostics_type
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_create_and_write, only: create_and_write_variable_noread
     use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
@@ -66,17 +67,19 @@ contains
     allocate(errest(5,2), erridx(5,3))
     errest = 0.0; erridx = 0
     
-    ! error estimate obtained by comparing standard integral with less-accurate integral
-    call get_verr (errest, erridx, phinew, bparnew)
-    
-    ! error estimate based on monitoring amplitudes of legendre polynomial coefficients
-    call get_gtran (geavg, glavg, gtavg, phinew, bparnew)
+    if (.not. gnostics%replay) then
+      ! error estimate obtained by comparing standard integral with less-accurate integral
+      call get_verr (errest, erridx, phinew, bparnew)
+      
+      ! error estimate based on monitoring amplitudes of legendre polynomial coefficients
+      call get_gtran (geavg, glavg, gtavg, phinew, bparnew)
+    end if
 
     
     !errest(5,:) = -4
     
     if (.not. gnostics%vary_vnew_only) then
-       call create_and_write_variable(gnostics, gnostics%rtype, "vspace_lpcfrac", &
+       call create_and_write_variable_noread(gnostics, gnostics%rtype, "vspace_lpcfrac", &
           dim_string([gnostics%dims%generic_3,gnostics%dims%time]), &
           "Fraction of free energy contained in the high order coefficients of &
           & the Legendre polynomial transform of (1) energy space, (2) untrapped &
@@ -91,7 +94,7 @@ contains
           & (3) k phi, trapped pitch angles, (4) k apar, energy, (5) k apar, untrapped &
           & angles. Relative errors should be < 0.1. ", &
           "absolute error measures have units T_r/(e rho_r)", errest)
-       call create_and_write_variable(gnostics, gnostics%rtype, "vspace_vnewk", &
+       call create_and_write_variable_noread(gnostics, gnostics%rtype, "vspace_vnewk", &
           dim_string([gnostics%dims%generic_2,gnostics%dims%time]), &
           "If the simulation is set to vary the collisionality in order to keep &
           & error in velocity integrals to acceptable levels, contains species 1 &

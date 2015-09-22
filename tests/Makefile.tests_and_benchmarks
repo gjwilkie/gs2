@@ -41,24 +41,14 @@ endif
 # To save time you can set test deps yourself on the command line:
 # otherwise it builds everything just to be sure, because recursive
 # make can't resolve dependencies
-#TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
-TEST_DEPS?=libgs2.a functional_tests.o benchmarks.o
-#export
+# UPDATE: Tests link against libgs2 now, so you can't choose 
+# which dependencies to build any more. EGH 04/03/2015
+# UPDATE: we now build and test the gs2 exec as well. EGH 14/03/15
+TEST_DEPS?=libgs2.a functional_tests.o benchmarks.o gs2
 TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD) $(SDATIO_LINK)" LIBS=" -lgs2 $(SDATIO_LIB) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
-#MAKETESTS = $(MAKE)
 
-#export TEST_DEPS
 export TESTCOMMAND
-#export gs2_mod
-#export TESTNORUN
-#export TESTFC=$(FC)
-#export TESTF90FLAGS=$(F90FLAGS)
-#export TESTCPP=$(CPP)
-#export TESTLD=$(LD)
-#export TESTLDFLAGS=$(LDFLAGS)
-#export TESTLIBS=$(LIBS)
-#export
 
 define TEST_PRINTOUT
 	@echo ""

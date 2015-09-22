@@ -7,6 +7,7 @@ module gs2_reinit
   public :: check_time_step, time_reinit
   public :: init_reinit, wnml_gs2_reinit
   public :: reduce_time_step, increase_time_step
+  public :: init_gs2_reinit, finish_gs2_reinit
 
 
 
@@ -87,6 +88,7 @@ contains
     use mp, only: proc0
     use file_utils, only: error_unit
     use job_manage, only: time_message
+    use nonlinear_terms, only: gryfx_zonal
     implicit none
     integer, intent(in) :: istep 
     logical, intent(inout) :: my_exit
@@ -96,6 +98,7 @@ contains
     integer, save :: nconsec=0
     type(init_type), intent(inout) :: current_init
 
+    real :: fac = 1.0
 
     if (first) call init_reinit
     first = .false.
@@ -137,11 +140,18 @@ contains
     call init(current_init, init_level_list%override_timestep)
 ! change timestep 
 
+    if(gryfx_zonal%on) then
+!both code_dt = dt_gs2 and code_dt_cfl = dt_cfl_gryfx are in gs2 units
+!we want to check if dt_gryfx = 2*dt_gs2 is too big/small when compared to
+!dt_cfl_gryfx
+      fac = 1.9999
+    endif
+
 ! If timestep is too big, make it smaller
-    if (code_dt > code_dt_cfl) then
+    if (code_dt*fac > code_dt_cfl) then
        call reduce_time_step
 ! If timestep is too small, make it bigger
-    else if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
+    else if (code_dt*fac < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) then
        call increase_time_step
     endif
     
@@ -166,24 +176,46 @@ contains
 
   subroutine check_time_step (reset, exit)
     use gs2_time, only: code_dt_cfl, code_dt
+    use nonlinear_terms, only: gryfx_zonal
+    use mp, only: broadcast
     implicit none
     logical, intent(in) :: exit
     logical, intent(out) :: reset
+
+    real :: fac = 1.0
 
     if (first) call init_reinit
     first = .false.
     reset = .false.
 
+    if(gryfx_zonal%on) then
+      !code_dt_cfl is only set on proc 0 by gryfx in nlps.cu
+      call broadcast(code_dt_cfl)
+!both code_dt = dt_gs2 and code_dt_cfl = dt_cfl_gryfx are in gs2 units
+!we want to check if dt_gryfx = 2*dt_gs2 is too big/small when compared to
+!dt_cfl_gryfx
+      fac = 1.9999
+    endif
+
 ! nothing to do if exiting in this iteration
     if (exit) return
 
 ! If timestep is too big, make it smaller
-    if (code_dt > code_dt_cfl) reset = .true. !Note this logic is repeated in gs2_time::check_time_step_too_large
+    if (code_dt*fac > code_dt_cfl) reset = .true. !Note this logic is repeated in gs2_time::check_time_step_too_large
        
 ! If timestep is too small, make it bigger
-    if (code_dt < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
+    if (code_dt*fac < min(dt0, code_dt_cfl/delt_adj/delt_cushion)) reset = .true.
 
   end subroutine check_time_step
+
+
+  subroutine init_gs2_reinit
+    call init_reinit
+  end subroutine init_gs2_reinit
+
+  subroutine finish_gs2_reinit
+    first = .true.
+  end subroutine finish_gs2_reinit
 
   subroutine init_reinit
     use run_parameters, only: code_delt_max

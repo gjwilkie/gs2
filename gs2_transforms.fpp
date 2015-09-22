@@ -1113,10 +1113,13 @@ contains
 
   subroutine transform2_5d (g, yxf)
     use gs2_layouts, only: g_lo, yxf_lo, ik_idx
+    use unit_tests,only: debug_message
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
     integer :: iglo
+
+    call debug_message(4, 'gs2_transforms::transform2_5d starting')
 
 !CMR+GC: 2/9/2013
 !  gs2's Fourier coefficients,  F_k^gs2, not standard form: i.e. f(x) = f_k e^(i k.x)
@@ -1170,6 +1173,7 @@ contains
 
   subroutine transform2_5d_accel (g, axf, i)
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
+    use unit_tests, only: debug_message
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
 # ifdef FFT
@@ -1181,6 +1185,8 @@ contains
     integer :: iglo, k, idx
     integer :: itgrid, iduo
     integer :: ntgrid
+
+    call debug_message(4, 'gs2_transforms::transform2_5d_accel starting')
 
     ntgrid = accel_lo%ntgrid
 !
