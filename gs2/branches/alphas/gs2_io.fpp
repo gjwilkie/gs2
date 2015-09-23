@@ -1372,7 +1372,7 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, var='he_heating')
        status = nf90_put_att (ncid, he_heating_id, 'long_name', 'Total heating by species and energy')
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, he_heating_id, att='long_name')
-       status = nf90_def_var (ncid, 'he_parstream', netcdf_real, flux_e_dim, he_heating_id)
+       status = nf90_def_var (ncid, 'he_parstream', netcdf_real, flux_e_dim, he_parstream_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='he_parstream')
 
     end if
