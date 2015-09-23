@@ -4,7 +4,7 @@ module geometry
 
   private
 
-  public :: beta_a_fun, eikcoefs, geofax, iofrho, pbarofrho
+  public :: beta_a_fun, eikcoefs, geofax, iofrho, pbarofrho, bi_out
   public :: qfun, rpofrho, rcenter, init_theta, nth_get, f_trap  !procedures
   public :: psi, cvdrift, theta, dvdrhon, surfarea
   public :: rhoc, nperiod, eqfile, irho, iflux, local_eq, gen_eq
@@ -22,7 +22,9 @@ module geometry
   public :: qsf, rmaj, shat, kxfac, aminor, finish_geometry, drhodpsin
   public :: p_prime_input, invLp_input, beta_prime_input, alpha_input, dp_mult
   public :: gs2d_eq, idfit_eq, dfit_eq, s_hat_new, beta_prime_new, debug
-  public :: job_id
+  public :: theta_eqarc, gradpar_prime, theta_prime, theta_prime_eqarc
+  public :: job_id, big, dbetadrho, eqinit, shotnum, xanthopoulos, rfun, tstar
+  public :: diameter, Hahm_Burrell 
 
   real, allocatable, dimension(:) :: grho, theta, bmag, gradpar, &
        cvdrift, cvdrift0, gbdrift, gbdrift0, gds2, gds21, gds22, jacob, &
@@ -30,13 +32,14 @@ module geometry
        cdrift, cdrift0, gds23, gds24, gds24_noq, gbdrift_th, cvdrift_th, Bpol ! MAB
   
   real, allocatable, dimension(:) :: J_X, B_X, g11_X, g12_X, g22_X, &
-       K1_X, K2_X, gradpar_X
+       K1_X, K2_X, gradpar_X, theta_eqarc, gradpar_prime, theta_prime_eqarc, &
+       theta_prime
 
   real :: Rref_X, Bref_X
 
   real :: rhoc, rmaj, r_geo, shift, dbetadrho, kxfac
   real :: qinp, shat, akappa, akappri, tri, tripri, dpressdrho, asym, asympri
-  real :: delrho, rmin, rmax, qsf, aminor
+  real :: delrho, rmin, rmax, qsf, aminor, bi_out
   
   real :: s_hat_input, p_prime_input, invLp_input, beta_prime_input
   real :: alpha_input, dp_mult
@@ -114,33 +117,66 @@ module geometry
   !> These are functions of theta that are output by the 
   !! geometry module
   type coefficients_type
-    real :: grho   
-    real :: bmag       
-    real :: gradpar    
-    real :: cvdrift    
-    real :: cvdrift0   
-    real :: gbdrift    
-    real :: gbdrift0   
-    real :: cdrift    
-    real :: cdrift0    
-    real :: gbdrift_th 
-    real :: cvdrift_th 
-    real :: gds2       
-    real :: gds21      
-    real :: gds22      
-    real :: gds23      
-    real :: gds24      
-    real :: gds24_noq  
-    real :: jacob      
-    real :: Rplot      
-    real :: Zplot      
-    real :: aplot      
-    real :: Rprime     
-    real :: Zprime     
-    real :: aprime     
-    real :: Uk1        
-    real :: Uk2        
-    real :: Bpol       
+    real :: theta
+    real :: theta_eqarc   
+    real :: theta_prime
+    real :: theta_prime_eqarc   
+    real :: grho
+    real :: grho_eqarc   
+    real :: bmag
+    real :: bmag_eqarc       
+    real :: gradpar
+    real :: gradpar_eqarc    
+    real :: gradpar_prime
+    real :: gradpar_prime_eqarc    
+    real :: cvdrift
+    real :: cvdrift_eqarc    
+    real :: cvdrift0
+    real :: cvdrift0_eqarc   
+    real :: gbdrift
+    real :: gbdrift_eqarc    
+    real :: gbdrift0
+    real :: gbdrift0_eqarc   
+    real :: cdrift
+    real :: cdrift_eqarc    
+    real :: cdrift0
+    real :: cdrift0_eqarc    
+    real :: gbdrift_th
+    real :: gbdrift_th_eqarc 
+    real :: cvdrift_th
+    real :: cvdrift_th_eqarc 
+    real :: gds2
+    real :: gds2_eqarc       
+    real :: gds21
+    real :: gds21_eqarc      
+    real :: gds22
+    real :: gds22_eqarc      
+    real :: gds23
+    real :: gds23_eqarc      
+    real :: gds24
+    real :: gds24_eqarc      
+    real :: gds24_noq
+    real :: gds24_noq_eqarc  
+    real :: jacob
+    real :: jacob_eqarc      
+    real :: Rplot
+    real :: Rplot_eqarc      
+    real :: Zplot
+    real :: Zplot_eqarc      
+    real :: aplot
+    real :: aplot_eqarc      
+    real :: Rprime
+    real :: Rprime_eqarc     
+    real :: Zprime
+    real :: Zprime_eqarc     
+    real :: aprime
+    real :: aprime_eqarc     
+    real :: Uk1
+    real :: Uk1_eqarc        
+    real :: Uk2
+    real :: Uk2_eqarc        
+    real :: Bpol
+    real :: Bpol_eqarc       
   end type coefficients_type
 
   !> These are coefficients that are constant
@@ -151,6 +187,8 @@ module geometry
     real :: shat
     real :: kxfac
     real :: aminor
+    real :: drhodpsin
+    real :: bi
   end type constant_coefficients_type
 
   type(coefficients_type) :: output_coefficients
@@ -275,6 +313,7 @@ contains
     use  deq, only: dfitin, deq_init => dfit_init
     use ideq, only: idfitin, ideq_init => dfit_init
     use  leq, only: leqin, dpdrhofun
+    use splines, only: inter_cspl
     use constants, only: pi
     implicit none
     integer, optional, intent (out) :: ntheta_returned
@@ -351,9 +390,12 @@ if (debug) write(6,*) "eikcoefs: allocated(theta)", allocated(theta), 'jid=',job
 
     if(iflux /= 1 .and. iflux /= 10) then
 
+       if (verb>3) write (*,*) 'Starting leqin, ntheta = ', ntheta, ntgrid
+
        call leqin(rmaj, R_geo, akappa, akappri, tri, tripri, rhoc, delrho, shift, &
             qinp, s_hat_input, asym, asympri, ntgrid)
        if(.not.allocated(gds22)) call alloc_module_arrays(ntgrid)
+       if(present(ntheta_returned)) ntheta_returned = ntheta
        call alloc_local_arrays(ntgrid)
     endif
 
@@ -976,8 +1018,69 @@ if (debug) write(6,*) "eikcoefs: end gradients"
     end if
 
     if(isym == 1) call sym(gradpar, 0, ntgrid)
+     
+    
+    ! EGH added this for GRYFX
+    bi_out = btori(rgrid(0),theta(0))
+
+    ! In the GK equation we have dg/dl.
+    ! Our parallel coordinate is theta, so the term is 
+    ! dtheta/dl dg/dtheta and gradpar = dtheta/dl.
+    ! We now define a new coordinate theta' such that
+    ! gradpar' = dtheta'/dl is constant, and the term is now
+    ! dtheta'/dl dg/dtheta'. This is the coordinate that 
+    ! is used if equal_arc = .true. and as a consequence
+    ! the values of theta that are used, e.g. in calculating
+    ! the matrices for invert_rhs is emphatically not the 
+    ! poloidal angle but this new coordinate theta'.
+    ! It is important to note that when you use equal_arc
+    ! it means that gradpar is constant, NOT that there are 
+    ! equal lengths of arc between gridpoints. In fact the 
+    ! grid points do not move, it's just that we have changed
+    ! the definition of our parallel coordinate, and consequently
+    ! gradpar. In other words Delta l/ Delta theta' is constant,
+    ! but Delta l is not... it is the same as it was before.
+    ! In the section of code below, which is used primarly by GRYFX,
+    ! we are doing something more. We calculate a set of theta values
+    ! such that Delta theta' is constant (rather than, as is the case
+    ! for most geometries,  Delta theta). As a consequence, on this
+    ! new grid, which we call theta_eqarc, Delta l is itself a constant
+    ! as a function of grid index.
+    theta_eqarc = gradpar ! Temp storage
+    call arclength (ntheta, nperiod, gradpar, arcl)
+    theta_prime = arcl
+    gradpar_prime = gradpar
+    gradpar = theta_eqarc ! Retrieve temp storage
+    ! arcl(i) is theta'(i) = theta'(theta(i)) such that
+    ! dl / dtheta' is constant. At the moment Delta theta is
+    ! constant and Delta theta' is not. We now calculate a new
+    ! set of theta values, theta_eqarc, such that Delta theta'
+    ! is constant but Delta theta is not. Since we have convenient
+    ! equally spaced set of grid points in theta, we use that for
+    ! the x values of the interpolation routine. 
+    ! The four important arguments of the call below
+    ! are:
+    !     2. An unequally spaced set of theta' values: theta_prime
+    !     3. The values of theta that correspond to them: theta
+    !     5. A set of equally spaced theta' values: theta_prime_eqarc
+    !     6. The new set of unequally spaced theta values, theta_eqarc, which correspond
+    !          to equally spaced theta' values and consequently constant 
+    !          values of Delta l, i.e. constant arc lengths between gridpoints.
+    !     
+    !
+    theta_prime_eqarc = theta
+    call inter_cspl(size(theta), theta_prime,       theta, &
+                    size(theta), theta_prime_eqarc, theta_eqarc)
       
+    ! In the lines below we redefine theta to be theta', and
+    ! gradpar to be gradpar'. This means that the values of
+    ! theta in the gs2 output file are not values of the poloidal
+    ! angle but values of theta_prime EGH
     if(equal_arc) then
+      ! The lines below can now be replaced by 
+      ! theta = theta_prime
+      ! gradpar = gradpar_prime
+      ! but we'll want to test extensively before doing it. EGH
        call arclength (ntheta, nperiod, gradpar, arcl)
        theta = arcl
     endif
@@ -1042,6 +1145,8 @@ if (debug) write(6,*) "eikcoefs: end gradients"
 ! so that Rplot, Zplot etc can be made available elsewhere in GS2
 !    if (nperiod ==1) call plotdata (rgrid, seik, grads, dpsidrho)
     call plotdata (rgrid, seik, grads, dpsidrho)
+
+    !write (*,*) 'gbdrift is ', gbdrift
 
     Bpol = bpolmag
 
@@ -2729,6 +2834,10 @@ end subroutine geofax
          aprime     (-n:n), &
          Uk1        (-n:n), &
          Uk2        (-n:n), &
+         theta_eqarc(-n:n), & !EGH
+         theta_prime(-n:n), & !EGH
+         theta_prime_eqarc(-n:n), & !EGH
+         gradpar_prime(-n:n),     & !EGH
          Bpol       (-n:n))
     if (debug) write(6,*) "alloc_module_arrays: done"
   end subroutine alloc_module_arrays
@@ -2761,6 +2870,10 @@ end subroutine geofax
          aprime     , &
          Uk1        , &
          Uk2        , &
+         theta_eqarc, & ! EGH
+         theta_prime, & ! EGH
+         theta_prime_eqarc, & ! EGH
+         gradpar_prime,     & ! EGH
          Bpol       )
   end subroutine dealloc_module_arrays
 
@@ -2799,7 +2912,8 @@ end subroutine geofax
     ntheta=nt
     nth = nt / 2
     ntgrid = (2*nperiod - 1)*nth       
-    if (debug) write(6,*) "init_theta: allocated(theta),ntgrid=",allocated(theta),ntgrid
+    if (verb>3) write(6,*) "init_theta: allocated(theta),ntgrid,nt,nperiod=",&
+      allocated(theta),ntgrid,nt,nperiod
     if (.not. first_local .and. allocated(theta)) deallocate (theta)
     allocate(theta(-ntgrid:ntgrid))
     first_local = .false.
@@ -3296,7 +3410,7 @@ end module geometry
 
 !contains
 subroutine geometry_set_inputs(equilibrium_type,&
-                               eqfile_in, &
+                               !eqfile_in, &
                                irho_in, &
                                rhoc_in, &
                                bishop_in, &
@@ -3305,19 +3419,20 @@ subroutine geometry_set_inputs(equilibrium_type,&
   use geometry, only: rhoc, nperiod, eqfile, irho, iflux, local_eq, gen_eq, init_theta
   use geometry, only: ppl_eq, transp_eq, chs_eq, efit_eq, equal_arc, bishop
   use geometry, only: dp_mult, delrho, rmin, rmax, isym, in_nt, writelots, itor
+  use geometry, only: verb
   use mp, only: mp_abort
   implicit none
   integer, intent(in) :: equilibrium_type, nperiod_in, irho_in, bishop_in
   real, intent(in) :: rhoc_in
   integer, intent(inout) :: ntheta
-  character(len=800), intent(in) :: eqfile_in
+  !character(len=800), intent(in) :: eqfile_in
 
   write (*,*) 'Setting inputs'
   write (*,*)
 
   rhoc = rhoc_in
   nperiod = nperiod_in
-  eqfile = eqfile_in
+  !eqfile = eqfile_in
   irho = irho_in
 
   iflux = 1 ! Numerical unless changed for miller
@@ -3337,9 +3452,11 @@ subroutine geometry_set_inputs(equilibrium_type,&
   rmax = 1.0
   isym = 0
   in_nt = .false.
-  writelots = .false.
+  writelots = .true.
   !! Advanced use only
   itor = 1
+
+  verb = 4
 
   
   !ntheta_out = -1
@@ -3348,6 +3465,7 @@ subroutine geometry_set_inputs(equilibrium_type,&
   case (1)  ! Miller
     local_eq = .true.
     iflux = 0
+    bishop = 4
     call init_theta(ntheta)
   case (2)  ! EFIT
     efit_eq = .true.
@@ -3474,6 +3592,12 @@ subroutine geometry_set_miller_parameters(miller_parameters_in)
   asympri = miller_parameters_in%asympri
    
   write(*,*) 's_hat was set to', shat
+  write(*,*) 'akappa was set to', akappa
+  write(*,*) 'asym was set to', asym
+  write(*,*) 'R_geo was set to', R_geo
+  write(*,*) 'rmaj was set to', rmaj
+  write(*,*) 'qinp was set to', qinp
+  !write(*,*) 'ntheta was set to', ntheta
 
 end subroutine geometry_set_miller_parameters
 
@@ -3490,10 +3614,13 @@ subroutine geometry_vary_s_alpha(s_hat_input_in, beta_prime_input_in)
 end subroutine geometry_vary_s_alpha
 
 subroutine geometry_calculate_coefficients(grid_size)
-  use geometry, only: eikcoefs, nperiod
+  use geometry, only: eikcoefs, nperiod, equal_arc
   implicit none
   integer, intent(out) :: grid_size
   integer :: ntheta_out
+  ! We calculate the equal_arc grids manually,
+  ! and override equal_arc = .false.
+  equal_arc = .false.
   call eikcoefs(ntheta_out)
   write (*,*) 'ntheta out is ', ntheta_out
   grid_size = (2*nperiod - 1)*ntheta_out + 1 ! = 2*ntgrid + 1
@@ -3506,82 +3633,120 @@ subroutine geometry_get_coefficients(grid_size, coefficients_out)
   use geometry, only: gbdrift, gbdrift0, cdrift, cdrift0, gbdrift_th
   use geometry, only: cvdrift_th, gds2, gds21, gds22, gds23, gds24, gds24_noq
   use geometry, only: jacob, Rplot, Zplot, aplot, Rprime, Zprime, aprime, Uk1, Uk2, Bpol
+  use geometry, only: theta, theta_eqarc, theta_prime, theta_prime_eqarc
+  use geometry, only: gradpar_prime
   implicit none
   integer, intent(in) :: grid_size
   type(coefficients_type), dimension(grid_size) :: coefficients_out
   integer ::ntgrid, i
+  real, dimension(:,:),allocatable :: interp_matrix
+   
+  allocate(interp_matrix(grid_size,grid_size))
 
   !ntgrid = (2*nperiod - 1) * ntheta/2
   ntgrid = (grid_size - 1)/2
 
-   !allocate(coefficients_out(2*ntgrid+1))   
-  !write (*,*) 'HERE2'
-   !!allocate(coefficients_out%bmag(ntgrid:ntgrid))       
-   !allocate(coefficients_out%gradpar(ntgrid:ntgrid))    
-   !allocate(coefficients_out%cvdrift(ntgrid:ntgrid))    
-   !allocate(coefficients_out%cvdrift0(ntgrid:ntgrid))   
-   !allocate(coefficients_out%gbdrift(ntgrid:ntgrid))    
-   !allocate(coefficients_out%gbdrift0(ntgrid:ntgrid))   
-   !allocate(coefficients_out%cdrift(ntgrid:ntgrid))    
-   !allocate(coefficients_out%cdrift0(ntgrid:ntgrid))    
-   !allocate(coefficients_out%gbdrift_th(ntgrid:ntgrid)) 
-   !allocate(coefficients_out%cvdrift_th(ntgrid:ntgrid)) 
-   !allocate(coefficients_out%gds2(ntgrid:ntgrid))       
-   !allocate(coefficients_out%gds21(ntgrid:ntgrid))      
-   !allocate(coefficients_out%gds22(ntgrid:ntgrid))      
-   !allocate(coefficients_out%gds23(ntgrid:ntgrid))      
-   !allocate(coefficients_out%gds24(ntgrid:ntgrid))      
-   !allocate(coefficients_out%gds24_noq(ntgrid:ntgrid))  
-   !allocate(coefficients_out%jacob(ntgrid:ntgrid))      
-   !allocate(coefficients_out%Rplot(ntgrid:ntgrid))      
-   !allocate(coefficients_out%Zplot(ntgrid:ntgrid))      
-   !allocate(coefficients_out%aplot(ntgrid:ntgrid))      
-   !allocate(coefficients_out%Rprime(ntgrid:ntgrid))     
-   !allocate(coefficients_out%Zprime(ntgrid:ntgrid))     
-   !allocate(coefficients_out%aprime(ntgrid:ntgrid))     
-   !allocate(coefficients_out%Uk1(ntgrid:ntgrid))        
-   !allocate(coefficients_out%Uk2(ntgrid:ntgrid))        
-   !allocate(coefficients_out%Bpol(ntgrid:ntgrid))       
+  call create_interp_matrix
 
   write (*,*) 'HERE'
   write (*,*) 'Grid size should be ', 2*ntgrid + 1
   do i = -ntgrid,ntgrid
      write (*,*) 'i', i
+     coefficients_out(i+ntgrid+1)%theta        = theta(i)   
+     coefficients_out(i+ntgrid+1)%theta_eqarc = theta_eqarc(i)
+     coefficients_out(i+ntgrid+1)%theta_prime        = theta_prime(i)   
+     coefficients_out(i+ntgrid+1)%theta_prime_eqarc = theta_prime_eqarc(i)
      coefficients_out(i+ntgrid+1)%grho        = grho(i)   
+     coefficients_out(i+ntgrid+1)%grho_eqarc = interp(grho,i)
      coefficients_out(i+ntgrid+1)%bmag        = bmag(i)       
+     coefficients_out(i+ntgrid+1)%bmag_eqarc = interp(bmag,i)
      coefficients_out(i+ntgrid+1)%gradpar     = gradpar(i)    
+     coefficients_out(i+ntgrid+1)%gradpar_eqarc = interp(gradpar,i)
+     coefficients_out(i+ntgrid+1)%gradpar_prime     = gradpar_prime(i)    
+     coefficients_out(i+ntgrid+1)%gradpar_prime_eqarc = interp(gradpar_prime,i)
      coefficients_out(i+ntgrid+1)%cvdrift     = cvdrift(i)    
+     coefficients_out(i+ntgrid+1)%cvdrift_eqarc = interp(cvdrift,i)
      coefficients_out(i+ntgrid+1)%cvdrift0    = cvdrift0(i)   
+     coefficients_out(i+ntgrid+1)%cvdrift0_eqarc = interp(cvdrift0,i)
      coefficients_out(i+ntgrid+1)%gbdrift     = gbdrift(i)    
+     coefficients_out(i+ntgrid+1)%gbdrift_eqarc = interp(gbdrift,i)
      coefficients_out(i+ntgrid+1)%gbdrift0    = gbdrift0(i)   
+     coefficients_out(i+ntgrid+1)%gbdrift0_eqarc = interp(gbdrift0,i)
      coefficients_out(i+ntgrid+1)%cdrift     = cdrift(i)    
+     coefficients_out(i+ntgrid+1)%cdrift_eqarc = interp(cdrift,i)
      coefficients_out(i+ntgrid+1)%cdrift0     = cdrift0(i)    
+     coefficients_out(i+ntgrid+1)%cdrift0_eqarc = interp(cdrift0,i)
      coefficients_out(i+ntgrid+1)%gbdrift_th  = gbdrift_th(i) 
+     coefficients_out(i+ntgrid+1)%gbdrift_th_eqarc = interp(gbdrift_th,i)
      coefficients_out(i+ntgrid+1)%cvdrift_th  = cvdrift_th(i) 
+     coefficients_out(i+ntgrid+1)%cvdrift_th_eqarc = interp(cvdrift_th,i)
      coefficients_out(i+ntgrid+1)%gds2        = gds2(i)       
+     coefficients_out(i+ntgrid+1)%gds2_eqarc = interp(gds2,i)
      coefficients_out(i+ntgrid+1)%gds21       = gds21(i)      
+     coefficients_out(i+ntgrid+1)%gds21_eqarc = interp(gds21,i)
      coefficients_out(i+ntgrid+1)%gds22       = gds22(i)      
+     coefficients_out(i+ntgrid+1)%gds22_eqarc = interp(gds22,i)
      coefficients_out(i+ntgrid+1)%gds23       = gds23(i)      
+     coefficients_out(i+ntgrid+1)%gds23_eqarc = interp(gds23,i)
      coefficients_out(i+ntgrid+1)%gds24       = gds24(i)      
+     coefficients_out(i+ntgrid+1)%gds24_eqarc = interp(gds24,i)
      coefficients_out(i+ntgrid+1)%gds24_noq   = gds24_noq(i)  
+     coefficients_out(i+ntgrid+1)%gds24_noq_eqarc = interp(gds24_noq,i)
      coefficients_out(i+ntgrid+1)%jacob       = jacob(i)      
+     coefficients_out(i+ntgrid+1)%jacob_eqarc = interp(jacob,i)
      coefficients_out(i+ntgrid+1)%Rplot       = Rplot(i)      
+     coefficients_out(i+ntgrid+1)%Rplot_eqarc = interp(Rplot,i)
      coefficients_out(i+ntgrid+1)%Zplot       = Zplot(i)      
+     coefficients_out(i+ntgrid+1)%Zplot_eqarc = interp(Zplot,i)
      coefficients_out(i+ntgrid+1)%aplot       = aplot(i)      
+     coefficients_out(i+ntgrid+1)%aplot_eqarc = interp(aplot,i)
      coefficients_out(i+ntgrid+1)%Rprime      = Rprime(i)     
+     coefficients_out(i+ntgrid+1)%Rprime_eqarc = interp(Rprime,i)
      coefficients_out(i+ntgrid+1)%Zprime      = Zprime(i)     
+     coefficients_out(i+ntgrid+1)%Zprime_eqarc = interp(Zprime,i)
      coefficients_out(i+ntgrid+1)%aprime      = aprime(i)     
+     coefficients_out(i+ntgrid+1)%aprime_eqarc = interp(aprime,i)
      coefficients_out(i+ntgrid+1)%Uk1         = Uk1(i)        
+     coefficients_out(i+ntgrid+1)%Uk1_eqarc = interp(Uk1,i)
      coefficients_out(i+ntgrid+1)%Uk2         = Uk2(i)        
+     coefficients_out(i+ntgrid+1)%Uk2_eqarc = interp(Uk2,i)
      coefficients_out(i+ntgrid+1)%Bpol        = Bpol(i)       
+     coefficients_out(i+ntgrid+1)%Bpol_eqarc = interp(Bpol,i)
   end do
 
+  deallocate(interp_matrix)
+
   write (*,*) 'Returning....'
+  contains
+    subroutine create_interp_matrix
+      use geometry, only: theta, theta_eqarc
+      use splines, only: inter_cspl
+      integer :: j,k
+      real, dimension(grid_size) :: delta_array
+      do j = 1,grid_size
+        delta_array = 0.
+        delta_array(j) = 1.
+        call inter_cspl(grid_size, theta, delta_array, &
+                        grid_size, theta_eqarc, interp_matrix(:,j))
+      end do
+
+    end subroutine create_interp_matrix
+
+    function interp(array, ig)
+      real, dimension(:), intent(in) :: array
+      integer, intent(in) :: ig
+      real :: interp
+      integer :: j
+      j = ig + ntgrid + 1
+      interp = dot_product(array(:),interp_matrix(j,:))
+      !interp = array(j)
+    end function interp
 
 end subroutine geometry_get_coefficients
 
 subroutine geometry_get_constant_coefficients(constant_coefficients_out)
-  use geometry, only: qsf, rmaj, shat, kxfac, aminor
+  use geometry, only: qsf, rmaj, shat, kxfac, aminor, drhodpsin, gradpar
+  use geometry, only: bi_out
   use geometry, only: constant_coefficients_type, constant_coefficients
   implicit none
   type(constant_coefficients_type), intent(out) :: constant_coefficients_out
@@ -3591,6 +3756,8 @@ subroutine geometry_get_constant_coefficients(constant_coefficients_out)
   constant_coefficients%shat = shat
   constant_coefficients%kxfac = kxfac
   constant_coefficients%aminor = aminor
+  constant_coefficients%drhodpsin = drhodpsin
+  constant_coefficients%bi = bi_out
   constant_coefficients_out = constant_coefficients
   
 end subroutine geometry_get_constant_coefficients

@@ -35,6 +35,9 @@ module antenna
   public :: wnml_antenna, check_antenna, no_driver
   public :: antenna_w, antenna_apar, antenna_amplitudes, a_ext_data
 
+  public :: init_antenna_level_1, init_antenna_level_2
+  public :: finish_antenna_level_1, finish_antenna_level_2
+
   complex :: w_antenna
   complex, dimension(:), allocatable :: w_stir
   complex, dimension(:,:,:), allocatable :: apar_new, apar_old
@@ -117,6 +120,21 @@ contains
     end do
   end subroutine wnml_antenna
 
+  subroutine init_antenna_level_1
+     call read_parameters
+  end subroutine init_antenna_level_1
+
+  subroutine finish_antenna_level_1
+  end subroutine finish_antenna_level_1
+
+  subroutine init_antenna_level_2
+    call init_antenna
+  end subroutine init_antenna_level_2
+
+  subroutine finish_antenna_level_2
+    call finish_antenna
+  end subroutine finish_antenna_level_2
+
   subroutine init_antenna
     use species, only: spec, nspec, init_species
     use run_parameters, only: beta
@@ -128,9 +146,9 @@ contains
     initialized = .true.
     
     if (.not. allocated(w_stir)) then
-       call init_species
+       !call init_species
        
-       call read_parameters
+       !call read_parameters
        if (no_driver) then
           i = -1
           call init_antenna_data (i)

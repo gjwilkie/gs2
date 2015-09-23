@@ -17,6 +17,7 @@
 
 #include "include/simpledataio.h"
 
+int sdatio_debug=0;
 
 #define ERRCODE 2
 #define ERR(e) {printf("Error: %s\n", nc_strerror(e)); exit(ERRCODE);}
@@ -272,6 +273,31 @@ void sdatio_increment_start(struct sdatio_file * sfile, char * dimension_name){
       }   
       found = 1;
       (sdim->start)++;
+    }
+  }
+  if (!found) {
+    printf("Couldn't find dimension %s in sdatio_increment_count\n", dimension_name);
+    abort();
+  }
+}
+
+/* Set the start of an unlimited dimension*/
+void sdatio_set_dimension_start(struct sdatio_file * sfile, char * dimension_name, int start){
+
+  int found, j;
+  struct sdatio_dimension * sdim;
+
+  found = 0;
+  for (j=0;j<sfile->n_dimensions;j++){
+    sdim = sfile->dimensions[j];
+    if (!strcmp(sdim->name, dimension_name)){
+      /*if (sdim->size != SDATIO_UNLIMITED) {*/
+      /*printf("Dimension %s does not have unlimited size.\n", dimension_name);*/
+      /*abort();*/
+      /*}   */
+      found = 1;
+      sdim->start = start;
+      printf("Start for dimension %s is %d\n", sdim->name, sdim->start);
     }
   }
   if (!found) {
@@ -621,6 +647,7 @@ void sdatio_get_counts_and_starts(struct sdatio_file * sfile, struct sdatio_vari
     for (j=0;j<sfile->n_dimensions;j++){
       sdim = sfile->dimensions[j];
       if (sdim->nc_id == svar->dimension_ids[i]){
+        /*printf("Start for dimension %s is %d\n", sdim->name, sdim->start);*/
         if (svar->manual_starts[i] == -1) starts[i] = sdim->start;
         else starts[i] = svar->manual_starts[i];
         found = 1;
@@ -991,6 +1018,8 @@ void sdatio_open_file(struct sdatio_file * sfile )  {
   int dummy;
   int *nunlim;
 
+  DEBUG_MESS("starting sdatio_open_file\n");
+
   retval = 0;
 
   if (sfile->is_open){
@@ -1001,6 +1030,7 @@ void sdatio_open_file(struct sdatio_file * sfile )  {
   /* We make the choice to always open the file in readwrite mode*/
   sfile->mode = sfile->mode|NC_WRITE;
 
+  DEBUG_MESS("sdatio_open_file opening file\n");
   /* Open the file*/
   if (sfile->is_parallel) {
 #ifdef PARALLEL 
@@ -1013,6 +1043,7 @@ void sdatio_open_file(struct sdatio_file * sfile )  {
   else {
     if ((retval = nc_open(sfile->name, sfile->mode, &(sfile->nc_file_id)))) ERR(retval);
   }
+  DEBUG_MESS("sdatio_open_file opened file\n");
   /*Initialize object file data*/
   sfile->is_open = 1;
   sfile->n_dimensions = 0;
@@ -1037,9 +1068,9 @@ void sdatio_open_file(struct sdatio_file * sfile )  {
     for(j=0; j<nunlimdims; j++) if (unlimdims[j] == i) is_unlimited = 1;
     if (is_unlimited) {
       sdim->size = SDATIO_UNLIMITED;
-      /* We choose the first write to unlimited variables to be a new
-       * record, so we set the length to be 1 greater than the current
-       * final record.*/
+      /* We choose the first write to unlimited variables to be the last
+       * existing record. Users can easily move to the next by
+       * calling sdatio_increment_start before writing anything */
       sdim->start = lengthp-1;
     }
     else {

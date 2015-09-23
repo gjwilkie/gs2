@@ -144,7 +144,7 @@ contains
 !both code_dt = dt_gs2 and code_dt_cfl = dt_cfl_gryfx are in gs2 units
 !we want to check if dt_gryfx = 2*dt_gs2 is too big/small when compared to
 !dt_cfl_gryfx
-      fac = 2.0
+      fac = 1.9999
     endif
 
 ! If timestep is too big, make it smaller
@@ -194,7 +194,7 @@ contains
 !both code_dt = dt_gs2 and code_dt_cfl = dt_cfl_gryfx are in gs2 units
 !we want to check if dt_gryfx = 2*dt_gs2 is too big/small when compared to
 !dt_cfl_gryfx
-      fac = 2.0
+      fac = 1.9999
     endif
 
 ! nothing to do if exiting in this iteration

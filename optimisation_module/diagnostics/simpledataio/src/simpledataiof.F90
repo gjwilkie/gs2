@@ -199,6 +199,7 @@ contains
          type(sdatio_file) :: sfile
        end subroutine sdatio_open_file
     end interface
+    !write (*,*) 'opening file'
     call sdatio_open_file(sfile)
 #endif
 #endif
@@ -576,6 +577,28 @@ contains
     call sdatio_increment_start(sfile, dimension_name//c_null_char)
 #endif
   end subroutine increment_start
+
+  !/* Set the start of the specified infinite dimension */
+  !void sdatio_increment_start(struct sdatio_file * sfile, char * dimension_name)
+  subroutine set_dimension_start(sfile, dimension_name, start)
+    type(sdatio_file), intent(in) :: sfile
+    character(*), intent(in) :: dimension_name
+    integer, intent(in) :: start
+#ifdef ISO_C_BINDING
+    interface
+       subroutine sdatio_set_dimension_start(sfile, dimension_name, start) &
+           bind(c, name='sdatio_set_dimension_start')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         character(c_char) :: dimension_name(*)
+         integer(c_int), value :: start
+       end subroutine sdatio_set_dimension_start
+    end interface
+    write (*,*) 'setting dimension start for', dimension_name, start
+    call sdatio_set_dimension_start(sfile, dimension_name//c_null_char, start-1)
+#endif
+  end subroutine set_dimension_start
 
   !>/* Set parallel access collective*/
   subroutine set_collective(sfile, variable_name)

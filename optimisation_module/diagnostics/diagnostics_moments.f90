@@ -18,7 +18,9 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp, qparflux, pperpj1, qpperpj1
 
-    call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+    if (.not. gnostics%replay) then
+      call getmoms (phinew, bparnew, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
+    end if
 
     call write_standard_moment_properties(gnostics, &
          'ntot',  'The total perturbed species density', 'n_r', ntot, gnostics%distributed)
@@ -55,7 +57,9 @@ contains
     complex, dimension (-ntgrid:ntgrid,ntheta0,naky,nspec) :: ntot, density, &
          upar, tpar, tperp !, qparflux, pperpj1, qpperpj1
 
-    call getmoms_notgc(phinew, bparnew, density,upar,tpar,tperp,ntot)
+    if (.not. gnostics%replay) then
+      call getmoms_notgc(phinew, bparnew, density,upar,tpar,tperp,ntot)
+    end if
 
     call write_standard_moment_properties(gnostics, &
          'ntot_notgc',  'The total perturbed species density &
@@ -77,6 +81,7 @@ contains
   subroutine write_standard_moment_properties(gnostics, moment_name, moment_description, &
        moment_units, moment_value, distributed)
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_create_and_write, only: create_and_write_variable_noread
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
     use diagnostics_dimensions, only: dim_string
     use volume_averages, only: average_theta, average_kx, average_ky
@@ -89,7 +94,7 @@ contains
     implicit none
     type(diagnostics_type), intent(in) :: gnostics
     character(*), intent(in) :: moment_name, moment_description, moment_units
-    complex, dimension(-ntgrid:,:,:,:), intent(in) :: moment_value
+    complex, dimension(-ntgrid:,:,:,:), intent(inout) :: moment_value
     logical, intent(in) :: distributed
     real, dimension(ntheta0, naky, nspec) :: moment2_by_mode
     real, dimension(naky,nspec) :: moment2_by_ky
@@ -117,7 +122,7 @@ contains
          moment_description//" squared and averaged over theta and ky", &
          "("//moment_units//")^2", moment2_by_kx)
 
-    call create_and_write_variable(gnostics, gnostics%rtype, moment_name//"2", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, moment_name//"2", &
          dim_string([gnostics%dims%species,gnostics%dims%time]), &
          moment_description//" squared and averaged over theta, kx and ky", &
          "("//moment_units//")^2", sum(moment2_by_kx, 1))

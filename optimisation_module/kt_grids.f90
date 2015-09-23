@@ -562,6 +562,11 @@ contains
 
     if (y0 < 0) y0 = -1./y0
 
+    !EGH This line does not affect any existing gs2 runs but is
+    !here because gryfx uses jtwist < 0 to signal using the
+    ! default
+    if (jtwist < 0) jtwist = max(int(2.0*pi*shat + 0.5),1)
+
     if (ly == 0.) ly = 2.0*pi*y0
     if (naky == 0) naky = (ny-1)/3 + 1
     if (ntheta0 == 0) ntheta0 = 2*((nx-1)/3) + 1
@@ -877,7 +882,7 @@ contains
     use kt_grids_box, only: grbx=>gryfx
     logical :: gryfx
     gryfx = grbx
-    call broadcast(gryfx)
+    !call broadcast(gryfx)
   end function gryfx
 
 

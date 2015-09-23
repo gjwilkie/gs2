@@ -239,13 +239,17 @@ contains
          use_old_diagnostics
 
     if (proc0) then
-       fbpar = -1.0
-       faperp = 0.0
        beta = 0.0
        zeff = 1.0
        tite = 1.0
        teti = -100.0
        rhostar = 3.e-3
+       user_comments = ''
+       k0 = 1.
+
+       fbpar = -1.0
+       faperp = 0.0
+
 !       include_lowflow = .false.
        neo_test = .false.
        wstar_units = .false.
@@ -254,7 +258,6 @@ contains
        secondary = .true.
        tertiary = .false.
        harris = .false.
-       k0 = 1.
        delt_option = 'default'
        margin = 0.05
        avail_cpu_time = 1.e10
@@ -262,7 +265,6 @@ contains
        trinity_linear_fluxes = .false.
        do_eigsolve = .false.
        immediate_reset = .true.
-       user_comments = ''
        use_old_diagnostics = .false.
        
        in_file = input_unit_exist("parameters", rpexist)
