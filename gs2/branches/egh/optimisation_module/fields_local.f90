@@ -1496,7 +1496,7 @@ contains
 
   !>A routine to reset the object
   subroutine ky_reset(self)
-    use mp, only: free_comm
+    use mp, only: free_comm!, mp_comm_null
     implicit none
     class(ky_type), intent(inout) :: self
     integer :: is
@@ -1508,8 +1508,9 @@ contains
 
 
     !AJ Free communicators associated with this ky block
-    if((self%ky_sub_all%id .ne. self%parent_sub%id).and.self%ky_sub_all%nproc.gt.0) then
-!       write(*,*) 'free comm ky',self%ky_sub_all%id
+    !if(self%ky_sub_all%id .ne. self%parent_sub%id .and. self%ky_sub_all%nproc .gt. 0 .and. self%ky_sub_all%id .ne. mp_comm_null) then
+    !<DD> Don't have mp_comm_null in trunk yet
+    if(self%ky_sub_all%id .ne. self%parent_sub%id .and. self%ky_sub_all%nproc .gt. 0) then
        call free_comm(self%ky_sub_all)
     end if
 
@@ -3616,6 +3617,7 @@ contains
     call pc%reset
     call fieldmat%reset
     !reinit = .true.
+    reinit = .false.
     initialised=.false.
   end subroutine finish_fields_local
 

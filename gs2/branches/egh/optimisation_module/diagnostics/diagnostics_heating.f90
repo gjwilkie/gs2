@@ -133,6 +133,7 @@ contains
     use mp, only: proc0
     use diagnostics_config, only: diagnostics_type
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_create_and_write, only: create_and_write_variable_noread
     use diagnostics_dimensions, only: dim_string
     implicit none
     type(diagnostics_type), intent (inout) :: gnostics
@@ -152,34 +153,34 @@ contains
     call create_and_write_variable(gnostics, gnostics%rtype, "heating_imp_colls", &
          dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "?? [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0", "TBC", h%imp_colls)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_imp_colls_sum", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, "heating_imp_colls_sum", &
          dim_string([gnostics%dims%time]), &
          "?? [h_(i+1)*h_*]/2 * C[h_(i+1)] * T_0", "TBC", sum(h%imp_colls))
     call create_and_write_variable(gnostics, gnostics%rtype, "heating_hypercoll", &
          dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Heating resulting from hyperviscosity -[h H(h) * T_0]", "TBC", h%hypercoll)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_hypercoll_sum", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, "heating_hypercoll_sum", &
          dim_string([gnostics%dims%time]), &
          "Heating resulting from hyperviscosity -[h H(h) * T_0]", "TBC", sum(h%hypercoll))
     call create_and_write_variable(gnostics, gnostics%rtype, "heating_collisions", &
          dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Heating resulting from collisions -[h C(h) * T_0]", "TBC", h%collisions)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_collisions_sum", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, "heating_collisions_sum", &
          dim_string([gnostics%dims%time]), &
          "Heating resulting from collisions -[h C(h) * T_0]", "TBC", sum(h%collisions))
     call create_and_write_variable(gnostics, gnostics%rtype, "heating_gradients", &
          dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Energy injection resulting from gradients [h omega_* h]", "TBC", h%gradients)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_gradients_sum", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, "heating_gradients_sum", &
          dim_string([gnostics%dims%time]), &
          "Energy injection resulting from gradients [h omega_* h]", "TBC", sum(h%gradients))
     call create_and_write_variable(gnostics, gnostics%rtype, "heating_heating", &
          dim_string([gnostics%dims%species,gnostics%dims%time]), &
          "Total heating sum [h (q dchi/dt - dh/dt * T0)]", "TBC", h%heating)
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_heating_sum", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, "heating_heating_sum", &
          dim_string([gnostics%dims%time]), &
          "Total heating sum [h (q dchi/dt - dh/dt * T0)]", "TBC", sum(h%heating))
-    call create_and_write_variable(gnostics, gnostics%rtype, "heating_energy_balance", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, "heating_energy_balance", &
          dim_string([gnostics%dims%time]), &
          "Sum of total heating, total injection and total change in stored &
          & free energy (should be zero)", "TBC", sum(h%heating)+h%antenna+sum(h%gradients)+h%energy_dot)

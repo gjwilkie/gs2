@@ -17,21 +17,6 @@
 !
 !==============================================================================
 
-
-&diagnostics_config
-      nwrite = 10
-      write_any = .true.
-      write_fields = .true.
-      write_phi_over_time = .false.
-      write_apar_over_time = .false.
-      write_bpar_over_time = .false.
-      write_fluxes = .true.
-      write_fluxes_by_mode = .true.
-      write_verr = .false.
-
-      omegatol = -0.001
-/
-
 !==============================
 !GENERAL PARAMETERS  
 !==============================
@@ -41,24 +26,22 @@
 /
 
 &kt_grids_knobs
- grid_option = "box" ! The general layout of the perpendicular grid.
+ grid_option = "single" ! The general layout of the perpendicular grid.
 /
 
 !==============================
 !  
 !==============================
-&kt_grids_box_parameters
- y0 = 2
- naky = 2
- jtwist = 6
- nx = 4
+&kt_grids_single_parameters
+ aky = 0.5 ! The actual value of ky rho
+ akx = 0.0 
 /
 
 !==============================
 !  
 !==============================
 &theta_grid_parameters
- ntheta = 6 ! Number of points along field line (theta) per 2 pi segment
+ ntheta = 12 ! Number of points along field line (theta) per 2 pi segment
  nperiod = 1 ! Number of 2 pi segments along equilibrium magnetic field.
  eps = 0.18 ! eps=r/R
  epsl = 2.0 ! epsl=2 a/R
@@ -85,8 +68,8 @@
 !PITCH ANGLE/ENERGY GRID SETUP  
 !==============================
 &le_grids_knobs
- ngauss = 1 ! Number of untrapped pitch-angles moving in one direction along field line.
- negrid = 4 ! Total number of energy grid points
+ ngauss = 3 ! Number of untrapped pitch-angles moving in one direction along field line.
+ negrid = 12 ! Total number of energy grid points
 /
 
 !==============================
@@ -105,7 +88,7 @@
 !ALGORITHMIC CHOICES  
 !==============================
 &fields_knobs
- field_option = "implicit" ! Controls which time-advance algorithm is used for the linear terms.
+ field_option = "local" ! Controls which time-advance algorithm is used for the linear terms.
 /
 
 !==============================
@@ -117,9 +100,7 @@
  fapar = 0.0 ! Multiplies A_par. Use 1 for finite beta (electromagnetic), 0 otherwise (electrostatic)
  faperp = 0.0 ! Multiplies A_perp. Use 1 for high beta, 0 otherwise. Deprecated: use fbpar instead
  delt = 0.05 ! Time step
- nstep = 50 ! Maximum number of timesteps
- avail_cpu_time = 302
- use_old_diagnostics = .false.
+ nstep = 600 ! Maximum number of timesteps
 /
 
 !==============================
@@ -148,7 +129,7 @@
 !NONLINEARITY  
 !==============================
 &nonlinear_terms_knobs
- nonlinear_mode = "on" ! Include nonlinear terms? ('on','off')
+ nonlinear_mode = "off" ! Include nonlinear terms? ('on','off')
  flow_mode = "off" 
  cfl = 0.5 ! The maximum delt < cfl * min(Delta_perp/v_perp)
 /
@@ -189,8 +170,7 @@
 &init_g_knobs
  chop_side = .false. ! Rarely needed. Forces asymmetry into initial condition.
  phiinit = 0.001 ! Average amplitude of initial perturbation of each Fourier mode.
- ginit_option = "single_parallel_mode" ! Sets the way that the distribution function is initialized.
- ikpar_init = 1
+ ginit_option = "noise" ! Sets the way that the distribution function is initialized.
 /
 
 !==============================
@@ -200,7 +180,7 @@
  print_flux_line = .F. ! Instantaneous fluxes output to screen
  write_nl_flux = .true. ! Write nonlinear fluxes as a function of time.
  print_line = .false. ! Estimated frequencies and growth rates to the screen/stdout
- write_verr = .false. ! Write velocity space diagnostics to '.lpc' and '.verr' files
+ write_verr = .true. ! Write velocity space diagnostics to '.lpc' and '.verr' files
   ! write_g not specified --- Write the distribution function to the '.dist' (NetCDF?)
  write_line = .false. ! If (write_ascii = T) write estimated frequencies and growth rates to the output file
   ! write_gyx not specified --- Write dist fn at a given physical spacial point to a file
@@ -218,8 +198,8 @@
  nwrite = 10 ! Output diagnostic data every nwrite
  navg = 10 ! Any time averages performed over navg
  omegatol = -0.001 ! The convergence has to be better than one part in 1/omegatol
- omegatinst = 1.0e6 ! Recommended value: 500.
- save_for_restart = .true. ! Write restart files.
+ omegatinst = 500.0 ! Recommended value: 500.
+ save_for_restart = .false. ! Write restart files.
   ! write_flux_line not specified --- 
   ! write_ascii not specified --- 
   ! write_kpar not specified --- 

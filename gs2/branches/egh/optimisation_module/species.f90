@@ -424,11 +424,11 @@ contains
          spec(is)%tz = spec(is)%temp/spec(is)%z
          spec(is)%zt = spec(is)%z/spec(is)%temp
          spec(is)%smz = abs(sqrt(spec(is)%temp*spec(is)%mass)/spec(is)%z)
-         !if (gryfx()) then
-           ! WARNING THIS NORMALISATION IS A GUESS!!!
-           ! FEEL FREE TO QUESTION IT AND WORRY ABOUT IT
-           !spec(is)%vnewk = spec(is)%vnewk / sqrt(2.0)
-         !end if
+         if (gryfx()) then
+            !WARNING THIS NORMALISATION IS A GUESS!!!
+            !FEEL FREE TO QUESTION IT AND WORRY ABOUT IT
+           spec(is)%vnewk = spec(is)%vnewk / sqrt(2.0)
+         end if
       end do
     end if
     call broadcast (nspec)

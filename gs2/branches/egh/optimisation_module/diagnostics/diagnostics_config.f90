@@ -70,6 +70,8 @@ module diagnostics_config
      integer :: verbosity = 3
      logical :: create
      logical :: wryte
+     logical :: reed
+     logical :: replay
      logical :: distributed
      logical :: parallel
      logical :: exit

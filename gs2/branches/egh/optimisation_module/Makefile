@@ -118,7 +118,10 @@ USE_AUTOTOOLS ?= off
 
 HAS_ISO_C_BINDING ?= on
 
-
+# If on, build with position independent code, needed if GS2 is going to be included
+# in a shared library or linked dynamically (e.g. it's needed by GRYFX).
+# This *may* have performance implications, but it hasn't been tested yet.
+USE_FPIC ?= 
 
 #
 # * Targets:
@@ -142,12 +145,12 @@ MPIFC		?= mpif90
 H5FC		?= h5fc
 H5FC_par	?= h5pfc
 F90FLAGS	=
-F90OPTFLAGS	=
+F90OPTFLAGS	= 
 CC		= cc
 MPICC		?= mpicc
 H5CC		?= h5cc
 H5CC_par	?= h5pcc
-CFLAGS		=
+CFLAGS		= 
 COPTFLAGS 	=
 LD 		= $(FC)
 LDFLAGS 	= $(F90FLAGS)
@@ -280,6 +283,11 @@ ifeq ($(USE_NEW_DIAG),on)
 	CPPFLAGS+=-DNEW_DIAG
 endif
 
+ifeq ($(USE_FPIC),on)
+	CFLAGS+=-fPIC
+	F90FLAGS += -fPIC
+endif
+
 ifdef USE_SHMEM
 	CPPFLAGS += -DSHMEM
 endif
@@ -404,14 +412,15 @@ diagnostics:
 simpledataio:
 endif
 
-LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
+LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(NETCDF_LIB) $(HDF5_LIB) $(FFT_LIB) \
 		$(IPM_LIB) $(NAG_LIB) $(EIG_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
+	   $(DEFAULT_INC) $(MPI_INC) $(NETCDF_INC) $(HDF5_INC)  $(FFT_INC)\
 		 $(SIMPLEDATAIO_INC) $(EIG_INC)
 CFLAGS += $(COPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) 
+	   $(DEFAULT_INC) $(MPI_INC) $(NETCDF_INC) $(HDF5_INC) $(FFT_INC) 
+
 
 DATE=$(shell date +%y%m%d)
 TARDIR=$(GK_PROJECT)_$(DATE)
@@ -692,6 +701,8 @@ unlink:
 revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
+
+geometry_c_interface.o: geometry_c_interface.h
 
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 

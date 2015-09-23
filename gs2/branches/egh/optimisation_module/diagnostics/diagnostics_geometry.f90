@@ -8,7 +8,7 @@ contains
   subroutine write_geometry(gnostics)
     use theta_grid, only: bmag, gradpar, gbdrift, gbdrift0, &
          cvdrift, cvdrift0, gds2, gds21, gds22, grho, jacob, &
-         shat, drhodpsi, eps, cdrift, cdrift0, qval, shape, theta, ntgrid
+         shat, drhodpsi, eps, cdrift, cdrift0, qval, shape, theta, ntgrid, Bpol
     use theta_grid, only: Rplot, Zplot, aplot, Rprime, Zprime, aprime, drhodpsi
     use diagnostics_create_and_write, only: create_and_write_variable
     use diagnostics_dimensions, only: dim_string
@@ -21,7 +21,10 @@ contains
 
     call create_and_write_variable(gnostics, gnostics%rtype, "bmag", &
          dim_string([gnostics%dims%theta]), &
-         "Values of bmag, the magnitude of the magnetic field ", "B_a", bmag)
+         "Values of bmag, the magnitude of the magnetic field", "B_a", bmag)
+    call create_and_write_variable(gnostics, gnostics%rtype, "bpol", &
+         dim_string([gnostics%dims%theta]), &
+         "Values of Bpol, the poloidal magnetic field", "B_a", Bpol)
     call create_and_write_variable(gnostics, gnostics%rtype, "gradpar", &
          dim_string([gnostics%dims%theta]), &
          "Values of gradpar, which multiplies the parallel derivative", "a", gradpar)
@@ -95,10 +98,11 @@ contains
        write (unit,fmt="('# shape: ',a)") trim(shape)
        write (unit,fmt="('# q = ',e11.4,' drhodpsi = ',e11.4)") qval, drhodpsi
        write (unit,fmt="('# theta1             R2                  Z3               alpha4      ', &
-         &   '       Rprime5              Zprime6           alpha_prime7 ')")
+            '       Rprime5              Zprime6           alpha_prime7     ', & 
+            '      bpol8')")
        do i=-ntgrid,ntgrid
           write (unit,'(20(1x,1pg18.11))') theta(i),Rplot(i),Zplot(i),aplot(i), &
-               Rprime(i),Zprime(i),aprime(i)
+               Rprime(i),Zprime(i),aprime(i),Bpol(i)
        enddo
        call close_output_file (unit)
     endif

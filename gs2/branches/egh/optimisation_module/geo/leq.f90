@@ -44,7 +44,7 @@ contains
 !   1.0642542534450539        2.3203788153401778E-310   0.0000000000000000        0.0000000000000000                4
 
 ! kp, dp, r, s, qs
-    !write (*,*) 'R0', R0,Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap, nt_used
+    !write (*,*) 'leq inputs', R0,Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap, nt_used
     surf%R_center = R0
     surf%R_geo = Ra
     surf%delp = s

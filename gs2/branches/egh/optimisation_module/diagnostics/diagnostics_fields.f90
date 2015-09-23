@@ -17,6 +17,8 @@ contains
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
 
+    if (gnostics%replay) return 
+
     if (fphi >epsilon(0.0)) call write_standard_field_properties(gnostics, &
       'phi',  'The electrostatic potential', 'T_r/e', phinew)
     if (fapar>epsilon(0.0)) call write_standard_field_properties(gnostics, &
@@ -28,6 +30,7 @@ contains
   subroutine write_standard_field_properties(gnostics, field_name, field_description, &
        field_units, field_value)
     use diagnostics_create_and_write, only: create_and_write_variable
+    use diagnostics_create_and_write, only: create_and_write_variable_noread
     use diagnostics_create_and_write, only: create_and_write_distributed_fieldlike_variable
     use diagnostics_dimensions, only: dim_string
     use diagnostics_config, only: diagnostics_type
@@ -38,7 +41,7 @@ contains
     implicit none
     type(diagnostics_type), intent(inout) :: gnostics
     character(*), intent(in) :: field_name, field_description, field_units
-    complex, dimension(-ntgrid:,:,:), intent(in) :: field_value
+    complex, dimension(-ntgrid:,:,:), intent(inout) :: field_value
     logical :: distributed
     !Should these be allocatable to avoid them hanging around?
     complex, dimension(ntheta0, naky) :: field_igomega_by_mode
@@ -63,7 +66,7 @@ contains
          field_description//" squared and averaged over theta and ky, as a function of time", &
          "("//field_units//")^2", field2_by_kx)
 
-    call create_and_write_variable(gnostics, gnostics%rtype, field_name//"2", &
+    call create_and_write_variable_noread(gnostics, gnostics%rtype, field_name//"2", &
          dim_string([gnostics%dims%time]), &
          field_description//" squared and averaged over theta, kx and ky, as a function of time", &
          "("//field_units//")^2", sum(field2_by_kx))
@@ -83,6 +86,7 @@ contains
  
     field_igomega_by_mode(:,:) = field_value(gnostics%igomega, :, :)
 
+    !write (*,*) 'dim string is ', dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%kx,gnostics%dims%ky])
     call create_and_write_distributed_fieldlike_variable( &
          gnostics, gnostics%rtype, field_name, &
          dim_string([gnostics%dims%ri,gnostics%dims%theta,gnostics%dims%kx,gnostics%dims%ky]), &
