@@ -29,6 +29,7 @@ upload:
 
 RUNCOMMAND= @$(TESTCOMMAND)$(1) $(BLUEGENEARGS) $(2) $(3); if test "$$?" != 0; then  echo "FAILED: `basename $$PWD` ($(TESTCOMMAND)$(1) $(2) $(3))" >> results_of_test.txt; else echo "passed: `basename $$PWD` ($(TESTCOMMAND)$(1) $(2) $(3))" >> results_of_test.txt;  fi
 
+SKIPCOMMAND= @echo "skipped: `basename $$PWD` ($(1))" >> results_of_test.txt
 
 BENCHMARKCOMMAND= $(call TESTEXEC,$(1))$(2) $(BLUEGENEARGS) $(3)
 

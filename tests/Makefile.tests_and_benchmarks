@@ -50,6 +50,12 @@ MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 
 export TESTCOMMAND
 
+ifndef NO_TEST_COLOURS
+COLOUR_COMMAND=| sed -e 's/passed/\x1b[32mpassed\x1b[39m/' \
+										 -e 's/FAILED/\x1b[31mFAILED\x1b[39m/' \
+										 -e 's/skipped/\x1b[34mskipped\x1b[39m/'
+endif
+
 define TEST_PRINTOUT
 	@echo ""
 	@echo ""
@@ -65,7 +71,7 @@ define TEST_RESULTS
 	@echo
 	@echo "=======   $(1)"
 	@echo
-	@find $(TEST_DIR)/$(1) -name results_of_test.txt | xargs -n 1 cat
+	@find $(TEST_DIR)/$(1) -name results_of_test.txt | xargs -n 1 cat $(COLOUR_COMMAND)
 endef
 
 define RUN_TESTS
