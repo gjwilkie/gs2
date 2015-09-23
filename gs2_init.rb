@@ -41,9 +41,10 @@ class GenerateInit
     # full is a special level to signify complete
     # initialiation
     ['full', ['set_initial_values', 'normalisations']],
-    ['fields' , ['collisions', 'antenna', 'dist_fn_level_3']],
+    ['fields_level_2' , ['collisions', 'antenna_level_2', 'dist_fn_level_3']],
     ['dist_fn_level_3' , ['dist_fn_level_2', 'hyper', 'override_timestep']],
     ['dist_fn_level_1' , ['dist_fn_arrays']], 
+    ['fields_level_1' , ['kt_grids', 'antenna_level_1', 'gs2_layouts']],
     ['collisions' ,
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 'le_grids',
         'dist_fn_layouts', 'run_parameters', 'dist_fn_level_3']],
@@ -51,10 +52,10 @@ class GenerateInit
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid', 'le_grids',
         'dist_fn_layouts', 'override_optimisations']],
     ['gs2_layouts' , []],
-    ['set_initial_values', ['fields', 'init_g', 'override_initial_values']],
+    ['set_initial_values', ['fields_level_2', 'init_g', 'override_initial_values']],
     ['le_grids' ,
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid']],
-    ['antenna' , ['species', 'run_parameters', 'override_profiles']],
+    ['antenna_level_2' , ['species', 'run_parameters', 'override_profiles']],
     ['theta_grid' , ['theta_grid_params', 'override_miller_geometry']],
     ['normalisations', []],
     ['theta_grid_params' , []],
@@ -74,6 +75,7 @@ class GenerateInit
       ['species', 'kt_grids', 'gs2_layouts', 'theta_grid']],
 
     ['dist_fn_level_2' , ['dist_fn_level_1', 'override_profiles']], 
+    ['antenna_level_1', ['species']],
     
     ['override_kt_grids' , ['kt_grids_parameters']],
     ['override_optimisations' , ['gs2_layouts']],
@@ -82,7 +84,7 @@ class GenerateInit
     ['override_profiles' , ['species']],
     # Override the timestep set in run_parameters
     ['override_timestep' , ['run_parameters']],
-    ['override_initial_values', ['fields', 'init_g']],
+    ['override_initial_values', ['fields_level_2', 'init_g']],
   ]
                   
 
@@ -105,6 +107,7 @@ class GenerateInit
   # the order the levels have to be reached, i.e.
   # the order in which modules are initialized.
   while modules_remaining.size > 0
+    #p modules_remaining 
     modules_remaining.each do |mod|
       if deps[mod] - LEVELS == [] # i.e. all dependencies already in LEVELS
         LEVELS.push mod
@@ -131,6 +134,10 @@ class GenerateInit
                      'gs2_layouts' 
                    when /^dist_fn_*/
                      'dist_fn'
+                   when /^fields_level_[12]/
+                     'fields'
+                   when /^antenna_level_[12]/
+                     'antenna'
                    when /^kt_grids*/
                      'kt_grids'
                    else
