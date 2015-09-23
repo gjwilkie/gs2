@@ -19,6 +19,12 @@ else
 	endif
 endif
 
+
+ifdef SIMPLEDATAIO_LIB_DIR_ABS
+      SDATIO_LINK=-L$(SIMPLEDATAIO_LIB_DIR_ABS)
+      SDATIO_LIB=-lsimpledataio
+endif
+
 export TESTCOMMAND
 export NTESTPROCS
 
@@ -39,7 +45,7 @@ export TEST_LEVEL
 #TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
 TEST_DEPS?=libgs2.a functional_tests.o benchmarks.o
 #export
-TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD)  -L$(SIMPLEDATAIO_LIB_DIR_ABS)" LIBS=" -lgs2 -lsimpledataio $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
+TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD)  $(SDATIO_LINK)" LIBS=" -lgs2 $(SDATIO_LIB) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 #MAKETESTS = $(MAKE)
 

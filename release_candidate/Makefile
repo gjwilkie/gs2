@@ -110,7 +110,7 @@ LOWFLOW ?=
 WITH_EIG ?= 
 
 # Compile with the new simplified diagnostics module
-USE_NEW_DIAG ?= on
+USE_NEW_DIAG ?= 
 
 # Use autotools to configure the code (currently only affects the new diagnostics module)
 # Possible values... on, off

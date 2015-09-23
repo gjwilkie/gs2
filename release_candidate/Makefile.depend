@@ -148,23 +148,6 @@ ffttester_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
-	 diagnostics_antenna.o \
-	 diagnostics_ascii.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 diagnostics_dimensions.o \
-	 diagnostics_fields.o \
-	 diagnostics_final_routines.o \
-	 diagnostics_fluxes.o \
-	 diagnostics_geometry.o \
-	 diagnostics_heating.o \
-	 diagnostics_metadata.o \
-	 diagnostics_moments.o \
-	 diagnostics_nonlinear_convergence.o \
-	 diagnostics_omega.o \
-	 diagnostics_screen_printout.o \
-	 diagnostics_turbulence.o \
-	 diagnostics_velocity_space.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -174,7 +157,6 @@ ffttester_mod = \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
-	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -182,7 +164,6 @@ ffttester_mod = \
 	 geq.o \
 	 gridgen4mod.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -214,8 +195,6 @@ ffttester_mod = \
 	 redistribute.o \
 	 run_parameters.o \
 	 runtime_tests.o \
-	 simpledataio_write.o \
-	 simpledataiof.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -223,8 +202,7 @@ ffttester_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o \
-	 volume_averages.o 
+	 unit_tests.o 
 
 generate_fftw_wisdom_mod = \
 	 antenna_data.o \
@@ -282,23 +260,6 @@ gs2_mod = \
 	 constants.o \
 	 convert.o \
 	 deq.o \
-	 diagnostics_antenna.o \
-	 diagnostics_ascii.o \
-	 diagnostics_config.o \
-	 diagnostics_create_and_write.o \
-	 diagnostics_dimensions.o \
-	 diagnostics_fields.o \
-	 diagnostics_final_routines.o \
-	 diagnostics_fluxes.o \
-	 diagnostics_geometry.o \
-	 diagnostics_heating.o \
-	 diagnostics_metadata.o \
-	 diagnostics_moments.o \
-	 diagnostics_nonlinear_convergence.o \
-	 diagnostics_omega.o \
-	 diagnostics_screen_printout.o \
-	 diagnostics_turbulence.o \
-	 diagnostics_velocity_space.o \
 	 dist_fn.o \
 	 dist_fn_arrays.o \
 	 eeq.o \
@@ -307,7 +268,6 @@ gs2_mod = \
 	 fields_arrays.o \
 	 fields_implicit.o \
 	 fields_local.o \
-	 fields_parallelization.o \
 	 fields_test.o \
 	 file_utils.o \
 	 gauss_quad.o \
@@ -316,7 +276,6 @@ gs2_mod = \
 	 gridgen4mod.o \
 	 gs2.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_heating.o \
 	 gs2_io.o \
 	 gs2_layouts.o \
@@ -348,8 +307,6 @@ gs2_mod = \
 	 redistribute.o \
 	 run_parameters.o \
 	 runtime_tests.o \
-	 simpledataio_write.o \
-	 simpledataiof.o \
 	 sorting.o \
 	 species.o \
 	 spfunc.o \
@@ -357,8 +314,7 @@ gs2_mod = \
 	 text_options.o \
 	 theta_grid.o \
 	 theta_grid_params.o \
-	 unit_tests.o \
-	 volume_averages.o 
+	 unit_tests.o 
 
 hrate_mod = \
 	 command_line.o \
@@ -544,7 +500,6 @@ diagnostics_config.o: \
 	 diagnostics_dimensions.o \
 	 file_utils.o \
 	 mp.o \
-	 simpledataiof.o \
 	 species.o \
 	 text_options.o 
 diagnostics_create_and_write.o: \
@@ -553,11 +508,8 @@ diagnostics_create_and_write.o: \
 	 fields_parallelization.o \
 	 file_utils.o \
 	 kt_grids.o \
-	 mp.o \
-	 simpledataio_write.o \
-	 simpledataiof.o 
-diagnostics_dimensions.o: \
-	 simpledataiof.o 
+	 mp.o 
+diagnostics_dimensions.o: 
 diagnostics_fields.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
@@ -637,8 +589,7 @@ diagnostics_metadata.o: \
 	 file_utils.o \
 	 mp.o \
 	 run_parameters.o \
-	 runtime_tests.o \
-	 simpledataiof.o 
+	 runtime_tests.o 
 diagnostics_moments.o: \
 	 diagnostics_config.o \
 	 diagnostics_create_and_write.o \
@@ -836,7 +787,6 @@ file_utils.o: \
 	 command_line.o 
 functional_tests.o: \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_main.o \
 	 job_manage.o \
 	 kt_grids.o \
@@ -935,8 +885,6 @@ gs2_diagnostics_new.o: \
 	 mp.o \
 	 nonlinear_terms.o \
 	 run_parameters.o \
-	 simpledataio_write.o \
-	 simpledataiof.o \
 	 species.o \
 	 theta_grid.o \
 	 volume_averages.o 
@@ -976,7 +924,6 @@ gs2_main.o: \
 	 file_utils.o \
 	 geometry.o \
 	 gs2_diagnostics.o \
-	 gs2_diagnostics_new.o \
 	 gs2_layouts.o \
 	 gs2_reinit.o \
 	 gs2_save.o \
@@ -1207,7 +1154,8 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 constants.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
@@ -1228,9 +1176,6 @@ rungridgen.o: \
 	 gridgen4mod.o \
 	 spl.o 
 runtime_tests.o: 
-simpledataio_write.o: \
-	 simpledataiof.o 
-simpledataiof.o: 
 sorting.o: 
 species.o: \
 	 file_utils.o \
