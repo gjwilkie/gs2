@@ -1,7 +1,0 @@
-#!/bin/bash
-if [ "$(./getncdat $1 -p 7,13)" = "$(./getncdat $2 -p 7,13)" ] 
-then
-	echo "T" > test_tmp.txt
-else
-	echo "F" > test_tmp.txt
-fi
