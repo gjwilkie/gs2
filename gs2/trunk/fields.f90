@@ -10,6 +10,8 @@ module fields
   public :: reset_init, set_init_fields
   public :: fields_init_response, set_dump_and_read_response
   public :: dump_response_to_file
+  public :: init_fields_level_1, init_fields_level_2
+  public :: finish_fields_level_1, finish_fields_level_2
 
   !> Made public for unit tests
   public :: fields_pre_init
@@ -113,6 +115,28 @@ contains
     call debug_message(verb, "init_fields: allocate_arrays")
     call allocate_arrays
   end subroutine fields_pre_init
+  
+  subroutine init_fields_level_1
+    use unit_tests, only: debug_message
+    implicit none
+    integer, parameter :: verb=3
+    call debug_message(verb, "init_fields: read_parameters")
+    call read_parameters
+    call debug_message(verb, "init_fields: allocate_arrays")
+    call allocate_arrays
+  end subroutine init_fields_level_1
+
+  subroutine finish_fields_level_1
+    call finish_fields
+  end subroutine finish_fields_level_1
+
+  subroutine init_fields_level_2
+    call init_fields
+  end subroutine init_fields_level_2
+
+  subroutine finish_fields_level_2
+    call reset_init
+  end subroutine finish_fields_level_2
 
   subroutine fields_init_response
     use fields_implicit, only: init_fields_implicit
