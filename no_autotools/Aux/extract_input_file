@@ -1,2 +1,0 @@
-#!/bin/bash
-ncdump $1 -v input_file |  grep 'input_file = ' | sed s/.\ \;\$// | sed s/input_file.....// | sed   s/\\\\\\\"/\\\"/g | sed s/\\\(\\\\\\\\n\ \\\)*\\\\\\\\n/\\n/g 
