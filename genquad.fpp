@@ -49,6 +49,15 @@ contains
     real,dimension(0:N_out):: alpha,beta
     integer:: i, nerr, ier, neval, n
     real:: errest, moment1, moment2
+!    procedure(wgt_x_func),pointer:: wgt_x => null
+!    procedure(poly_sq_func),pointer:: poly_sq => null
+!    procedure(poly_sqx_func),pointer:: poly_sqx => null
+    procedure(real),pointer:: wgt_x
+    procedure(real),pointer:: poly_sq 
+    procedure(real),pointer:: poly_sqx 
+    wgt_x => wgt_x_func
+    poly_sq => poly_sq_func
+    poly_sqx => poly_sqx_func
 
 #ifdef LAPACK
 
@@ -149,32 +158,14 @@ contains
 
 contains
 
-   real function wgt_x(x)
+   real function wgt_x_func(x)
      implicit none
      real,intent(in):: x
-     wgt_x = wgt_func(x)*x
+     wgt_x_func = wgt_func(x)*x
      return
-   end function wgt_x
+   end function wgt_x_func
 
-   real function poly_sqx(x)
-     implicit none
-     real,intent(in):: x
-     real:: ym1,y,temp
-     integer:: i,j
-
-     ym1 = 0.0
-     y = 1.0
-     do i = 1,poly_order
-       temp = y
-       y = (x-a_poly(i-1))*y - b_poly(i-1)*ym1
-       ym1 = temp
-     end do 
-     poly_sqx = wgt_func(x)*y*y*x
-     return
-   end function poly_sqx
-
-
-   real function poly_sq(x)
+   real function poly_sqx_func(x)
      implicit none
      real,intent(in):: x
      real:: ym1,y,temp
@@ -187,9 +178,27 @@ contains
        y = (x-a_poly(i-1))*y - b_poly(i-1)*ym1
        ym1 = temp
      end do 
-     poly_sq = wgt_func(x)*y*y
+     poly_sqx_func = wgt_func(x)*y*y*x
      return
-   end function poly_sq
+   end function poly_sqx_func
+
+
+   real function poly_sq_func(x)
+     implicit none
+     real,intent(in):: x
+     real:: ym1,y,temp
+     integer:: i,j
+
+     ym1 = 0.0
+     y = 1.0
+     do i = 1,poly_order
+       temp = y
+       y = (x-a_poly(i-1))*y - b_poly(i-1)*ym1
+       ym1 = temp
+     end do 
+     poly_sq_func = wgt_func(x)*y*y
+     return
+   end function poly_sq_func
 
 #else
    write(*,*) "You must link to LAPACK for genquad to work."
