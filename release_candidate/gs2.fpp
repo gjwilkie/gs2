@@ -3,13 +3,23 @@
 !! 
 !! GS2 is an initial value nonlinear code which solves the gyrokinetic equation. This is the source code documentation for GS2, and is aimed at developers. 
 !!
+#ifdef RELEASE
+!! This is the documentation for release RELEASE.
+!! For documentation for the development trunk please go to
+!! http://gyrokinetics.sourceforge.net/gs2_documentation
+#else
+!! This is the documentation for the development trunk.
+!! For documentation for specific releases please go to
+!! http://gyrokinetics.sourceforge.net/gs2_documentation/releases
+#endif
+!!
 !! \subsection udoc User Documentation
 !! For a general introduction and user documentation please go to the Gyrokinetics Wiki: http://gyrokinetics.sourceforge.net/wiki/index.php/Main_Page
 !! 
 !! Some useful pages are: 
 !!  - A beginners guide to downloading and installing: http://gyrokinetics.sourceforge.net/wiki/index.php/GS2:_A_Guide_for_Beginners
 !!  - A general introduction to GS2: http://gyrokinetics.sourceforge.net/wiki/index.php/An_Introduction_to_GS2
-!!  - A comprehensive guide to the GS2 input parameters: http://gyrokinetics.sourceforge.net/wiki/index.php/GS2_Input_Parameters
+!!  - A comprehensive guide to the GS2 input parameters: http://gyrokinetics.sourceforge.net/wiki/index.php/GS2_Input_Parameters.RELEASE
 !!
 !! \section doc Documentation Structure
 !! Documentation is categorized by namespaces (i.e. modules), class (which in
