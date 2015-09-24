@@ -14,6 +14,7 @@ contains
     use simpledataio, only: add_standard_metadata
     use runtime_tests, only: build_identifier
     use runtime_tests, only: get_svn_rev
+    use runtime_tests, only: is_release, release
     use run_parameters, only: user_comments
     type(diagnostics_type), intent(in) :: gnostics
     character (20) :: datestamp, timestamp, timezone
@@ -111,6 +112,18 @@ contains
       trim(get_svn_rev()))
     call add_metadata(gnostics%sfile, "build_identifier", &
       trim(build_identifier()))
+    if (is_release()) then
+      call add_metadata(gnostics%sfile, "release_info", &
+        "This is official release number "//trim(build_identifier()))
+    else 
+      call add_metadata(gnostics%sfile, "release_info", &
+        jline("This is not an official release (presumably")//&
+        jline("a development version)"))
+    end if
+
+
+
+
 
     call add_standard_metadata(gnostics%sfile)
   end subroutine write_metadata
