@@ -117,13 +117,13 @@ contains
 
     call calculate_f0_arrays(epts, wgts, vcut,.false.)
     
-    do is = 1,nspec
-       do ie = 1,negrid
+!    do is = 1,nspec
+!       do ie = 1,negrid
 !          if (proc0) write(*,*) is, ie,epts(ie,is),f0_values(ie,is),df0dE(ie,is), f0prim(ie,is)
-          if (proc0) write(*,*) is, ie,epts(ie,is),wgts(ie,is),f0_values(ie,is)
-       end do
-       if (proc0) write(*,*) "Sum = ",sum(wgts(:,is))
-    end do
+!          if (proc0) write(*,*) is, ie,epts(ie,is),wgts(ie,is),f0_values(ie,is)
+!       end do
+!       if (proc0) write(*,*) "Sum = ",sum(wgts(:,is))
+!    end do
 
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
@@ -191,13 +191,13 @@ contains
 
     call calculate_f0_arrays(epts, wgts, vcut,.true.)
     
-    do is = 1,nspec
-       do ie = 1,negrid
+!    do is = 1,nspec
+!       do ie = 1,negrid
 !          if (proc0) write(*,*) is, ie,epts(ie,is),f0_values(ie,is),df0dE(ie,is), f0prim(ie,is)
-          if (proc0) write(*,*) is, ie,epts(ie,is),wgts(ie,is),f0_values(ie,is)
-       end do
-       if (proc0) write(*,*) "Sum = ",sum(wgts(:,is))
-    end do
+!          if (proc0) write(*,*) is, ie,epts(ie,is),wgts(ie,is),f0_values(ie,is)
+!       end do
+!       if (proc0) write(*,*) "Sum = ",sum(wgts(:,is))
+!    end do
 
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
