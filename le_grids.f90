@@ -117,11 +117,13 @@ contains
 
     call calculate_f0_arrays(epts, wgts, vcut,.false.)
     
-!    do is = 1,nspec
-!       do ie = 1,negrid
+    do is = 1,nspec
+       do ie = 1,negrid
 !          if (proc0) write(*,*) is, ie,epts(ie,is),f0_values(ie,is),df0dE(ie,is), f0prim(ie,is)
-!       end do
-!    end do
+          if (proc0) write(*,*) is, ie,epts(ie,is),wgts(ie,is),f0_values(ie,is)
+       end do
+       if (proc0) write(*,*) "Sum = ",sum(wgts(:,is))
+    end do
 
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
@@ -183,18 +185,19 @@ contains
       !wgts(:nesub) = wgts(:nesub)*epts(:nesub)*exp(-epts(:nesub))/sqrt(pi)
       ! No longer absorb maxwellian... allow for arbitrary f0. EGH/GW
       ! See eq. 4.12 of M. Barnes's thesis
-      wgts(:, is) = wgts(:, is)*4.0*pi*epts(:,is)
+      wgts(:, is) = wgts(:, is)*pi*epts(:,is)
 
     end do
 
     call calculate_f0_arrays(epts, wgts, vcut,.true.)
     
-!    do is = 1,nspec
-!       do ie = 1,negrid
+    do is = 1,nspec
+       do ie = 1,negrid
 !          if (proc0) write(*,*) is, ie,epts(ie,is),f0_values(ie,is),df0dE(ie,is), f0prim(ie,is)
-!       end do
-!    end do
-
+          if (proc0) write(*,*) is, ie,epts(ie,is),wgts(ie,is),f0_values(ie,is)
+       end do
+       if (proc0) write(*,*) "Sum = ",sum(wgts(:,is))
+    end do
 
     energy_grid = epts
     zeroes(:,:) = sqrt(epts(:negrid-1,:))
@@ -563,6 +566,11 @@ contains
     else 
        nesuper = min(negrid/10+1, 4)
        nesub = negrid - nesuper
+    endif
+
+    if (genquad) then
+       nesub = negrid
+       nesuper = 0
     endif
 
   end subroutine read_parameters
