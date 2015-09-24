@@ -249,6 +249,15 @@ endif
 SVN_REV='"$(shell svnversion -n .)"'
 CPPFLAGS+=-DSVN_REV=$(SVN_REV)
 
+# Define RELEASE based on the contents of the RELEASE
+# file, which is empty unless we are in a release.
+RELEASE_FILE = $(shell cat RELEASE)
+ifneq ($(RELEASE_FILE),) # If the file is not empty
+	RELEASE=$(RELEASE_FILE)
+	CPPFLAGS+=-DRELEASE=$(RELEASE_FILE)
+	DOC_FOLDER=releases/$(RELEASE_FILE)/
+endif
+
 # Define GK_SYSTEM for runtime_tests so that we can get the system name
 # at runtime
 CPPFLAGS+=-DGK_SYSTEM='"$(GK_SYSTEM)"'
@@ -575,11 +584,14 @@ depend: $(FORTFROMRUBY) $(F90FROMFPP)
 gs2_init.f90: templates/gs2_init_template.f90
 
 doc: $(F90FROMFPP) $(FORTFROMRUBY)
-	doxygen ../doxygen/gs2 
+	doxygen doxygen_config 
 	rm -f $(F90FROMFPP)
 
 sync_doc: 
-	rsync -av --delete ../doxygen/doc/html/	${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/
+	rsync -av --delete --exclude=releases doc/html/	${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/$(DOC_FOLDER)
+	mkdir -p doc/html/releases
+	echo "Options +Indexes" > doc/html/releases/.htaccess
+	rsync -av doc/html/releases/ ${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/releases/
 
 sync_input_doc:
 	coderunner cc synchronise_variables . -C gs2
@@ -605,7 +617,10 @@ cleanlib:
 cleanconfig:
 	rm -f system_config .tmp_output
 
-distclean: unlink clean cleanlib clean_tests clean_benchmarks distclean_simpledataio cleanconfig
+cleandoc:
+	rm -rf doc/
+
+distclean: unlink clean cleanlib clean_tests clean_benchmarks distclean_simpledataio cleanconfig cleandoc
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
