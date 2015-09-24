@@ -1,0 +1,129 @@
+ifdef NPROCS
+	NTESTPROCS=$(NPROCS)
+else
+	NTESTPROCS=2
+endif
+
+ifdef TESTNORUN
+	TESTCOMMAND=: 
+else
+	ifdef TESTEXEC
+		TESTCOMMAND=$(TESTEXEC) ./
+	else
+		ifdef USE_MPI
+				TESTCOMMAND=mpirun -np $(NTESTPROCS) ./
+		else
+		    TESTCOMMAND=./
+		endif
+
+	endif
+endif
+
+
+ifdef SIMPLEDATAIO_LIB_DIR_ABS
+      SDATIO_LINK=-L$(SIMPLEDATAIO_LIB_DIR_ABS)
+      SDATIO_LIB=-lsimpledataio
+endif
+
+export TESTCOMMAND
+export NTESTPROCS
+
+#Set the level of testing, currently loosely defined as
+# 0 : Only most basic tests included
+# 1 : Most simple tests run
+# 2 : More expensive tests (say a few minutes on 8 cores)
+# 3 : Very expensive tests (say more than 10 minutes on 8 cores)
+#etc.
+ifndef TEST_LEVEL
+       TEST_LEVEL:=1
+endif
+export TEST_LEVEL
+
+# To save time you can set test deps yourself on the command line:
+# otherwise it builds everything just to be sure, because recursive
+# make can't resolve dependencies
+#TEST_DEPS?=$(gs2_mod) functional_tests.o benchmarks.o
+TEST_DEPS?=libgs2.a functional_tests.o benchmarks.o
+#export
+TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD)  $(SDATIO_LINK)" LIBS=" -lgs2 $(SDATIO_LIB) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
+MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
+#MAKETESTS = $(MAKE)
+
+#export TEST_DEPS
+export TESTCOMMAND
+#export gs2_mod
+#export TESTNORUN
+#export TESTFC=$(FC)
+#export TESTF90FLAGS=$(F90FLAGS)
+#export TESTCPP=$(CPP)
+#export TESTLD=$(LD)
+#export TESTLDFLAGS=$(LDFLAGS)
+#export TESTLIBS=$(LIBS)
+#export
+
+define TEST_PRINTOUT
+	@echo ""
+	@echo ""
+	@echo "=================================="
+	@echo "           Test Results      "
+	@echo "==================================" $(1)
+	@echo
+	@echo "=================================="
+endef
+
+define TEST_RESULTS
+
+	@echo
+	@echo "=======   $(1)"
+	@echo
+	@find $(TEST_DIR)/$(1) -name results_of_test.txt | xargs -n 1 cat
+endef
+
+define RUN_TESTS
+	@find $(TEST_DIR)/$(1) -name results_of_test.txt | xargs rm -f
+	cd $(TEST_DIR)/$(1) && time ${MAKETESTS} 
+endef
+
+clean_tests:
+	$(MAKE) clean -C $(TEST_DIR)/nonlinear_tests 
+	$(MAKE) clean -C $(TEST_DIR)/linear_tests 
+	$(MAKE) clean -C $(TEST_DIR)/unit_tests 
+
+clean_benchmarks:
+	$(MAKE) clean -C $(TEST_DIR)/benchmarks 
+
+unit_tests_no_message: unit_tests.o $(TEST_DEPS)
+	$(call RUN_TESTS,unit_tests)
+
+unit_tests: unit_tests_no_message
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
+
+linear_tests_no_message: functional_tests.o unit_tests.o $(TEST_DEPS)
+	$(call RUN_TESTS,linear_tests)
+
+linear_tests: linear_tests_no_message
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
+
+nonlinear_tests_no_message: functional_tests.o unit_tests.o $(TEST_DEPS)
+	$(call RUN_TESTS,nonlinear_tests)
+
+nonlinear_tests: nonlinear_tests_no_message
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
+
+tests: unit_tests_no_message linear_tests_no_message nonlinear_tests_no_message
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,unit_tests)$(call TEST_RESULTS,linear_tests)$(call TEST_RESULTS,nonlinear_tests))
+
+
+test_script: unit_tests_no_message linear_tests_no_message
+	echo "" > test_script.sh
+	find $(PWD)/$(TEST_DIR)/unit_tests -executable | grep -v svn | grep '$(TEST_DIR)/unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	find $(PWD)/$(TEST_DIR)/linear_tests -executable | grep -v svn | grep '$(TEST_DIR)/linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	find $(PWD)/$(TEST_DIR)/nonlinear_tests -executable | grep -v svn | grep '$(TEST_DIR)/nonlinear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	echo "echo \"Tests Successful\"" >> test_script.sh
+
+benchmarks: unit_tests.o $(TEST_DEPS)
+	cd $(TEST_DIR)/benchmarks && time ${MAKETESTS} && echo && echo "Completed Benchmarks"
+
+upload_benchmarks: 
+	cd $(TEST_DIR)/benchmarks && time ${MAKETESTS} upload && echo && echo "Completed Benchmarks"
+
