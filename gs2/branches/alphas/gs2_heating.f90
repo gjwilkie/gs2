@@ -669,6 +669,8 @@ contains
                    he_hist(n,mod(istep,navg)) % hs2(is)        = he(n) % hs2(is)
                    he_hist(n,mod(istep,navg)) % gradients(is)  = he(n) % gradients(is)
                    he_hist(n,mod(istep,navg)) % heating(is)    = he(n) % heating(is)
+                   he_hist(n,mod(istep,navg)) % dh2dt(is)    = he(n) % dh2dt(is)
+                   he_hist(n,mod(istep,navg)) % parstream(is)    = he(n) % parstream(is)
                 end do
              end do
           end if
@@ -681,6 +683,8 @@ contains
                       he(n)%hs2(is)        = he(n)%hs2(is)       + he_hist(n,i) % hs2(is) / real(navg)
                       he(n)%gradients(is)  = he(n)%gradients(is) + he_hist(n,i) % gradients(is) / real(navg)
                       he(n)%heating(is)    = he(n)%heating(is)   + he_hist(n,i) % heating(is) / real(navg)
+                      he(n)%dh2dt(is)    = he(n)%dh2dt(is)   + he_hist(n,i) % dh2dt(is) / real(navg)
+                      he(n)%parstream(is)    = he(n)%parstream(is)   + he_hist(n,i) % parstream(is) / real(navg)
                    end do
                 end do
              end do
