@@ -4842,7 +4842,7 @@ subroutine check_dist_fn(report_unit)
     end do
 
     call sum_reduce(total,0)
-    if (proc0) flx = 0.5*total
+    if (proc0) flx = total
 
     deallocate(total)
 
@@ -6110,7 +6110,7 @@ subroutine check_dist_fn(report_unit)
           
           do ig=-ntgrid, ntgrid-1
              
-             dzinv = gradpar(ig)
+             dzinv = gjadpar(ig)
 
              hdot = fdot (g   (ig  ,isgn,iglo), &
                           gnew(ig  ,isgn,iglo), &
@@ -6256,7 +6256,7 @@ subroutine check_dist_fn(report_unit)
                           gnew(ig  ,isgn,iglo), &
                           gnew(ig+1,isgn,iglo))
 
-             g0(ig,isgn,iglo) = 2.0*zi * wstar(ik,ie,is)/code_dt * conjg(havg)*chi * spec(is)%dens
+             g0(ig,isgn,iglo) = zi * wstar(ik,ie,is)/code_dt * conjg(havg)*chi * spec(is)%dens
             
           end do
        end do
