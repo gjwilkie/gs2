@@ -71,6 +71,7 @@ module gs2_heating
      real, dimension(:), pointer :: heating    => null()
      real, dimension(:), pointer :: dh2dt    => null()
      real, dimension(:), pointer :: parstream    => null()
+     real, dimension(:), pointer :: vdrift    => null()
   end type heating_diagnostics
 
 !GGH>
@@ -205,6 +206,7 @@ contains
        allocate (h(n) % gradients(nspec))   
        allocate (h(n) % heating(nspec))     
        allocate (h(n) % parstream(nspec))     
+       allocate (h(n) % vdrift(nspec))     
     end do
 
     call zero_hetype (h)
@@ -227,6 +229,7 @@ contains
        allocate (h(m,n) % gradients(nspec))   
        allocate (h(m,n) % heating(nspec))     
        allocate (h(m,n) % parstream(nspec))     
+       allocate (h(m,n) % vdrift(nspec))     
     end do
     end do
 
@@ -363,6 +366,7 @@ contains
        h(n) % gradients = 0. 
        h(n) % heating = 0.   
        h(n) % parstream = 0.   
+       h(n) % vdrift = 0.   
     end do
 
   end subroutine zero_hetype_1
@@ -383,6 +387,7 @@ contains
        h(m,n) % gradients = 0. 
        h(m,n) % heating = 0.   
        h(m,n) % parstream = 0.   
+       h(m,n) % vdrift = 0.   
     end do
     end do
 
@@ -497,6 +502,7 @@ contains
        deallocate (h(m) % gradients)
        deallocate (h(m) % heating)
        deallocate (h(m) % parstream)
+       deallocate (h(m) % vdrift)
     end do
 
   end subroutine del_hetype_1
@@ -516,6 +522,7 @@ contains
        deallocate (h(m,n) % gradients)
        deallocate (h(m,n) % heating)
        deallocate (h(m,n) % parstream)
+       deallocate (h(m,n) % vdrift)
     end do
     end do
 
@@ -671,6 +678,7 @@ contains
                    he_hist(n,mod(istep,navg)) % heating(is)    = he(n) % heating(is)
                    he_hist(n,mod(istep,navg)) % dh2dt(is)    = he(n) % dh2dt(is)
                    he_hist(n,mod(istep,navg)) % parstream(is)    = he(n) % parstream(is)
+                   he_hist(n,mod(istep,navg)) % vdrift(is)    = he(n) % vdrift(is)
                 end do
              end do
           end if
@@ -685,6 +693,7 @@ contains
                       he(n)%heating(is)    = he(n)%heating(is)   + he_hist(n,i) % heating(is) / real(navg)
                       he(n)%dh2dt(is)    = he(n)%dh2dt(is)   + he_hist(n,i) % dh2dt(is) / real(navg)
                       he(n)%parstream(is)    = he(n)%parstream(is)   + he_hist(n,i) % parstream(is) / real(navg)
+                      he(n)%vdrift(is)    = he(n)%vdrift(is)   + he_hist(n,i) % vdrift(is) / real(navg)
                    end do
                 end do
              end do
@@ -830,6 +839,12 @@ contains
        do is=1,nspec
           do n=1,nmax
              tmp(n,is) = he(n)%parstream(is)
+          end do
+       end do
+    case (6) 
+       do is=1,nspec
+          do n=1,nmax
+             tmp(n,is) = he(n)%vdrift(is)
           end do
        end do
 
