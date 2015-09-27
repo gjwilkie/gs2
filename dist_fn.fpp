@@ -6110,7 +6110,7 @@ subroutine check_dist_fn(report_unit)
           
           do ig=-ntgrid, ntgrid-1
              
-             dzinv = gjadpar(ig)
+             dzinv = gradpar(ig)
 
              hdot = fdot (g   (ig  ,isgn,iglo), &
                           gnew(ig  ,isgn,iglo), &
