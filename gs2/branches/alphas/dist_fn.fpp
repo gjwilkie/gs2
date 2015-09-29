@@ -4729,7 +4729,6 @@ subroutine check_dist_fn(report_unit)
        end do
        call get_flux_e (phi, pflux, dnorm)
 
-
     else
        pflux = 0.
     end if
@@ -4799,7 +4798,7 @@ subroutine check_dist_fn(report_unit)
 
   end subroutine get_flux
 
-  subroutine fsavg_keep_e (g,flx)
+  subroutine fsavg_keep_e (g_in,flx)
   !< Integrates a function g over lambda, flux-surface-averages, returning to result to flx on proc0
   !! Similar to get_flux_e
     use theta_grid, only: ntgrid, delthet, grho, bmag, gradpar, jacob
@@ -4810,7 +4809,7 @@ subroutine check_dist_fn(report_unit)
     use mp, only: sum_reduce, proc0
     use gs2_layouts, only: g_lo,ie_idx,il_idx,is_idx,it_idx,ik_idx,isign_idx,yxf_lo
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g_in
     complex, dimension (:,:), intent (inout) :: flx
     complex, dimension (:,:), allocatable :: total
     real, dimension (-ntgrid:ntgrid) :: wgt
@@ -4822,21 +4821,21 @@ subroutine check_dist_fn(report_unit)
     
     wgt(-ntgrid:) = 0.0
     do ig=-ntgrid,ntgrid
-!       wgt(ig) = delthet(ig)*(jacob(ig)+jacob(ig+1))*0.5
-       wgt(ig) = delthet(ig)*jacob(ig)
+!       wgt(ig) = delthet(ig)*jacob(ig)
+       wgt(ig) = delthet(ig)*(jacob(ig)+jacob(ig+1))*0.5
     end do
-    wgt(-ntgrid:) = wgt(-ntgrid:) / (sum(wgt)*grho(-ntgrid:))
+    wgt(-ntgrid:) = wgt(-ntgrid:) / (sum(wgt(-ntgrid:)))
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
-       fac =0.5
        ie = ie_idx(g_lo,iglo)
        il = il_idx(g_lo,iglo)
        it = it_idx(g_lo,iglo)
        ik = ik_idx(g_lo,iglo)
        is = is_idx(g_lo,iglo)
-       if (aky(ik) == 0.) fac = 1.0
+       fac =0.5
+       if (aky(ik) < epsilon(0.0)) fac = 1.0
 
-       total(ie,is) = total(ie,is) + fac*sum((g0(-ntgrid:,1,iglo) + g0(-ntgrid:,2,iglo)) &
+       total(ie,is) = total(ie,is) + fac*sum((g_in(-ntgrid:,1,iglo) + g_in(-ntgrid:,2,iglo)) &
                   * wl(-ntgrid:,il)*wgt(-ntgrid:))
 
     end do
