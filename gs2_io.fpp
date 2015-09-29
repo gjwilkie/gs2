@@ -117,7 +117,7 @@ module gs2_io
   integer, dimension (5) :: mom_dim
   integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
   logical :: write_apar_t, write_phi_t, write_bpar_t ! Should the fields be written out every nwrite?
-  integer :: energy_int_wgt_id, lambda_int_wgt_id, f0_id, f0prim_id
+  integer :: energy_int_wgt_id, lambda_int_wgt_id, f0_id, f0prim_id, df0dE_id
 
 # endif
   real :: zero
@@ -335,7 +335,7 @@ contains
     use gs2_layouts, only: yxf_lo
     use species, only: nspec
     use le_grids, only: negrid, nlambda, energy, al, lwgts=>wl, ewgts=>w, Bovervpar
-    use general_f0, only: f0_values, f0prim
+    use general_f0, only: f0_values, f0prim, df0dE
     use nonlinear_terms, only: nonlin
 # ifdef NETCDF
 !    use netcdf_mod
@@ -393,6 +393,8 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, f0_id)
     status = nf90_put_var (ncid, f0prim_id, f0prim)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, f0prim_id)
+    status = nf90_put_var (ncid, df0dE_id, df0dE)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, df0dE_id)
 
     if (nonlin) then
        nmesh = (2*ntgrid+1)*2*nlambda*negrid*nx*ny*nspec
@@ -860,6 +862,8 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='f0')
     status = nf90_def_var (ncid, 'f0prim', netcdf_real, nenergy_dim , f0prim_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='f0prim')
+    status = nf90_def_var (ncid, 'df0dE', netcdf_real, nenergy_dim , df0dE_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='df0dE')
 
     status = nf90_def_var (ncid, 'energy_int_wgt', netcdf_real, nenergy_dim , energy_int_wgt_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='energy_int_wgt')
