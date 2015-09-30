@@ -4808,6 +4808,7 @@ subroutine check_dist_fn(report_unit)
     use species, only: nspec
     use mp, only: sum_reduce, proc0
     use gs2_layouts, only: g_lo,ie_idx,il_idx,is_idx,it_idx,ik_idx,isign_idx,yxf_lo
+    use nonlinear_terms, only: nonlin
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g_in
     complex, dimension (:,:), intent (inout) :: flx
