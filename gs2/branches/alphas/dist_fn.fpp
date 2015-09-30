@@ -4834,6 +4834,7 @@ subroutine check_dist_fn(report_unit)
        is = is_idx(g_lo,iglo)
        fac =0.5
        if (aky(ik) < epsilon(0.0)) fac = 1.0
+       if (nonlin .and. it == 1 .and. ik == 1) cycle
 
        total(ie,is) = total(ie,is) + fac*sum((g_in(-ntgrid:,1,iglo) + g_in(-ntgrid:,2,iglo)) &
                   * wl(-ntgrid:,il)*wgt(-ntgrid:))
