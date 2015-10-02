@@ -1234,6 +1234,7 @@ if (debug) write(6,*) 'eik_get_grids: end'
     use geometry, only: d2qdr2, betadbprim, d2psidr2
     use geometry, only: delrho, rmin, rmax
     use geometry, only: isym, in_nt, writelots
+    use geometry, only: write_profile_variation, read_profile_variation
     use theta_grid_params, only: nperiod_in => nperiod
     use theta_grid_params, only: rhoc_in => rhoc
     use theta_grid_params, only: rmaj_in => rmaj, r_geo_in => r_geo
@@ -1254,7 +1255,8 @@ if (debug) write(6,*) 'eik_get_grids: end'
          ppl_eq, gen_eq, efit_eq, eqfile, dfit_eq, &
          equal_arc, bishop, local_eq, idfit_eq, gs2d_eq, transp_eq, &
          s_hat_input, alpha_input, invLp_input, beta_prime_input, dp_mult, &
-         delrho, rmin, rmax, isym, writelots
+         delrho, rmin, rmax, isym, writelots, &
+         write_profile_variation, read_profile_variation
 
     nperiod = nperiod_in  
     rhoc = rhoc_in
@@ -1288,7 +1290,9 @@ if (debug) write(6,*) 'eik_get_grids: end'
     in_nt = .false.
     writelots = .false.
     local_eq = .true.
-
+    write_profile_variation = .false.
+    read_profile_variation = .false.
+    
     in_file = input_unit_exist("theta_grid_eik_knobs", exist)
     if (exist) read (unit=input_unit("theta_grid_eik_knobs"), nml=theta_grid_eik_knobs)
   end subroutine read_parameters
