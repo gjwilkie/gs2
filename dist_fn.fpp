@@ -870,18 +870,21 @@ contains
        end do
     end do
 
-!     if (proc0) then
-!        open (unit=1008,file='aj0p.out',status='unknown')
-!        is = 1 ; imu = 6 ; ik = 1 ; it = 1
-!        do ig = -ntgrid, ntgrid
-!           arg = spec(is)%smz*sqrt(vperp2(ig,imu)*kperp2(ig,it,ik))/bmag(ig)          
-!           write (1008,'(8e12.4)') theta(ig), j0(arg), -j1(arg)*mu(imu)/(bmag(ig)*spec(is)%zstm**2) &
-!                * (dkperp2dr(ig,it,ik) - kperp2(ig,it,ik)*dBdrho(ig)/bmag(ig)), &
-! !               + j1(arg)*mu(imu)/(bmag(ig)*spec(is)%zstm**2)*kperp2(ig,it,ik)*spec(is)%tprim, &
-!                kperp2(ig,it,ik), dkperp2dr(ig,it,ik), bmag(ig), dBdrho(ig), mu(imu)*spec(is)%temp
-!        end do
-!        close (1008)
-!     end if
+    ! note that the + j1*mu*...*tprim term below is necessary because
+    ! when comparing J0 at different GS2 radii, GS2 keeps mu_s / v_ts^2
+    ! constant instead of mu_s (and v_ts is a function of radius)
+    ! if (proc0) then
+    !    open (unit=1008,file='aj0p.out',status='unknown')
+    !    is = 1 ; imu = 6 ; ik = 1 ; it = 1
+    !    do ig = -ntgrid, ntgrid
+    !       arg = spec(is)%smz*sqrt(vperp2(ig,imu)*kperp2(ig,it,ik))/bmag(ig)          
+    !       write (1008,'(8e12.4)') theta(ig), j0(arg), -j1(arg)*mu(imu)/(bmag(ig)*spec(is)%zstm**2) &
+    !            * (dkperp2dr(ig,it,ik) - kperp2(ig,it,ik)*dBdrho(ig)/bmag(ig)) &
+    !            + j1(arg)*mu(imu)/(bmag(ig)*spec(is)%zstm**2)*kperp2(ig,it,ik)*spec(is)%tprim, &
+    !            kperp2(ig,it,ik), dkperp2dr(ig,it,ik), bmag(ig), dBdrho(ig)
+    !    end do
+    !    close (1008)
+    ! end if
 
   end subroutine init_bessel
 
