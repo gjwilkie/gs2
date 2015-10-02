@@ -424,7 +424,7 @@ contains
     double precision, intent (in) :: xold, xnew, pold, pnew
     double precision, intent (out) :: zz
     integer :: i, maxit=100
-    real :: eps
+    double precision :: eps
     double precision :: x1, x2, p1, p2, pz
 
     ! <doc>
@@ -432,7 +432,7 @@ contains
     !  [see comment in find_zero_bisect_newton above.]
     ! </doc>
 
-    eps = sqrt(epsilon(eps)*epsilon(x1)) * 4.0
+    eps = sqrt(epsilon(eps)*epsilon(x1)) * dble(4.0)
     x1 = xold
     x2 = xnew
     p1 = pold
@@ -441,34 +441,37 @@ contains
     if (debug) write (*,'(a,4es15.5e3)') 'initial ', x1, p1, x2, p2
 
     ! bisection
-    do i=1, 8
+    do i=1, maxit
        zz = (x1+x2) * dble(.5)
        pz = laguerre_l(n,zz)
-       if (abs(pz) <= epsilon(dble(0.0))) return
-       if (pz*p1 < 0.) then
+       if (abs(pz) <= eps) return
+       if (pz*p1 < dble(0.)) then
           p2=pz ; x2=zz
        else
           p1=pz ; x1=zz
        end if
-       if (debug) write (*,'(a,4es15.5e3)') 'bisection ', x1, p1, x2, p2
-    end do
-
-    ! newton-raphson
-    if (zz==x1) x1 = x2
-    do i=1, maxit
-       x1 = zz
-       p1 = laguerre_l(n,x1)
-       zz = x1 - p1 / laguerre_lp(n,x1)
-       pz = laguerre_l(n,zz)
-       if (debug) write (*,'(a,5es15.5e3)') &
-            'newton ', zz, pz, x1, p1, eps
-       if (min(abs(zz/x1-1.0), abs(pz)) < eps) exit
+       if (debug) write (*,'(a,6es15.5e3)') 'bisection ', x1, p1, x2, p2, pz, eps
     end do
 
     if (i==maxit+1) then
-       write (error_unit(),*) &
-         & 'WARNING: too many iterations in get_laguerre_grids'
-       stop 1
+       ! newton-raphson
+       if (zz==x1) x1 = x2
+       do i=1, maxit
+          x1 = zz
+          p1 = laguerre_l(n,x1)
+          zz = x1 - p1 / laguerre_lp(n,x1)
+          pz = laguerre_l(n,zz)
+          if (debug) write (*,'(a,5es15.5e3)') &
+               'newton ', zz, pz, x1, p1, eps
+          if (min(abs(zz/x1-dble(1.0)), abs(pz)) < eps) exit
+       end do
+
+       if (i==maxit+1) then
+          write (error_unit(),*) &
+               & 'WARNING: too many iterations in get_laguerre_grids'
+
+          stop 11
+       end if
     end if
        
   end subroutine find_zero
@@ -492,7 +495,7 @@ contains
     end if
 
     do k=2, n
-       p = ((2*k-1-x) * p1 - (k-1) * p2) / k
+       p = ((dble(2.0)*k-dble(1.0)-x) * p1 - (k-dble(1.0)) * p2) / k
        p2 = p1
        p1 = p
     end do
