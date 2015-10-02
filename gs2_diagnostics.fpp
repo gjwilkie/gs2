@@ -1582,7 +1582,6 @@ if (debug) write(6,*) "loop_diagnostics: -1"
     if (write_fields) call nc_write_fields (nout, phinew, aparnew, bparnew)  !MR
     if (write_moments) then !CMR
        call getmoms (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
-       if (proc0) write (*,'(a7,3e12.4)') 'phiphi', t, real(phinew(0,1,1)), real(aparnew(0,1,1))
        call nc_write_moments(nout, ntot)
     endif
 

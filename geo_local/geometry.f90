@@ -45,6 +45,7 @@ module geometry
   integer :: eqinit = 1
   
   logical :: gen_eq, efit_eq, ppl_eq, local_eq
+  logical :: write_profile_variation, read_profile_variation
 
   ! CHEASE equilbrium. EGH.
   logical :: chs_eq
@@ -382,7 +383,7 @@ if (debug) write(6,*) "eikcoefs: call check"
 
        call leqin(rmaj, R_geo, akappa, akappri, tri, tripri, rhoc, delrho, shift, &
             qinp, s_hat_input, asym, asympri, beta_prime_input, betadbprim, d2qdr2, &
-            d2psidr2, ntheta/2+1, nperiod)
+            d2psidr2, ntheta/2+1, nperiod, write_profile_variation, read_profile_variation)
        if(.not.allocated(gds22)) call alloc_module_arrays(ntgrid)
        call alloc_local_arrays(ntgrid)
        ! get geometry coefficients needed for dgk/drho equation

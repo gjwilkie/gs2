@@ -5,6 +5,8 @@ module leq
   integer :: nr, nt, np
   private
 
+  logical :: write_prof_var, read_prof_var
+  
   integer :: ntg, ntg2pi
 
   real :: dpsidrho, dIdrho, bi, dqdr, d2Idr2
@@ -49,10 +51,12 @@ module leq
 contains
 
   subroutine leqin(R0, Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap, bp, bpp, d2q, &
-       d2psidr2, nt_used, np_used)
+       d2psidr2, nt_used, np_used, write_profile_variation, read_profile_variation)
         
     real :: R0, Ra, k, kp, d, dp, r, dr, s, qq, qs, a, ap, bp, bpp, d2q, d2psidr2
     integer :: nt_used, np_used
+
+    logical, intent (in) :: write_profile_variation, read_profile_variation
     
     integer :: i
     real :: dum
@@ -84,19 +88,13 @@ contains
     np = np_used
     ntg2pi = nt-1
     ntg = ntg2pi*(2*np-1)
-!    ntg = ntg2pi
     if(.not.allocated(beta)) call alloc_arrays(3, nt)
     surf%nt = nt
     surf%np = np
     dqdr = surf%shat*surf%q/surf%r
 
-    ! open (unit=1002,file='leq.out',status='unknown')
-    ! read (1002,*) line
-    ! read (1002,*) line
-    ! do i = -ntg, ntg
-    !    read (1002,*) dum, dum, dum, d2R(i), dum, dum, dum, d2Z(i), line
-    ! end do
-    ! close (unit=1002)
+    write_prof_var = write_profile_variation
+    read_prof_var = read_profile_variation
 
     call leq_init
 
@@ -148,14 +146,28 @@ contains
     real pi, t, r
     integer i, j
 
+    character (3) :: dum
+
     pi=2*acos(0.)
     dr(1) = -surf%dr
     dr(2) = 0.
     dr(3) = surf%dr
+
+    ! initialize to zero
+    ! will be overwritten if reading in from file
+    ! only relevant for profile variation tests
+    d2R = 0. ; d2Z = 0.
+    
+    if (read_prof_var) then
+       open (1002,file='RZ.in',status='old')
+       do j=-ntg,ntg
+          read (1002,'(3e13.5)') theta(j), d2R(j), d2Z(j)
+       end do
+       close (1002)
+    end if
     
     do j=-ntg,ntg
        theta(j) = j*(2*np-1)*pi/real(ntg)
-!       theta(j) = j*pi/real(ntg)
        do i=1,3
           r = surf%r + dr(i)
           Rr(i,j) = Rpos(r,theta(j),j)
@@ -233,7 +245,15 @@ contains
 
     ! get d2R/drho2 and d2Z/drho2
     call get_d2RZdr2
-
+    
+    if (write_prof_var) then
+       open (1002,file='RZ.out',status='unknown')
+       do j=-ntg,ntg
+          write (1002,'(3e13.5)') theta(j), d2Rdr2(j), d2Zdr2(j)
+       end do
+       close (1002)
+    end if
+    
     ! get theta derivative of d2R/drho2 and d2Z/drho2
     call get_dthet (d2Rdr2, d2Rdr2dth)
     call get_dthet (d2Zdr2, d2Zdr2dth)
@@ -1155,10 +1175,11 @@ contains
     g = cos(theta + surf%d * sin(theta-0.5*pi*surf%a))
     gp = -sin(theta + surf%d * sin(theta-0.5*pi*surf%a)) &
          *(surf%dp*sin(theta-0.5*surf%a)-surf%d*0.5*pi*surf%ap*cos(theta-0.5*pi*surf%a))
-    
+
     ! second line here is (1/2)*(r-r0)**2*d2R/dr|_r0
-    Rpos = surf%R_center + surf%delp*dr + g*surf%r + (g+surf%r*gp)*dr !&
-!         + 0.5*(r-0.5)**2*d2R(j)
+    ! note that d2R=0 unless read_profile_variation = T in input file
+    Rpos = surf%R_center + surf%delp*dr + g*surf%r + (g+surf%r*gp)*dr &
+         + 0.5*(r-0.5)**2*d2R(j)
     
   end function Rpos
 
@@ -1167,10 +1188,11 @@ contains
     integer, intent (in) :: j
     real, intent (in) :: r, theta
     real :: Zpos, dr
-    
+
     dr = r - surf%r
-    Zpos = surf%k*sin(theta)*surf%r + (surf%r*surf%kp + surf%k)*sin(theta)*dr !&
-!         + 0.5*(r-0.5)**2*d2Z(j)
+    ! note that d2Z=0 unless read_profile_variation=T in input file
+    Zpos = surf%k*sin(theta)*surf%r + (surf%r*surf%kp + surf%k)*sin(theta)*dr &
+         + 0.5*(r-0.5)**2*d2Z(j)
     
   end function Zpos
 
