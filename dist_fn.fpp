@@ -4821,7 +4821,7 @@ subroutine check_dist_fn(report_unit)
     total = 0.
     
     wgt(-ntgrid:) = 0.0
-    do ig=-ntgrid,ntgrid
+    do ig=-ntgrid,ntgrid-1
 !       wgt(ig) = delthet(ig)*jacob(ig)
        wgt(ig) = delthet(ig)*(jacob(ig)+jacob(ig+1))*0.5
     end do
