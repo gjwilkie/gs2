@@ -6855,9 +6855,9 @@ subroutine check_dist_fn(report_unit)
 
     do iglo = g_lo%llim_world, g_lo%ulim_world
        ! writing out g(vpar,vperp) at ik=it=is=1, ig=0
-       ik = ik_idx(g_lo, iglo) ; if (ik /= 1) cycle
+       ik = ik_idx(g_lo, iglo) ; if (ik /= 25) cycle
        it = it_idx(g_lo, iglo) ; if (it /= 1) cycle
-       is = is_idx(g_lo, iglo) ; if (is /= 1) cycle
+       is = is_idx(g_lo, iglo) ; if (is /= 5) cycle
        ie = ie_idx(g_lo, iglo) 
        ig = 0
        il = il_idx(g_lo, iglo)
