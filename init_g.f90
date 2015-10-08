@@ -1110,7 +1110,7 @@ contains
   subroutine ginit_noise
     use species, only: spec, tracer_species
     use theta_grid, only: ntgrid 
-    use kt_grids, only: naky, ntheta0, aky, reality
+    use kt_grids, only: naky, ntheta0, aky, reality, akx
     use le_grids, only: forbid
     use dist_fn_arrays, only: g, gnew
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx, proc_id
@@ -1218,6 +1218,14 @@ contains
           if ( l_links(ik,it) .eq. 0 ) g(-ntgrid,1,iglo)=0.0
           if ( r_links(ik,it) .eq. 0 ) g(ntgrid,1,iglo)=0.0
        endif
+    end do
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       if (( abs(aky(ik)) .LT. 10.0*epsilon(0.0)) .AND. (abs(akx(it)) .LT. 10.0*epsilon(0.0))) then
+          g(:,:,iglo) = 0.0
+       end if
     end do
 
     if ( clean_init .and. boundary_option_switch .eq. boundary_option_linked .and. sum(r_links+l_links) .gt. 0 ) then
