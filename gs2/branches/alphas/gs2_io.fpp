@@ -16,7 +16,7 @@ module gs2_io
   public :: nc_qflux, nc_vflux, nc_pflux, nc_loop, nc_loop_moments
   public :: nc_loop_vres
   public :: nc_loop_movie, nc_write_fields, nc_write_moments
-  public :: nc_flux_emu, nc_flux_e
+  public :: nc_flux_emu, nc_flux_e, nc_eflux
 
   public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
 
@@ -43,6 +43,7 @@ module gs2_io
   integer, dimension (2) :: kx_dim, ky_dim, om_dim, flux_dim, nin_dim, fmode_dim, energyt_dim
   integer, dimension (5) :: flux_emu_dim
   integer, dimension (3) :: flux_e_dim
+  integer, dimension (3) :: eflux_dim
   integer, dimension(2) :: nenergy_dim, nlambdaspec_dim
 
   ! added by EAB 03/05/04 for movies
@@ -114,6 +115,7 @@ module gs2_io
   integer :: he_gradients_id, he_hypercoll_id, he_heating_id, he_imp_colls_id
   integer :: es_flux_emu_id, apar_flux_emu_id, bpar_flux_emu_id
   integer :: es_flux_e_id, apar_flux_e_id, bpar_flux_e_id
+  integer :: es_eflux_id, apar_eflux_id, bpar_eflux_id
   integer, dimension (5) :: mom_dim
   integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
   logical :: write_apar_t, write_phi_t, write_bpar_t ! Should the fields be written out every nwrite?
@@ -132,7 +134,7 @@ contains
       write_moments,&
       write_full_moments_notgc, write_sym, write_correlation, nwrite_big_tot, &
       write_correlation_extend, write_phi_over_time, write_apar_over_time,  & 
-      write_bpar_over_time,write_flux_emu, write_flux_e) 
+      write_bpar_over_time,write_flux_emu, write_flux_e, write_eflux) 
 
     !write_fields_over_time added by EGH 08/2009
 !David has made some changes to this subroutine (may 2005) now should 
@@ -153,7 +155,7 @@ contains
 # endif
 !    logical :: write_nl_flux, write_omega, write_hrate, make_movie
 !    logical :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_nl_flux, write_omega, write_flux_emu, write_flux_e
+    logical, intent(in) :: write_nl_flux, write_omega, write_flux_emu, write_flux_e, write_eflux
     logical, intent(in) :: write_hrate, make_movie, write_fields, write_moments, write_hrate_e
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
@@ -241,7 +243,7 @@ contains
        call define_vars (write_nl_flux, write_omega, &
             write_hrate, write_hrate_e, write_final_antot, write_eigenfunc, write_verr, &
             write_fields, write_moments, write_full_moments_notgc, write_sym, write_correlation, &
-            write_correlation_extend,write_flux_emu,write_flux_e)
+            write_correlation_extend,write_flux_emu,write_flux_e,write_eflux)
        call nc_grids
        call nc_species
        call nc_geo
@@ -504,7 +506,7 @@ contains
   subroutine define_vars (write_nl_flux, write_omega, &
        write_hrate, write_hrate_e, write_final_antot, write_eigenfunc, write_verr, &
        write_fields, write_moments, write_full_moments_notgc, write_sym, write_correlation, &
-       write_correlation_extend,write_flux_emu,write_flux_e)
+       write_correlation_extend,write_flux_emu,write_flux_e,write_eflux)
 
     use mp, only: nproc
     use species, only: nspec
@@ -520,7 +522,7 @@ contains
 !    use netcdf_mod
 !    logical :: write_nl_flux, write_omega, write_hrate
 !    logical :: write_final_antot, write_eigenfunc, write_verr
-    logical, intent(in) :: write_nl_flux, write_omega, write_flux_emu, write_flux_e
+    logical, intent(in) :: write_nl_flux, write_omega, write_flux_emu, write_flux_e, write_eflux
     logical, intent(in) :: write_hrate, write_final_antot, write_hrate_e
     logical, intent(in) :: write_eigenfunc, write_verr, write_fields, write_moments
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
@@ -585,6 +587,10 @@ contains
     flux_e_dim (1) = negrid_dim
     flux_e_dim (2) = nspec_dim
     flux_e_dim (3) = time_dim
+
+    eflux_dim (1) = negrid_dim
+    eflux_dim (2) = nspec_dim
+    eflux_dim (3) = time_dim
 
     nenergy_dim(1) = negrid_dim
     nenergy_dim(2) = nspec_dim
@@ -1000,6 +1006,10 @@ contains
              status = nf90_def_var (ncid, 'es_flux_e', netcdf_real, flux_e_dim, es_flux_e_id)
              if (status /= NF90_NOERR) call netcdf_error (status, var='es_flux_e')
           end if
+          if (write_eflux) then
+             status = nf90_def_var (ncid, 'es_eflux', netcdf_real, eflux_dim, es_eflux_id)
+             if (status /= NF90_NOERR) call netcdf_error (status, var='es_eflux')
+          end if
           status = nf90_def_var (ncid, 'es_energy_exchange', netcdf_real, flux_dim, es_energy_exchange_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_energy_exchange')
           status = nf90_def_var (ncid, 'es_heat_by_k', netcdf_real, fluxk_dim, es_heat_by_k_id)
@@ -1112,6 +1122,10 @@ contains
              status = nf90_def_var (ncid, 'apar_flux_e', netcdf_real, flux_e_dim, apar_flux_e_id)
              if (status /= NF90_NOERR) call netcdf_error (status, var='apar_flux_e')
           end if
+          if (write_eflux) then
+             status = nf90_def_var (ncid, 'apar_eflux', netcdf_real, eflux_dim, apar_eflux_id)
+             if (status /= NF90_NOERR) call netcdf_error (status, var='apar_eflux')
+          end if
           status = nf90_def_var (ncid, 'apar_part_flux', netcdf_real, flux_dim, apar_part_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_part_flux')
           status = nf90_def_var (ncid, 'apar_heat_by_k', netcdf_real, fluxk_dim, apar_heat_by_k_id)
@@ -1180,6 +1194,10 @@ contains
           if (write_flux_e) then       
              status = nf90_def_var (ncid, 'bpar_flux_e', netcdf_real, flux_e_dim, bpar_flux_e_id)
              if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_flux_e')
+          end if
+          if (write_eflux) then       
+             status = nf90_def_var (ncid, 'bpar_eflux', netcdf_real, eflux_dim, bpar_eflux_id)
+             if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_eflux')
           end if
           status = nf90_def_var (ncid, 'bpar_heat_by_k', netcdf_real, fluxk_dim, bpar_heat_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_heat_by_k')
@@ -2000,6 +2018,48 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, hflux_tot_id)
 # endif
   end subroutine nc_qflux
+
+  subroutine nc_eflux(nout,flux,mflux,bflux)
+    use species, only: nspec
+    use le_grids, only: negrid, nlambda
+    use run_parameters, only: fphi,fapar,fbpar
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    implicit none
+    integer,intent(in):: nout
+    real,dimension(:,:),intent(in):: flux,mflux,bflux
+# ifdef NETCDF
+    integer, dimension (5) :: start, count
+    integer:: status
+
+    start(1) = 1
+    start(2) = 1
+    start(3) = nout
+   
+    count(1) = negrid
+    count(2) = nspec
+    count(3) = 1
+
+
+    if (fphi > zero) then
+       status = nf90_put_var (ncid, es_eflux_id, flux, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_eflux_id)
+    end if
+
+    if (fapar > zero) then
+       status = nf90_put_var (ncid, apar_eflux_id, mflux, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_eflux_id)
+    end if
+
+    if (fbpar > zero) then
+       status = nf90_put_var (ncid, bpar_eflux_id, bflux, start=start, count=count)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_eflux_id)
+    end if
+
+# endif
+  end subroutine nc_eflux
+
 
   subroutine nc_flux_e(nout,flux,mflux,bflux)
     use species, only: nspec
