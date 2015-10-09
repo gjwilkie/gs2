@@ -4765,7 +4765,7 @@ subroutine check_dist_fn(report_unit)
   end subroutine eflux
 
 
-  subroutine flux_e (phi, apar, bpar, pflux, pmflux, pbflux)
+  subroutine flux_e (phi, apar, bpar, pflux, pmflux, pbflux, flux_trapped, flux_passing)
     use species, only: spec, nspec
     use theta_grid, only: ntgrid, bmag, gradpar, grho, delthet, drhodpsi
     use theta_grid, only: qval, shat, gds21, gds22
@@ -4780,7 +4780,7 @@ subroutine check_dist_fn(report_unit)
     use theta_grid, only: Rplot, Bpol
     implicit none
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
-    real, dimension (:,:), intent (inout) :: pflux, pmflux, pbflux
+    real, dimension (:,:), intent (inout) :: pflux, pmflux, pbflux, flux_trapped, flux_passing
     real, dimension (:,:,:), allocatable :: dnorm
     integer :: it, ik, is, isgn, ig
     integer :: iglo
@@ -4788,7 +4788,7 @@ subroutine check_dist_fn(report_unit)
     allocate (dnorm (-ntgrid:ntgrid,ntheta0,naky))
 
     if (proc0) then
-        pflux = 0.0;   pmflux = 0.0; pbflux = 0.0 ; 
+        pflux = 0.0;   pmflux = 0.0; pbflux = 0.0 ; flux_trapped = 0.0; flux_passing = 0.0
     end if
 
     do ik = 1, naky
@@ -4796,6 +4796,11 @@ subroutine check_dist_fn(report_unit)
           dnorm(:,it,ik) = delthet/bmag/gradpar*woutunits(ik)
        end do
     end do
+
+    do isgn = 1, 2
+       g0(:,isgn,:) = gnew(:,isgn,:)
+    end do
+    call get_flux_tp(phi,apar,bpar,flux_trapped,flux_passing,dnorm)
 
     if (fphi > epsilon(0.0)) then
        do isgn = 1, 2
@@ -4967,6 +4972,87 @@ subroutine check_dist_fn(report_unit)
     deallocate(total)
 
   end subroutine get_flux_e
+
+  subroutine get_flux_tp (phi,apar,bpar,trapped_flx,passing_flx, dnorm)
+    use theta_grid, only: ntgrid, delthet, grho
+    use kt_grids, only: ntheta0, aky, naky
+    use le_grids, only: negrid,nlambda,wl,ng2
+    use species, only: nspec, spec
+    use mp, only: sum_reduce, proc0
+    use run_parameters, only: fphi, fapar, fbpar
+    use gs2_layouts, only: g_lo,ie_idx,il_idx,is_idx,it_idx,ik_idx,isign_idx,yxf_lo
+    use dist_fn_arrays, only: aj0, aj1, vperp2, vpa
+    implicit none
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi,apar,bpar
+    real, dimension (:,:), intent (inout) :: trapped_flx, passing_flx
+    real, dimension (-ntgrid:,:,:) :: dnorm
+    real, dimension (:,:), allocatable :: total
+    real:: wgt,fac
+    integer :: ik, it, is, ig, iglo, ie, il, isgn
+
+    allocate(total(negrid,nspec))
+
+    !  Integrate only over trapped particles
+    total = 0.
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       fac =0.5
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+!       if ( abs(aky(ik)) .LT. 10.0*epsilon(0.0)) fac = 1.0
+       if ( aky(ik) == 0.) fac = 1.0
+       if (il <= ng2) fac =0.0
+       wgt = sum(dnorm(-ntgrid:,it,ik)*grho(-ntgrid:))
+
+       total(ie,is) = total(ie,is) + fac*& 
+                      sum(aimag(g0(-ntgrid:,1,iglo)*conjg(aj0(-ntgrid:,iglo)*fphi*phi(-ntgrid:,it,ik) & 
+                                              - aj0(-ntgrid:,iglo)*spec(is)%stm*vpa(-ntgrid:,1,iglo)*fapar*apar(-ntgrid:,it,ik)  &
+                                              + aj1(-ntgrid:,iglo)*2.0*vperp2(-ntgrid:,iglo)*spec(is)%tz*fbpar*bpar(-ntgrid:,it,ik)  ) &
+                      * dnorm(-ntgrid:,it,ik) * aky(ik)) * wl(-ntgrid:,il)/wgt)
+       total(ie,is) = total(ie,is) + fac*& 
+                      sum(aimag(g0(-ntgrid:,2,iglo)*conjg(aj0(-ntgrid:,iglo)*phi(-ntgrid:,it,ik) & 
+                                              - aj0(-ntgrid:,iglo)*spec(is)%stm*vpa(-ntgrid:,2,iglo)*apar(-ntgrid:,it,ik)  &
+                                              + aj1(-ntgrid:,iglo)*2.0*vperp2(-ntgrid:,iglo)*spec(is)%tz*bpar(-ntgrid:,it,ik)  ) &
+                      * dnorm(-ntgrid:,it,ik) * aky(ik)) * wl(-ntgrid:,il)/wgt)
+    end do
+
+    call sum_reduce(total,0)
+
+    if (proc0) trapped_flx = 0.5*total  
+
+    ! Now repeat for passing
+    total = 0.
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+       fac =0.5
+       ie = ie_idx(g_lo,iglo)
+       il = il_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+       it = it_idx(g_lo,iglo)
+       ik = ik_idx(g_lo,iglo)
+       if (aky(ik) == 0.) fac = 1.0
+       if (il > ng2) fac = 0.0
+       wgt = sum(dnorm(-ntgrid:,it,ik)*grho(-ntgrid:))
+       total(ie,is) = total(ie,is) + fac*& 
+          sum(aimag(g0(-ntgrid:,1,iglo)*conjg(aj0(-ntgrid:,iglo)*phi(-ntgrid:,it,ik) & 
+                                              - aj0(-ntgrid:,iglo)*spec(is)%stm*vpa(:,1,iglo)*apar(-ntgrid:,it,ik)  &
+                                              + aj1(-ntgrid:,iglo)*2.0*vperp2(-ntgrid:,iglo)*spec(is)%tz*bpar(-ntgrid:,it,ik)  ) &
+                    *  dnorm(-ntgrid:,it,ik) * aky(ik)) * wl(-ntgrid:,il)/wgt)
+       total(ie,is) = total(ie,is) + fac*& 
+          sum(aimag(g0(-ntgrid:,2,iglo)*conjg(aj0(-ntgrid:,iglo)*phi(-ntgrid:,it,ik) & 
+                                              - aj0(-ntgrid:,iglo)*spec(is)%stm*vpa(:,2,iglo)*apar(-ntgrid:,it,ik)  &
+                                              + aj1(-ntgrid:,iglo)*2.0*vperp2(-ntgrid:,iglo)*spec(is)%tz*bpar(-ntgrid:,it,ik)  ) &
+                    *  dnorm(-ntgrid:,it,ik) * aky(ik)) * wl(-ntgrid:,il)/wgt)
+    end do
+
+    call sum_reduce(total,0)
+
+    if (proc0) passing_flx = 0.5*total  
+
+    deallocate(total)
+
+  end subroutine get_flux_tp
 
   subroutine get_eflux (fld,fldnew, flx, dnorm)
     use theta_grid, only: ntgrid, delthet, grho

@@ -114,7 +114,7 @@ module gs2_io
   integer :: he_hypervisc_id, he_hyperres_id, he_collisions_id
   integer :: he_gradients_id, he_hypercoll_id, he_heating_id, he_imp_colls_id
   integer :: es_flux_emu_id, apar_flux_emu_id, bpar_flux_emu_id
-  integer :: es_flux_e_id, apar_flux_e_id, bpar_flux_e_id
+  integer :: es_flux_e_id, apar_flux_e_id, bpar_flux_e_id, trapped_flux_id, passing_flux_id
   integer :: es_eflux_id, apar_eflux_id, bpar_eflux_id
   integer, dimension (5) :: mom_dim
   integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
@@ -1005,6 +1005,10 @@ contains
           if (write_flux_e) then
              status = nf90_def_var (ncid, 'es_flux_e', netcdf_real, flux_e_dim, es_flux_e_id)
              if (status /= NF90_NOERR) call netcdf_error (status, var='es_flux_e')
+             status = nf90_def_var (ncid, 'trapped_flux', netcdf_real, flux_e_dim, trapped_flux_id)
+             if (status /= NF90_NOERR) call netcdf_error (status, var='trapped_flux')
+             status = nf90_def_var (ncid, 'passing_flux', netcdf_real, flux_e_dim, passing_flux_id)
+             if (status /= NF90_NOERR) call netcdf_error (status, var='passing_flux')
           end if
           if (write_eflux) then
              status = nf90_def_var (ncid, 'es_eflux', netcdf_real, eflux_dim, es_eflux_id)
@@ -2061,7 +2065,7 @@ contains
   end subroutine nc_eflux
 
 
-  subroutine nc_flux_e(nout,flux,mflux,bflux)
+  subroutine nc_flux_e(nout,flux,mflux,bflux,trapped_flux,passing_flux)
     use species, only: nspec
     use le_grids, only: negrid, nlambda
     use run_parameters, only: fphi,fapar,fbpar
@@ -2070,7 +2074,7 @@ contains
 # endif
     implicit none
     integer,intent(in):: nout
-    real,dimension(:,:),intent(in):: flux,mflux,bflux
+    real,dimension(:,:),intent(in):: flux,mflux,bflux,trapped_flux,passing_flux
 # ifdef NETCDF
     integer, dimension (5) :: start, count
     integer:: status
@@ -2083,6 +2087,11 @@ contains
     count(2) = nspec
     count(3) = 1
 
+
+    status = nf90_put_var (ncid, trapped_flux_id, trapped_flux, start=start, count=count)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, trapped_flux_id)
+    status = nf90_put_var (ncid, passing_flux_id, passing_flux, start=start, count=count)
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, passing_flux_id)
 
     if (fphi > zero) then
        status = nf90_put_var (ncid, es_flux_e_id, flux, start=start, count=count)

@@ -111,7 +111,7 @@ module gs2_diagnostics
   real, dimension (:,:,:), allocatable :: pbflux, vbflux
   real, dimension (:,:,:), allocatable :: exchange
   real,dimension(:,:,:,:), allocatable :: pflux_emu, mflux_emu, bflux_emu
-  real,dimension(:,:), allocatable :: pflux_e, mflux_e, bflux_e
+  real,dimension(:,:), allocatable :: pflux_e, mflux_e, bflux_e, trapped_flux, passing_flux
   real,dimension(:,:), allocatable :: peflux, meflux, beflux
 
   ! (ntheta0,naky,nspec)
@@ -601,6 +601,8 @@ contains
        allocate (pflux_e(negrid,nspec)) ; pflux_e = 0.
        allocate (mflux_e(negrid,nspec)) ; mflux_e = 0.
        allocate (bflux_e(negrid,nspec)) ; bflux_e = 0.
+       allocate (trapped_flux(negrid,nspec)) ; trapped_flux = 0.
+       allocate (passing_flux(negrid,nspec)) ; trapped_flux = 0.
     end if
       
     if (write_eflux) then
@@ -1407,7 +1409,7 @@ contains
     if (allocated(pflux)) deallocate (pflux, qheat, vflux, vflux_par, vflux_perp, pmflux, qmheat, vmflux, &
          pbflux, qbheat, vbflux, vflux0, vflux1, exchange)
     if (allocated(pflux_emu)) deallocate(pflux_emu,mflux_emu,bflux_emu)
-    if (allocated(pflux_e)) deallocate(pflux_e,mflux_e,bflux_e)
+    if (allocated(pflux_e)) deallocate(pflux_e,mflux_e,bflux_e,trapped_flux,passing_flux)
     if (allocated(peflux)) deallocate(peflux,meflux,beflux)
     if (allocated(bxf)) deallocate (bxf, byf, xx4, xx, yy4, yy, dz, total)
     if (allocated(pflux_avg)) deallocate (pflux_avg, qflux_avg, heat_avg, vflux_avg)
@@ -1693,11 +1695,13 @@ if (debug) write(6,*) "loop_diagnostics: -1"
           end do
        end if
        if (write_flux_e) then
-          call flux_e (phinew, aparnew, bparnew, pflux_e, mflux_e, bflux_e)
+          call flux_e (phinew, aparnew, bparnew, pflux_e, mflux_e, bflux_e,trapped_flux,passing_flux)
           do is = 1,nspec
              pflux_e(:,is) = pflux_e(:,is) * spec(is)%dens
              mflux_e(:,is) = mflux_e(:,is) * spec(is)%dens
              bflux_e(:,is) = bflux_e(:,is) * spec(is)%dens
+             trapped_flux(:,is) = trapped_flux(:,is) * spec(is)%dens
+             passing_flux(:,is) = passing_flux(:,is) * spec(is)%dens
           end do
        end if
        if (write_eflux) then
@@ -2080,7 +2084,7 @@ if (debug) write(6,*) "loop_diagnostics: -2"
              call nc_pflux (nout, pflux, pmflux, pbflux, &
                   part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
              if (write_flux_emu) call nc_flux_emu(nout,pflux_emu,mflux_emu,bflux_emu)
-             if (write_flux_e) call nc_flux_e(nout,pflux_e,mflux_e,bflux_e)
+             if (write_flux_e) call nc_flux_e(nout,pflux_e,mflux_e,bflux_e,trapped_flux,passing_flux)
              if (write_eflux) call nc_eflux(nout,peflux,meflux,beflux)
           end if
           call nc_loop (nout, t, fluxfac, &
