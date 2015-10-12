@@ -84,6 +84,13 @@ contains
   end subroutine write_gs2d
 end module gs2d
 
+!> This module is a submodule of geometry which handles reading from the
+!! ascii EQDSK format output by EFIT, but also now by other codes. This 
+!! file contains psi on an R,Z grid, as well as other quantities such as
+!! q (safety factor), I (a.k.a. f) and p (pressure) on a psi grid. 
+!!
+!! The normalising field is set to the field on axis; the normalising length
+!! is set to the half-diameter of the LCFS.
 module eeq
 
   implicit none
@@ -337,21 +344,22 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
   end subroutine gs2din
 
+  !>   This subroutine reads an EFIT output file containing 
+  !!   the axisymmetric magnetic field geometry on a rectangular 
+  !!   domain defined by the coordinates (R,Z). It reads and stores
+  !!   the following quantities (among others).
+  !!  
+  !!   - efit_R:     R grid
+  !!   - efit_Z:     Z grid
+  !!   - fp:    F on psibar grid
+  !!   - efit_psi:   psi on (R,Z) grid
+  !!   - R_mag:        major radius of the magnetic axis
+  !!   - Z_mag:        elevation of the magnetic axis
+  !!   - rwid:       total width of the domain
+  !!   - rleft:      position of leftmost point of domain
+  !!   - zhei:       total height of domain
   subroutine efitin(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq, big)
 !
-!     This subroutine reads an EFIT output file containing 
-!     the axisymmetric magnetic field geometry on a rectangular 
-!     domain defined by the coordinates (R,Z).
-!
-!     efit_R     R grid
-!     efit_Z     Z grid
-!     fp    F on psibar grid
-!     efit_psi   psi on (R,Z) grid
-!     R_mag        major radius of the magnetic axis
-!     Z_mag        elevation of the magnetic axis
-!     rwid       total width of the domain
-!     rleft      position of leftmost point of domain
-!     zhei       total height of domain
 !
     use constants, only: pi, twopi
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
@@ -570,6 +578,10 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     
   end subroutine efitin
 
+  !> Calculate the following arrays:
+  !!  - eqth, which is theta on an R,Z grid
+  !!  - dpm, which is (d psi / d R) and (d psi / d Z) on an R,Z grid
+  !!  - dtm, which is (d theta / d R) and (d theta / d Z) on an R,Z grid 
   subroutine efit_init
     real, dimension(:, :), allocatable :: eqth 
     integer :: i, j
@@ -587,6 +599,9 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     enddo
 
     if (verbosity > 2) write(6,*) "efit_init: derm"     
+    ! dpm(:,:,1) is d psi / d R
+    ! dpm(:,:,2) is d psi / d Z
+    ! Both on an R,Z grid
     call derm(efit_psi, dpm)
     if (verbosity > 2) write(6,*) "efit_init: tderm"     
     call tderm(eqth, dtm)
@@ -639,6 +654,9 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     if (verbosity > 2) write(6,*) "efit: tderm: Z derivative done"     
   end subroutine tderm
 
+  !> Calculate the derivative of f w.r.t. R, Z
+  !! - dfm(:,:,1) is deriv w.r.t. R
+  !! - def(:,:,2) is deriv w.r.t. Z
   subroutine derm(f, dfm)
     implicit none
     real, dimension(:,:), intent(in) :: f
@@ -670,6 +688,16 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     
   end subroutine derm
 
+  !> Calculate the derivative of psi/(a^2 B_a) w.r.t. R and Z. Parameters
+  !! are: 
+  !!   - rgrid: distance to mag axis as a fn of theta
+  !!   - theta: grid of theta
+  !!   - grad(:,1): deriv w.r.t. R as fn of theta
+  !!   - grad(:,2): deriv w.r.t  Z as fn of theta
+  !!   - char: if char = 'R', return the gradient of pressure instead
+  !!   - rp: value of psi/(a^2 B_a) on the flux surface where we want the grad
+  !!   - nth: number of theta points
+  !!   - ntm: lower index of theta array is -ntm
   subroutine gradient(rgrid, theta, grad, char, rp, nth, ntm)
     use splines, only: inter_d_cspl
     implicit none
@@ -691,12 +719,30 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
     if(char == 'R') then
        rpt(1) = rp
+       ! This returns d (pressure/pressure(1)) / d psibar
+       ! multiply by psi_N to get d (pressure/pressure(1)) / d (psi/ a^2 B_a)
+       ! multiply by beta_0 to get d (pressure) / d (psi)
+       ! However, I think there is a problem because dpm is in units of a^2 B_a ?
        call inter_d_cspl(nw, psi_bar, pressure, 1, rpt, aa, daa)
        grad = grad*daa(1)*0.5* beta_0/psi_N
     endif
 
   end subroutine gradient
 
+  !> Calculate the derivative of psi/(a^2 B_a) w.r.t. R and Z and return
+  !! the modulus sqrt(dpsi/dR ^ 2 + dpsi/dZ^2). I.e. return |grad psi|.
+  !! Parameters are: 
+  !!   - rgrid: distance to mag axis as a fn of theta
+  !!   - theta: grid of theta
+  !!   - grad(:,1): |grad psi|
+  !!   - grad(:,2): 0.0
+  !!   - char: if char = 'R', return |grad pressure| instead
+  !!   - char: if char = 'T', then return theta gradient in bishop form
+  !!    - grad(:,1): (dtheta/dZ d psi/dR - dtheta/dR dpsi/dZ)/ |grad psi|
+  !!    - grad(:,2): (dtheta/dR d psi/dR + dtheta/dZ dpsi/dZ)/ |grad psi|
+  !!   - rp: value of psi/(a^2 B_a) on the flux surface where we want the grad
+  !!   - nth: number of theta points
+  !!   - ntm: lower index of theta array is -ntm
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
     use splines, only: inter_d_cspl
     implicit none
@@ -739,6 +785,10 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
     if(char == 'R') then
        rpt(1) = rp
+       ! This returns d (pressure/pressure(1)) / d psibar
+       ! multiply by psi_N to get d (pressure/pressure(1)) / d (psi/ a^2 B_a)
+       ! multiply by beta_0 to get d (pressure) / d (psi)
+       ! However, I think there is a problem because dpm is in units of a^2 B_a ?
        call inter_d_cspl(nw, psi_bar, pressure, 1, rpt, aa, daa)
        do i=-nth_used, nth_used
           grad(i,1)=grad(i,1)*daa(1) * 0.5*beta_0/psi_N
@@ -749,6 +799,8 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
   end subroutine bgradient
 
+  !> fstar is f(R,Z) interpolated at the values (r,thetain). The parameter
+  !! r is the distance to the magnetic axis.
   subroutine eqitem(r, thetin, f, fstar)
     use mp, only: mp_abort
     implicit none

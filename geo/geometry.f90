@@ -587,6 +587,15 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
     ! note that rpgrad is given in (R,Z,phi) coordinates if bishop=0
     ! and (rho,l,phi) coordinates if bishop>0
     ! also, rpgrad is grad psi if iflux=1 and grad rho if iflux=0 -- MAB
+
+    ! When bishop > 0
+    ! rpgrad(:,1) is |grad rp|
+    ! rpgrad(:,2) is 0
+    ! crpgrad(:,1) is drp/dR
+    ! crpgrad(:,2) is drp/dZ
+    !
+    ! bishop = 0 is high aspect ratio coefficients for debugging -- EGH
+
     if(bishop == 0) then
        call  grad(rgrid, theta, rpgrad, char, dum, nth, ntgrid)
        crpgrad = rpgrad
@@ -1957,6 +1966,9 @@ if (debug) write(6,*) "eikcoefs: end gradients"
     enddo
   end subroutine integrate
 
+  !> Calculates rmajor = R(theta), where R is the distance
+  !! to the central axis (rmajor not to be confused with rmaj, r_geo etc)
+  !! rgrid is the submodule radial grid (r_circ for EFIT & deq, rp otherwise)
   subroutine rmajortgrid(rgrid, theta, rmajor)
     real, dimension(-ntgrid:), intent(in) :: rgrid, theta
     real, dimension(-ntgrid:), intent(out) :: rmajor
@@ -2413,6 +2425,14 @@ end subroutine geofax
     if(iflux == 1) then
        rmagaxis=rmaj
     else
+      write (*,*) 'ERROR: This formula for rmagaxis is wrong: &
+        & the position of the magnetic axis is undefined &
+        & in local (Miller) geometry'
+      stop 1
+      ! EGH This is wrong! When iflux=0, r_geo
+      ! is I_N=I/a^2 Ba where I = RB_t
+      ! As far as I can tell this formula is not used
+      ! anywhere so no harm done.
        rmagaxis=R_geo
     endif
     
@@ -3036,6 +3056,16 @@ end subroutine geofax
     endif
   end subroutine check
 
+  !> Calculate the derivative of rp w.r.t. R and Z. Parameters
+  !! are: 
+  !!   - rgrid: Submodule radial grid (r_circ for EFIT, rp otherwise)
+  !!   - theta: grid of theta
+  !!   - gradf(:,1): deriv w.r.t. R as fn of theta
+  !!   - gradf(:,2): deriv w.r.t  Z as fn of theta
+  !!   - char: if char = 'R', return the gradient of pressure instead
+  !!   - rp: value of rp on the flux surface where we want the grad
+  !!   - nth: number of theta points
+  !!   - ntgrid: lower index of theta array is -ntgrid
   subroutine grad(rgrid, theta, gradf, char, rp, nth, ntgrid)
      use  geq, only:  geq_gradient => gradient
      use  peq, only:  peq_gradient => gradient
@@ -3060,6 +3090,20 @@ end subroutine geofax
      if(local_eq) call  leq_gradient(theta, gradf, char, rp, nth, ntgrid)
    end subroutine grad
 
+  !> Calculate the derivative of rp w.r.t. R and Z and return
+  !! the modulus sqrt(drp/dR ^ 2 + drp/dZ^2). I.e. return |grad rp|.
+  !! Parameters are: 
+  !!   - rgrid: Submodule radial grid (r_circ for EFIT, rp otherwise)
+  !!   - theta: grid of theta
+  !!   - gradf(:,1): |grad psi|
+  !!   - gradf(:,2): 0.0
+  !!   - char: if char = 'R', return |grad pressure| instead
+  !!   - char: if char = 'T', then return theta gradient in bishop form
+  !!    - gradf(:,1): (dtheta/dZ d rp/dR - dtheta/dR drp/dZ)/ |grad rp|
+  !!    - gradf(:,2): (dtheta/dR d rp/dR + dtheta/dZ drp/dZ)/ |grad rp|
+  !!   - rp: value of rp on the flux surface where we want the grad
+  !!   - nth: number of theta points
+  !!   - ntgrid: lower index of theta array is -ntgrid
    subroutine bgrad(rgrid, theta, gradf, char, rp, nth, ntgrid)
      use  geq, only:  geq_bgradient => bgradient
      use  peq, only:  peq_bgradient => bgradient
@@ -3084,6 +3128,9 @@ end subroutine geofax
      if(local_eq) call  leq_bgradient(theta, gradf, char, rp, nth, ntgrid)
    end subroutine bgrad
 
+  !> Calculate rgrid for the case of eeq and deq: 
+  !! in this case, rgrid is the distance to the magnetic 
+  !! axis as a function of theta.
   subroutine rtg(rgrid, rp)
     use mp, only: mp_abort
     use eeq, only: ebound => bound
@@ -3100,6 +3147,10 @@ end subroutine geofax
 
     if (efit_eq) then
        do i=-nth,nth
+          ! The line below calcualates the distance
+          ! of the boundary away from the magnetic axis
+          ! at this value of theta: i.e. the maximum value 
+          ! of rfun.
           broot=ebound(theta(i))
           rgrid(i)=rfun(rp, theta(i), broot)
        enddo
@@ -3112,6 +3163,12 @@ end subroutine geofax
     if(nperiod>1) call periodic_copy(rgrid,0.0)
   end subroutine rtg
 
+  !> Returns the distance to the magnetic axis
+  !! as a function of rp (the normalised poloidal flux variable)
+  !! and theta. If broot is set > 0, assumes distance is less 
+  !! than or equal to broot: i.e. specifies the outer limit 
+  !! of the root finding.
+  !! Only for eeq and deq
   function rfun(rp, thet, broot)
     use eeq, only: ebound => bound
     use deq, only: dbound => bound
@@ -3282,6 +3339,9 @@ end subroutine geofax
     nth_get = nth
   end function nth_get
 
+  !> Calculate the derivative of the flux label rho
+  !! with respect to the internal flux label rp (the 
+  !! normalised poloidal flux)
   subroutine drho_drp(rp, drhodrp)
     real, intent(in) :: rp
     real, intent (out) :: drhodrp
