@@ -2803,13 +2803,17 @@ contains
 
     if (.not. allocated(source_mod)) allocate (source_mod(nresponse)) ; source_mod = 0.0
     
-    call get_source (gfncold, phi, phinew, apar, aparnew, istep)
+!    call get_source (gfncold, phi, phinew, apar, aparnew, istep)
+    call get_linear_source (gfncold, phi, phinew, apar, aparnew, istep)
     if (equation==1) then
        call add_gprim_source
-    else if (equation==2) then
-       call add_higher_order_source
+    else
+       call get_nonlinear_source (gfncold, phi, phinew, apar, aparnew, istep)
+       if (equation==2) then
+          call add_higher_order_source
+       end if
     end if
-    
+       
     call set_parallel_bc (gfnc)
 
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
@@ -2899,7 +2903,227 @@ contains
 
   end subroutine implicit_solve
 
-  subroutine get_source (gfnc, phifnc, phinewfnc, aparfnc, aparnewfnc, istep)
+!   subroutine get_source (gfnc, phifnc, phinewfnc, aparfnc, aparnewfnc, istep)
+
+!     use constants, only: zi
+!     use centering, only: get_cell_value
+!     use dist_fn_arrays, only: aj0, source
+!     use dist_fn_arrays, only: vpar, vpar_thetac
+!     use gs2_time, only: code_dt
+!     use species, only: spec
+!     use run_parameters, only: t_imp, fapar
+!     use theta_grid, only: ntgrid, thet_imp
+!     use vpamu_grids, only: anon, anonc, anon_thetac
+!     use vpamu_grids, only: nvgrid, vpa_imp
+!     use vpamu_grids, only: vpa, vpac
+!     use vpamu_grids, only: use_gaussian_quadrature
+!     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
+!     use nonlinear_terms, only: nonlin
+!     use kt_grids, only: ntheta0
+
+!     implicit none
+
+!     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: gfnc
+!     complex, dimension (-ntgrid:,:,:), intent (in) :: phifnc, phinewfnc
+!     complex, dimension (-ntgrid:,:,:), intent (in) :: aparfnc, aparnewfnc
+!     integer, intent (in) :: istep
+
+!     integer :: ig, iv, iglo, iseg, it, ik, imu, is
+!     integer, dimension (:), allocatable :: ig_idx, iv_idx
+!     complex, dimension (:), allocatable :: phi_m
+!     complex, dimension (:,:), allocatable :: phic
+!     complex, dimension (:,:), allocatable :: apar_m
+!     complex, dimension (:,:), allocatable :: aparc
+
+!     allocate (phic(-ntgrid:ntgrid,3))
+!     allocate (phi_m(-ntgrid:ntgrid))
+
+!     allocate (aparc(-ntgrid:ntgrid,2))
+!     allocate (apar_m(-ntgrid:ntgrid,2))
+
+!     allocate (iv_idx(-nvgrid:nvgrid-1))
+!     allocate (ig_idx(-ntgrid:ntgrid-1))
+    
+!     if (fapar < epsilon(0.0)) then
+!        aparc = 0.
+!        apar_m = 0.
+!     end if
+
+!     ! note that GKE is evaluated at cell values
+!     ! ig=-ntgrid is first cell value, ig=ntgrid-1 is last cell value
+!     ! iv=-nvgrid is first cell value, iv=nvgrid-1 is last cell value
+
+!     do iglo = g_lo%llim_proc, g_lo%ulim_proc
+
+!        ik = ik_idx(g_lo,iglo)
+!        imu = imu_idx(g_lo,iglo)
+!        is = is_idx(g_lo,iglo)
+
+!        do it = 1, ntheta0
+!           ! get space-time cell values for J0*phi.  where to evaluate in 
+!           ! spatial cell depends on vpa in order to get upwinding right
+!           phic(:,3) = aj0(:,it,iglo)*(t_imp*phinewfnc(:,it,ik) + (1.0-t_imp)*phifnc(:,it,ik))
+!           call get_cell_value (1.0-thet_imp, phic(:,3), phic(:,1), -ntgrid)
+!           call get_cell_value (thet_imp, phic(:,3), phic(:,2), -ntgrid)
+
+!           ! d(J0*phi)/dtheta = del(J0*phi) / delthet...(1/delthet) is already present in vpar,
+!           ! which multiplies phi_m below
+!           phi_m(:ntgrid-1) = phic(-ntgrid+1:,3) - phic(:ntgrid-1,3)
+
+!           if (fapar > epsilon(0.0)) then
+!              aparc(:,2) = spec(is)%stm*aj0(:,it,iglo)*(t_imp*aparnewfnc(:,it,ik) + (1.0-t_imp)*aparfnc(:,it,ik))
+!              call get_cell_value (1.0-thet_imp, aparc(:,2), aparc(:,1), -ntgrid)
+!              call get_cell_value (thet_imp, aparc(:,2), aparc(:,2), -ntgrid)
+
+!              apar_m(:,2) = spec(is)%zstm*aj0(:,it,iglo)*(aparnewfnc(:,it,ik)-aparfnc(:,it,ik))
+!              call get_cell_value (1.0-thet_imp, apar_m(:,2), apar_m(:,1), -ntgrid)
+!              call get_cell_value (thet_imp, apar_m(:,2), apar_m(:,2), -ntgrid)
+
+!              ! nvgrid index never used later so serves as convenient dummy index
+! !             aparc(:,nvgrid) = aj0(:,it,iglo)*(t_imp*aparnewfnc(:,it,ik) + (1.0-t_imp)*aparfnc(:,it,ik))
+! !             call get_cell_value (1.0-thet_imp, aparc(:,nvgrid), aparc(:,-nvgrid), -ntgrid)
+! !             call get_cell_value (thet_imp, aparc(:,nvgrid), aparc(:,0), -ntgrid)
+
+! !             aparc(:,-nvgrid+1:-1) = spread(aparc(:,-nvgrid),2,nvgrid-1)
+! !             aparc(:,1:nvgrid-1) = spread(aparc(:,0),2,nvgrid-1)
+! !
+! !             apar_m(:ntgrid-1,:) = vpc*spread(aparc(-ntgrid+1:,nvgrid)-aparc(:ntgrid-1,nvgrid),2,nvpa)
+
+! !             aparc(-ntgrid:ntgrid-1,:) = vpc*aparc(-ntgrid:ntgrid-1,:)
+             
+!           end if
+
+!           call get_gold_source_contribution (it, iglo, gfnc, source)
+
+!           ! iv_idx needed to distinguish between +/- vpar for upwinding
+!           iv_idx(-nvgrid:-1) = 1
+!           iv_idx(0:nvgrid-1) = 2
+!           ! ig_idx needed to distinguish between +/- theta for upwinding          
+!           ig_idx(-ntgrid:-1) = 1
+!           ig_idx(0:ntgrid-1) = 2
+          
+!           if (imu == 1 .and. .not.use_gaussian_quadrature) then
+!              ! for mu=0, source is centered in theta but not vpa
+!              ! because the d/dvpa term is zero and thus there is
+!              ! no coupling in vpa
+!              do iv = -nvgrid, nvgrid-1
+!                 do ig = -ntgrid, ntgrid-1
+!                    ! actual source terms (not contributions from g at old time level)
+!                    source(ig,iv,it,iglo) = source(ig,iv,it,iglo) &
+!                         - anon_thetac(ig,iv)*(vpar_thetac(ig,iv,is)*phi_m(ig) &
+!                         + zi*(wdriftc(ig,iv,it,iglo)*phic(ig,iv_idx(iv)) &
+!                         - wstar_thetac(ig,iv,ik,is)*(phic(ig,iv_idx(iv))-vpa(iv)*aparc(ig,ig_idx(ig)))) &
+!                         + vpa(iv)*apar_m(ig,ig_idx(ig)))
+!                 end do
+!              end do
+!           else
+!              do iv = -nvgrid, nvgrid-1
+!                 do ig = -ntgrid, ntgrid-1
+!                    ! actual source terms (not contributions from g at old time level)
+!                    source(ig,iv,it,iglo) = source(ig,iv,it,iglo) &
+!                         - anonc(ig,iv,imu)*(vpar(ig,iv,is)*phi_m(ig) &
+!                         + zi*(wdriftc(ig,iv,it,iglo)*phic(ig,iv_idx(iv)) &
+!                         - wstarc(ig,iv,iglo)*(phic(ig,iv_idx(iv))-vpac(iv,ig_idx(ig))*aparc(ig,ig_idx(ig)))) &
+!                         + vpac(iv,ig_idx(ig))*apar_m(ig,ig_idx(ig)))
+!                 end do
+!              end do
+!           end if
+
+! !             call add_explicit_source_contribution (source(ig,iv,it,iglo))
+             
+!           if (nonlin) then
+!              select case (istep)
+!              case (0)
+!                 ! do nothing
+!              case (1)
+!                 do ig = -ntgrid, ntgrid-1
+!                    source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*gexp_1(ig,:,it,iglo)
+!                 end do
+!              case (2)
+!                 do ig = -ntgrid, ntgrid-1
+!                    source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*( &
+!                         1.5*gexp_1(ig,:,it,iglo) - 0.5*gexp_2(ig,:,it,iglo))
+!                 end do
+!              case default
+!                 do ig = -ntgrid, ntgrid-1
+!                    source(ig,:,it,iglo) = source(ig,:,it,iglo) + code_dt*( &
+!                         (23./12.)*gexp_1(ig,:,it,iglo) &
+!                         - (4./3.)*gexp_2(ig,:,it,iglo) &
+!                         + (5./12.)*gexp_3(ig,:,it,iglo))
+!                 end do
+!              end select
+!           end if
+
+!           if (periodic(ik)) then
+!              source(-ntgrid,-1,it,iglo) = globalfac1*source(-ntgrid,-1,it,iglo) &
+!                   + globalfac2*source(ntgrid-1,0,it,iglo)
+!           end if
+
+! !          if (is==1.and.imu==2.and.ik==2.and.it==2) write (*,*) 'ig=1,iv=1,it=2,ik=2,imu=2,is=1 source', source(1,1,it,iglo)
+	  
+!           ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
+!           if (imu==1 .and. .not.use_gaussian_quadrature) then
+             
+!              mu0_source(:,it,ik,is) = gfnc(:,0,it,iglo) + zi*anon(:,0,imu) &
+!                   * (wstar(:,0,iglo)-wdrift(:,0,it,iglo))*phic(:,3)
+
+!              if (nonlin) then
+!                 select case (istep)
+!                 case (0)
+!                    ! do nothing
+!                 case (1)
+!                    mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*gexp_1(:,0,it,iglo)
+!                 case (2)
+!                    mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*( &
+!                         1.5*gexp_1(:,0,it,iglo) - 0.5*gexp_2(:,0,it,iglo))
+!                 case default
+!                    mu0_source(:,it,ik,is) = mu0_source(:,it,ik,is) + code_dt*( &
+!                         (23./12.)*gexp_1(:,0,it,iglo) &
+!                         - (4./3.)*gexp_2(:,0,it,iglo) &
+!                         + (5./12.)*gexp_3(:,0,it,iglo))
+!                 end select
+!              end if
+                
+!           end if
+
+!           if (it > neigen(ik)) cycle
+
+!           do iseg = 1, nsegments(it,ik)
+!              ! this is the source at the (theta=0,vpa=0) grid point (not a cell value)
+!              ! it is needed because that point does not take info from other grid points
+!              ! except indirectly through the fields
+!              source0(iseg,itmod(iseg,it,ik),iglo) = gfnc(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) + zi*anon(ig_mid(iseg),0,imu) &
+!                   * (wstar(ig_mid(iseg),0,iglo)-wdrift(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)) &
+!                   * aj0(ig_mid(iseg),itmod(iseg,it,ik),iglo)*(t_imp*phinewfnc(ig_mid(iseg),itmod(iseg,it,ik),ik) &
+!                   + (1.0-t_imp)*phifnc(ig_mid(iseg),itmod(iseg,it,ik),ik))
+             
+!              if (nonlin) then
+!                 select case (istep)
+!                 case (0)
+!                    ! do nothing
+!                 case (1)
+!                    source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)
+!                 case (2)
+!                    source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*( &
+!                         1.5*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) - 0.5*gexp_2(ig_mid(iseg),0,itmod(iseg,it,ik),iglo))
+!                 case default
+!                    source0(iseg,itmod(iseg,it,ik),iglo) = source0(iseg,itmod(iseg,it,ik),iglo) + code_dt*( &
+!                         (23./12.)*gexp_1(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) &
+!                         - (4./3.)*gexp_2(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) &
+!                         + (5./12.)*gexp_3(ig_mid(iseg),0,itmod(iseg,it,ik),iglo))
+!                 end select
+!              end if
+!           end do
+          
+!        end do
+!     end do
+    
+!     deallocate (phic, phi_m, aparc, apar_m)
+!     deallocate (iv_idx, ig_idx)
+    
+!   end subroutine get_source
+
+  subroutine get_linear_source (gfnc, phifnc, phinewfnc, aparfnc, aparnewfnc, istep)
 
     use constants, only: zi
     use centering, only: get_cell_value
@@ -2914,9 +3138,9 @@ contains
     use vpamu_grids, only: vpa, vpac
     use vpamu_grids, only: use_gaussian_quadrature
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
-    use nonlinear_terms, only: nonlin
     use kt_grids, only: ntheta0
-
+    use nonlinear_terms, only: nonlin
+    
     implicit none
 
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: gfnc
@@ -3025,8 +3249,78 @@ contains
              end do
           end if
 
-!             call add_explicit_source_contribution (source(ig,iv,it,iglo))
-             
+          ! if nonlinear, then will ensure periodicity after
+          ! adding nonlinear source term
+          if (periodic(ik) .and. .not.nonlin) then
+             source(-ntgrid,-1,it,iglo) = globalfac1*source(-ntgrid,-1,it,iglo) &
+                  + globalfac2*source(ntgrid-1,0,it,iglo)
+          end if
+
+          ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
+          if (imu==1 .and. .not.use_gaussian_quadrature) then
+             mu0_source(:,it,ik,is) = gfnc(:,0,it,iglo) + zi*anon(:,0,imu) &
+                  * (wstar(:,0,iglo)-wdrift(:,0,it,iglo))*phic(:,3)
+          end if
+
+          if (it > neigen(ik)) cycle
+
+          do iseg = 1, nsegments(it,ik)
+             ! this is the source at the (theta=0,vpa=0) grid point (not a cell value)
+             ! it is needed because that point does not take info from other grid points
+             ! except indirectly through the fields
+             source0(iseg,itmod(iseg,it,ik),iglo) = gfnc(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) + zi*anon(ig_mid(iseg),0,imu) &
+                  * (wstar(ig_mid(iseg),0,iglo)-wdrift(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)) &
+                  * aj0(ig_mid(iseg),itmod(iseg,it,ik),iglo)*(t_imp*phinewfnc(ig_mid(iseg),itmod(iseg,it,ik),ik) &
+                  + (1.0-t_imp)*phifnc(ig_mid(iseg),itmod(iseg,it,ik),ik))
+          end do
+          
+       end do
+    end do
+    
+    deallocate (phic, phi_m, aparc, apar_m)
+    deallocate (iv_idx, ig_idx)
+    
+  end subroutine get_linear_source
+
+  subroutine get_nonlinear_source (gfnc, phifnc, phinewfnc, aparfnc, aparnewfnc, istep)
+
+    use constants, only: zi
+    use centering, only: get_cell_value
+    use dist_fn_arrays, only: aj0, source
+    use dist_fn_arrays, only: vpar, vpar_thetac
+    use gs2_time, only: code_dt
+    use species, only: spec
+    use run_parameters, only: t_imp, fapar
+    use theta_grid, only: ntgrid, thet_imp
+    use vpamu_grids, only: anon, anonc, anon_thetac
+    use vpamu_grids, only: nvgrid, vpa_imp
+    use vpamu_grids, only: vpa, vpac
+    use vpamu_grids, only: use_gaussian_quadrature
+    use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
+    use kt_grids, only: ntheta0
+    use nonlinear_terms, only: nonlin
+    
+    implicit none
+
+    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: gfnc
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phifnc, phinewfnc
+    complex, dimension (-ntgrid:,:,:), intent (in) :: aparfnc, aparnewfnc
+    integer, intent (in) :: istep
+
+    integer :: ig, iv, iglo, iseg, it, ik, imu, is
+
+    ! note that GKE is evaluated at cell values
+    ! ig=-ntgrid is first cell value, ig=ntgrid-1 is last cell value
+    ! iv=-nvgrid is first cell value, iv=nvgrid-1 is last cell value
+
+    do iglo = g_lo%llim_proc, g_lo%ulim_proc
+
+       ik = ik_idx(g_lo,iglo)
+       imu = imu_idx(g_lo,iglo)
+       is = is_idx(g_lo,iglo)
+
+       do it = 1, ntheta0
+          
           if (nonlin) then
              select case (istep)
              case (0)
@@ -3050,6 +3344,8 @@ contains
              end select
           end if
 
+!          if (is==1.and.imu==2.and.ik==2.and.it==2) write (*,*) 'ig=1,iv=1,it=2,ik=2,imu=2,is=1 source', source(1,1,it,iglo)
+          
           if (periodic(ik)) then
              source(-ntgrid,-1,it,iglo) = globalfac1*source(-ntgrid,-1,it,iglo) &
                   + globalfac2*source(ntgrid-1,0,it,iglo)
@@ -3058,9 +3354,6 @@ contains
           ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
           if (imu==1 .and. .not.use_gaussian_quadrature) then
              
-             mu0_source(:,it,ik,is) = gfnc(:,0,it,iglo) + zi*anon(:,0,imu) &
-                  * (wstar(:,0,iglo)-wdrift(:,0,it,iglo))*phic(:,3)
-
              if (nonlin) then
                 select case (istep)
                 case (0)
@@ -3086,11 +3379,6 @@ contains
              ! this is the source at the (theta=0,vpa=0) grid point (not a cell value)
              ! it is needed because that point does not take info from other grid points
              ! except indirectly through the fields
-             source0(iseg,itmod(iseg,it,ik),iglo) = gfnc(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) + zi*anon(ig_mid(iseg),0,imu) &
-                  * (wstar(ig_mid(iseg),0,iglo)-wdrift(ig_mid(iseg),0,itmod(iseg,it,ik),iglo)) &
-                  * aj0(ig_mid(iseg),itmod(iseg,it,ik),iglo)*(t_imp*phinewfnc(ig_mid(iseg),itmod(iseg,it,ik),ik) &
-                  + (1.0-t_imp)*phifnc(ig_mid(iseg),itmod(iseg,it,ik),ik))
-             
              if (nonlin) then
                 select case (istep)
                 case (0)
@@ -3112,11 +3400,8 @@ contains
        end do
     end do
     
-    deallocate (phic, phi_m, aparc, apar_m)
-    deallocate (iv_idx, ig_idx)
-    
-  end subroutine get_source
-
+  end subroutine get_nonlinear_source
+  
   subroutine get_gold_source_contribution (it, iglo, g_old, source_out)
 
     use gs2_layouts, only: g_lo
