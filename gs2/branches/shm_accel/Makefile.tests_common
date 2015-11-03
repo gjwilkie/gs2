@@ -1,0 +1,26 @@
+
+.SUFFIXES: .fpp .f90 .c .o
+.PHONY: all clean
+
+#$(info "F90FLAGS is $(F90FLAGS)")
+#F90FLAGS = $(F90FLAGS) -I ../../
+#$(info "F90FLAGS is $(F90FLAGS)")
+#LDFLAGS += -I ../../
+#CFLAGS += -I ../../
+#CPPFLAGS += -I ../../
+
+.f90.o: 
+	$(FC) $(F90FLAGS) -c $< -I ../../
+.fpp.f90:
+	$(CPP) $(CPPFLAGS) $< $@ -I ../../
+.c.o:
+	$(CC) $(CFLAGS) -c $< -I ../../
+
+
+clean: 
+	$(CLEANCOMMAND)
+
+
+
+RUNCOMMAND= $(TESTCOMMAND)$(1) $(BLUEGENEARGS) $(2)
+

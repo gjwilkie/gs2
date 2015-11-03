@@ -1,0 +1,45 @@
+# Host: helios at IFERC-CSC (Bull B510)
+#// Specifically target the backend processors (gains ~10% decrease in execution time)
+# modules:
+# bullxmpi
+# fftw (version 2.1.5)
+# netcdf
+# hdf5_p
+#
+# These module must be loaded at RUN TIME as well 
+# at compile time. EGH
+#
+#
+COMPILER=intel
+CHIP=sandy-bridge
+MPIFC=mpiifort
+MPICC=mpiicc
+
+USE_FFT := 1 
+FFTW_DIR := /opt/intel/mkl
+
+ifdef FFTW_DIR
+	USE_FFT = fftw3
+endif
+ifdef NETCDF_DIR
+	USE_NETCDF = on
+endif
+ifdef HDF5
+	USE_HDF5 = on
+endif
+ifdef PGPLOT_DIR
+	PGPLOT_LIB = -lpgplot -L$$PGPLOT_DIR /usr/lib64/libpng.so.3
+endif
+
+include Makefile.$(COMPILER)
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I$$NETCDF_DIR/include
+	NETCDF_LIB = -L$$NETCDF_DIR/lib -lnetcdf -lnetcdff 
+endif
+
+
+ifdef USE_FFT
+	FFT_INC := -I${FFTW_DIR}/include/fftw 
+	FFT_LIB := -L${FFTW_DIR} -Wl,--start-group  $(MKLROOT)/lib/intel64/libmkl_intel_lp64.a $(MKLROOT)/lib/intel64/libmkl_sequential.a $(MKLROOT)/lib/intel64/libmkl_core.a -Wl,--end-group -lpthread -lm -lrt
+endif

@@ -1,0 +1,44 @@
+# Makefile for arch linux
+# Maintainer: gwilkie@umd.edu
+
+#Before building install these packages
+#gcc
+#gfortran
+#openmpi-bin
+#fftw2
+#fftw-dev
+#libnetcdf6
+#netcdf-bin
+#libnetcdf-dev
+
+
+COMPILER=gnu-gfortran
+USE_HDF5=
+
+# As of July 2013, there is a bug in arch associated with GCC 4.8 that
+# prevents netcdf-fortran from being used as installed
+# However, one can install the libraries manually in /usr/local. If you have not done so,
+# and the archlinux bug has not been fixed, uncomment the next line
+#USE_NETCDF=
+
+include Makefile.$(COMPILER)
+
+USE_LOCAL_SPFUNC=on
+
+ifeq ($(USE_FFT),sfftw)
+	FFT_LIB = -L/usr/local/lib -lsrfftw -lsfftw
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L/usr/local/lib -lrfftw -lfftw
+endif
+
+ifeq ($(USE_FFT),fftw3)
+	FFT_LIB = -L/usr/lib -lfftw3 -lfftw3f
+
+endif
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I/usr/local/include
+	NETCDF_LIB = -L/usr/local/lib -lnetcdf -lnetcdff
+endif

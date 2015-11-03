@@ -1,0 +1,90 @@
+#! /bin/sh
+#  set workstation type:
+#
+#    ALPHA means OSF1
+#    SGI means Silicon Graphics Irix
+#    SUN means SUNOS
+#    RS6000 means AIX
+#    ...others may require porting effort...
+#
+S=`uname -s`
+WORKSTATION_TYPE='unknown'
+if  test "$S" = 'IRIX64'; then
+      WORKSTATION_TYPE='SGI'
+elif  test "$S" = 'OSF1'; then
+      WORKSTATION_TYPE='ALPHA'
+elif test "$S" = 'AIX'; then
+      WORKSTATION_TYPE='RS6000'
+elif test "$S" = 'SunOS'; then
+    R=`uname -r | sed "s/\..//"` 
+    if test "$R" = '4'; then
+       WORKSTATION_TYPE='SUN'
+    else
+       WORKSTATION_TYPE='SUNOS'
+    fi
+elif test "$S" = 'Linux'; then
+      WORKSTATION_TYPE='LINUX'
+elif test "$S" = 'HP_UX'; then
+      WORKSTATION_TYPE='HP'
+fi
+if test $WORKSTATION_TYPE = 'unknown'; then
+    S=`uname -m`
+    if test "$S" = 'CRAY T3E'; then
+       WORKSTATION_TYPE='T3E'
+    elif test "$S" = 'CRAY J90'; then
+       WORKSTATION_TYPE='C90'
+    else
+       echo `uname -s` is not recognized by test_os script
+       exit
+    fi
+fi
+
+# distinguish between Linux on Intel or Alpha machines:
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`uname -m`
+    if test "$S" = 'alpha'; then
+	WORKSTATION_TYPE='LINUX_alpha'
+    fi
+fi
+
+# Check if using Linux with Fujitsu F90 compiler
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`f90 -V 2>&1`
+    S=`echo $S | grep Fujitsu`
+    if test ${#S} != 0 ; then
+	WORKSTATION_TYPE='LINUX_fuj'
+    fi
+fi
+
+# Check if using Linux with Lahey-Fujitsu F90 compiler
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`lf95 --version 2>&1`
+    S=`echo $S | grep Lahey`
+    if test ${#S} != 0 ; then
+	WORKSTATION_TYPE='LINUX_lf95'
+    fi
+fi
+
+# Check if using Linux with Absoft compiler
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`mpif90 -show 2>&1`
+    S=`echo $S | grep absoft`
+    if test ${#S} != 0 ; then
+	WORKSTATION_TYPE='LINUX_abs'
+    fi
+fi
+
+# TT> added intel compiler
+# Check if using Linux with Intel fortran compiler
+if test "$WORKSTATION_TYPE" = 'LINUX'; then
+    S=`ifort -V 2>&1`
+    S=`echo $S | grep Intel`
+    if test ${#S} != 0 ; then
+        WORKSTATION_TYPE='LINUX_ifort'
+    fi
+fi
+# <TT
+
+echo $WORKSTATION_TYPE
+# export WORKSTATION_TYPE
+

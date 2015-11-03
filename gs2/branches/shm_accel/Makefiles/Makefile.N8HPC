@@ -1,0 +1,46 @@
+# Host: N8HPC
+# Author: Peter Buxton
+
+NETCDF_DIR = /apps/developers/libraries/netcdf/4.2.1.1/1/bit-64-intel-12.1.5.339-intelmpi-4.1.0.024
+FFT_DIR = /apps/developers/libraries/fftw/2.1.5/1/bit-64-intel-12.1.5.339-intelmpi-4.1.0.024
+
+FFT_INC = -I$(FFT_DIR)/include
+
+COMPILER=intel
+
+include Makefile.$(COMPILER)
+
+FC=ifort
+MPIFC=mpif90
+CC=icc
+$(FC=$FC)
+ifeq ($(USE_FFT),fftw)
+	ifdef DBLE
+		FFT_LIB = -L$(FFT_DIR)/lib -ldrfftw -ldfftw -lm
+	else
+		FFT_LIB = -lsfftw -lsrfftw
+	endif
+endif
+
+NETCDF_INC = -I$(NETCDF_DIR)/include
+NETCDF_LIB = -L$(NETCDF_DIR)/lib -lnetcdff -lnetcdf
+
+####################### How to install and run on N8HPC #######################
+# INSTALLING:                                                                 #
+# ~/trunk>module load bit/64 york intel fftw/2.1.5 netcdf                     #
+# ~/trunk>module switch openmpi intelmpi                                      #
+# ~/trunk>export GK_SYSTEM=N8HPC                                              #
+# ~/trunk>make -I Makefiles                                                   #
+#                                                                             #
+# To run create a gs2_submission_script.sh                                    #
+# #$ -cwd -V                                                                  #
+# #$ -l h_rt=01:00:00                                                         #
+# #$ -l np=16                                                                 #
+# module load bit/64 york intel fftw/2.1.5 netcdf                             #
+# module switch openmpi intelmpi                                              #
+# EXECUTABLE=~/trunk/gs2                                                      #
+# INFILE=gs2input.in                                                          #
+# mpirun ${EXECUTABLE} ${INFILE} > OUTPUT                                     #
+#                                                                             #
+# qsub gs2_submission_script.sh                                               #
+###############################################################################
