@@ -75,6 +75,7 @@ nonlinear_mode = "on"
 /
 
 &layouts_knobs
-layout="xyles"
+layout="yxles"
+opt_redist_nbk = F
 ! default lxyes
 /

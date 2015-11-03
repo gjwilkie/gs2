@@ -1,0 +1,44 @@
+#
+# Include used for fft benchmark
+#
+ifeq ($(PE_ENV),GNU)
+   COMPILER=gcc
+else ifeq ($(PE_ENV),CRAY)
+   COMPILER=cray
+else ifeq ($(PE_ENV),INTEL)
+   COMPILER=intel
+else
+   $(error unknown value for PE_ENV $(PE_ENV)) 
+endif
+
+include Makefile.$(COMPILER)
+
+USE_FFT = fftw3
+
+FC=ftn
+CC=cc
+ifdef USE_MPI
+        MPIFC=ftn
+        MPICC=cc
+endif
+
+
+ifdef USE_NETCDF
+        NETCDF_INC =
+        NETCDF_LIB =
+endif
+
+ifdef NETCDF_DIR
+        USE_NETCDF = on
+else
+        override USE_NETCDF =
+endif
+ifdef HDF5_FLIB
+        USE_HDF5 = on
+else
+        override USE_HDF5 =
+endif
+ifdef PGPLOT_DIR
+        PGPLOT_LIB = -lpgplot -L$$PGPLOT_DIR
+endif
+

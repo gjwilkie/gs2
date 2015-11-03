@@ -135,7 +135,7 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-  subroutine init_ccfftw (fft, is, n, howmany, data_array)
+  subroutine init_ccfftw (fft, is, n, howmany, data_array, transpose, m)
 
     use mp, only: mp_abort
 
@@ -143,6 +143,8 @@ contains
     integer, intent (in) :: is, n
     integer, optional, intent (in) :: howmany
     complex, optional, dimension(:,:), intent(inout) :: data_array 
+    character(len=1), optional, intent(in) :: transpose
+    integer, optional, intent(in) :: m 
 # if FFT == _FFTW3_
     integer, dimension(1) :: array_n
 # endif    
@@ -172,10 +174,17 @@ contains
     array_n = n
     j = FFTW_PATIENT
     !aaaaa
-    call FFTW_PREFIX(_plan_many_dft)(fft%plan, 1, array_n, howmany, &
-         data_array, array_n, 1, n, &
-         data_array, array_n, 1, n, &
-         is, j)
+    if ( present(transpose)) then
+       call FFTW_PREFIX(_plan_many_dft)(fft%plan, 1, array_n, howmany, &
+            data_array, array_n, howmany*m, 1, &
+            data_array, array_n, howmany*m, 1, &
+            is, j)
+    else
+       call FFTW_PREFIX(_plan_many_dft)(fft%plan, 1, array_n, howmany, &
+            data_array, array_n, 1, n, &
+            data_array, array_n, 1, n, &
+            is, j)
+    endif
 # endif
 
   end subroutine init_ccfftw
@@ -204,11 +213,12 @@ contains
   
 # elif FFT == _FFTW3_
 
-  subroutine init_rcfftw_1d (fft, is, n, howmany)
+  subroutine init_rcfftw_1d (fft, is, n, howmany, transposed)
 
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, n
     integer, intent(in) :: howmany
+    character(len=1), optional, intent(in) :: transposed
     integer :: j
 
 
@@ -233,17 +243,30 @@ contains
     fft%howmany = howmany
     fft%strided = .false.
 
-    allocate (dummy_real_data(N, max (1, howmany)))
-    allocate (dummy_complex_data(N/2+1, max(1, howmany)))
+    if (present(transposed)) then
+       allocate (dummy_real_data(max (1, howmany), N))
+       allocate (dummy_complex_data(max(1, howmany), N/2+1))
+    else
+       allocate (dummy_real_data(N, max (1, howmany)))
+       allocate (dummy_complex_data(N/2+1, max(1, howmany)))
+    endif
 
     vector_sizes_real = N
     vector_sizes_complex = N/2+1
-    j = FFTW_PATIENT ! + FFTW_UNALIGNED 
-    call FFTW_PREFIX(_plan_many_dft_r2c) (fft%plan, 1, &
-         vector_sizes_real, howmany, &
-         dummy_real_data,    vector_sizes_real,    1, N,     &
-         dummy_complex_data, vector_sizes_complex, 1, N/2+1, &
-         j)
+    j = FFTW_PATIENT ! + FFTW_UNALIGNED
+    if ( present(transposed)) then
+       call FFTW_PREFIX(_plan_many_dft_r2c) (fft%plan, 1, &
+            vector_sizes_real, howmany, &
+            dummy_real_data,    vector_sizes_real,   howmany,  1, &
+            dummy_complex_data, vector_sizes_complex, howmany, 1, &
+            j)
+    else
+       call FFTW_PREFIX(_plan_many_dft_r2c) (fft%plan, 1, &
+            vector_sizes_real, howmany, &
+            dummy_real_data,    vector_sizes_real,    1, N,     &
+            dummy_complex_data, vector_sizes_complex, 1, N/2+1, &
+            j)
+       endif
 
     deallocate (dummy_real_data, dummy_complex_data)
 
@@ -299,11 +322,12 @@ contains
 # elif FFT == _FFTW3_
 
 
-  subroutine init_crfftw_1d (fft, is, n, howmany)
+  subroutine init_crfftw_1d (fft, is, n, howmany, transposed)
 
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, n
     integer, intent(in) :: howmany
+    character(len=1), optional, intent(in) :: transposed
     integer :: j
 
     ! a few things required for FFTW3 over FFTW2    
@@ -326,17 +350,30 @@ contains
     fft%howmany = howmany
     fft%strided = .false.
 
-    allocate (dummy_real_data(N, max (1, howmany)))
-    allocate (dummy_complex_data(N/2+1, max(1, howmany)))
+    if (present(transposed)) then
+       allocate (dummy_real_data(max (1, howmany), N))
+       allocate (dummy_complex_data(max(1, howmany), N/2+1))
+    else
+       allocate (dummy_real_data(N, max (1, howmany)))
+       allocate (dummy_complex_data(N/2+1, max(1, howmany)))
+    endif
 
     vector_sizes_real = N
     vector_sizes_complex = N/2+1
     j = FFTW_PATIENT ! + FFTW_UNALIGNED 
-    call FFTW_PREFIX(_plan_many_dft_c2r) (fft%plan, 1, &
-         vector_sizes_real, howmany, &
-         dummy_complex_data, vector_sizes_complex, 1, N/2+1, &
-         dummy_real_data,    vector_sizes_real,    1, N,     &
-         j)
+    if (present(transposed)) then
+       call FFTW_PREFIX(_plan_many_dft_c2r) (fft%plan, 1, &
+            vector_sizes_real, howmany, &
+            dummy_complex_data, vector_sizes_complex, howmany,1, &
+            dummy_real_data,    vector_sizes_real,    howmany,1, &
+            j)
+    else
+       call FFTW_PREFIX(_plan_many_dft_c2r) (fft%plan, 1, &
+            vector_sizes_real, howmany, &
+            dummy_complex_data, vector_sizes_complex, 1, N/2+1, &
+            dummy_real_data,    vector_sizes_real,    1, N,     &
+            j)
+    endif
 
     deallocate (dummy_real_data, dummy_complex_data)
 
@@ -417,10 +454,10 @@ contains
     fft%howmany = howmany
     fft%strided = .true.
 
-    stride  = howmany
+       stride  = howmany
 
-    allocate (dummy_real_data(howmany, m*n))
-    allocate (dummy_complex_data(howmany, (m/2+1)*n))
+    allocate (dummy_real_data(stride, m*n))
+    allocate (dummy_complex_data(stride, (m/2+1)*n))
 
     vector_sizes_real(1) = m
     vector_sizes_real(2) = n
@@ -478,7 +515,6 @@ contains
 # elif FFT == _FFTW3_
 
   subroutine init_crfftw_2d (fft, is, m, n, howmany)
-
     
     type (fft_type), intent (out) :: fft
     integer, intent (in) :: is, m, n
@@ -514,8 +550,8 @@ contains
 
     stride  = howmany
 
-    allocate (dummy_real_data(howmany, m*n))
-    allocate (dummy_complex_data(howmany, (m/2+1)*n))
+    allocate (dummy_real_data(stride, m*n))
+    allocate (dummy_complex_data(stride, (m/2+1)*n))
 
     vector_sizes_real(1) = m
     vector_sizes_real(2) = n

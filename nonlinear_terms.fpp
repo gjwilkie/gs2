@@ -29,7 +29,8 @@ module nonlinear_terms
   real, save, dimension (:,:), pointer :: ba => null(), gb => null(), bracket => null()
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
 
-  real, save, dimension (:,:,:), allocatable :: aba, agb, abracket
+  real, save, dimension (:,:,:), pointer, contiguous :: aba => null(), &
+       agb => null(), abracket => null()
   ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
 
   !complex, dimension (:,:), allocatable :: xax, xbx, g_xf
@@ -171,9 +172,12 @@ contains
        if (debug) write(6,*) "init_nonlinear_terms: allocations"
        if (alloc) then
           if (accelerated) then
-             allocate (     aba(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
-             allocate (     agb(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
-             allocate (abracket(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
+             !allocate (     aba(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
+             !allocate (     agb(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
+             !allocate (abracket(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
+             call shm_alloc(aba, (/ 1, 2*ntgrid+1, 1, 2, accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
+             call shm_alloc(agb, (/ 1, 2*ntgrid+1, 1, 2, accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
+             call shm_alloc(abracket, (/ 1, 2*ntgrid+1, 1, 2, accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
              aba = 0. ; agb = 0. ; abracket = 0.
           else
              !allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
@@ -739,7 +743,10 @@ contains
     use shm_mpi3, only : shm_free
     implicit none
 
-    if (allocated(aba)) deallocate (aba, agb, abracket)
+    !if (allocated(aba)) deallocate (aba, agb, abracket)
+    if (associated(aba)) call shm_free(aba)
+    if (associated(agb)) call shm_free(agb)
+    if (associated(abracket)) call shm_free(abracket)
     !if (allocated(ba)) deallocate (ba, gb, bracket)
     if (associated(ba)) then
        call shm_free(ba)

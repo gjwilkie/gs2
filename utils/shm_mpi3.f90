@@ -30,7 +30,7 @@ private
 !<LA shared memory public procedures and data types
   public :: shm_init, shm_alloc, shm_free, &
        shm_onnode, shm_node_id, shm_get_node_pointer, &
-       shm_node_barrier, shm_clean
+       shm_node_barrier, shm_clean, shm_fence
        
 !LA>
   
@@ -70,6 +70,11 @@ private
      module procedure remap_bounds_3r
   end interface remap_bounds
 
+  interface shm_fence
+     module procedure shm_fence_c
+     module procedure shm_fence_r
+  end interface shm_fence
+
   integer, parameter :: maxlen=127
 
   type shm_info_t
@@ -104,6 +109,7 @@ contains
     integer, intent(in) :: wcomm
 
     integer comm, id_world, id_node, n, ierr
+    integer(kind=MPI_ADDRESS_KIND) ta
 
     ! test for MPI version 
 
@@ -120,9 +126,15 @@ contains
     call mpi_allgather(id_world, 1, mpi_integer, &
          shm_info%wranks, 1, mpi_integer, comm, ierr)
 
-    call mpi_info_create(info_noncontig, ierr)
-    call mpi_info_set(info_noncontig, "alloc_shared_noncontig", "true", ierr)
-    !info_noncontig=MPI_INFO_NULL
+    ! use contigous block for accelerated ffts
+    !call mpi_info_create(info_noncontig, ierr)
+    !call mpi_info_set(info_noncontig, "alloc_shared_noncontig", "true", ierr)
+
+    ! check the size of MPI_ADRESS_KIND
+    if (id_world == 0) then 
+       write(*,*) "shm_mpi3 init: test MPI_ADDRESS_KIND vs integer ", kind(ta), kind(n)
+    endif
+       
 
   end subroutine shm_init
 
@@ -352,6 +364,26 @@ subroutine shm_free_r(a)
   end subroutine shm_node_barrier
 
 
+ subroutine shm_fence_r(a)
+    use, intrinsic :: iso_c_binding, only : c_loc, c_associated
+    implicit none
+    real, target, intent(in) :: a
+
+    include "shm_mpi3_fence_tmpl.inc"
+
+ end subroutine shm_fence_r
+
+
+ subroutine shm_fence_c(a)
+    use, intrinsic :: iso_c_binding, only : c_loc, c_associated
+    implicit none
+    complex, target, intent(in) :: a
+
+    include "shm_mpi3_fence_tmpl.inc"
+
+ end subroutine shm_fence_c
+
+
 !********************* shm critical regions ********
 !!$  subroutine shm_node_critical_start
 !!$# ifdef MPI
@@ -383,26 +415,17 @@ subroutine shm_free_r(a)
     integer, intent(in) :: ip
     logical shm_onnode
 
-    integer i, nproc, ierr
+    integer i
 
     shm_onnode = .false.
     
-    call mpi_comm_size(shm_info%wcomm, nproc, ierr)
+    do i = 0, shm_info%size - 1
+       if (ip == shm_info%wranks(i)) then
+          shm_onnode = .true.
+          exit
+       end if
+    enddo
     
-    if ( ip >= 0 .and. ip < nproc) then
-       do i = 0, shm_info%size - 1
-          ! this loop might be an overkill
-          ! if the ranks are ordered a range test id enough
-          ! but this loop shoudn't be very expensive
-          if (ip == shm_info%wranks(i)) then
-             shm_onnode = .true.
-             exit
-          end if
-       enddo
-    else
-       call error_abort("rank value out of range in shm_onnode function")
-    end if
-
   end function shm_onnode
 
   function shm_node_id(ip)

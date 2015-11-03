@@ -80,6 +80,7 @@ ffttester_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -144,6 +145,7 @@ gs2_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -211,6 +213,7 @@ ingen_mod = \
 	 leq.o \
 	 matrix_inverse.o \
 	 mp.o \
+	 mt19937.o \
 	 nonlinear_terms.o \
 	 parameter_scan.o \
 	 parameter_scan_arrays.o \
@@ -350,6 +353,7 @@ dist_fn.o: \
 	 prof.o \
 	 redistribute.o \
 	 run_parameters.o \
+	 shm_mpi3.o \
 	 species.o \
 	 spfunc.o \
 	 text_options.o \
@@ -560,7 +564,8 @@ gs2_layouts.o: \
 	 file_utils.o \
 	 layouts_type.o \
 	 mp.o \
-	 redistribute.o 
+	 redistribute.o \
+	 shm_mpi3.o 
 gs2_main.o: \
 	 antenna.o \
 	 collisions.o \
@@ -607,7 +612,9 @@ gs2_reinit.o: \
 	 nonlinear_terms.o \
 	 run_parameters.o 
 gs2_save.o: \
+	 convert.o \
 	 dist_fn_arrays.o \
+	 fields_arrays.o \
 	 file_utils.o \
 	 gs2_layouts.o \
 	 layouts_type.o \
@@ -632,6 +639,7 @@ gs2_transforms.o: \
 	 mp.o \
 	 prof.o \
 	 redistribute.o \
+	 shm_mpi3.o \
 	 sorting.o \
 	 theta_grid.o 
 hdf_wrapper.o: \
@@ -744,6 +752,7 @@ mp.o: \
 	 constants.o \
 	 file_utils.o \
 	 shm_mpi3.o 
+mt19937.o: 
 netcdf_utils.o: \
 	 constants.o \
 	 file_utils.o 
@@ -758,6 +767,7 @@ nonlinear_terms.o: \
 	 le_grids.o \
 	 mp.o \
 	 run_parameters.o \
+	 shm_mpi3.o \
 	 species.o \
 	 text_options.o \
 	 theta_grid.o 
@@ -780,12 +790,12 @@ peq.o: \
 pgplot_utils.o: \
 	 constants.o 
 prof.o: 
-ran.o: 
+ran.o: \
+	 mt19937.o 
 read_chease.o: 
 redistribute.o: \
 	 job_manage.o \
-	 mp.o \
-	 shm_mpi3.o 
+	 mp.o 
 regress.o: \
 	 regression.o 
 regression.o: 

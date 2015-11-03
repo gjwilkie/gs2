@@ -1,12 +1,21 @@
     type(shm_node_pointers_t), pointer :: next => null()
 
-    integer i, ierr
+    integer i, jd, ierr
     integer, allocatable :: ashape(:)
     logical found
 
     if ( present(a1)) a1 =>null()
     if ( present(a2)) a2 =>null()
     if ( present(a3)) a3 =>null()
+
+    ! id = -1 is for pointer from node to whole array
+    ! a shm symbolic name must be used 
+
+    if ( id == -1) then 
+       jd = 0
+    else
+       jd = id
+    endif
 
      next => shm_ptr_head
      do while (associated(next))
@@ -23,22 +32,41 @@
            endif
            allocate(ashape(next%ndim))
            do i = 1, next%ndim
-              ashape(i) =next%se(2*i,id) - next%se(2*i-1,id) +1
+              ashape(i) =next%se(2*i,jd) - next%se(2*i-1,jd) +1
            enddo
 
-           select case (next%ndim)
-           case(1)
-              call c_f_pointer(next%nd(id), a1, ashape)
-              a1 => remap_bounds(next%se(1,id), a1)
-           case(2)
-              call c_f_pointer(next%nd(id), a2, ashape)
-              a2 =>  remap_bounds(next%se(1,id), next%se(3,id), a2)
-           case(3)
-              call c_f_pointer(next%nd(id), a3, ashape)
-              a3 =>  remap_bounds(next%se(1,id), next%se(3,id), next%se(5,id), a3)
-           case default
-              call error_abort(" shm_get_node_pointer : wrong ndim")
-           end select
+           if ( id == -1) then 
+              i = next%ndim
+              ashape(i) = next%se(2*i,shm_info%size -1) - next%se(2*i-1,0) +1
+           endif
+           !write(0,*) 'ashape', shm_info%id, ashape, next%se
+           
+           if ( id == -1 ) then
+              select case (next%ndim)
+              case(1)
+                 call c_f_pointer(next%nd(jd), a1, ashape)
+              case(2)
+                 call c_f_pointer(next%nd(jd), a2, ashape)
+              case(3)
+                 call c_f_pointer(next%nd(jd), a3, ashape)
+              case default
+                 call error_abort(" shm_get_node_pointer : wrong ndim")
+              end select
+           else
+              select case (next%ndim)
+              case(1)
+                 call c_f_pointer(next%nd(jd), a1, ashape)
+                 a1 => remap_bounds(next%se(1,jd), a1)
+              case(2)
+                 call c_f_pointer(next%nd(jd), a2, ashape)
+                 a2 =>  remap_bounds(next%se(1,jd), next%se(3,jd), a2)
+              case(3)
+                 call c_f_pointer(next%nd(jd), a3, ashape)
+                 a3 =>  remap_bounds(next%se(1,jd), next%se(3,jd), next%se(5,jd), a3)
+              case default
+                 call error_abort(" shm_get_node_pointer : wrong ndim")
+              end select
+           endif
            exit
         else
            next => next%next
