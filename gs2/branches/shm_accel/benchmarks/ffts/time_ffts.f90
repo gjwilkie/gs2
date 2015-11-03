@@ -8,7 +8,7 @@ program time_ffts
   use mpi
   use shm_mpi3
   use unit_tests
-  use mp, only: init_mp, finish_mp, mp_abort, proc0, iproc, broadcast
+  use mp, only: init_mp, finish_mp, mp_abort, proc0, iproc, broadcast, barrier
   use file_utils, only: init_file_utils, run_name
   use species, only: init_species, nspec, spec
   use constants, only: pi
@@ -57,18 +57,21 @@ program time_ffts
   call init_nonlinear_terms
 
   call shm_alloc(g1, (/-ntgrid, ntgrid, 1, 2, g_lo%llim_proc, g_lo%ulim_proc/))
-  call shm_alloc(g, (/-ntgrid, ntgrid, 1, 2, g_lo%llim_proc, g_lo%ulim_proc/))
+  !call shm_alloc(g, (/-ntgrid, ntgrid, 1, 2, g_lo%llim_proc, g_lo%ulim_proc/))
   !allocate(g1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
-  !allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+  allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
   allocate(phi(-ntgrid:ntgrid,ntheta0,naky))
   allocate(apar(-ntgrid:ntgrid,ntheta0,naky))
   allocate(bpar(-ntgrid:ntgrid,ntheta0,naky))
 
   !if (proc0) call time_message(.false., time_taken, "FFT time")
-  ts = mpi_wtime()
 
   nruns = 5
 
+  call barrier
+
+  ts = mpi_wtime()
+ 
   do i = 1, nruns
     call nonlinear_terms_unit_test_time_add_nl(g1, phi, apar, bpar)
     !if (proc0) write (*,*) 'Finished nonlinear_terms_unit_test_time_add_nl ', i
@@ -93,7 +96,7 @@ program time_ffts
   call finish_nonlinear_terms
 
   call shm_free(g1)
-  call shm_free(g)
+  !call shm_free(g)
   call close_module_test('time_ffts')
 
   call finish_mp

@@ -52,7 +52,7 @@ module mp
   public :: nbrecv
   public :: nproc_comm
   public :: rank_comm
-  public :: allgatherv
+  public :: allgatherv, allgather
 !</DD>
   public :: init_jobs
   public :: mp_comm
@@ -173,6 +173,11 @@ module mp
      module procedure free_comm_id
      module procedure free_comm_type
   end interface
+
+!<LA> gather could be faster that gatherv, it's worth using it when possible
+interface allgather
+    module procedure allgather_integer_array_1to1
+end interface
 !<DD>
   interface allgatherv
      module procedure allgatherv_complex_array_1to1
@@ -504,6 +509,25 @@ contains
   end subroutine finish_mp
 
 ! ************** allgathers *****************************
+  subroutine allgather_integer_array_1to1(arr,count,out,recvcnts)
+    !<DD>A subroutine to do a allgatherv operation, sending recvcnts(iproc)
+    !data from the iproc'th processor to all others starting at arr(start).
+    implicit none
+    integer, dimension(:), intent(in) :: arr  !The data to gather
+    integer, intent(in) :: count !How much data to gather, <=SIZE(arr)
+    integer, dimension(:), intent(out) :: out !The gathered data
+    integer, intent(in) :: recvcnts !Array detailing how much data to expect from each proc
+# ifdef MPI
+    integer :: ierror
+    !Do the gather
+    call mpi_allgather(arr,count,MPI_INTEGER,out,recvcnts,&
+         MPI_INTEGER,mp_comm,ierror)
+# else
+    out=RESHAPE(arr,SHAPE(out))    
+#endif
+  end subroutine allgather_integer_array_1to1
+
+
   subroutine allgatherv_complex_array_1to1(arr,count,out,recvcnts,displs)
     !<DD>A subroutine to do a allgatherv operation, sending recvcnts(iproc)
     !data from the iproc'th processor to all others starting at arr(start).

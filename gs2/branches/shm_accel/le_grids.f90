@@ -2041,8 +2041,9 @@ contains
 ! old (finite-difference) integration scheme
     else
 !CMR, 1/11/2013: 
-!  jend(ig)=  il      lambda index of the trapped particle bouncing at theta(ig)
-!             0       if no trapped particles
+! Above, with no trapped particles, we set: jend(ig)=   0      
+! Here, with trapped particles, we set:     jend(ig)=  il      
+!  where il is the lambda index of the trapped particle bouncing at theta(ig)
 !
        jend = ng2 + 1
 !       wlterr = 0.0

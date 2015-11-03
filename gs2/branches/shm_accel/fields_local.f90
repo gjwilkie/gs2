@@ -11,7 +11,7 @@ module fields_local
   public :: init_fields_local, init_allfields_local, finish_fields_local
   public :: advance_local, reset_fields_local, dump_response_to_file_local
   public :: fields_local_functional, read_response_from_file_local, minNrow
-  public :: do_smart_update
+  public :: do_smart_update, field_local_allreduce, field_local_allreduce_sub
 
   !> Unit tests
   public :: fields_local_unit_test_init_fields_matrixlocal
@@ -270,6 +270,8 @@ module fields_local
   logical :: reinit=.false. !Are we reinitialising?
   logical :: dump_response=.false. !Do we dump the response matrix?
   logical :: read_response=.false. !Do we read the response matrix from dump?
+  logical :: field_local_allreduce = .false. !If true use an allreduce to gather field else use reduce+broadcast
+  logical :: field_local_allreduce_sub = .false. !If true and field_local_allreduce true then do two sub comm all reduces rather than 1
   integer :: nfield !How many fields
   integer :: nfq !How many field equations (always equal to nfield)
   type(pc_type),save :: pc !This is the parallel control object
@@ -2373,28 +2375,67 @@ contains
   end subroutine fm_make_subcom_2
 
   !>Gather all the fields to proc0/all for diagnostics etc.
-  subroutine fm_gather_fields(self,ph,ap,bp,to_all_in)
+  subroutine fm_gather_fields(self,ph,ap,bp,to_all_in,do_allreduce_in)
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use mp, only: broadcast, sum_reduce_sub!, sum_allreduce_sub
+    use mp, only: broadcast, sum_reduce_sub, sum_allreduce, sum_allreduce_sub
+    use mp, only: rank_comm, comm_type, proc0
     use run_parameters, only: fphi, fapar, fbpar
+    use gs2_layouts, only: g_lo, intspec_sub
     implicit none
     class(fieldmat_type), intent(inout) :: self
     complex, dimension(:,:,:), intent(inout) :: ph,ap,bp
-    logical, optional, intent(in) :: to_all_in
-    logical :: to_all
-    complex, dimension(:,:,:,:), allocatable :: tmp
+    logical, optional, intent(in) :: to_all_in, do_allreduce_in
+    logical :: to_all, do_allreduce
+    complex, dimension(:,:,:,:), allocatable :: tmp, tmp_tmp
     integer :: ifl, ik, is, ic, it, iex, bnd, ig
+    logical :: use_sub
+    type(comm_type), save :: les_comm
+    logical, save :: first=.true.
+    logical, save :: sub_has_proc0=.false.
 
     !Set the to_all flag
     to_all=.false.
     if(present(to_all_in)) to_all=to_all_in
 
+    !Set the do_allreduce flag
+    do_allreduce=.false.
+    if(present(do_allreduce_in)) do_allreduce=do_allreduce_in
+    
+    !Shouldn't do to_all if do_allreduce
+    if(do_allreduce) to_all=.false.
+
+    !Work out if we want to use sub communicators in reduction and
+    !if we are allowed to.
+    use_sub=(.not.(g_lo%x_local.and.g_lo%y_local)).and.do_allreduce.and.field_local_allreduce_sub.and.intspec_sub
+
+    !If using sub-communicators set up object and work out which procs
+    !have proc0 as a member
+    if(use_sub.and.first)then
+       !Setup type
+       les_comm%id=g_lo%lesblock_comm
+       call rank_comm(les_comm%id,les_comm%iproc)
+       !Decide who has proc0
+       ig=0
+       if(proc0) ig=1
+       call sum_allreduce_sub(ig,les_comm%id)
+       if(ig.ne.0) sub_has_proc0=.true.
+    endif
+    first=.false.
+
     !Allocate the tmp array if we're part of the head subcom
     !or if we're sending to all
-    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all) then
+    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all.or.do_allreduce) then
+       if(use_sub)then
+          !Use a smaller array so we ignore zero entries, really would like to reuse some of the
+          !integrate species code to do reduction and gather but have extra dimension due to fields
+          allocate(tmp_tmp(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,nfield))
+       else
+          allocate(tmp_tmp(-ntgrid:ntgrid,ntheta0,naky,nfield))
+       endif
        allocate(tmp(-ntgrid:ntgrid,ntheta0,naky,nfield))
-       tmp=0
+       tmp_tmp=0
+       if(use_sub) tmp=0 !Only need to zero if tmp_tmp is not same size as tmp
     endif
 
     !Now loop over supercells, and store sections
@@ -2413,7 +2454,7 @@ contains
                    if(ic.ne.self%kyb(ik)%supercells(is)%ncell) bnd=1
                    do ig=-ntgrid,ntgrid-bnd
                       iex=iex+1
-                      tmp(ig,it,ik,ifl)=self%kyb(ik)%supercells(is)%tmp_sum(iex)
+                      tmp_tmp(ig,it,ik,ifl)=self%kyb(ik)%supercells(is)%tmp_sum(iex)
                    enddo
                 enddo
              enddo
@@ -2421,8 +2462,8 @@ contains
              !/Now fix boundary points
              if(self%kyb(ik)%supercells(is)%ncell.gt.1) then
                 do ic=1,self%kyb(ik)%supercells(is)%ncell-1
-                   tmp(ntgrid,self%kyb(ik)%supercells(is)%cells(ic)%it_ind,ik,:)=&
-                        tmp(-ntgrid,self%kyb(ik)%supercells(is)%cells(ic+1)%it_ind,ik,:)
+                   tmp_tmp(ntgrid,self%kyb(ik)%supercells(is)%cells(ic)%it_ind,ik,:)=&
+                        tmp_tmp(-ntgrid,self%kyb(ik)%supercells(is)%cells(ic+1)%it_ind,ik,:)
                 enddo
              endif
           enddo
@@ -2432,7 +2473,45 @@ contains
        !Really we should be able to do some form of gather here
        !as every proc knows how long the supercell is and where to put it
 !       call sum_allreduce_sub(tmp,self%fm_sub_headsc_p0%id)
-       call sum_reduce_sub(tmp,0,self%fm_sub_headsc_p0)
+       if(.not.do_allreduce)call sum_reduce_sub(tmp_tmp,0,self%fm_sub_headsc_p0)
+    endif
+
+    !Should really be able to do this on the xyblock sub communicator
+    !but proc0 needs to know full result for diagnostics so would need
+    !some way to tell proc0 about the other parts of the field (or
+    !update diagnostics to work in parallel). We have the lesblock comm
+    !which should help with this, but we'd need to work out which procs
+    !are in the same comm as proc0. 
+    if(do_allreduce) then
+       if(use_sub) then
+          !This reduction (and copy) ensures that every proc knows the field
+          !in its local x-y cells. It could be implemented as an allgatherv which
+          !would be slightly more efficient but is more complicated and may involve 
+          !more local operations which outweigh the benefits. 
+          call sum_allreduce_sub(tmp_tmp,g_lo%xyblock_comm)
+       else
+          call sum_allreduce(tmp_tmp)
+       endif
+    endif
+
+    !Now copy tmp_tmp into tmp if we have it
+    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all.or.do_allreduce) then
+       if(use_sub)then
+          tmp(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,:)=tmp_tmp
+          
+          !Here we reduce to proc0 of the lesblock comm (which should include the
+          !global proc0). Should only really need to call this on procs which
+          !have proc0 in their subcomm but no way to determine this currently
+          !NOTE: We don't need to know the result of this reduction until we
+          !reach the diagnostics. With non-blocking communications we may be able
+          !to do this required communication in the background whilst we proceed
+          !with the second call to timeadv. There is a slight complication in that
+          !we're communicating the change in the fields so we have to remember to 
+          !increment the field before diagnostics are called.
+          if(sub_has_proc0) call sum_reduce_sub(tmp,0,les_comm) 
+       else
+          tmp=tmp_tmp !It would be nice to avoid this copy if possible
+       endif
     endif
 
     !////////////////////////
@@ -2457,9 +2536,9 @@ contains
     if(to_all)then
        call broadcast(tmp)
     endif
-    
+
     !Finally, unpack tmp and deallocate arrays
-    if(self%fm_sub_all%proc0.or.to_all)then
+    if(self%fm_sub_all%proc0.or.to_all.or.do_allreduce)then
        ifl=0
        if(fphi.gt.epsilon(0.0)) then
           ifl=ifl+1
@@ -2475,9 +2554,8 @@ contains
        endif
     endif
 
-    if((self%fm_sub_headsc_p0%nproc.gt.0).or.to_all) then
-       deallocate(tmp)
-    endif
+    if(allocated(tmp)) deallocate(tmp)
+    if(allocated(tmp_tmp)) deallocate(tmp_tmp)
 
     !/Fill the empties by broadcasting from proc0 if we
     !didn't do it with the earlier broadcast. Note that here we
@@ -2485,7 +2563,7 @@ contains
     !However with to_all we have the additional cost of unpacking data.
     !It is possible that for some values of nfield to_all is faster than
     !.not.to_all, this is also likely to depend on the machine
-    if(.not.to_all) then
+    if(.not.(to_all.or.do_allreduce)) then
        if(fphi.gt.0) call broadcast(ph)
        if(fapar.gt.0) call broadcast(ap)
        if(fbpar.gt.0) call broadcast(bp)
@@ -3509,7 +3587,8 @@ contains
     !NOTE: We currently calculate omega at every time step so we
     !actually need to gather everytime, which is a pain!
     !We also fill in the empties here.
-    if(do_gather) call fieldmat%gather_fields(phi,apar,bpar)!,to_all_in=.true.)
+    if(do_gather) call fieldmat%gather_fields(phi,apar,bpar,&
+         to_all_in=.false.,do_allreduce_in=field_local_allreduce)
 
     !This routine updates *new fields using gathered update
     if(do_update) call fieldmat%update_fields(phi,apar,bpar)

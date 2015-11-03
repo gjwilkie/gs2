@@ -7,10 +7,13 @@
        ashape(i) = lubd(2*i) - lubd(2*i-1) +1
     enddo
 
-    asize = disp * product(ashape)
-    if (debug) write(0,*) "alloc size ", shm_info%id, asize	
+    asize = int(disp, mpi_address_kind)  * product(ashape)
+    if (debug) write(0,*) "alloc size, shape ", shm_info%id, asize, ashape
 
     call mpi_win_allocate_shared(asize, disp, info_noncontig, shm_info%comm, base_ptr, win, ierr)
+    if (ierr /= MPI_SUCCESS) then 
+	call error_abort("failed to allocate share memory") 
+    endif
 
     select case (ndim)
     case(1)

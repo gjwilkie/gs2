@@ -106,6 +106,8 @@ USE_NAGLIB ?=
 MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
+# Compile with PETSC/SLEPC support for determining eigensystem (bin).
+WITH_EIG ?= 
 
 USE_NEW_DIAG?=on
 
@@ -178,6 +180,8 @@ MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
 FFT_LIB ?=
+EIG_INC ?=
+EIG_LIB ?=
 NETCDF_INC ?=
 NETCDF_LIB ?=
 HDF5_INC ?=
@@ -353,6 +357,26 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
+ifdef WITH_EIG
+	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
+	ifdef PETSC_ARCH
+		EIG_LIB += -L$(PETSC_DIR)/$(PETSC_ARCH)/lib
+		EIG_INC += -I$(PETSC_DIR)/$(PETSC_ARCH)/include
+	else
+		EIG_LIB += -L$(PETSC_DIR)/lib
+	endif
+	ifdef SLEPC_ARCH
+		EIG_LIB += -L$(SLEPC_DIR)/$(SLEPC_ARCH)/lib
+		EIG_INC += -I$(SLEPC_DIR)/$(SLEPC_ARCH)/include
+	else
+		EIG_LIB += -L$(SLEPC_DIR)/lib
+	endif
+	EIG_LIB += -lslepc -lpetsc
+
+	CPPFLAGS += -DWITH_EIG $(EIG_INC)
+	CFLAGS += -DWITH_EIG 
+endif 
+
 ifdef USE_NEW_DIAG
 sinclude Makefile.diagnostics
 else
@@ -364,11 +388,11 @@ simpledataio:
 endif
 
 LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
-		$(IPM_LIB) $(NAG_LIB)
+		$(IPM_LIB) $(NAG_LIB) $(EIG_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
 	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
-		 $(SIMPLEDATAIO_INC)
+		 $(SIMPLEDATAIO_INC) $(EIG_INC)
 CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
@@ -457,7 +481,9 @@ sinclude Makefile.target_$(GK_PROJECT)
 ############################################################### SPECIAL RULES
 
 # comment this out to keep intermediate .f90 files
-#.PRECIOUS: $(F90FROMFPP)
+.PRECIOUS: $(F90FROMFPP)
+
+$(info f90 $(F90FROMFPP))
 
 #.INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
 		mp.f90 fft_work.f90
@@ -598,6 +624,7 @@ test_make:
 	@echo CPPFLAGS is $(CPPFLAGS)
 	@echo LIBS is $(LIBS)
 	@echo PLIBS is $(PLIBS)
+	@echo WITH_EIG is $(WITH_EIG)
 
 unlink:
 	-rm -f $(F90FROMFPP) layouts_type.h

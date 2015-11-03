@@ -111,7 +111,6 @@ module redistribute
      integer, dimension (4) :: to_low, from_low, to_high, from_high
      type (index_map), dimension (:), pointer :: to   => null()
      type (index_map), dimension (:), pointer :: from => null()
-     type (index_map), dimension (:), pointer :: node => null()
      complex, dimension (:), pointer :: complex_buff  => null()
      real,    dimension (:), pointer :: real_buff     => null()
      integer, dimension (:), pointer :: integer_buff  => null()
@@ -230,26 +229,24 @@ contains
   end subroutine setup_persistent
 
   subroutine init_redist_gs2 (r, char, to_low, to_high, to_list, &
-       from_low, from_high, from_list, node_list, ierr)
+       from_low, from_high, from_list, ierr)
 
     use mp, only: iproc, nproc, proc0
-    use shm_mpi3, only : shm_info
     type (redist_type), intent (inout) :: r
     character(1), intent (in) :: char
     type (index_list_type), dimension (0:nproc-1), intent (in) :: to_list, from_list
-    integer, dimension(:), intent (in) :: to_low, from_low, to_high, from_high 
-    type (index_list_type), optional, intent (in) :: node_list(0:shm_info%size-1)   
-    integer :: j, ip, n_to, n_from, buff_size, n
+    integer, dimension(:), intent (in) :: to_low, from_low, to_high, from_high    
+    integer :: j, ip, n_to, n_from, buff_size
     integer, optional, intent (out) :: ierr
 
-    allocate (r%to(0:nproc-1), r%from(0:nproc-1), r%node(0:shm_info%size-1))
+    allocate (r%to(0:nproc-1), r%from(0:nproc-1))
 
     if (present(ierr)) ierr = 0
     buff_size = 0
 
-    !do j = 1, size(to_high)
-    !   r%to_low(j) = to_low(j)
-    !enddo
+    do j = 1, size(to_high)
+       r%to_low(j) = to_low(j)
+    enddo
 
 ! TT> added possibility of higher dimension
 !    r%to_low(1) = 1
@@ -259,8 +256,8 @@ contains
     ! when redist receives array
     ! The new description below hangs up if dimension of to_high is
     ! set incorrectly
-    r%to_low(:) = 1
-    r%to_low(size(to_high)) = to_low(1)
+!    r%to_low(:) = 1
+!    r%to_low(size(to_high)) = to_low
 !    print *, 'size(to_high) is', size(to_high), iproc
 !    print *, 'r%to_low', r%to_low, iproc
 ! <TT
@@ -328,32 +325,6 @@ contains
           r%from(ip)%nn = 0
        endif
     enddo
-
-
-   ! transfer the shared memory data
-    if ( present(node_list)) then
-       ! should allocation be done at once for all 3 components
-       ! this needs clarification
-       do ip = 0, shm_info%size-1
-          r%node(ip)%nn = 0
-          if(associated(node_list(ip)%first)) then
-             n =size(node_list(ip)%first)
-             r%node(ip)%nn = n
-             allocate(r%node(ip)%k(n))
-             r%node(ip)%k(:) = node_list(ip)%first(:)
-          endif
-          if(associated(node_list(ip)%second)) then
-             n =size(node_list(ip)%second)
-             allocate(r%node(ip)%l(n))
-             r%node(ip)%l(:) = node_list(ip)%second(:)
-          endif
-          if(associated(node_list(ip)%third)) then
-             n =size(node_list(ip)%first)
-             allocate(r%node(ip)%m(n))
-             r%node(ip)%m(:) = node_list(ip)%third(:)
-          endif
-       enddo
-    endif
 
 
     select case (char)
@@ -664,12 +635,12 @@ contains
     use mp, only: nproc
 ! TT> caused a problem on PGI compiler
 !    type (index_list_type), dimension(0:) :: list
-    type (index_list_type), dimension(:), intent (inout) :: list
+    type (index_list_type), dimension(0:nproc-1), intent (inout) :: list
 ! <TT
 
     integer :: ip
 
-    do ip = 1,size(list)
+    do ip = 0, nproc-1
        if(associated(list(ip)%first)) deallocate(list(ip)%first)
        if(associated(list(ip)%second)) deallocate(list(ip)%second)
        if(associated(list(ip)%third)) deallocate(list(ip)%third)
@@ -779,8 +750,6 @@ contains
        call c_redist_22_old_copy(r, from_here, to_here)
     end if
     
-    call c_redist_22_shm(r, from_here, to_here)
-
     ! c_redist_22_mpi_copy contains all the remote to local 
     ! copy functionality
     !<DD> Pick from non-blocking and blocking approach
@@ -879,40 +848,9 @@ contains
 
   end subroutine c_redist_22_new_copy
 
-  subroutine c_redist_22_shm(r, from_here, to_here)
-    use shm_mpi3, only : shm_node_barrier, shm_info, shm_get_node_pointer
-    implicit none
-    type (redist_type), intent (in out) :: r
-    
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):), intent (in) :: from_here
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in out) :: to_here
-
-    integer i, ipn, ipfrom
-    complex, pointer :: nd_ptr(:,:)
-    
-    call shm_node_barrier
-    do ipn = 0,shm_info%size - 1
-       if (ipn == shm_info%id) cycle
-       ipfrom = shm_info%wranks(ipn)
-       if (r%node(ipn)%nn > 0) then
-          nd_ptr => shm_get_node_pointer(from_here, ipn)
-          do i = 1, r%node(ipn)%nn
-             to_here(r%to(ipfrom)%k(i), &
-                  r%to(ipfrom)%l(i)) &
-                  = nd_ptr(r%node(ipn)%k(i), &
-                  r%node(ipn)%l(i))
-          end do
-       endif
-    enddo
-    call shm_node_barrier
-  end subroutine c_redist_22_shm
-
   subroutine c_redist_22_mpi_copy (r, from_here, to_here)
+
     use mp, only: iproc, nproc, send, receive
-    use shm_mpi3, only : shm_onnode
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -934,7 +872,7 @@ contains
        if (mod(iproc/iadp,2) == 0) then
 
           ! send to idpth next processor
-          if (r%from(ipto)%nn > 0 .and. .not. shm_onnode(ipto)) then
+          if (r%from(ipto)%nn > 0) then
              do i = 1, r%from(ipto)%nn
                 r%complex_buff(i) = from_here(r%from(ipto)%k(i), &
                                               r%from(ipto)%l(i))
@@ -943,7 +881,7 @@ contains
           end if
 
           ! receive from idpth preceding processor
-          if (r%to(ipfrom)%nn > 0 .and. .not. shm_onnode(ipfrom)) then
+          if (r%to(ipfrom)%nn > 0) then
              call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
              do i = 1, r%to(ipfrom)%nn
                 to_here(r%to(ipfrom)%k(i), &
@@ -953,7 +891,7 @@ contains
           end if
        else
           ! receive from idpth preceding processor
-          if (r%to(ipfrom)%nn > 0 .and. .not. shm_onnode(ipfrom)) then
+          if (r%to(ipfrom)%nn > 0) then
              call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
              do i = 1, r%to(ipfrom)%nn
                 to_here(r%to(ipfrom)%k(i), &
@@ -963,7 +901,7 @@ contains
           end if
 
           ! send to idpth next processor
-          if (r%from(ipto)%nn > 0 .and. .not. shm_onnode(ipto)) then
+          if (r%from(ipto)%nn > 0) then
              do i = 1, r%from(ipto)%nn
                 r%complex_buff(i) = from_here(r%from(ipto)%k(i), &
                                               r%from(ipto)%l(i))
@@ -1183,8 +1121,6 @@ contains
        call c_redist_22_inv_old_copy(r, from_here, to_here)
     end if
 
-    call c_redist_22_inv_shm(r, from_here, to_here)
-    
     ! c_redist_22_inv_mpi_copy contains all the remote to local 
     ! copy functionality
     !<DD>
@@ -1284,42 +1220,10 @@ contains
 
   end subroutine c_redist_22_inv_new_copy
 
-  subroutine c_redist_22_inv_shm (r, from_here, to_here)
-    use shm_mpi3, only : shm_node_barrier, shm_info, shm_get_node_pointer
-    implicit none
-    type (redist_type), intent (in out) :: r
-    
-    complex, dimension (r%to_low(1):, &
-         r%to_low(2):), intent (in) :: from_here
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):), intent (in out) :: to_here
-
-    integer i, ipn, ipto
-    complex, pointer :: nd_ptr(:,:)
-
-    call shm_node_barrier
-    do ipn = 0,shm_info%size - 1
-       if (ipn == shm_info%id) cycle
-       ipto = shm_info%wranks(ipn)
-       if (r%node(ipn)%nn > 0) then
-          nd_ptr => shm_get_node_pointer(to_here, ipn)
-          do i = 1, r%node(ipn)%nn
-             nd_ptr(r%node(ipn)%k(i), &
-                  r%node(ipn)%l(i))&
-               =from_here(r%to(ipto)%k(i), &
-               r%to(ipto)%l(i))
-          end do
-       endif
-    enddo
-    call shm_node_barrier
-
-
-  end subroutine c_redist_22_inv_shm
 
   subroutine c_redist_22_inv_mpi_copy (r, from_here, to_here)
+
     use mp, only: iproc, nproc, send, receive
-    use shm_mpi3, only : shm_onnode
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%to_low(1):, &
@@ -1342,7 +1246,7 @@ contains
        if (mod(iproc/iadp,2) == 0) then
 
           ! send to idpth next processor
-          if (r%to(ipto)%nn > 0 .and. .not. shm_onnode(ipto)) then
+          if (r%to(ipto)%nn > 0) then
              do i = 1, r%to(ipto)%nn
                 r%complex_buff(i) = from_here(r%to(ipto)%k(i), &
                                               r%to(ipto)%l(i))
@@ -1351,7 +1255,7 @@ contains
           end if
 
           ! receive from idpth preceding processor
-          if (r%from(ipfrom)%nn > 0 .and. .not. shm_onnode(ipfrom)) then
+          if (r%from(ipfrom)%nn > 0) then
              call receive (r%complex_buff(1:r%from(ipfrom)%nn), ipfrom, idp)
              do i = 1, r%from(ipfrom)%nn
                 to_here(r%from(ipfrom)%k(i), &
@@ -1361,7 +1265,7 @@ contains
           end if
        else
           ! receive from idpth preceding processor
-          if (r%from(ipfrom)%nn > 0 .and. .not. shm_onnode(ipfrom)) then
+          if (r%from(ipfrom)%nn > 0) then
              call receive (r%complex_buff(1:r%from(ipfrom)%nn), ipfrom, idp)
              do i = 1, r%from(ipfrom)%nn
                 to_here(r%from(ipfrom)%k(i), &
@@ -1371,7 +1275,7 @@ contains
           end if
 
           ! send to idpth next processor
-          if (r%to(ipto)%nn > 0 .and. .not. shm_onnode(ipto)) then
+          if (r%to(ipto)%nn > 0) then
              do i = 1, r%to(ipto)%nn
                 r%complex_buff(i) = from_here(r%to(ipto)%k(i), &
                                               r%to(ipto)%l(i))
@@ -1642,9 +1546,6 @@ contains
     
 !AJ c_redist_32_mpi_copy contains all the remote to local 
 !AJ copy functionality
-
-    call c_redist_32_shm(r, from_here, to_here)
-
     !<DD>
     if(opt_redist_nbk)then
        if(opt_redist_persist) then
@@ -1658,7 +1559,6 @@ contains
     endif
 
     if (proc0.and.(.not.using_measure_scatter)) call time_message(.false.,time_redist,' Redistribute')
-
   end subroutine c_redist_32
 
 
@@ -1982,48 +1882,9 @@ contains
     
   end subroutine c_redist_32_new_opt_copy
 
-  subroutine c_redist_32_shm(r, from_here, to_here)
-    use mp, only: iproc, nproc, send, receive
-    use shm_mpi3, only : shm_onnode, shm_get_node_pointer, &
-         shm_info, shm_node_barrier
-    implicit none
-    type (redist_type), intent (in) :: r
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):, &
-                        r%from_low(3):), intent (in) :: from_here
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in out) :: to_here
-
-    integer :: i, idp, ipto, ipfrom, iadp, ipn
-
-    complex, pointer:: nd_ptr(:,:,:) => null()
-    
-    ! probable the barrier can be moved one level up,
-    ! it might help communication
-     call shm_node_barrier
-     do ipn = 0,shm_info%size - 1
-       if (ipn == shm_info%id) cycle
-       ipfrom = shm_info%wranks(ipn)
-       if (r%node(ipn)%nn > 0) then
-          nd_ptr => shm_get_node_pointer(from_here, ipn)
-          do i = 1, r%node(ipn)%nn
-             to_here(r%to(ipfrom)%k(i), &
-                  r%to(ipfrom)%l(i)) &
-                  = nd_ptr(r%node(ipn)%k(i), &
-                  r%node(ipn)%l(i), &
-               r%node(ipn)%m(i))
-          end do
-       endif
-    enddo
-    call shm_node_barrier
-  end subroutine c_redist_32_shm
-
   subroutine c_redist_32_mpi_copy(r, from_here, to_here)
 
     use mp, only: iproc, nproc, send, receive
-    use shm_mpi3, only : shm_onnode
     type (redist_type), intent (in out) :: r
 
     complex, dimension (r%from_low(1):, &
@@ -2033,15 +1894,11 @@ contains
     complex, dimension (r%to_low(1):, &
                         r%to_low(2):), intent (in out) :: to_here
 
-    integer :: i, idp, ipto, ipfrom, iadp, ipn
-
-    complex, pointer:: node_shm_array(:,:,:) => null()
+    integer :: i, idp, ipto, ipfrom, iadp
 
     ! redistribute to idpth next processor from idpth preceding processor
     ! or redistribute from idpth preceding processor to idpth next processor
     ! to avoid deadlocks
-
-    
     do idp = 1, nproc-1
        ipto = mod(iproc + idp, nproc)
        ipfrom = mod(iproc + nproc - idp, nproc)
@@ -2049,8 +1906,8 @@ contains
        ! avoid deadlock AND ensure mostly parallel resolution
        if (mod(iproc/iadp,2) == 0) then
 
-          ! send to idpth next processor if not on the same node
-          if (r%from(ipto)%nn > 0 .and. .not. shm_onnode(ipto)) then
+          ! send to idpth next processor
+          if (r%from(ipto)%nn > 0) then
              do i = 1, r%from(ipto)%nn
                 r%complex_buff(i) = from_here(r%from(ipto)%k(i), &
                                               r%from(ipto)%l(i), &
@@ -2060,7 +1917,7 @@ contains
           end if
 
           ! receive from idpth preceding processor
-          if (r%to(ipfrom)%nn > 0 .and. .not. shm_onnode(ipfrom)) then
+          if (r%to(ipfrom)%nn > 0) then
              call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
              do i = 1, r%to(ipfrom)%nn
                 to_here(r%to(ipfrom)%k(i), &
@@ -2070,7 +1927,7 @@ contains
           end if
        else
           ! receive from idpth preceding processor
-          if (r%to(ipfrom)%nn > 0 .and. .not. shm_onnode(ipfrom)) then
+          if (r%to(ipfrom)%nn > 0) then
              call receive (r%complex_buff(1:r%to(ipfrom)%nn), ipfrom, idp)
              do i = 1, r%to(ipfrom)%nn
                 to_here(r%to(ipfrom)%k(i), &
@@ -2080,7 +1937,7 @@ contains
           end if
 
           ! send to idpth next processor
-          if (r%from(ipto)%nn > 0 .and. .not. shm_onnode(ipto)) then
+          if (r%from(ipto)%nn > 0) then
              do i = 1, r%from(ipto)%nn
                 r%complex_buff(i) = from_here(r%from(ipto)%k(i), &
                                               r%from(ipto)%l(i), &
@@ -2090,7 +1947,7 @@ contains
           end if
        end if
     end do
-   
+
   end subroutine c_redist_32_mpi_copy
 
 !<DDHACK>
@@ -2362,9 +2219,7 @@ contains
 !AJ c_redist_32_inv_old_copy is the original local copy functionality
        call c_redist_32_inv_old_copy(r, from_here, to_here)
     end if
-    
-    call c_redist_32_inv_shm(r, from_here, to_here) 
-   
+       
 !AJ c_redist_32_inv_mpi_copy contains all the remote to local 
 !AJ copy functionality
     !<DD>
@@ -2710,45 +2565,9 @@ contains
 
   end subroutine c_redist_32_inv_new_opt_copy
 
-  subroutine c_redist_32_inv_shm(r, from_here, to_here)
-    use shm_mpi3, only : shm_onnode, shm_get_node_pointer, shm_info, shm_node_barrier
-    implicit none
-     type (redist_type), intent (in) :: r
-
-    complex, dimension (r%to_low(1):, &
-                        r%to_low(2):), intent (in) :: from_here
-
-    complex, dimension (r%from_low(1):, &
-                        r%from_low(2):, &
-                        r%from_low(3):), intent (in out) :: to_here
-    
-    integer i, ipn, ipto
-    complex, pointer :: nd_ptr(:,:,:) => null()
-    
-    call shm_node_barrier
-    do ipn = 0, shm_info%size - 1
-       if (ipn == shm_info%id) cycle
-       ipto = shm_info%wranks(ipn)
-       if (r%node(ipn)%nn > 0) then
-          nd_ptr => shm_get_node_pointer(to_here, ipn) 
-          do i = 1, r%node(ipn)%nn
-             nd_ptr(r%node(ipn)%k(i), &
-                  r%node(ipn)%l(i),   &
-                  r%node(ipn)%m(i))   &
-                  =from_here(r%to(ipto)%k(i), &
-                  r%to(ipto)%l(i))
-             
-          enddo
-       end if
-    enddo
-    call shm_node_barrier
-
-  end subroutine c_redist_32_inv_shm
-
   subroutine c_redist_32_inv_mpi_copy(r, from_here, to_here)
+
     use mp, only: iproc, nproc, send, receive
-    use shm_mpi3, only : shm_onnode
-    implicit none
 
     type (redist_type), intent (in out) :: r
 
@@ -2761,8 +2580,7 @@ contains
 
 
     integer :: i, idp, ipto, ipfrom, iadp
-    
-    
+
     ! redistribute to idpth next processor from idpth preceding processor
     ! or redistribute from idpth preceding processor to idpth next processor
     ! to avoid deadlocks
@@ -2774,16 +2592,16 @@ contains
        if (mod(iproc/iadp,2) == 0) then
 
           ! send to idpth next processor
-          if (r%to(ipto)%nn > 0 .and. .not. shm_onnode(ipto) ) then
+          if (r%to(ipto)%nn > 0) then
              do i = 1, r%to(ipto)%nn
                 r%complex_buff(i) = from_here(r%to(ipto)%k(i), &
-                     r%to(ipto)%l(i))
+                                              r%to(ipto)%l(i))
              end do
              call send (r%complex_buff(1:r%to(ipto)%nn), ipto, idp)
           end if
 
           ! receive from idpth preceding processor
-          if (r%from(ipfrom)%nn > 0 .and. .not. shm_onnode(ipfrom)) then
+          if (r%from(ipfrom)%nn > 0) then
              call receive (r%complex_buff(1:r%from(ipfrom)%nn), ipfrom, idp)
              do i = 1, r%from(ipfrom)%nn
                 to_here(r%from(ipfrom)%k(i), &
@@ -2794,7 +2612,7 @@ contains
           end if
        else
           ! receive from idpth preceding processor
-          if (r%from(ipfrom)%nn > 0 .and. .not. shm_onnode(ipfrom)) then
+          if (r%from(ipfrom)%nn > 0) then
              call receive (r%complex_buff(1:r%from(ipfrom)%nn), ipfrom, idp)
              do i = 1, r%from(ipfrom)%nn
                 to_here(r%from(ipfrom)%k(i), &
@@ -2805,7 +2623,7 @@ contains
           end if
 
           ! send to idpth next processor
-          if (r%to(ipto)%nn > 0 .and. .not. shm_onnode(ipto)) then
+          if (r%to(ipto)%nn > 0) then
              do i = 1, r%to(ipto)%nn
                 r%complex_buff(i) = from_here(r%to(ipto)%k(i), &
                                               r%to(ipto)%l(i))

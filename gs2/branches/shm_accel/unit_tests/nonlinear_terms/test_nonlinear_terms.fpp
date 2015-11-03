@@ -37,7 +37,7 @@ program test_nonlinear_terms
   integer :: i
 
   complex, dimension (:,:,:), allocatable :: integrate_species_results
-  complex, dimension (:,:,:), pointer :: g1
+  complex, dimension (:,:,:), pointer, contiguous :: g1 => null()
   complex, dimension (:,:,:), allocatable :: phi, apar, bpar
 
 
@@ -61,9 +61,9 @@ program test_nonlinear_terms
   call init_nonlinear_terms
 
   !allocate(g1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
-  !allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
   call shm_alloc(g1, (/ -ntgrid,ntgrid,1,2,g_lo%llim_proc,g_lo%ulim_proc/))
-  call shm_alloc(g, (/ -ntgrid,ntgrid,1,2,g_lo%llim_proc,g_lo%ulim_proc/))
+  allocate(g(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_proc))
+  !call shm_alloc(g, (/ -ntgrid,ntgrid,1,2,g_lo%llim_proc,g_lo%ulim_proc/))
   allocate(phi(-ntgrid:ntgrid,ntheta0,naky))
   allocate(apar(-ntgrid:ntgrid,ntheta0,naky))
   allocate(bpar(-ntgrid:ntgrid,ntheta0,naky))
@@ -81,7 +81,7 @@ program test_nonlinear_terms
   call close_module_test('nonlinear_terms')
 
   call shm_free(g1)
-  call shm_free(g)
+  !call shm_free(g)
   call finish_mp
 
 
@@ -153,8 +153,8 @@ function ffttest (jx,jy,debug)
   logical, save :: accelerated
   logical,save:: first=.true. 
 
-  real, save, dimension (:,:), pointer :: gr  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
-  real, save, dimension (:,:,:), allocatable :: gra  ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
+  real, save, dimension (:,:), pointer, contiguous :: gr => null()  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
+  real, save, dimension (:,:,:), pointer, contiguous :: gra => null() ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
   real:: exact, err
   complex:: fexact
 
@@ -168,9 +168,7 @@ function ffttest (jx,jy,debug)
 
 
   printlots=.false. 
-! Following line was causing seg faults, but the problem has disappeared 
-! (don't know why, but possibly due to fixing a memory leak?)
-  if (present(debug) .and. debug) printlots=.true.
+  if (present(debug)) printlots=debug
 
 !CMR, 5-D FFTs
   g=0
@@ -243,7 +241,8 @@ if (printlots) call barrier
             write(6,fmt='(2i20,A20)') accelx_lo%ulim_proc,accel_lo%ulim_proc,"ulim_proc"
             write(6,fmt='(2i20,A20)') accelx_lo%ulim_alloc,accel_lo%ulim_alloc,"ulim_alloc"
          endif
-         allocate (gra(-ntgrid:ntgrid, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
+         !allocate (gra(-ntgrid:ntgrid, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
+         call shm_alloc(gra, (/ -ntgrid, ntgrid, 1, 2, accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
          gra=0.
       else
      !write (*,*) accelerated, 'accelerated', iproc
@@ -392,10 +391,12 @@ if (printlots) call barrier
    fail=.false.
    if (accelerated) then
      !write (*,*) accelerated, 'accelerated', iproc
-      call transform2 (g, gra, ia)
+      ! needs a shm pointer
+      g1 = g
+      call transform2 (g1, gra, ia)
       gra=2.0*gra
    else
-      call transform2 (g, gr)
+      call transform2 (g1, gr)
       gr=2.0*gr
    end if
 
@@ -453,11 +454,13 @@ if (printlots) call barrier
 
    if (accelerated) then
       gra=0.5*gra
-      call inverse2 (gra, g, ia)
+      call inverse2 (gra, g1, ia)
    else
       gr=0.5*gr
-      call inverse2 (gr, g)
+      call inverse2 (gr, g1)
    end if
+
+   g = g1
 
 ! CHECK result at ONLY one point in (velocity,species,theta) space
 ! at theta=0 along the field line
