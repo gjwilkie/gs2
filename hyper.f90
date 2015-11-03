@@ -1,12 +1,11 @@
 ! nexp has been changed in a rush.  Only known to be correct for nexp=2
 !
 !
+
 module hyper
   
   implicit none
-
   private
-
   public :: init_hyper, finish_hyper, hyper_diff, D_res
   public :: read_parameters, wnml_hyper, check_hyper
   public :: D_v, D_eta, nexp
@@ -29,10 +28,10 @@ module hyper
   logical :: hyper_on = .false.
   logical :: gridnorm
 
-  real, dimension (:,:), allocatable :: D_res
+  real, dimension (:,:), allocatable, save :: D_res
   ! (it, ik)
 
-  real, dimension (:,:,:), allocatable :: hypervisc_filter
+  real, dimension (:,:,:), allocatable, save :: hypervisc_filter
   ! (-ntgrid:ntgrid, ntheta0, naky)
 
   logical :: initialized = .false.
@@ -40,8 +39,8 @@ module hyper
 contains
 
   subroutine check_hyper(report_unit)
-    implicit none
-    integer, intent(in) :: report_unit
+  implicit none
+  integer :: report_unit
     select case (hyper_option_switch)
     case (hyper_option_none)
        if (D_hyperres > 0.) then
@@ -69,7 +68,7 @@ contains
           write (report_unit, *) 
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, fmt="('hyper_option = ',a,' chooses no hyperresistivity.  &
-               &D_hyperres ignored.')") trim(hyper_option)
+            &D_hyperres ignored.')") trim(hyper_option)
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
           D_hyperres = -10.
@@ -134,14 +133,14 @@ contains
 
        select case (hyper_option_switch)
 
-       case (hyper_option_visc)
+          case (hyper_option_visc)
 
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperviscosity included without hyperresistivity.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hypervisc
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hypervisc
           else
-             write (report_unit, fmt="('The damping coefficent is ',e11.4)") D_hypervisc
+             write (report_unit, fmt="('The damping coefficent is ',e10.4)") D_hypervisc
              write (report_unit, fmt="('The damping rate is proportional to the RMS amplitude of the turbulence.')")
           end if
           if (isotropic_shear) then
@@ -150,15 +149,15 @@ contains
           else
              write (report_unit, fmt="('The hyperviscosity is anisotropic in the perpendicular plane.')")
              write (report_unit, fmt="('This is appropriate for drift-type calculations.')")
-             write (report_unit, fmt="('omega_osc = ',e11.4)") omega_osc
+             write (report_unit, fmt="('omega_osc = ',e10.4)") omega_osc
           end if
-
+          
        case (hyper_option_res)
 
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperresistivity included without hyperviscosity.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hyperres
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
           else
              write (report_unit, fmt="('################# WARNING #######################')")
              write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
@@ -176,11 +175,11 @@ contains
           end if
 
        case (hyper_option_both)
-
+          
           write (report_unit, *) 
           write (report_unit, fmt="('Hyperresistivity and hyperviscosity included.')")
           if (const_amp) then
-             write (report_unit, fmt="('Damping rate is ',e11.4,' at highest k_perp.')") D_hyperres
+             write (report_unit, fmt="('Damping rate is ',e10.4,' at highest k_perp.')") D_hyperres
           else
              write (report_unit, fmt="('################# WARNING #######################')")
              write (report_unit, fmt="('const_amp = .false. is not implemented for hyperresistivity.')")
@@ -204,43 +203,44 @@ contains
 
   subroutine wnml_hyper(unit)
     implicit none
-    integer, intent(in) :: unit          
-    if (.not. hyper_on) return
-    write (unit, *)
-    write (unit, fmt="(' &',a)") "hyper_knobs"
+    integer :: unit          
+          if (.not. hyper_on) return
+          write (unit, *)
+          write (unit, fmt="(' &',a)") "hyper_knobs"
 
-    select case (hyper_option_switch)
+          select case (hyper_option_switch)
+             
+          case (hyper_option_visc) 
+             write (unit, fmt="(' hyper_option = ',a)") '"visc_only"'
+             write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+             
+          case (hyper_option_res) 
+             write (unit, fmt="(' hyper_option = ',a)") '"res_only"'
+             write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             
+          case (hyper_option_both) 
+             write (unit, fmt="(' hyper_option = ',a)") '"both"'
+             if (D_hyperres == D_hypervisc) then
+                write (unit, fmt="(' D_hyper = ',e16.10)") D_hyper
+             else
+                write (unit, fmt="(' D_hypervisc = ',e16.10)") D_hypervisc
+                write (unit, fmt="(' D_hyperres = ',e16.10)") D_hyperres
+             end if
+          end select
 
-    case (hyper_option_visc) 
-       write (unit, fmt="(' hyper_option = ',a)") '"visc_only"'
-       write (unit, fmt="(' D_hypervisc = ',e17.10)") D_hypervisc
+!          write (unit, fmt="(' include_kpar = ',L1)") include_kpar
 
-    case (hyper_option_res) 
-       write (unit, fmt="(' hyper_option = ',a)") '"res_only"'
-       write (unit, fmt="(' D_hyperres = ',e17.10)") D_hyperres
+          write (unit, fmt="(' const_amp = ',L1)") const_amp
+          write (unit, fmt="(' isotropic_shear = ',L1)") isotropic_shear
+          if (.not. isotropic_shear) &
+               write (unit, fmt="(' omega_osc = ',e16.10)") omega_osc
 
-    case (hyper_option_both) 
-       write (unit, fmt="(' hyper_option = ',a)") '"both"'
-       if (D_hyperres == D_hypervisc) then
-          write (unit, fmt="(' D_hyper = ',e17.10)") D_hyper
-       else
-          write (unit, fmt="(' D_hypervisc = ',e17.10)") D_hypervisc
-          write (unit, fmt="(' D_hyperres = ',e17.10)") D_hyperres
-       end if
-    end select
-
-!    write (unit, fmt="(' include_kpar = ',L1)") include_kpar
-    
-    write (unit, fmt="(' const_amp = ',L1)") const_amp
-    write (unit, fmt="(' isotropic_shear = ',L1)") isotropic_shear
-    if (.not. isotropic_shear) &
-         write (unit, fmt="(' omega_osc = ',e17.10)") omega_osc
-
-    write (unit, fmt="(' gridnorm = ',L1)") gridnorm
-    write (unit, fmt="(' /')")
+          write (unit, fmt="(' gridnorm = ',L1)") gridnorm
+          write (unit, fmt="(' /')")
   end subroutine wnml_hyper
 
   subroutine init_hyper
+
     use kt_grids, only: ntheta0, naky, akx, aky
     use gs2_time, only: code_dt
     use gs2_layouts, only: init_gs2_layouts
@@ -328,7 +328,7 @@ contains
 
        call get_option_value &
             (hyper_option, hyperopts, hyper_option_switch, &
-            ierr, "hyper_option in hyper_knobs",.true.)
+            ierr, "hyper_option in hyper_knobs")
 
        if (.not. isotropic_shear .and. nexp /=2) then
           write (ierr, *) 'Forcing nexp = 2.  Higher values not implemented for anisotropic shear model.'
@@ -440,7 +440,7 @@ contains
 
   end subroutine allocate_arrays
 
-  subroutine hyper_diff (g0, phi)
+  subroutine hyper_diff (g0, phi, bpar)
 
     use gs2_layouts, only: ik_idx, it_idx, is_idx
     use theta_grid, only: ntgrid
@@ -450,7 +450,7 @@ contains
 
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g0
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
 
     real, dimension (-ntgrid:ntgrid) :: shear_rate_nz, shear_rate_z, shear_rate_z_nz
 

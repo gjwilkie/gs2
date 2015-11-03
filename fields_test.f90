@@ -1,12 +1,12 @@
 module fields_test
   implicit none
 
-  private
-
   public :: init_fields_test
   public :: advance_test
   public :: init_phi_test
   public :: reset_init
+
+  private
 
   logical :: initialized = .false.
 
@@ -44,7 +44,9 @@ contains
   end subroutine advance_test
 
   subroutine reset_init
+    
     initialized = .false.
+
   end subroutine reset_init
 
 end module fields_test

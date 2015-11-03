@@ -1,10 +1,6 @@
 ! This module contains routines to read from CMR's GS2D equilibrium solver
+
 module gs2d
-  private
-
-  public :: read_gs2d, psi, b0, f, ippsi, nr, nz, p, ps
-  public :: psip, psmin, q, r0, rgrid, rmag, rsep, zgrid, zmag, zsep
-
   real, dimension(:), allocatable :: ps,amin_gs2d,q,f,p,pp
   real, dimension(:), allocatable :: rsep,zsep,rgrid,zgrid
   real, dimension(:,:), allocatable :: psi
@@ -84,38 +80,12 @@ contains
   end subroutine write_gs2d
 end module gs2d
 
-!> This module is a submodule of geometry which handles reading from the
-!! ascii EQDSK format output by EFIT, but also now by other codes. This 
-!! file contains psi on an R,Z grid, as well as other quantities such as
-!! q (safety factor), I (a.k.a. f) and p (pressure) on a psi grid. 
-!!
-!! The normalising field is set to the field on axis; the normalising length
-!! is set to the half-diameter of the LCFS.
 module eeq
 
   implicit none
-
   private
 
-  public :: efit_init, efitin, gradient, eqitem, bgradient, efit_finish
-  public :: gs2din
-
-  public :: invR
-  public :: Rpos
-  public :: Zpos
-  public :: btori,    initialize_btori
-  public :: dbtori,   initialize_dbtori
-  public :: qfun,     initialize_q
-  public :: pfun,     initialize_pressure
-  public :: dpfun,    initialize_dpressure
-  public :: betafun,  initialize_beta
-  public :: bound,    initialize_bound
-  public :: psi,      initialize_psi
-  public :: verbosity  !Should this be replaced by usage of runtime_test:verbosity?
-
   integer :: nw, nh, nbbbs, ntime, ntstar
-
-  integer :: verbosity = 0  !Should this be replaced by usage of runtime_test:verbosity?
 
   real, allocatable, dimension (:) :: psi_bar, fp, qsf, pressure, beta, spsi_bar
   real, allocatable, dimension (:) :: dummy, efit_R, efit_Z, sefit_R, sefit_Z, efit_t
@@ -136,7 +106,24 @@ module eeq
   logical :: init_beta = .true.
   logical :: init_psi = .true.
 
+  public :: efit_init, efitin, gradient, eqitem, bgradient
+  public :: gs2din
+
+  public :: invR
+  public :: Rpos
+  public :: Zpos
+  public :: btori,    initialize_btori
+  public :: dbtori,   initialize_dbtori
+  public :: qfun,     initialize_q
+  public :: pfun,     initialize_pressure
+  public :: dpfun,    initialize_dpressure
+  public :: betafun,  initialize_beta
+  public :: bound,    initialize_bound
+  public :: psi,      initialize_psi
+
+
 contains
+  
   subroutine gs2din(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq, big)
 !
 !     This subroutine reads a GS2D output file containing 
@@ -154,26 +141,23 @@ contains
 !     zhei       total height of domain
 !
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
-    use constants, only: pi, twopi
-    use gs2d, only: read_gs2d, psi, b0, f, ippsi, nr, nz, p, ps
-    use gs2d, only: psip, psmin, q, r0, rgrid, rmag, rsep, zgrid, zmag, zsep
-    use mp, only: mp_abort
+    use gs2d
     implicit none
 
-    character(len=80), intent(in) :: eqfile
-    real, intent(out) :: psi_0, psi_a, B_T, amin, rmaj
-    integer, intent(in) :: initeq, big
     real :: p_0
-    real :: rwid, rleft, zhei
-    real :: rcentr, bcentr
+    real :: rwid, rleft, zhei, amin, B_T
+    real :: psi_0, psi_a, rmaj, rcentr, bcentr
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
-    character(80) :: filename
-    integer :: i, j, init, nhb, nwb, ierr
-    logical, parameter :: debug =.false.
-!What is the following for?        
+    
+    character(80) :: filename, eqfile
+    
+    integer :: i, j, init, initeq, big, nhb, nwb, ierr
+    
     data init /1/
     save init
+
+    logical, parameter :: debug =.false.
     
 ! Need to generalize initialization condition if equilibrium changes
 
@@ -197,8 +181,8 @@ if (debug) write(6,fmt='(T2,"psmin",T15,"psedge (Wb)",T27,"b0 (T)",T39,"ip(A)"/1
     rcentr=r0 ; rleft=minval(rgrid)
     R_mag=rmag ; Z_mag=zmag ; psi_0=psmin ; psi_a=psip ; bcentr=b0
 
-    psi_0 = psi_0/twopi
-    psi_a = psi_a/twopi
+    psi_0 = psi_0/(8.0*atan(1.))
+    psi_a = psi_a/(8.0*atan(1.))
 if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
 
 !
@@ -210,7 +194,7 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
     if (size(ps) /= nw) then
        write(6,*) 'gs2din: size(ps) (',size(ps),') /= nw (',nw,')'
        write(6,*) 'gs2din: => should fix the GS2D output file and try again'
-       call mp_abort('gs2din: => should fix the GS2D output file and try again')
+       stop
     endif
     spsi_bar=(ps-minval(ps))/(maxval(ps)-minval(ps))
 
@@ -227,7 +211,7 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
     call inter_cspl(nw, spsi_bar, f, nwb, psi_bar, fp)
     call inter_cspl(nw, spsi_bar, p, nwb, psi_bar, pressure)
 ! divide GS2D psi by 2pi to get poloidal flux in (Wb/rad)
-    sefit_psi=psi/twopi
+    sefit_psi=psi/(8.0*atan(1.0))
 
     allocate(zp(3*nw*nh), temp(nw+2*nh))
     allocate(zx1(nh), zxm(nh), zy1(nw), zyn(nw))
@@ -264,12 +248,12 @@ if (debug) write(6,*) "gs2din: psi_0, psi_a=", psi_0, psi_a
 ! Allow for duplicated points near +- pi:
 
     if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + twopi
+       thetab(1) = thetab(1) + 4.*acos(0.)
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
     if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - twopi
+       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
@@ -328,7 +312,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
 ! MKS: beta = 2 mu_0 p / B**2
 
-    beta = 8. * pi * pressure * 1.e-7 / B_T0**2
+    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
     beta_0 = beta(1)
 
     pressure = pressure / p_0
@@ -344,67 +328,58 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
   end subroutine gs2din
 
-  !>   This subroutine reads an EFIT output file containing 
-  !!   the axisymmetric magnetic field geometry on a rectangular 
-  !!   domain defined by the coordinates (R,Z). It reads and stores
-  !!   the following quantities (among others).
-  !!  
-  !!   - efit_R:     R grid
-  !!   - efit_Z:     Z grid
-  !!   - fp:    F on psibar grid
-  !!   - efit_psi:   psi on (R,Z) grid
-  !!   - R_mag:        major radius of the magnetic axis
-  !!   - Z_mag:        elevation of the magnetic axis
-  !!   - rwid:       total width of the domain
-  !!   - rleft:      position of leftmost point of domain
-  !!   - zhei:       total height of domain
   subroutine efitin(eqfile, psi_0, psi_a, rmaj, B_T, amin, initeq, big)
 !
+!     This subroutine reads an EFIT output file containing 
+!     the axisymmetric magnetic field geometry on a rectangular 
+!     domain defined by the coordinates (R,Z).
 !
-    use constants, only: pi, twopi
+!     efit_R     R grid
+!     efit_Z     Z grid
+!     fp    F on psibar grid
+!     efit_psi   psi on (R,Z) grid
+!     R_mag        major radius of the magnetic axis
+!     Z_mag        elevation of the magnetic axis
+!     rwid       total width of the domain
+!     rleft      position of leftmost point of domain
+!     zhei       total height of domain
+!
     use splines, only: inter_cspl, fitp_surf2, fitp_surf1
     implicit none
-    
-    character(len=80), intent(in) :: eqfile
-    real, intent(out) :: psi_0, psi_a, B_T, amin, rmaj
-    integer, intent(in) :: initeq, big
+
     real :: xdum, p_0
-    real :: rwid, rleft, zhei
-    real :: rcentr, bcentr
+    real :: rwid, rleft, zhei, amin, B_T
+    real :: psi_0, psi_a, rmaj, rcentr, bcentr
     real, dimension(:), allocatable :: zp, temp, zx1, zxm, zy1, zyn
     real :: zxy11, zxym1, zxy1n, zxymn
     
-    character(80) :: filename
+    character(80) :: filename, eqfile
     character(10) ::  char
     
-    integer :: i, j, init, ndum, nhb, nwb, ierr
-!What is the following for?            
+    integer :: i, j, init, ndum, initeq, big, nhb, nwb, ierr
+    
     data init /1/
     save init
     
 ! Need to generalize initialization condition if equilibrium changes
 
-    if (verbosity>2) write (*,*) 'Starting efitin'
     if(initeq == 0) return
     init=0
     
     i=index(eqfile,' ')-1
     filename = eqfile(1:i)
-    if (verbosity>1) write (*,*) 'Opening file ', filename
     open(unit=5,file=filename,status='old',form='formatted')
     
 ! Read the data
 
-    read(5,1000) char, char, char, char, char, i, nw, nh
-
-    if (verbosity>1) write (*,*) 'EFIT dimensions are: ', nw, nh
+   read(5,1000) char, char, char, char, char, i, nw, nh
 !   write(*,1000) char, char, char, char, char, i, nw, nh
 
     nwb = nw * big
     nhb = nh * big
-    
+
     call alloc_module_arrays(nwb, nwb, nhb, nw, nh)
-   
+
     read(5,2020) rwid, zhei, rcentr, rleft, xdum      
     read(5,2020) R_mag, Z_mag, psi_0, psi_a, bcentr
 !    write(*,2020) rwid, zhei, rcentr, rleft, xdum      
@@ -464,6 +439,8 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
       
     deallocate(zp, temp)
 
+
+
     read(5,2020) (dummy(j) ,   j = 1, nw)
     
 !    write(*,2020) (dummy(j) ,   j = 1, nw)
@@ -474,7 +451,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     nh = nhb
 !    read (5, *) nbbbs, ndum
     read(5,2022) nbbbs, ndum
-    allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
+   allocate(rbbbs(nbbbs), zbbbs(nbbbs), thetab(nbbbs), r_bound(nbbbs))
     read(5,2020) (rbbbs(i), zbbbs(i) , i = 1, nbbbs)
 !    write (*,*) (rbbbs(i), i=1,nbbbs)
 ! get r_boundary(theta)
@@ -488,12 +465,12 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 ! Allow for duplicated points near +- pi:
 
     if(thetab(1) == thetab(2)) then
-       thetab(1) = thetab(1) + twopi
+       thetab(1) = thetab(1) + 4.*acos(0.)
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
     if(thetab(nbbbs-1) == thetab(nbbbs)) then
-       thetab(nbbbs) = thetab(nbbbs) - twopi
+       thetab(nbbbs) = thetab(nbbbs) - 4.*acos(0.)
        call sort(thetab, r_bound, zbbbs, rbbbs)
     endif
 
@@ -549,7 +526,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
 ! MKS: beta = 2 mu_0 p / B**2
 
-    beta = 8. * pi * pressure * 1.e-7 / B_T0**2
+    beta = 8. * (2. * acos(0.)) * pressure * 1.e-7 / B_T0**2
     beta_0 = beta(1)
 
     pressure = pressure / p_0
@@ -564,30 +541,29 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     efit_dZ = efit_Z(2) - efit_Z(1)
 
     if (.true.) then
-       write (*,*) "Finished efitin... imported EFIT equilibrium"
-       write (*,*) 'Some important quantities:'
-       write (*,*) "aminor", aminor
-       write (*,*) 'R_mag', R_mag
-       write (*,*) 'B_T0', B_T0
-       write (*,*) 'beta', beta_0
+      write (*,*) "Finished efitin... imported EFIT equilibrium"
+      write (*,*) 'Some important quantities:'
+      write (*,*) "aminor", aminor
+      write (*,*) 'R_mag', R_mag
+      write (*,*) 'B_T0', B_T0
+      write (*,*) 'beta', beta_0
     end if
 
-1000 format(5(a10),i2,i4,i4)
-2020 format (5e16.9)
-2022 format (2i5)      
-    
+    1000 format(5(a10),i2,i4,i4)
+    2020 format (5e16.9)
+    2022 format (2i5)      
+
   end subroutine efitin
 
-  !> Calculate the following arrays:
-  !!  - eqth, which is theta on an R,Z grid
-  !!  - dpm, which is (d psi / d R) and (d psi / d Z) on an R,Z grid
-  !!  - dtm, which is (d theta / d R) and (d theta / d Z) on an R,Z grid 
   subroutine efit_init
-    real, dimension(:, :), allocatable :: eqth 
-    integer :: i, j
 
-    allocate(eqth(nw,nh))
-    if (verbosity > 2) write(6,*) "efit_init: do i"     
+    real, dimension(nw, nh) :: eqth 
+    integer :: i, j
+!cmr nov04: adding following debug switch
+    logical, parameter :: debug=.false.
+!cmr
+
+if (debug) write(6,*) "efit_init: do i"     
     do i = 1, nw
        do j = 1,nh
           if(efit_Z(j) == Z_mag .and. efit_R(i) == R_mag) then
@@ -598,51 +574,39 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
        enddo
     enddo
 
-    if (verbosity > 2) write(6,*) "efit_init: derm"     
-    ! dpm(:,:,1) is d psi / d R
-    ! dpm(:,:,2) is d psi / d Z
-    ! Both on an R,Z grid
     call derm(efit_psi, dpm)
-    if (verbosity > 2) write(6,*) "efit_init: tderm"     
     call tderm(eqth, dtm)
-    if (verbosity > 2) write(6,*) "efit_init: finished"     
-    deallocate(eqth)
     
   end subroutine efit_init
 
   subroutine tderm(f, dfm)
-    use constants, only: pi
+
     implicit none
-    real, dimension(:,:), intent(in) :: f
-    real, dimension(:,:,:), intent(out) :: dfm
-    integer :: i, j
+    integer i, j
+    real f(:,:), dfm(:,:,:), pi
+
+    pi = 2.*acos(0.)
     
 ! EFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for EFIT output.    
 
-    if (verbosity > 2) write(6,*) "efit: tderm: R boundary"     
     i=1
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))/efit_dR
     
     i=nw
     dfm(i,:,1) = 0.5*(3*f(i,:)-4*f(i-1,:)+f(i-2,:))/efit_dR
    
-    if (verbosity > 2) write(6,*) "efit: tderm: Z boundary"     
     j=1
     dfm(:,j,2) = -0.5*(3*f(:,j)-4*f(:,j+1)+f(:,j+2))/efit_dZ
     
     j=nh      
     dfm(:,j,2) = 0.5*(3*f(:,j)-4*f(:,j-1)+f(:,j-2))/efit_dZ
     
-    if (verbosity > 2) write(6,*) "efit: tderm: R derivative"     
     do i=2,nw-1
        dfm(i,:,1)=0.5*(f(i+1,:)-f(i-1,:))/efit_dR
     enddo
     
-    if (verbosity > 2) write(6,*) "efit: tderm: Z derivative"     
     do j=2,nh-1
-       if (verbosity > 4) write(6,*) "efit: tderm: Z derivative, j = ", j,&
-            "/", nh-1 
        do i = 1,nw
           if(f(i,j+1)-f(i,j-1) > pi) then
              dfm(i,j,2)=0.5*(f(i,j+1)-f(i,j-1)-2.*pi)/efit_dZ
@@ -651,17 +615,14 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
           endif
        enddo
     enddo
-    if (verbosity > 2) write(6,*) "efit: tderm: Z derivative done"     
+    
   end subroutine tderm
 
-  !> Calculate the derivative of f w.r.t. R, Z
-  !! - dfm(:,:,1) is deriv w.r.t. R
-  !! - def(:,:,2) is deriv w.r.t. Z
   subroutine derm(f, dfm)
+
     implicit none
-    real, dimension(:,:), intent(in) :: f
-    real, dimension(:,:,:), intent(out) :: dfm
-    integer :: i, j
+    integer i, j
+    real f(:,:), dfm(:,:,:)
     
 ! EFIT grid is equally spaced in R, Z -- this routine uses that fact and 
 ! is therefore not completely general.  It is fine for EFIT output.    
@@ -688,26 +649,15 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     
   end subroutine derm
 
-  !> Calculate the derivative of psi/(a^2 B_a) w.r.t. R and Z. Parameters
-  !! are: 
-  !!   - rgrid: distance to mag axis as a fn of theta
-  !!   - theta: grid of theta
-  !!   - grad(:,1): deriv w.r.t. R as fn of theta
-  !!   - grad(:,2): deriv w.r.t  Z as fn of theta
-  !!   - char: if char = 'R', return the gradient of pressure instead
-  !!   - rp: value of psi/(a^2 B_a) on the flux surface where we want the grad
-  !!   - nth: number of theta points
-  !!   - ntm: lower index of theta array is -ntm
   subroutine gradient(rgrid, theta, grad, char, rp, nth, ntm)
+
     use splines, only: inter_d_cspl
-    implicit none
-    integer, intent(in) :: nth, ntm
-    character(len=1), intent(in) ::  char
+    integer nth, ntm
+    character(1) char
     real, dimension(-ntm:), intent(in) :: rgrid, theta
     real, dimension(-ntm:,:), intent(out) :: grad
-    real, intent(in) :: rp
-    real :: aa(1), daa(1), rpt(1)
-    integer :: i
+    real aa(1), daa(1), rp, rpt(1)
+    integer i
     
     grad = 0.
     do i=-nth, nth
@@ -719,45 +669,23 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
     if(char == 'R') then
        rpt(1) = rp
-       ! This returns d (pressure/pressure(1)) / d psibar
-       ! multiply by psi_N to get d (pressure/pressure(1)) / d (psi/ a^2 B_a)
-       ! multiply by beta_0 to get d (pressure) / d (psi)
-       ! However, I think there is a problem because dpm is in units of a^2 B_a ?
        call inter_d_cspl(nw, psi_bar, pressure, 1, rpt, aa, daa)
        grad = grad*daa(1)*0.5* beta_0/psi_N
     endif
 
   end subroutine gradient
 
-  !> Calculate the derivative of psi/(a^2 B_a) w.r.t. R and Z and return
-  !! the modulus sqrt(dpsi/dR ^ 2 + dpsi/dZ^2). I.e. return |grad psi|.
-  !! Parameters are: 
-  !!   - rgrid: distance to mag axis as a fn of theta
-  !!   - theta: grid of theta
-  !!   - grad(:,1): |grad psi|
-  !!   - grad(:,2): 0.0
-  !!   - char: if char = 'R', return |grad pressure| instead
-  !!   - char: if char = 'T', then return theta gradient in bishop form
-  !!    - grad(:,1): (dtheta/dZ d psi/dR - dtheta/dR dpsi/dZ)/ |grad psi|
-  !!    - grad(:,2): (dtheta/dR d psi/dR + dtheta/dZ dpsi/dZ)/ |grad psi|
-  !!   - rp: value of psi/(a^2 B_a) on the flux surface where we want the grad
-  !!   - nth: number of theta points
-  !!   - ntm: lower index of theta array is -ntm
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
+
     use splines, only: inter_d_cspl
     implicit none
     
-    integer, intent(in) :: nth_used, ntm
-    character(len=1), intent(in) :: char
-    real, dimension(-ntm:), intent(in) :: rgrid, theta
-    real, dimension(-ntm:,:), intent(out) :: grad
-    real, intent(in) :: rp
-    real :: tmp(2), aa(1), daa(1), rpt(1)
-    real, dimension(:, :, :), allocatable ::  dbish
-    integer :: i
-
-
-    allocate(dbish(nw, nh, 2)) 
+    integer nth_used, ntm
+    character(1) char
+    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
+    real tmp(2), aa(1), daa(1), rp, rpt(1)
+    real, dimension(nw, nh, 2) ::  dbish
+    integer i
  
     dbish(:,:,1) = sqrt(dpm(:,:,1)**2 + dpm(:,:,2)**2)
     dbish(:,:,2) = 0.
@@ -785,30 +713,22 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
     if(char == 'R') then
        rpt(1) = rp
-       ! This returns d (pressure/pressure(1)) / d psibar
-       ! multiply by psi_N to get d (pressure/pressure(1)) / d (psi/ a^2 B_a)
-       ! multiply by beta_0 to get d (pressure) / d (psi)
-       ! However, I think there is a problem because dpm is in units of a^2 B_a ?
        call inter_d_cspl(nw, psi_bar, pressure, 1, rpt, aa, daa)
        do i=-nth_used, nth_used
           grad(i,1)=grad(i,1)*daa(1) * 0.5*beta_0/psi_N
           grad(i,2)=grad(i,2)*daa(1) * 0.5*beta_0/psi_N
        enddo
     endif
-    deallocate(dbish)
 
   end subroutine bgradient
 
-  !> fstar is f(R,Z) interpolated at the values (r,thetain). The parameter
-  !! r is the distance to the magnetic axis.
   subroutine eqitem(r, thetin, f, fstar)
-    use mp, only: mp_abort
-    implicit none
+      
+    integer :: i, j, istar, jstar
     real, intent (in) :: r, thetin, f(:,:)
     real, intent (out) :: fstar
-    integer :: i, j, istar, jstar
-    real :: st, dt, sr, dr
-    real :: r_pos, z_pos
+    real st, dt, sr, dr
+    real r_pos, z_pos
     
     r_pos = Rpos(r, thetin)
     z_pos = Zpos(r, thetin)
@@ -819,7 +739,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of R domain'
        write(*,*) r, thetin, efit_R(nw), r_pos
-       call mp_abort('No evaluation of eqitem allowed outside or on edge of R domain')
+       stop      
     endif
 
 ! ensure point is on Z mesh
@@ -828,7 +748,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
        write(*,*) 'No evaluation of eqitem allowed outside'
        write(*,*) 'or on edge of Z domain'
        write(*,*) r, thetin, efit_Z(1), efit_Z(nh), z_pos
-       call mp_abort('No evaluation of eqitem allowed outside or on edge of Z domain')
+       stop
     endif
     
     istar=0
@@ -871,99 +791,110 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
   end subroutine eqitem
 
   function Zpos (r, theta)
+   
     real, intent (in) :: r, theta
     real :: Zpos
     
     Zpos = Z_mag + r * sin(theta)
+
   end function Zpos
 
   function Rpos (r, theta)
+   
     real, intent (in) :: r, theta
     real :: Rpos
 
     Rpos = R_mag + r * cos(theta)
+    
   end function Rpos
 
   function invR (r, theta)
+   
     real, intent (in) :: r, theta
     real :: invR
 
     invR = 1/(R_mag + r*cos(theta))
+    
   end function invR
 
   function initialize_psi (init) 
-    integer, intent(in) :: init
-    integer :: initialize_psi
+
+    integer :: init, initialize_psi
     
     init_psi = .false.
     if(init == 1) init_psi = .true.
     initialize_psi = 1
+
   end function initialize_psi
 
   function psi (r, theta)
+   
     real, intent (in) :: r, theta
     real :: f, psi
 
     call eqitem(r, theta, efit_psi, f)
     psi = f
+    
   end function psi
    
   function initialize_btori (init) 
-    integer, intent(in) :: init
-    integer :: initialize_btori
+
+    integer :: init, initialize_btori
     
     init_btori = .false.
     if(init == 1) init_btori = .true.
     initialize_btori = 1
+
   end function initialize_btori
 
   function btori (pbar)
-    use splines, only: new_spline, splint, spline
-    implicit none
-    real, intent(in) :: pbar
-    real :: btori
+  
+    use splines
+    real :: pbar, btori
     type (spline), save :: spl
 
     if(init_btori) call new_spline(nw, psi_bar, fp, spl)
 
     btori = splint(pbar, spl)
+
   end function btori
 
   function initialize_dbtori (init) 
-    integer, intent(in) :: init
-    integer :: initialize_dbtori
+
+    integer :: init, initialize_dbtori
     
     init_dbtori = .false.
     if(init == 1) init_dbtori = .true.
     initialize_dbtori = 1
+
   end function initialize_dbtori
 
   function dbtori (pbar)
-    use splines, only: new_spline, dsplint, spline
-    implicit none
-    real, intent(in) :: pbar
-    real :: dbtori
+  
+    use splines
+    real :: pbar, dbtori
     type (spline), save :: spl
 
     if(init_dbtori) call new_spline(nw, psi_bar, fp, spl)
 
     dbtori = dsplint(pbar, spl)/psi_N
+
   end function dbtori
 
   function initialize_q (init) 
-    integer, intent(in) :: init
-    integer :: initialize_q
+
+    integer :: init, initialize_q
     
     init_q = .false.
     if(init == 1) init_q = .true.
     initialize_q = 1
+
   end function initialize_q
 
   function qfun (pbar)
-    use splines, only: new_spline, splint, spline
-    implicit none
-    real, intent(in) :: pbar
-    real :: qfun
+  
+    use splines
+    real :: pbar, qfun
     type (spline), save :: spl
 
     if(init_q) then
@@ -971,95 +902,101 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     endif
 
     qfun = splint(pbar, spl)
+
   end function qfun
 
   function initialize_pressure (init) 
-    integer, intent(in) :: init
-    integer :: initialize_pressure
+
+    integer :: init, initialize_pressure
     
     init_pressure = .false.
     if(init == 1) init_pressure = .true.
     initialize_pressure = 1
+
   end function initialize_pressure
 
   function pfun (pbar)
-    use splines, only: new_spline, splint, spline
-    implicit none
-    real, intent(in) :: pbar
-    real :: pfun
+  
+    use splines
+    real :: pbar, pfun
     type (spline), save :: spl
 
     if(init_pressure) call new_spline(nw, psi_bar, pressure, spl)
 
     pfun = splint(pbar, spl) * beta_0/2.
+
   end function pfun
 
   function initialize_dpressure (init) 
-    integer, intent(in) :: init
-    integer :: initialize_dpressure
+
+    integer :: init, initialize_dpressure
     
     init_dpressure = .false.
     if(init == 1) init_dpressure = .true.
     initialize_dpressure = 1
+
   end function initialize_dpressure
 
   function dpfun (pbar)
-    use splines, only: new_spline, dsplint, spline
-    implicit none
-    real, intent(in) :: pbar
-    real :: dpfun
+  
+    use splines
+    real :: pbar, dpfun
     type (spline), save :: spl
 
     if(init_dpressure) call new_spline(nw, psi_bar, pressure, spl)
 
     dpfun = dsplint(pbar, spl)/psi_N * beta_0/2.
+
   end function dpfun
 
   function initialize_beta (init) 
-    integer, intent(in) :: init
-    integer :: initialize_beta
+
+    integer :: init, initialize_beta
     
     init_beta = .false.
     if(init == 1) init_beta = .true.
     initialize_beta = 1
+
   end function initialize_beta
 
   function betafun (pbar)
-    use splines, only: new_spline, splint, spline
-    implicit none
-    real, intent(in) :: pbar
-    real :: betafun
+  
+    use splines
+    real :: pbar, betafun
     type (spline), save :: spl
 
     if(init_beta) call new_spline(nw, psi_bar, beta, spl)
 
     betafun = splint(pbar, spl)
+
   end function betafun
 
   function initialize_bound (init) 
-    integer, intent(in) :: init
-    integer :: initialize_bound
+
+    integer :: init, initialize_bound
     
     init_bound = .false.
     if(init == 1) init_bound = .true.
     initialize_bound = 1
+
   end function initialize_bound
 
   function bound(theta) 
-    use splines, only: new_spline, splint, spline
-    implicit none
-    real, intent(in) :: theta
-    real :: bound
+
+    use splines
+    real :: theta, bound
     type (spline), save :: spl
 
     if(init_bound) call new_spline(nbbbs, thetab, r_bound, spl)
     init_bound = .false.
     
     bound = splint(theta, spl)
+
   end function bound    
 
   subroutine alloc_module_arrays(np, nw, nh, nws, nhs, ntime)
-    integer, intent(in) :: np, nw, nh, nws, nhs
+
+    integer :: np, nw, nh, nws, nhs
     integer, intent (in), optional :: ntime
  
     allocate(psi_bar(np), fp(np), qsf(np), pressure(np), beta(np))
@@ -1072,32 +1009,14 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
        allocate (dum2(ntime,nws), dum3(nws, nhs, ntime))
        allocate (efit_t(ntime))
     end if
+
   end subroutine alloc_module_arrays
 
-  subroutine dealloc_module_arrays
-    implicit none
-    if(allocated(psi_bar)) deallocate(psi_bar,fp,qsf,pressure,beta)
-    if(allocated(dummy)) deallocate(dummy,efit_R,efit_Z)
-    if(allocated(spsi_bar)) deallocate(spsi_bar,sefit_R,sefit_Z)
-    if(allocated(efit_psi)) deallocate(efit_psi,sefit_psi)
-    if(allocated(dpm)) deallocate(dpm,dtm)
-    if(allocated(dum2)) deallocate(dum2,dum3)
-    if(allocated(efit_t)) deallocate(efit_t)
-  end subroutine dealloc_module_arrays
-
-  subroutine efit_finish
-    implicit none
-    call dealloc_module_arrays
-  end subroutine efit_finish
-
   subroutine a_minor(r, z, Z_mag, a)
-!    use mp, only: mp_abort
-    use splines, only: new_spline, splint, delete_spline, spline
-    implicit none
+
+    use splines
     real, dimension(:), intent (in) :: r, z
-    real, intent(in) :: Z_mag
-    real, intent(out) :: a
-    real :: r1, r2
+    real :: a, Z_mag, r1, r2
     integer, parameter :: nz = 5
     real, dimension(nz) :: rtmp, ztmp
     integer i, j, i1, n
@@ -1106,7 +1025,6 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 !               to determine r2 on inboard mid-plane
     integer :: k = 0 
     logical, parameter :: debug=.false.
-
     n = size(r)
 
     if (debug) write(6,*) "aminor:"
@@ -1116,7 +1034,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
     if(n < nz) then
        write(*,*) 'nbbbs < nz -- very strange.  Stopping.'
        write(*,*) 'Look in eeq.f90.'
-!      call mp_abort('nbbbs < nz -- very strange.  Stopping : Look in eeq.f90')
+!       stop
     endif
 
     j = 0
@@ -1186,10 +1104,10 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 
   end subroutine a_minor
 
-!Can we use something from the sorting module?
   subroutine sort(a, b, c, d)
-    real, dimension(:), intent(in out) :: a, b, c, d
-    real :: tmp
+
+    real, dimension(:) :: a, b, c, d
+    real tmp
     integer :: i, jmax
     logical :: sorted
 
@@ -1214,7 +1132,7 @@ if (debug) write(6,*) "gs2din: B_T0, aminor, psi_0, psi_a=", B_T0, aminor, psi_0
 ! alternative coding
 !  subroutine sort(a, b, c, d)
 !
-!    real, dimension(:), intent(in out) :: a, b, c, d
+!    real, dimension(:) :: a, b, c, d
 !    real tmp
 !    integer :: i, j, jmax
 !

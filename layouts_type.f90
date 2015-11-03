@@ -4,10 +4,6 @@ module layouts_type
 
   implicit none
 
-  private
-  public :: g_layout_type, lz_layout_type, e_layout_type
-  public :: le_layout_type, p_layout_type
-
   type :: g_layout_type
      sequence
      integer :: iproc

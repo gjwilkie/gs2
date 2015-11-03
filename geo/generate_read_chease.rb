@@ -12,6 +12,7 @@ two_dim_vars = vars.slice((vars.size-14)...vars.size)
 #p [zero_dim_vars, one_dim_vars, two_dim_vars]
 
 module_text = <<EOF
+
 !> CHEASE Output Reader
 !!
 !! A module to read in datafiles from CHEASE.
@@ -41,42 +42,50 @@ module_text = <<EOF
 
 module read_chease
   implicit none
-
-  private
-
-  public :: read_infile
-
-  public :: npsi_chease, nchi_chease 
-  public :: psi_chease, chi_chease
-  #{zero_dim_vars.map{|v| "public :: #{v}"}.join("\n  ")}
-  #{one_dim_vars.map{|v| "public :: #{v}"}.join("\n  ")}
-  #{two_dim_vars.map{|v| "public :: #{v}"}.join("\n  ")}
-
   integer :: npsi_chease, nchi_chease 
-  real, dimension (:), allocatable :: psi_chease,chi_chease  
+  public :: npsi_chease, nchi_chease 
+  
+#{zero_dim_vars.map{|v| 
+"
+  real :: #{v}
+  public :: #{v}
+"}.join("\n")}
+
+  real, dimension (:), allocatable :: psi_chease,chi_chease
+  public :: psi_chease, chi_chease
+
+#{one_dim_vars.map{ |v| 
+"
+  real, dimension(:), allocatable :: #{v}
+  public :: #{v}"}.join("\n")
+}
+
+#{two_dim_vars.map{|v| 
+"
+  real, dimension(:,:), allocatable :: #{v}
+  public :: #{v}
+"}.join("\n")}
+
   integer :: infile=1212
   integer, parameter :: ncols = 5
 
-  #{zero_dim_vars.map{|v| "real :: #{v}"}.join("\n  ")}
-  #{one_dim_vars.map{|v| "real, dimension(:), allocatable :: #{v}"}.join("\n  ")}
-  #{two_dim_vars.map{|v| "real, dimension(:,:), allocatable :: #{v}"}.join("\n  ")}
 
-contains
+  contains
   subroutine read_infile(filename)
-    implicit none
-    character(len=80), intent(in) :: filename
+    character (len=80) :: filename
     open(infile,file= filename)
-
     read(infile, *)
     read(infile, *) npsi_chease
     write(*, *) npsi_chease, "<---npsi_chease"
-
     read(infile, *)
     read(infile, *) nchi_chease
     write(*, *) nchi_chease, "<---nchi_chease"
 
-    #{zero_dim_vars.map{ |v| "read(infile, *)
-    read(infile, *) #{v}"}.join("\n    ")}
+#{zero_dim_vars.map{ |v|
+"
+    read(infile, *)
+    read(infile, *) #{v}
+"}.join("\n")}
 
     allocate(psi_chease(npsi_chease))
     read(infile, *)
@@ -88,22 +97,35 @@ contains
     read(infile, *) chi_chease
     !write(*, *) chi_chease, "<---chi_chease"
 
-    #{one_dim_vars.map{|v| "allocate(#{v}(npsi_chease))
+#{one_dim_vars.map{ |v|
+"
+    allocate(#{v}(npsi_chease))
     read(infile, *)
     read(infile, *) #{v}
-    !write(*, *) #{v}, \"<---#{v}\""}.join("\n\n    ")}
+    !write(*, *) #{v}, \"<---#{v}\"
+"}.join("\n")}
 
-    #{two_dim_vars.map{|v| "allocate(#{v}(npsi_chease,nchi_chease))
+
+#{two_dim_vars.map{ |v|
+"
+    allocate(#{v}(npsi_chease,nchi_chease))
     read(infile, *)
     read(infile, *) #{v}
-    !write(*, *) #{v}, \"<---#{v}\""}.join("\n\n    ")}
+    !write(*, *) #{v}, \"<---#{v}\"
+"}.join("\n")}
+   
+
   end subroutine read_infile
-
   subroutine finish
     deallocate(psi_chease)
     deallocate(chi_chease)
-    #{(one_dim_vars + two_dim_vars).map{|v| "deallocate(#{v})"}.join("\n    ")}
+    #{(one_dim_vars + two_dim_vars).map{|v|
+"
+    deallocate(#{v})"}.join("\n")}
   end subroutine finish
+
+
+
 end module read_chease
 
 !program test

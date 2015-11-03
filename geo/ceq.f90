@@ -1,27 +1,14 @@
+
 !> Reads in the geometry using a CHEASE output file.
 !! The CHEASE output file is read using the helper module
 !! read_chease.
+
 module ceq
+
 
   implicit none
 
-  public :: ceq_init, ceqin, gradient, eqitem, bgradient, Hahm_Burrell, ceq_finish
-  public :: invR,     initialize_invR
-  public :: Rpos
-  public :: Zpos
-  public :: rcenter,  initialize_rcenter 
-  public :: diameter, initialize_diameter
-  public :: btori,    initialize_btori
-  public :: dbtori,   initialize_dbtori
-  public :: qfun,     initialize_q
-  public :: pfun,     initialize_pressure
-  public :: dpfun,    initialize_dpressure
-  public :: betafun,  initialize_beta
-  public :: psi,      initialize_psi
-  public :: eqdbish
-
   private
-
   integer :: nr, nt, i_sym
   
   real, allocatable, dimension (:)     :: rho_d, eqpsi, psi_bar, fp, beta
@@ -46,9 +33,26 @@ module ceq
   logical :: init_invR = .true.
   logical :: transp = .false.
 
+!  public :: B_psi 
+  public :: ceq_init, ceqin, gradient, eqitem, bgradient, Hahm_Burrell
+
+  public :: invR,     initialize_invR
+  public :: Rpos
+  public :: Zpos
+  public :: rcenter,  initialize_rcenter 
+  public :: diameter, initialize_diameter
+  public :: btori,    initialize_btori
+  public :: dbtori,   initialize_dbtori
+  public :: qfun,     initialize_q
+  public :: pfun,     initialize_pressure
+  public :: dpfun,    initialize_dpressure
+  public :: betafun,  initialize_beta
+  public :: psi,      initialize_psi
+
   logical, parameter :: debug = .true.
 
 contains
+
   function chease_chi_index(nchi,itheta)
     integer, intent(in) :: nchi, itheta
     integer :: chease_chi_index
@@ -57,32 +61,43 @@ contains
     ! itheta  1 2 3 4 5 6 7 8 
     ! ichi    5 6 7 8 1 2 3 4         
     if (itheta > nchi/2) then 
-       chease_chi_index = itheta - nchi/2
+      chease_chi_index = itheta - nchi/2
     else
-       chease_chi_index = itheta + nchi/2
+      chease_chi_index = itheta + nchi/2
     end if
   end function chease_chi_index
     
   subroutine ceqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
        avgrmid, initeq, in_nt, nthg) 
+
     use constants, only: pi
-    use read_chease, only: read_infile, npsi_chease, nchi_chease, b0exp_chease
-    use read_chease, only: psi_chease, f_chease, q_chease, p_chease
-    use read_chease, only: r_chease, z_chease
+    use read_chease
     implicit none
-    character(len=80), intent(in) :: eqfile
+    character (len=80) :: eqfile
     real, intent(out) :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid
     integer, intent(in) :: initeq
-    logical, intent(in) :: in_nt 
     integer, intent(out) :: nthg
+!    integer :: initeq, nthg
+!    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
     real :: d, R_geo
+!    logical :: in_nt
+    logical, intent(in) :: in_nt
+    
     integer :: i,j
     integer :: nchar
+!    integer :: ncid, id, i, j, ifail, nchar, istatus
+!    character(31) :: fortrancrap
+!    character(80) :: filename, eqfile
     character (len=80) :: filename
+!    integer, dimension(2) :: start, cnt
 
 !
 ! what is the best way to handle the netcdf single/double problem?
 !
+!    integer*4 :: iwork
+!    integer nz1, nz2
+!    real*4, allocatable, dimension(:) :: workr, work
+    !real, allocatable, dimension(:) :: work
     real :: f_N, psi_N
 
 
@@ -90,11 +105,14 @@ contains
 
     if(initeq == 0) return
     if (.not.in_nt) then
+
        nchar=index(eqfile,' ')-1
        filename=eqfile(1:nchar)
 !       filename=trim(eqfile) ?
-       write (*,*)  'Reading CHEASE input file: ', eqfile
-       call read_infile(filename)
+
+
+        call read_infile(filename)
+
 !     netcdf read scalar: nr
 !
 !     nz2 == number of points in radial array
@@ -124,7 +142,7 @@ contains
 
        !nz2 = npsi
        nr = npsi_chease
-       
+
 !       start(1) = 8
 !       id = ncvid (ncid, 'nxy', ifail)
 !       call ncvgt1 (ncid, id, start, iwork, ifail)
@@ -137,8 +155,8 @@ contains
 !     netcdf read scalar: nt
 !
 !     nt == number of theta grid points in theta eq grid
-       nt = nchi_chease + 1
-       B_norm_chease = b0exp_chease
+      nt = nchi_chease + 1
+      B_norm_chease = b0exp_chease
 
      
       !nt = nchi_chease
@@ -215,7 +233,7 @@ contains
        
        psi_0 = eqpsi(1)
        psi_a = eqpsi(nr)
-       
+
        psi_bar = (eqpsi-psi_0)/(psi_a-psi_0)
        !write (*,*) 'psi_bar', psi_bar
 
@@ -251,7 +269,7 @@ contains
             !else
           enddo
        enddo
-       
+
 !       cnt(1) = nz1
 !       cnt(2) = nz2
 !       id = ncvid (ncid, 'z', ifail)
@@ -307,7 +325,7 @@ contains
 
        R_psi = R_psi / aminor
        Z_psi = Z_psi / aminor
-       
+
        R_mag = R_psi(1,1)
        Z_mag = Z_psi(1,1)
 
@@ -350,20 +368,313 @@ contains
     nthg=nt
 
     if (debug) then
-       write (*,*) "Finished ceqin... imported CHEASE equilibrium"
-       write (*,*) 'Some important quantities:'
-       write (*,*) "aminor", aminor
-       write (*,*) 'R_mag', R_mag
-       write (*,*) 'B_T0', B_T0
-       write (*,*) 'f_N', f_N
-       write (*,*) 'nthg', nthg
-       write (*,*) 'beta', beta_0
+      write (*,*) "Finished ceqin... imported CHEASE equilibrium"
+      write (*,*) 'Some important quantities:'
+      write (*,*) "aminor", aminor
+      write (*,*) 'R_mag', R_mag
+      write (*,*) 'B_T0', B_T0
+      write (*,*) 'f_N', f_N
+      write (*,*) 'nthg', nthg
+      write (*,*) 'beta', beta_0
     end if
+
   end subroutine ceqin
 
+!  subroutine teqin(eqfile, psi_0_out, psi_a_out, rmaj, B_T0, &
+!       avgrmid, initeq, in_nt, nthg) 
+!
+!    use constants, only: pi
+!!    use netcdf 
+!    implicit none
+!!    include 'netcdf.inc'
+!
+!!     This subroutine reads a generic NetCDF equilibrium file
+!!     containing the axisymmetric magnetic field geometry in flux 
+!!     coordinates
+!
+!    character (len=80) :: eqfile
+!    real, intent(out) :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid
+!    integer, intent(in) :: initeq
+!    integer, intent(out) :: nthg
+!!    integer :: initeq, nthg
+!!    real :: psi_0_out, psi_a_out, rmaj, B_T0, avgrmid, d, R_geo
+!    real :: d, R_geo
+!!    logical :: in_nt
+!    logical, intent(in) :: in_nt
+!
+!    integer :: istatus
+!    integer :: ncid, id, i, j
+!    integer :: nchar
+!!    integer :: ncid, id, i, j, ifail, nchar
+!!    character(31) :: fortrancrap
+!!    character(80) :: filename, eqfile
+!    character (len=80) :: filename
+!!    integer, dimension(2) :: start, cnt
+!
+!!
+!! what is the best way to handle the netcdf single/double problem?
+!!
+!!    integer :: nt1
+!!    real*8, allocatable, dimension(:) :: workr
+!!    real*8, allocatable, dimension(:,:) :: work
+!    real, allocatable, dimension(:,:) :: work
+!    real :: f_N, psi_N
+!!    real pi
+!    
+!!    pi = 2.*acos(0.)
+!!     read the data
+!
+!    if(initeq == 0) then
+!       nthg = nt/2
+!       return
+!    endif
+!    if (.not.in_nt) then
+!
+!       nchar=index(eqfile,' ')-1
+!       filename=eqfile(1:nchar)
+!!       filename=trim(eqfile)
+!    else
+!       filename='dskeq.cdf'
+!    endif
+!
+!# ifdef NETCDF
+!!     netcdf open file         
+!!    ncid = ncopn (filename, NCNOWRIT, ifail)
+!    istatus = nf90_open(filename, NF90_NOWRITE, ncid)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, file=filename)
+!
+!!     netcdf read scalar: nr
+!!
+!!     nr == number of radial grid points in radial eq grid
+!
+!!    id = ncdid (ncid, 'dim_00021', ifail)
+!!    call ncdinq (ncid, id, fortrancrap, nr, ifail)
+!
+!!    id = ncvid (ncid, 'ns', ifail)
+!!    call ncvgt1 (ncid, id, 1, nr, ifail)
+!    istatus = nf90_inq_varid (ncid, 'ns', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='ns')
+!    istatus = nf90_get_var (ncid, id, nr)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!    
+!!     netcdf read scalar: nt
+!!
+!!     nt == number of theta grid points in theta eq grid
+!
+!!    id = ncvid (ncid, 'nt1', ifail)
+!!    call ncvgt1 (ncid, id, 1, nt, ifail)
+!    istatus = nf90_inq_varid (ncid, 'nt1', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='nt1')
+!    istatus = nf90_get_var (ncid, id, nt)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!    
+!!    id = ncdid (ncid, 'dim_00050', ifail)
+!!    call ncdinq (ncid, id, fortrancrap, nt, ifail)
+!   
+!    call alloc_arrays(nr, nt)
+!
+!!     netcdf read scalars: psi_0,psi_a,B_T
+!!
+!!     psi_0 == value of psi at the magnetic axis
+!!     psi_a == value of psi at the boundary of the plasma
+!!     B_T == vacuum toroidal magnetic field at R_center
+!
+!!       id = ncvid (ncid, 'B_T', ifail)
+!!       call ncvgt1 (ncid, id, start, work1, ifail)
+!!       B_T = work1*1.e-4  ! cgs to MKS
+!
+!!     netcdf read vectors: eqpsi,fp,qsf,beta,pressure
+!!
+!!     rho_d(1:nr) == half diameters of flux surfaces at elevation 
+!!                             of Z_mag on the radial grid
+!!     psi is the poloidal flux
+!!     eqpsi(1:nr) == values of psi on the radial grid
+!!     psi_bar(1:nr) == values of psi_bar on the radial grid
+!!     [psi_bar == (eqpsi - psi_0)/(psi_a - psi_0) if not available]
+!!     fp(1:nr) == the function that satisfies 
+!!              B = fp grad zeta + grad zeta x grad psi
+!!     qsf(1:nr) == q profile on the radial grid
+!!     beta(1:nr) == local beta, with the magnetic field defined 
+!!     to be vacuum magnetic field on axis
+!!     pressure(1:nr) == pressure profile on the radial grid,
+!!     normalized to the value at the magnetic axis.     
+!
+!!    allocate(workr(nr))
+!!    workr = 0.
+!
+!!    start(1) = 1
+!!    cnt(1) = nr
+!
+!!    id = ncvid (ncid, 'rho', ifail)
+!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+!!    rho_b = workr(1:nr)
+!    istatus = nf90_inq_varid (ncid, 'rho', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='rho')
+!    istatus = nf90_get_var (ncid, id, rho_b)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!
+!!    id = ncvid (ncid, 'psi', ifail)
+!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+!!    eqpsi = abs(workr(1:nr))
+!    istatus = nf90_inq_varid (ncid, 'psi', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='psi')
+!    istatus = nf90_get_var (ncid, id, eqpsi)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!    eqpsi(1:nr) = abs(eqpsi(1:nr))
+!    
+!    psi_0 = eqpsi(1)
+!    psi_a = eqpsi(nr)
+!
+!    psi_bar = (eqpsi-psi_0)/(psi_a-psi_0)
+!    
+!!    id = ncvid (ncid, 'g', ifail)
+!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+!!    fp = abs(workr(1:nr))
+!    istatus = nf90_inq_varid (ncid, 'g', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='g')
+!    istatus = nf90_get_var (ncid, id, fp)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!    fp(1:nr) = abs(fp(1:nr))
+!    
+!! not needed
+!!    id = ncvid (ncid, 'q', ifail)
+!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)
+!!    qsf = abs(workr(1:nr))
+!    istatus = nf90_inq_varid (ncid, 'q', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='q')
+!    istatus = nf90_get_var (ncid, id, qsf)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!    qsf(1:nr) = abs(qsf(1:nr))
+!    
+!!    id = ncvid (ncid, 'p', ifail)
+!!    call ncvgt (ncid, id, start(1), cnt(1), workr, ifail)       
+!!    pressure = workr(1:nr)
+!    istatus = nf90_inq_varid (ncid, 'p', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='p')
+!    istatus = nf90_get_var (ncid, id, pressure)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!
+!!       id = ncvid (ncid, 'beta', ifail)
+!!       call ncvgt (ncid, id, start, cnt, workr, ifail)
+!!       beta = workr
+!!       beta_0 = beta(1)
+!
+!!     netcdf read 2d field: R_psi,Z_psi and B_psi (mod(B))
+!!     eq_Rpsi(1:nr, 1:nt)
+!!     eq_Zpsi(1:nr, 1:nt)
+!!     eq_Bpsi(1:nr, 1:nt)
+!!         
+!
+!    allocate(work(nt,nr))
+!!    start(1) = 1
+!!    start(2) = 1
+!!    cnt(1) = nt
+!!    cnt(2) = nr
+!
+!!    id = ncvid (ncid, 'R', ifail)
+!!    call ncvgt (ncid, id, start, cnt, work, ifail)
+!    istatus = nf90_inq_varid (ncid, 'R', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='R')
+!    istatus = nf90_get_var (ncid, id, work)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!
+!    do j=1,nt
+!       do i=1,nr
+!          R_psi(i,j) = work(j,i)
+!       enddo
+!    enddo
+!    
+!!    cnt(1) = nt
+!!    cnt(2) = nr
+!!    id = ncvid (ncid, 'Z', ifail)
+!!    call ncvgt (ncid, id, start, cnt, work, ifail)
+!    istatus = nf90_inq_varid (ncid, 'Z', id)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, var='Z')
+!    istatus = nf90_get_var (ncid, id, work)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus, ncid, id)
+!
+!    do j=1,nt
+!       do i=1,nr
+!          Z_psi(i,j) = work(j,i)
+!       enddo
+!    enddo
+!    
+!!    call ncclos (ncid, ifail)
+!    istatus = nf90_close (ncid)
+!    if (istatus /= NF90_NOERR) call netcdf_error (istatus)
+!    
+!!    deallocate(work,workr)
+!    deallocate(work)
+!
+!!    endif   ! end of external reads
+!
+!! mildly gimpy at the moment, because the TRANSP output does not 
+!! regularly include the point at theta=0.  
+!
+!! find aminor
+!    aminor = 0.5*abs(R_psi(nr,nt/2)-R_psi(nr,1))
+!
+!! find R_geo
+!    R_geo = 0.5*(R_psi(nr,nt/2)+R_psi(nr,1))
+!
+!! find rho_d
+!
+!    rho_d = 0.5*(R_psi(:,nt/2)-R_psi(:,1))/aminor
+!
+!! find magnetic axis
+!
+!    R_mag = R_psi(1,1)
+!    Z_mag = Z_psi(1,1)
+!
+!! Find normalizing magnetic field
+!
+!    B_T = fp(nr)/R_geo
+!!
+!!     Normalize, rename quantities 
+!!
+!
+!    R_mag = R_mag
+!    Z_mag = Z_mag
+!    R_geo = R_geo/aminor
+!    R_psi = R_psi/aminor
+!    Z_psi = Z_psi/aminor
+!     
+!
+!    beta = 8. * pi * 1.e-7 * pressure / B_T**2  ! not correct definition yet?
+!    beta_0 = beta(1)
+!    pressure = pressure/pressure(1)
+!
+!    avgrmid = aminor
+!    rmaj = R_mag / aminor   ! used to reference the grid
+!    B_T0 = abs(B_T)
+!
+!    psi_N = B_T0 * avgrmid**2
+!    psi_a = psi_a / psi_N
+!    psi_0 = psi_0 / psi_N
+!    psi_a_out = psi_a 
+!    psi_0_out = psi_0 
+!    eqpsi = eqpsi / psi_N
+!
+!    f_N = B_T0*avgrmid
+!    fp=fp/f_N
+!
+!!CMR 28/6/2011: why divide the number of theta points by two here?
+!    nthg=nt/2
+!
+!    transp = .true.
+!
+!!    do i=1,nr
+!!       write (*,*) rho_b(i), pressure(i), qsf(i)
+!!    end do
+!# else
+!    write(*,*) 'error: ceq teqin is called without netcdf'; stop
+!# endif
+!
+!  end subroutine teqin
+
   subroutine alloc_arrays(nr, nt)
-    implicit none
-    integer, intent(in) :: nr, nt
+
+    integer :: nr, nt
 
     allocate(rho_d(nr), eqpsi(nr), psi_bar(nr), fp(nr), beta(nr), pressure(nr), &
          rc(nr), diam(nr), qsf(nr), rho_b(nr))
@@ -371,7 +682,7 @@ contains
     rc = 0. ; diam = 0. ; qsf = 0. ; rho_b = 0.
     allocate(R_psi(nr, nt), Z_psi(nr, nt))
     R_psi = 0.  ; Z_psi = 0.
-    !    allocate(B_psi(nr, nt))
+!    allocate(B_psi(nr, nt))
     allocate(drm(nr, nt, 2), dzm(nr, nt, 2), dbtm(nr, nt, 2), &
          dpm(nr, nt, 2), dtm(nr, nt, 2))
     drm = 0. ; dzm = 0. ; dbtm = 0. ; dpm = 0. ; dtm = 0.
@@ -384,24 +695,13 @@ contains
 
   end subroutine alloc_arrays
 
-  subroutine dealloc_arrays
-    implicit none
-    if(allocated(rho_d)) deallocate(rho_d,eqpsi,psi_bar,fp,beta,pressure,rc,diam,qsf,rho_b)
-    if(allocated(R_psi)) deallocate(R_psi,Z_psi)
-    if(allocated(drm)) deallocate(drm,dzm,dbtm,dpm,dtm)
-    if(allocated(dpcart)) deallocate(dpcart,dtcart,dbtcart)
-    if(allocated(dpbish)) deallocate(dpbish,dtbish,dbtbish)
-  end subroutine dealloc_arrays
-  
-  subroutine ceq_finish
-    implicit none
-    call dealloc_arrays
-  end subroutine ceq_finish
-  
   subroutine ceq_init
+
     use constants, only: pi
     implicit none
     real, dimension(nr,nt) :: eqpsi1, eqth, eqbtor
+
+!    real pi
     integer i, j
    
     do j=1,nt
@@ -411,6 +711,7 @@ contains
        enddo
     enddo
     
+!    pi=2*acos(0.)
     !if (transp) then
        do j=1,nt
           eqth(:,j) = (j-1)*2.*pi/float(nt-1)-pi
@@ -472,30 +773,21 @@ contains
 
   end subroutine ceq_init
 
-  !> Calculate the derivative of f w.r.t to the radial
-  !! and poloidal indexes (i.e. calculate the finite 
-  !! differences without dividing by 
-  !! delta psi and delta theta).
-  !! - dfm(:,:,1) is the psi derivative
-  !! - dfm(:,:,2) is the theta derivative
-  !! - char specifies the periodicity in theta
-  !!   - 'E', 'O' mean continuous at theta = +/- pi
-  !!   - 'T' means a jump of 2 pi at theta = +/- pi
   subroutine derm(f, dfm, char)
 
     use constants, only: pi
     implicit none
     integer i, j
-    character(1), intent(in) :: char
-    real, intent(in) :: f(:,:)
-    real, intent(out) :: dfm(:,:,:)
+    character(1) :: char
+!    real f(:,:), dfm(:,:,:), pi
+    real :: f(:,:), dfm(:,:,:)
+
+!    pi = 2*acos(0.)
     
     i=1
-    ! Radial derivative
     dfm(i,:,1) = -0.5*(3*f(i,:)-4*f(i+1,:)+f(i+2,:))         
     
     i=nr
-    ! Radial derivative
     dfm(i,:,1) = 0.5*(3*f(i,:)-4*f(i-1,:)+f(i-2,:))
    
     !if (.not. transp) then
@@ -527,7 +819,6 @@ contains
        select case (char)
        case ('E') 
           j=1
-          ! theta derivative, periodic
           dfm(:,j,2) = 0.5*(f(:,j+1)-f(:,nt-1))
           
           j=nt      
@@ -573,12 +864,10 @@ contains
     use splines, only: inter_d_cspl
     implicit none
     
-    integer, intent(in) :: nth_used, ntm
-    character(1), intent(in) :: char
-    real, intent(in) :: rgrid(-ntm:), theta(-ntm:)
-    real, intent(out) :: grad(-ntm:,:)
-    real, intent(in) :: rp
-    real :: tmp(2), aa(1), daa(1), rpt(1)
+    integer nth_used, ntm
+    character(1) char
+    real rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
+    real tmp(2), aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) :: dcart
     real, dimension(nr,nt) :: f
     integer :: i
@@ -599,9 +888,9 @@ contains
     
     do i=-nth_used,-1
        f(:,:) = dcart(:,:,1)
-       call eqitem(rgrid(i), theta(i), f, tmp(1))
+       call eqitem(rgrid(i), theta(i), f, tmp(1), 'R')
        f(:,:) = dcart(:,:,2)
-       call eqitem(rgrid(i), theta(i), f, tmp(2))
+       call eqitem(rgrid(i), theta(i), f, tmp(2), 'Z')
        !if(char == 'T' .and. .not. transp) then
           !grad(i,1)=-tmp(1)
           !grad(i,2)=-tmp(2)
@@ -613,9 +902,9 @@ contains
 
     do i=0,nth_used
        f(:,:) = dcart(:,:,1)
-       call eqitem(rgrid(i),theta(i),f,tmp(1))
+       call eqitem(rgrid(i),theta(i),f,tmp(1), 'R')
        f(:,:) = dcart(:,:,2)
-       call eqitem(rgrid(i),theta(i),f,tmp(2))
+       call eqitem(rgrid(i),theta(i),f,tmp(2), 'Z')
        grad(i,1)=tmp(1)
        grad(i,2)=tmp(2)
     enddo
@@ -634,22 +923,21 @@ contains
   end subroutine gradient
 
   subroutine bgradient(rgrid, theta, grad, char, rp, nth_used, ntm)
-    use mp, only: mp_abort
+
     use splines, only: inter_d_cspl
     implicit none
     
-    integer, intent(in) :: nth_used, ntm
-    character(1), intent(in) :: char
-    real, intent(in) :: rgrid(-ntm:), theta(-ntm:), rp
-    real, intent(out) :: grad(-ntm:,:)
-    real :: aa(1), daa(1), rpt(1)
+    integer :: nth_used, ntm
+    character(1) :: char
+    real :: rgrid(-ntm:), theta(-ntm:), grad(-ntm:,:)
+    real :: aa(1), daa(1), rp, rpt(1)
     real, dimension(nr,nt,2) ::  dbish
     integer :: i
 
     select case(char)
     case('B') 
 !       dbish = dbbish
-       call mp_abort('error: bishop = 1 not allowed with ceq. (2)',.true.)
+       write(*,*) 'error: bishop = 1 not allowed with ceq. (2)'; stop
     case('D')  ! diagnostic
        dbish = dbtbish
     case('P') 
@@ -661,8 +949,8 @@ contains
     end select
 
     do i=-nth_used,nth_used
-       call eqitem(rgrid(i), theta(i), dbish(:,:,1), grad(i,1))
-       call eqitem(rgrid(i), theta(i), dbish(:,:,2), grad(i,2))
+       call eqitem(rgrid(i), theta(i), dbish(:,:,1), grad(i,1), 'R')
+       call eqitem(rgrid(i), theta(i), dbish(:,:,2), grad(i,2), 'Z')
     enddo
 
     !if (char == 'T' .and. .not. transp) then
@@ -685,27 +973,25 @@ contains
 
   end subroutine bgradient
 
-  !> Calculates fstar which is f interpolated at the location (r,theta).
-  !! Here r is the normalised poloidal flux coordinate rp (= psi_pN + psi_0N)
-  !! and theta_in is theta. f is a grid of values of f as a function of psi_p,theta
-
-  subroutine eqitem(r, theta_in, f, fstar)
-    use mp, only: mp_abort
+  subroutine eqitem(r, theta_in, f, fstar, char)
+ 
     use constants, only: pi
-    real, intent(in) :: r, theta_in
-    real, intent(out) :: fstar
-    real, dimension(:,:), intent(inout) :: f
     integer :: i, j, istar, jstar
-    real :: thet, sign
+    character(1) :: char
+    real :: r, thet, fstar, sign, theta_in
+!    real :: st, dt, sr, dr, pi, tp, tps
     real :: st, dt, sr, dr
+    real, dimension(:,:) :: f
     real, dimension(size(f,2)) :: mtheta
+    
+!    pi = 2.*acos(0.)
 
 ! check for axis evaluation
       
     if(r == eqpsi(1)) then
        write(*,*) 'no evaluation at axis allowed in eqitem'
        write(*,*) r, theta_in, eqpsi(1)
-       call mp_abort('no evaluation at axis allowed in eqitem')
+       stop
     endif
     
 ! allow psi(r) to be a decreasing function
@@ -716,7 +1002,7 @@ contains
     if(r < sign*eqpsi(1)) then
        write(*,*) 'r < Psi_0 in eqitem'
        write(*,*) r,sign,eqpsi(1)
-       call mp_abort('r < Psi_0 in eqitem')
+       stop
     endif
       
 ! find r on psi mesh
@@ -727,7 +1013,7 @@ contains
        write(*,*) 'No evaluation of eqitem allowed on or outside surface'
        write(*,*) '(Could this be relaxed a bit?)'
        write(*,*) r, theta_in, eqpsi(nr), sign
-       call mp_abort('No evaluation of eqitem allowed on or outside surface')
+       stop      
     endif
     
     istar=0
@@ -745,7 +1031,7 @@ contains
     if(istar == 1) then
        write(*,*) 'Too close to axis in eqitem'
        write(*,*) r, theta_in, eqpsi(1), eqpsi(2)
-       call mp_abort('Too close to axis in eqitem')
+       stop
     endif
   
 ! Now do theta direction
@@ -848,13 +1134,6 @@ contains
 
   end subroutine eqitem
 
-  !> Converts derivatives w.r.t. (psi_index,theta_index) to derivatives
-  !! w.r.t. (R,Z).
-  !! - dfm(:,:,1) is deriv w.r.t. psi_index (i.e. (df/dpsi)_theta * delta psi)
-  !! - dfm(:,:,2) is deriv w.r.t. theta_index
-  !! - dfcart(:,:,1) is deriv w.r.t. R
-  !! - dfcart(:,:,2) is deriv w.r.t. Z
-
   subroutine eqdcart(dfm, dfcart)
       
     implicit none
@@ -880,22 +1159,14 @@ contains
 
   end subroutine eqdcart
 
-  !> Convert gradients of a function f w.r.t. R,Z into bishop form
-  !! - dcart(:,:,1) is gradient of f w.r.t. R
-  !! - dcart(:,:,2) is gradient of f w.r.t. Z
-  !! - dbish(:,:,1) is set to (df/dR dpsi/dR + df/dZ dpsi/dZ)/|grad psi|
-  !! - dbish(:,:,2) is set to (-df/dR dpsi/dZ + df/dZ dpsi/dR)/|grad psi|
-  !! - Note that in the special case where f=psi
-  !!  - dbish(:,:,1) is |grad psi|
-  !!  - dbish(:,:,2) is 0
   subroutine eqdbish(dcart, dbish)
+
     implicit none
     real, dimension(:, :, :), intent (in) :: dcart
     real, dimension(:, :, :), intent(out) :: dbish
     real, dimension(size(dcart,1),size(dcart,2)) :: denom
     integer :: i, j
 
-    ! denom is |grad psi|
     denom(:,:) = sqrt(dpcart(:,:,1)**2 + dpcart(:,:,2)**2)
 
     dbish(:,:,1) = dcart(:,:,1)*dpcart(:,:,1) + dcart(:,:,2)*dpcart(:,:,2)
@@ -927,7 +1198,7 @@ contains
     
     th = mod2pi( theta)
     
-    call eqitem(r, th, R_psi, f)
+    call eqitem(r, th, R_psi, f, 'R')
     !if (debug) write(*,*) 'invR', 'th', th, 'R', f
     invR=1./f
     
@@ -941,7 +1212,7 @@ contains
     
     th = mod2pi( theta)
     
-    call eqitem(r, th, R_psi, f)
+    call eqitem(r, th, R_psi, f, 'R')
     Rpos=f
     
   end function Rpos
@@ -954,15 +1225,14 @@ contains
     
     th = mod2pi( theta)
     
-    call eqitem(r, th, Z_psi, f)
+    call eqitem(r, th, Z_psi, f, 'Z')
     Zpos=f
     
   end function Zpos
 
   function initialize_psi (init) 
 
-    integer, intent(in) :: init
-    integer :: initialize_psi
+    integer :: init, initialize_psi
     
     init_psi = .false.
     if(init == 1) init_psi = .true.
@@ -970,8 +1240,9 @@ contains
 
   end function initialize_psi
 
-  function psi (r)
-    real, intent (in) :: r
+  function psi (r, theta)
+   
+    real, intent (in) :: r, theta
     real :: psi
 
     psi = r
@@ -979,10 +1250,14 @@ contains
   end function psi
 
   function mod2pi (theta)
+
     use constants, only: pi
     real, intent(in) :: theta
+!    real :: pi, th, mod2pi
     real :: th, mod2pi
     logical :: out
+    
+!    pi=2.*acos(0.)
     
     if(theta <= pi .and. theta >= -pi) then
        mod2pi = theta
@@ -997,11 +1272,12 @@ contains
        if(th <= pi .and. th >= -pi) out=.false.
     enddo
     mod2pi=th
+    
   end function mod2pi
    
   function initialize_diameter (init) 
-    integer, intent(in) :: init
-    integer :: initialize_diameter
+
+    integer :: init, initialize_diameter
     
     init_diameter = .false.
     if(init == 1) init_diameter = .true.
@@ -1010,9 +1286,9 @@ contains
   end function initialize_diameter
 
   function diameter (rp)
-    use splines, only: new_spline, splint, spline
-    real, intent(in) :: rp
-    real :: diameter
+  
+    use splines
+    real :: rp, diameter
     type (spline), save :: spl
 
     if(init_diameter) then
@@ -1026,8 +1302,8 @@ contains
   end function diameter
 
   function initialize_rcenter (init) 
-    integer, intent(in) :: init
-    integer :: initialize_rcenter
+
+    integer :: init, initialize_rcenter
     
     init_rcenter = .false.
     if(init == 1) init_rcenter = .true.
@@ -1036,9 +1312,9 @@ contains
   end function initialize_rcenter
 
   function rcenter (rp)
-    use splines, only: new_spline, splint, spline
-    real, intent(in) :: rp
-    real :: rcenter
+  
+    use splines
+    real :: rp, rcenter
     type (spline), save :: spl
 
     if(init_rcenter) then
@@ -1053,8 +1329,7 @@ contains
 
   function initialize_dbtori (init) 
 
-    integer, intent(in) :: init
-    integer :: initialize_dbtori
+    integer :: init, initialize_dbtori
     
     init_dbtori = .false.
     if(init == 1) init_dbtori = .true.
@@ -1063,9 +1338,9 @@ contains
   end function initialize_dbtori
 
   function dbtori (pbar)
-    use splines, only: new_spline, dsplint, spline
-    real, intent(in) :: pbar
-    real :: dbtori
+  
+    use splines
+    real :: pbar, dbtori
     type (spline), save :: spl
 
     if(init_dbtori) call new_spline(nr, psi_bar, fp, spl)
@@ -1076,30 +1351,31 @@ contains
   end function dbtori
 
   function initialize_btori (init) 
-    integer, intent(in) :: init
-    integer :: initialize_btori
+
+    integer :: init, initialize_btori
     
     init_btori = .false.
     if(init == 1) init_btori = .true.
     initialize_btori = 1
+
   end function initialize_btori
 
   function btori (pbar)
-    use splines, only: new_spline, splint, spline
-    real, intent(in) :: pbar
-    real :: btori
+  
+    use splines
+    real :: pbar, btori
     type (spline), save :: spl
 
     if(init_btori) call new_spline(nr, psi_bar, fp, spl)
     init_btori=.false.
 
     btori = splint(pbar, spl)
+
   end function btori
 
   function initialize_q (init) 
 
-    integer, intent(in) :: init
-    integer :: initialize_q
+    integer :: init, initialize_q
     
     init_q = .false.
     if(init == 1) init_q = .true.
@@ -1109,9 +1385,8 @@ contains
 
   function qfun (pbar)
   
-    use splines, only: new_spline, splint, spline
-    real, intent(in) :: pbar
-    real :: qfun
+    use splines
+    real :: pbar, qfun
     type (spline), save :: spl
 
     if(init_q) call new_spline(nr, psi_bar, qsf, spl)
@@ -1123,8 +1398,7 @@ contains
 
   function initialize_pressure (init) 
 
-    integer, intent(in) :: init
-    integer :: initialize_pressure
+    integer :: init, initialize_pressure
     
     init_pressure = .false.
     if(init == 1) init_pressure = .true.
@@ -1134,9 +1408,8 @@ contains
 
   function pfun (pbar)
   
-    use splines, only: new_spline, splint, spline
-    real, intent(in) :: pbar
-    real :: pfun
+    use splines
+    real :: pbar, pfun
     type (spline), save :: spl
 
     if(init_pressure) call new_spline(nr, psi_bar, pressure, spl)
@@ -1150,8 +1423,7 @@ contains
   
   function initialize_dpressure (init) 
 
-    integer, intent(in) :: init
-    integer :: initialize_dpressure
+    integer :: init, initialize_dpressure
     
     init_dpressure = .false.
     if(init == 1) init_dpressure = .true.
@@ -1161,9 +1433,8 @@ contains
 
   function dpfun (pbar)
   
-    use splines, only: new_spline, dsplint, spline
-    real, intent(in) :: pbar
-    real :: dpfun
+    use splines
+    real :: pbar, dpfun
     type (spline), save :: spl
 !
 ! p_N would be B**2/mu_0 => p = beta/2 in our units
@@ -1179,8 +1450,7 @@ contains
 
   function initialize_beta (init) 
 
-    integer, intent(in) :: init
-    integer :: initialize_beta
+    integer :: init, initialize_beta
     
     init_beta = .false.
     if(init == 1) init_beta = .true.
@@ -1190,9 +1460,8 @@ contains
 
   function betafun (pbar)
   
-    use splines, only: new_spline, splint, spline
-    real, intent(in) :: pbar
-    real :: betafun
+    use splines
+    real :: pbar, betafun
     type (spline), save :: spl
 
     if(pbar == 0.) then
@@ -1209,9 +1478,10 @@ contains
 
   subroutine Hahm_Burrell(irho, a) 
 
+    use splines
+
     real, intent(in) :: a
-    integer, intent(in) :: irho
-    integer :: i
+    integer :: i, irho
     real :: gradpsi, mag_B, rho_eq, rp1, rp2, rho1, rho2, drhodpsiq
     real, dimension(nr) :: gamma, pbar, dp, d2p, pres
 
@@ -1235,7 +1505,7 @@ contains
        rho2=0.5*diameter(rp2)
        drhodpsiq=(rho1-rho2)/(rp1-rp2)
        
-       call eqitem(eqpsi(i), 0., dpbish(:,:,1), gradpsi)
+       call eqitem(eqpsi(i), 0., dpbish(:,:,1), gradpsi, 'R')
        
        mag_B=sqrt( (btori(pbar(i))**2 + gradpsi**2))/Rpos(eqpsi(i),0.)
 

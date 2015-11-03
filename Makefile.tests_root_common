@@ -1,0 +1,31 @@
+
+#$(info "gs2_mod is $(gs2_mod)")
+
+# This command adds '../../' to all the gs2 modules and gets rid of gs2.o
+TEST_MODS = $(shell echo "$(gs2_mod)" | sed -e 's/gs2.o//' -e 's/ \([^ ]\)/ ..\/..\/\1/g' -e 's/^\([^ ]\)/..\/..\/\1/')
+TEST_MODS += ../../unit_tests.o ../../functional_tests.o
+# add shared memory library
+
+
+# $(info TEST MODS $(TEST_MODS))
+
+# All subfolders unless otherwise specified
+TESTS ?= $(wildcard */.) 
+
+
+export
+     
+
+.PHONY: all $(TESTS) clean
+
+all: $(TESTS)
+
+clean: 
+	for d in $(TESTS); \
+	do \
+		$(MAKE) clean -C $$d; \
+	done
+
+
+$(TESTS): 
+	$(MAKE) all -C $@

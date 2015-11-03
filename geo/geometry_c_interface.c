@@ -5,7 +5,7 @@
 #include "geometry_c_interface.h"
 
 extern void geometry_set_inputs_(int * equilibrium_type,
-    /*char * eqfile,*/
+		 											 char * eqfile,
 													 int * irho,
 		 											 double * rhoc, 
 													 int * bishop,
@@ -93,7 +93,7 @@ void geometry_set_inputs_c(int * equilibrium_type,
 													 int * nperiod,
 													 int * ntheta_out){
 	geometry_set_inputs_( equilibrium_type,
-      /*eqfile,*/
+		 											  eqfile,
 													  irho,
 		 											  rhoc, 
 													  bishop,

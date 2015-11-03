@@ -2,35 +2,19 @@ module lowflow
   
   implicit none
 
-  private
-
-  public :: get_lowflow_terms, finish_lowflow_terms
-  public :: phineo, dphidth, mach_lab
+  public :: get_lowflow_terms, dphidth
+  public :: phineo
+  public :: mach_lab    
 
   real, dimension (:), allocatable :: dphidth
   real, dimension (:,:,:,:,:), allocatable :: coefs
   real, dimension (:,:), allocatable :: phineo, dcoefsdr
   real, dimension (:,:,:), allocatable :: dcoefsdth
   real, dimension (:), allocatable :: rad_neo, theta_neo
-  real, dimension (:,:), allocatable :: dens_neo, temp_neo
   real, dimension (:), allocatable :: mach_lab
 
 contains
-  subroutine finish_lowflow_terms
-    implicit none
-    !<DD>May actually be able to deallocate most of these much
-    !    earlier as most only used during initialisation
-    if(allocated(dphidth)) deallocate(dphidth)
-    if(allocated(coefs)) deallocate(coefs)
-    if(allocated(phineo)) deallocate(phineo)
-    if(allocated(dcoefsdr)) deallocate(dcoefsdr, dcoefsdth)
-    if(allocated(rad_neo)) deallocate(rad_neo)
-    if(allocated(theta_neo)) deallocate(theta_neo)
-    if(allocated(mach_lab)) deallocate(mach_lab)
-    if(allocated(dens_neo)) deallocate(dens_neo)
-    if(allocated(temp_neo)) deallocate(temp_neo)
-  end subroutine finish_lowflow_terms
-
+  
   subroutine get_lowflow_terms (theta, al, energy, bmag, dHdEc, dHdxic, vpadHdEc, dHdrc, &
        dHdthc, hneoc, dphidrc, dphidthc, phi_neo, lf_default, lf_decompose)
     
@@ -131,10 +115,8 @@ contains
        ! the distribution function with v fixed, not v/v_t(r) fixed.
        do is = 1, ns
           emax(2,is) = 16.0 ! this is EMAX for center grid point
-          emax(1,is) = emax(2,is)*temp_neo(1,is)
-          emax(3,is) = emax(2,is)*temp_neo(3,is)
-!          emax(1,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(1)-rad_neo(2)))
-!          emax(3,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(3)-rad_neo(2)))
+          emax(1,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(1)-rad_neo(2)))
+          emax(3,is) = emax(2,is)*(1.0-spec(is)%tprim*(rad_neo(3)-rad_neo(2)))
        end do
     else
        emax = 16.0
@@ -216,33 +198,20 @@ contains
        ! evaluate the neoclassical parallel heat flux and parallel velcotiy in GS2 geometry
        do ir=1, nr 
           do is=1, ns
+             drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
              do ie = 1, nenergy
-                w_r(ie) = w(ie) * exp(energy(ie)*(1.0-1.0/temp_neo(ir,is))) / temp_neo(ir,is)**1.5
+                w_r(ie) = w(ie) * exp(energy(ie)*(1.0-1.0/(1.0-drlt))) / (1.0-drlt)**1.5
                 do ixi = 1, nxi
                    il = min(ixi, nxi+1-ixi)
                    do ig = 1, ntheta
                       upar(ir,is,ig) = upar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
                            * sqrt(energy(ie))*xi(ig,ixi) * w_r(ie) * wl(-ntgrid+ig-1,il)
                       qpar(ir,is,ig) = qpar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
-                           * sqrt(energy(ie))*xi(ig,ixi)*(energy(ie)-2.5*temp_neo(ir,is)) &
-                           * dens_neo(ir,is) * w_r(ie) * wl(-ntgrid+ig-1,il)
+                           * sqrt(energy(ie))*xi(ig,ixi)*(energy(ie)-2.5*(1.0-drlt)) &
+                           * (1.0-drln) * w_r(ie) * wl(-ntgrid+ig-1,il)
                    end do
                 end do
              end do
-!              drlt = drad_neo(ir)*spec(is)%tprim ; drln = drad_neo(ir)*spec(is)%fprim
-!              do ie = 1, nenergy
-!                 w_r(ie) = w(ie) * exp(energy(ie)*(1.0-1.0/(1.0-drlt))) / (1.0-drlt)**1.5
-!                 do ixi = 1, nxi
-!                    il = min(ixi, nxi+1-ixi)
-!                    do ig = 1, ntheta
-!                       upar(ir,is,ig) = upar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
-!                            * sqrt(energy(ie))*xi(ig,ixi) * w_r(ie) * wl(-ntgrid+ig-1,il)
-!                       qpar(ir,is,ig) = qpar(ir,is,ig) + hneo(ir,ig,ixi,ie,is) &
-!                            * sqrt(energy(ie))*xi(ig,ixi)*(energy(ie)-2.5*(1.0-drlt)) &
-!                            * (1.0-drln) * w_r(ie) * wl(-ntgrid+ig-1,il)
-!                    end do
-!                 end do
-!              end do
           end do
        end do
 
@@ -273,9 +242,9 @@ contains
        do ir=1, nr
           do is = 1, ns
              write (neot_unit,fmt='(e14.5,i8,12e14.5)') radius(ir), is, pflx(ir,is), qflx(ir,is), vflx(ir,is), &
-                  qparB(ir,is),uparB(ir,is), upar1(ir,is)*sqrt(temp_neo(ir,is)), &
+                  qparB(ir,is),uparB(ir,is), upar1(ir,is)*sqrt(1.0-drlt), &
                   phi2(ir), jboot(ir), rmaj*upar_over_B(ir,is)/rgeo2, upar2(ir,is), qpar2(ir,is), phineo2(ir)
-             if (ir==2)  mach_lab(is)=rmaj*upar_over_B(ir,is)/rgeo2
+             if (ir==2)  mach_lab(is)=rmaj*upar_over_B(ir,is)/rgeo2 
           end do
        end do
        call close_output_file (neot_unit)
@@ -498,20 +467,20 @@ contains
     dphidrc(ntheta) = 0.0 ; dphidthc(ntheta) = 0.0
 
     deallocate (xi, emax, chebyp1, chebyp2, legp, dHdr, dHdth, dHdxi, dHdE, vpadHdE, hneo, forbid)
-    deallocate (coefs, drad_neo, dens_neo, temp_neo)
+    deallocate (coefs, drad_neo)
     deallocate (dphidr, dl_over_b, transport)
     deallocate (pflx, qflx, vflx, upar1, qparB)
     deallocate (upar, qpar, uparB)
     deallocate (upar2, qpar2)
     deallocate (afac, bfac)
-    
+
   end subroutine get_lowflow_terms
   
   function zfnc (enrgy, enrgymax)
     
     implicit none
     
-    real, intent(in) :: enrgy, enrgymax
+    real :: enrgy, enrgymax
     real :: zfnc
     
     zfnc = 2.*sqrt(enrgy/enrgymax)-1.
@@ -738,15 +707,11 @@ contains
 
     integer :: is, ik, ij, ig, ir, idx, ntheta, ntheta_neo
     integer :: ptheta_neo, ip 
-    integer :: ngrid_per_rad
     integer, save :: neo_unit, neof_unit, neophi_unit
    
     real, dimension (:), allocatable :: tmp, neo_coefs, dum, neo_phi, dneo_phi
     real, dimension (:), allocatable :: theta_neo_ext,neo_coefs_ext, neo_phi_ext, dneo_phi_ext !JPL
     ntheta = size(theta)
-
-    ! for now, set ir_neo by hand, but best to derive it from neo output in future
-    ir_neo = 2
 
     if (proc0) then
        call get_unused_unit (neo_unit)
@@ -763,14 +728,10 @@ contains
        end do
        read (neo_unit,*) nrad_neo
        if (.not. allocated(rad_neo)) allocate (rad_neo(nrad_neo))
-       if (.not. allocated(dens_neo)) allocate (dens_neo(nrad_neo,nspec_neo))
-       if (.not. allocated(temp_neo)) allocate (temp_neo(nrad_neo,nspec_neo))
        do ir = 1, nrad_neo
-          read (neo_unit,*) rad_neo(ir), dens_neo(ir,:), temp_neo(ir,:)
+          read (neo_unit,*) rad_neo(ir)
        end do
        close (neo_unit)
-       dens_neo = dens_neo / spread(dens_neo(ir_neo,:),1,nrad_neo)
-       temp_neo = temp_neo / spread(temp_neo(ir_neo,:),1,nrad_neo)
     end if
 
     call broadcast (nspec_neo)
@@ -780,19 +741,13 @@ contains
     call broadcast (nrad_neo)
     if (.not. allocated(theta_neo)) allocate (theta_neo(ntheta_neo))
     if (.not. allocated(rad_neo)) allocate (rad_neo(nrad_neo))
-    if (.not. allocated(dens_neo)) allocate (dens_neo(nrad_neo,nspec_neo))
-    if (.not. allocated(temp_neo)) allocate (temp_neo(nrad_neo,nspec_neo))
     call broadcast (theta_neo)
     call broadcast (rad_neo)
-    do ir = 1, nrad_neo
-       call broadcast (dens_neo)
-       call broadcast (temp_neo)
-    end do
 
-    ! define number of grid points per radial location to make file i/o easier
-    ngrid_per_rad = ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo
+    ! for now, set ir_neo by hand, but best to derive it from neo output in future
+    ir_neo = 2
 
-    if (.not. allocated(tmp)) allocate (tmp(ngrid_per_rad*nrad_neo))
+    if (.not. allocated(tmp)) allocate (tmp(ntheta_neo*(nxi_neo+1)*nenergy_neo*nspec_neo*nrad_neo))
     if (.not. allocated(neo_coefs)) allocate (neo_coefs(ntheta_neo), neo_phi(ntheta_neo), dneo_phi(ntheta_neo))
     if (.not. allocated(dum)) allocate (dum(ntheta))
     if (.not. allocated(coefs)) allocate (coefs(nrad_neo,ntheta,0:nxi_neo,0:nenergy_neo-1,nspec_neo))
@@ -819,9 +774,7 @@ contains
        call get_unused_unit (neof_unit)
        open (unit=neof_unit, file='neo_f.out', status="old", action="read")
 
-       do ir = 1, nrad_neo
-          read (neof_unit,*) tmp(ngrid_per_rad*(ir-1)+1:ngrid_per_rad*ir)
-       end do
+       read (neof_unit,*) tmp
 
        idx = 1
        do ir = 1, nrad_neo
@@ -860,9 +813,7 @@ contains
        call get_unused_unit (neophi_unit)
        open (unit=neophi_unit, file='neo_phi.out', status="old", action="read")
 
-       do ir = 1, nrad_neo
-          read (neophi_unit,*) tmp((ir-1)*ntheta_neo+1:ir*ntheta_neo)
-       end do
+       read (neophi_unit,*) tmp
 
        idx = 1
        do ir = 1, nrad_neo

@@ -7,41 +7,33 @@ module nonlinear_terms
 !
   implicit none
 
-  private
-
   public :: init_nonlinear_terms, finish_nonlinear_terms
   public :: read_parameters, wnml_nonlinear_terms, check_nonlinear_terms
-  public :: add_explicit_terms, nonlinear_mode_switch
+!  public :: add_nonlinear_terms, finish_nl_terms
+  public :: add_explicit_terms, finish_nl_terms
   public :: finish_init, reset_init, algorithm, nonlin, accelerated
-  public :: nonlinear_terms_unit_test_time_add_nl, cfl
-  public :: nonlinear_mode_none, nonlinear_mode_on
-  public :: gryfx_zonal
+  public :: nonlinear_terms_unit_test_time_add_nl
+  public :: cfl
 
-  type gs2_gryfx_zonal_type
-
-    logical :: on = .false.
-    complex*8, dimension (:), pointer :: NLdens_ky0, NLupar_ky0, NLtpar_ky0, &
-                                         NLtprp_ky0, NLqpar_ky0, NLqprp_ky0
-    logical :: first_half_step = .false.
-
-  end type gs2_gryfx_zonal_type
-
-  type(gs2_gryfx_zonal_type) gryfx_zonal
-
-  integer :: istep_last = 0
+  private
 
   ! knobs
-  integer :: nonlinear_mode_switch
-  integer :: flow_mode_switch !THIS IS NOT SUPPORTED, SHOULD BE REMOVED?
+  integer, public :: nonlinear_mode_switch
+  integer :: flow_mode_switch
 
-  integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
-  integer, parameter :: flow_mode_off = 1, flow_mode_on = 2
+  integer, public, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
+  integer, public, parameter :: flow_mode_off = 1, flow_mode_on = 2
 
-  real, dimension (:,:), allocatable :: ba, gb, bracket
+  !complex, dimension(:,:), allocatable :: phi_avg, apar_avg, bpar_avg  
+
+  real, save, dimension (:,:), pointer :: ba => null(), gb => null(), bracket => null()
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
 
-  real, dimension (:,:,:), allocatable :: aba, agb, abracket
+  real, save, dimension (:,:,:), allocatable :: aba, agb, abracket
   ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
+
+  !complex, dimension (:,:), allocatable :: xax, xbx, g_xf
+  ! xxf_lo%nx, xxf_lo%llim_proc:xxf_lo%ulim_alloc
 
 ! CFL coefficients
   real :: cfl, cflx, cfly
@@ -49,16 +41,12 @@ module nonlinear_terms
 ! hyperviscosity coefficients
   real :: C_par, C_perp, p_x, p_y, p_z
 
-! for gryfx
-  real :: densfac, uparfac, tparfac, tprpfac, qparfac, qprpfac
-
   integer :: algorithm = 1
   logical :: nonlin = .false.
   logical :: initialized = .false.
   logical :: initializing = .true.
   logical :: alloc = .true.
   logical :: zip = .false.
-  logical :: nl_forbid_force_zero = .true.
   logical :: accelerated = .false.
 
   logical :: exist
@@ -71,8 +59,8 @@ contains
     use run_parameters, only: margin, code_delt_max, nstep, wstar_units
     use theta_grid, only: nperiod
     implicit none
-    integer, intent(in) :: report_unit
-    real, intent(in) :: delt_adj
+    integer :: report_unit
+    real :: delt_adj
     if (nonlin) then
        write (report_unit, *) 
        write (report_unit, fmt="('This is a nonlinear simulation.')")
@@ -112,32 +100,34 @@ contains
           write (report_unit, fmt="('################# WARNING #######################')")
           write (report_unit, *) 
        end if
-       write (report_unit, fmt="('The minimum delt ( code_dt_min ) = ',e11.4)") code_dt_min
-       write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e11.4)") code_delt_max
+       write (report_unit, fmt="('The minimum delt ( code_dt_min ) = ',e10.4)") code_dt_min
+       write (report_unit, fmt="('The maximum delt (code_delt_max) = ',e10.4)") code_delt_max
        write (report_unit, fmt="('The maximum delt < ',f10.4,' * min(Delta_perp/v_perp). (cfl)')") cfl
        write (report_unit, fmt="('When the time step needs to be changed, it is adjusted by a factor of ',f10.4)") delt_adj
        write (report_unit, fmt="('The number of time steps nstep = ',i7)") nstep
        write (report_unit, fmt="('If running in batch mode on the NERSC T3E, the run will stop when ', &
-            & f7.4,' % of the time remains.')") 100.*margin
+            & f6.4,' % of the time remains.')") 100.*margin
     endif
   end subroutine check_nonlinear_terms
 
+
   subroutine wnml_nonlinear_terms(unit)
-    implicit none
-    integer, intent(in) :: unit
+  implicit none
+  integer :: unit
     if (.not. exist) return
     if (nonlinear_mode_switch == nonlinear_mode_on) then
        write (unit, *)
        write (unit, fmt="(' &',a)") "nonlinear_terms_knobs"
        write (unit, fmt="(' nonlinear_mode = ',a)") '"on"'
-       write (unit, fmt="(' cfl = ',e17.10)") cfl
-       write (unit, fmt="(' nl_forbid_force_zero = ',L1)") nl_forbid_force_zero
+       write (unit, fmt="(' cfl = ',e16.10)") cfl
        if (zip) write (unit, fmt="(' zip = ',L1)") zip
        write (unit, fmt="(' /')")
     endif
   end subroutine wnml_nonlinear_terms
 
-  subroutine init_nonlinear_terms 
+  subroutine init_nonlinear_terms
+    use mp, only : iproc
+    use shm_mpi3, only : shm_alloc
     use theta_grid, only: init_theta_grid, ntgrid
     use kt_grids, only: init_kt_grids, naky, ntheta0, nx, ny, akx, aky
     use le_grids, only: init_le_grids, nlambda, negrid
@@ -163,14 +153,21 @@ contains
     if (debug) write(6,*) "init_nonlinear_terms: init_species"
     call init_species
     if (debug) write(6,*) "init_nonlinear_terms: init_dist_fn_layouts"
-    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
-    
+    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
+
     call read_parameters
 
     if (debug) write(6,*) "init_nonlinear_terms: init_transforms"
     if (nonlinear_mode_switch /= nonlinear_mode_none) then
        call init_transforms (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
-
+       if (iproc == 0) then 
+          if (accelerated) then 
+             print*, "init nl : accelerated"
+          else
+              print*, "init nl : non-accelerated"
+          endif
+       endif
+          
        if (debug) write(6,*) "init_nonlinear_terms: allocations"
        if (alloc) then
           if (accelerated) then
@@ -179,9 +176,12 @@ contains
              allocate (abracket(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              aba = 0. ; agb = 0. ; abracket = 0.
           else
-             allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-             allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-             allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+             !allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+             !allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+             !allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+             call shm_alloc(ba, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
+             call shm_alloc(gb, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
+             call shm_alloc(bracket, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
              ba = 0. ; gb = 0. ; bracket = 0.
           end if
           alloc = .false.
@@ -210,9 +210,12 @@ contains
             text_option('on', flow_mode_on) /)
     character(20) :: flow_mode
     namelist /nonlinear_terms_knobs/ nonlinear_mode, flow_mode, cfl, &
-         C_par, C_perp, p_x, p_y, p_z, zip, nl_forbid_force_zero, &
-         densfac, uparfac, tparfac, tprpfac, qparfac, qprpfac
+         C_par, C_perp, p_x, p_y, p_z, zip
     integer :: ierr, in_file
+!    logical :: done = .false.
+
+!    if (done) return
+!    done = .true.
 
     if (proc0) then
        nonlinear_mode = 'default'
@@ -224,23 +227,16 @@ contains
        p_y = 6.0
        p_z = 6.0
 
-       densfac = 1.
-       uparfac = 1./sqrt(2.)
-       tparfac = 1./2.
-       tprpfac = 1./2. 
-       qparfac = 1./sqrt(8.)
-       qprpfac = 1./sqrt(8.)
-
        in_file=input_unit_exist("nonlinear_terms_knobs",exist)
        if(exist) read (unit=in_file,nml=nonlinear_terms_knobs)
 
        ierr = error_unit()
        call get_option_value &
             (nonlinear_mode, nonlinearopts, nonlinear_mode_switch, &
-            ierr, "nonlinear_mode in nonlinear_terms_knobs",.true.)
+            ierr, "nonlinear_mode in nonlinear_terms_knobs")
        call get_option_value &
             (flow_mode, flowopts, flow_mode_switch, &
-            ierr, "flow_mode in nonlinear_terms_knobs",.true.)
+            ierr, "flow_mode in nonlinear_terms_knobs")
     end if
 
     call broadcast (nonlinear_mode_switch)
@@ -251,16 +247,7 @@ contains
     call broadcast (p_x)
     call broadcast (p_y)
     call broadcast (p_z)
-    call broadcast (nl_forbid_force_zero)
     call broadcast (zip)
-    call broadcast (densfac)
-    call broadcast (uparfac)
-    call broadcast (tparfac)
-    call broadcast (tprpfac)
-    call broadcast (qparfac)
-    call broadcast (qprpfac)
-
-    istep_last = 0
 
     if (flow_mode_switch == flow_mode_on) then
        if (proc0) write(*,*) 'Forcing flow_mode = off'
@@ -274,7 +261,8 @@ contains
 
   end subroutine read_parameters
 
-  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd)
+!  subroutine add_nonlinear_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
+  subroutine add_explicit_terms (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo
     use gs2_time, only: save_dt_cfl
@@ -283,8 +271,9 @@ contains
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi,    apar,    bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
+    complex, intent (in) :: fexp
     real :: dt_cfl
-    logical, parameter :: nl = .true.
+    logical, save :: nl = .true.
 
     select case (nonlinear_mode_switch)
     case (nonlinear_mode_none)
@@ -293,37 +282,36 @@ contains
        call save_dt_cfl (dt_cfl)
 #ifdef LOWFLOW
        if (istep /=0) &
-            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd)
+            call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
 #endif
     case (nonlinear_mode_on)
 !       if (istep /= 0) call add_nl (g1, g2, g3, phi, apar, bpar, istep, bd, fexp)
-       if (istep /= 0) then
-         call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, nl)
-       endif
+       if (istep /= 0) call add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
     end select
+!  end subroutine add_nonlinear_terms
   end subroutine add_explicit_terms
 
-  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd,  nl)
+
+  subroutine add_explicit (g1, g2, g3, phi, apar, bpar, istep, bd, fexp, nl)
+
     use theta_grid, only: ntgrid
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use dist_fn_arrays, only: g
     use gs2_time, only: save_dt_cfl
-    use run_parameters, only: reset
-    use unit_tests, only: debug_message
+
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1, g2, g3
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer, intent (in) :: istep
     real, intent (in) :: bd
+    complex, intent (in) :: fexp
     logical, intent (in), optional :: nl
 
-    integer, parameter :: verb = 4
+    integer :: istep_last = 0
     integer :: iglo, ik, it
     real :: zero
     real :: dt_cfl
-
-    call debug_message(verb, 'nonlinear_terms::add_explicit starting')
 
     if (initializing) then
        if (present(nl)) then
@@ -333,12 +321,9 @@ contains
        return
     endif
 
-
 !
 ! Currently not self-starting.  Need to fix this.
 !
-
-    call debug_message(verb, 'nonlinear_terms::add_explicit copying old terms')
 
     if (istep /= istep_last) then
 
@@ -346,18 +331,11 @@ contains
        g3 = g2
        g2 = g1
 
-       call debug_message(verb, 'nonlinear_terms::add_explicit copied old terms')
-
        ! if running nonlinearly, then compute the nonlinear term at grid points
        ! and store it in g1
        if (present(nl)) then
-          call debug_message(verb, 'nonlinear_terms::add_explicit calling add_nl')
-          if(gryfx_zonal%on) then
-            call add_nl_gryfx (g1) 
-          else 
-            call add_nl (g1, phi, apar, bpar)
-          endif
-          if(reset) return !Return if resetting
+          call add_nl (g1, phi, apar, bpar)
+          
           ! takes g1 at grid points and returns 2*g1 at cell centers
           call center (g1)
        else
@@ -394,83 +372,42 @@ contains
     ! and overwrites it with array evaluated at cell centers
     ! note that there is an extra factor of 2 in output array
     subroutine center (gtmp)
-!
-!CMR, 13/10/2014
-! Fixing some (cosmetic) issues from prior to R3021.
-! (1) forbid(-ntgrid:ntgrid) refers to grid points at cell boundaries
-!     gtmp(-ntgrid:ntgrid-1) refers to cell centers
-!     => applying forbid to output gtmp did not zero the correct things!!!
-! (2) totally trapped particles are special, so return source without upwinding is fine
-!     BUT source for other trapped particles should NOT enter forbidden region.
-!     if ig or ig+1 forbidden (i.e. ig+1 or ig is bounce point) now return gtmp(ig,:,iglo)=0
-!
+
       use dist_fn_arrays, only: ittp
       use gs2_layouts, only: g_lo, il_idx
       use theta_grid, only: ntgrid
-      use le_grids, only: forbid, ng2, jend
-      use mp, only: mp_abort
+      use le_grids, only: forbid
 
       implicit none
 
       integer :: iglo, il, ig
       complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: gtmp
-      logical :: trapped = .false.
-
-      if (minval(jend) .gt. ng2) trapped=.true.
 
       ! factor of one-half appears elsewhere
-      do iglo = g_lo%llim_proc, g_lo%ulim_proc
-         il = il_idx(g_lo, iglo)
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
+          il = il_idx(g_lo, iglo)
+          ! Totally trapped particles get no bakdif 
+          do ig = -ntgrid, ntgrid-1
+             !JAB & GWH: orig if (il == ittp(ig)) cycle 
+             if (il >= ittp(ig)) cycle
+             gtmp(ig,1,iglo) = (1.+bd)*gtmp(ig+1,1,iglo) + (1.-bd)*gtmp(ig,1,iglo)
+             gtmp(ig,2,iglo) = (1.-bd)*gtmp(ig+1,2,iglo) + (1.+bd)*gtmp(ig,2,iglo)
+          end do
+          ! zero out spurious gtmp outside trapped boundary
+          where (forbid(:,il))
+             gtmp(:,1,iglo) = 0.0
+             gtmp(:,2,iglo) = 0.0
+          end where
+       end do
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!CMR, 7/10/2014: 
-! Incoming gtmp SHOULD vanish in forbidden region, 
-! New logical in nonlinear_terms_knobs namelist: nl_forbid_force_zero
-!     nl_forbid_force_zero =.t. : force zeroing    (default)
-!     nl_forbid_force_zero =.f. : NO forced zeroing
-!                                 ie assume forbidden gtmp is zero on entry 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-         if ( nl_forbid_force_zero ) then
-         ! force spurious gtmp outside trapped boundary to be zero
-            where (forbid(:,il))
-               gtmp(:,1,iglo) = 0.0
-               gtmp(:,2,iglo) = 0.0
-            end where
-         endif
-
-         do ig = -ntgrid, ntgrid-1
-!
-!CMR, 7/10/2014: 
-! loop sets gtmp to value at upwinded cell center RIGHT of theta(ig)
-!           except for ttp where upwinding makes no sense!
-!
-            if (il >= ittp(ig)) cycle
-            if ( trapped .and. ( il > jend(ig) .or. il > jend(ig+1)) ) then
-               !
-!CMR, 7/10/2014: 
-!   if either ig or ig+1 is forbidden, no source possible in a cell RIGHT of theta(ig) 
-!   => gtmp(ig,1:2,iglo)=0
-!
-               gtmp(ig,1:2,iglo) = 0.0
-            else 
-!
-!CMR, 7/10/2014: 
-!    otherwise ig and ig+1 BOTH allowed, and upwinding in cell RIGHT of theta(ig) is fine
-!
-               gtmp(ig,1,iglo) = (1.+bd)*gtmp(ig+1,1,iglo) + (1.-bd)*gtmp(ig,1,iglo)
-               gtmp(ig,2,iglo) = (1.-bd)*gtmp(ig+1,2,iglo) + (1.+bd)*gtmp(ig,2,iglo)
-
-            endif
-         end do
-      end do
     end subroutine center
+
   end subroutine add_explicit
 
   subroutine nonlinear_terms_unit_test_time_add_nl(g1, phi, apar, bpar)
     use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use theta_grid, only: ntgrid
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g1
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     call add_nl(g1, phi, apar, bpar)
   end subroutine nonlinear_terms_unit_test_time_add_nl
@@ -478,32 +415,27 @@ contains
   subroutine add_nl (g1, phi, apar, bpar)
     use mp, only: max_allreduce
     use theta_grid, only: ntgrid, kxfac
-    use gs2_layouts, only: g_lo, ik_idx, it_idx
+    use gs2_layouts, only: g_lo, ik_idx, it_idx, il_idx, is_idx
     use gs2_layouts, only: accelx_lo, yxf_lo
-    use dist_fn_arrays, only: g, g_adjust
+    use dist_fn_arrays, only: g
     use species, only: spec
     use gs2_transforms, only: transform2, inverse2
-    use run_parameters, only: fapar, fbpar, fphi, reset, immediate_reset
+    use run_parameters, only: fapar, fbpar, fphi
     use kt_grids, only: aky, akx
-    use gs2_time, only: save_dt_cfl, check_time_step_too_large
+    use gs2_time, only: save_dt_cfl
     use constants, only: zi
-    use unit_tests, only: debug_message
     implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g1
+    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g1
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar
     integer :: i, j, k
     real :: max_vel, zero
     real :: dt_cfl
-    integer, parameter :: verb = 4
 
-    integer :: iglo, ik, it, is, ig, ia
+    integer :: iglo, ik, it, is, ig, ia, isgn
     
-    call debug_message(verb, 'nonlinear_terms::add_nl starting')
-
     !Initialise zero so we can be sure tests are sensible
     zero = epsilon(0.0)
 
-    !Form g1=i*kx*chi
     if (fphi > zero) then
        call load_kx_phi
     else
@@ -513,32 +445,37 @@ contains
     if (fbpar > zero) call load_kx_bpar
     if (fapar  > zero) call load_kx_apar
 
-    call debug_message(verb, 'nonlinear_terms::add_nl calling transform2')
-    !Transform to real space
     if (accelerated) then
        call transform2 (g1, aba, ia)
     else
        call transform2 (g1, ba)
     end if
-
-    call debug_message(verb, 'nonlinear_terms::add_nl calculated dphi/dx')
     
-    !Form g1=i*ky*g_wesson
-    g1=g
-    call g_adjust(g1,phi,bpar,fphi,fbpar)
+    if (fphi > zero) then
+       call load_ky_phi
+    else
+       g1 = 0.
+    end if
+    if (fbpar > zero) call load_ky_bpar
+    
+    ! more generally, there should probably be a factor of anon...
+    !This is basically doing g_adjust to form i*ky*g_wesson (note the factor anon is missing)
+    !/Gives Fourier components of derivative of g_wesson in y direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        ik = ik_idx(g_lo,iglo)
-       g1(:,:,iglo)=g1(:,:,iglo)*zi*aky(ik)
-    enddo
-
-    !Transform to real space    
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*aky(ik)*g(ig,isgn,iglo)
+          end do
+       end do
+    end do
+    
     if (accelerated) then
        call transform2 (g1, agb, ia)
     else
        call transform2 (g1, gb)
     end if
-
-    call debug_message(verb, 'nonlinear_terms::add_nl calculated dg/dy')
     
     !It should be possible to write the following with vector notation
     !To find max_vel we'd then use MAXVAL rather than MAX
@@ -567,9 +504,6 @@ contains
 !       max_vel = maxval(abs(ba)*cfly)
     endif
 
-    call debug_message(verb, 'nonlinear_terms::add_nl calculated dphi/dx.dg/dy')
-
-    !Form g1=i*ky*chi
     if (fphi > zero) then
        call load_ky_phi
     else
@@ -578,23 +512,34 @@ contains
     
     if (fbpar > zero) call load_ky_bpar
     if (fapar  > zero) call load_ky_apar
-
-    !Transform to real space    
+    
     if (accelerated) then
        call transform2 (g1, aba, ia)
     else
        call transform2 (g1, ba)
     end if
-
-    !Form g1=i*kx*g_wesson
-    g1=g
-    call g_adjust(g1,phi,bpar,fphi,fbpar)
+    
+    if (fphi > zero) then
+       call load_kx_phi
+    else
+       g1 = 0.
+    end if
+    
+    if (fbpar > zero) call load_kx_bpar
+    
+    ! more generally, there should probably be a factor of anon...
+    !This is basically doing g_adjust to form i*kx*g_wesson (note the factor anon is missing)
+    !/Gives Fourier components of derivative of g_wesson in x direction
     do iglo = g_lo%llim_proc, g_lo%ulim_proc
        it = it_idx(g_lo,iglo)
-       g1(:,:,iglo)=g1(:,:,iglo)*zi*akx(it)
-    enddo
+       is = is_idx(g_lo,iglo)
+       do isgn = 1, 2
+          do ig = -ntgrid, ntgrid
+             g1(ig,isgn,iglo) = g1(ig,isgn,iglo)*spec(is)%zt + zi*akx(it)*g(ig,isgn,iglo)
+          end do
+       end do
+    end do
     
-    !Transform to real space
     if (accelerated) then
        call transform2 (g1, agb, ia)
     else
@@ -621,22 +566,18 @@ contains
           end do
        end do
     end if
+    
+    call max_allreduce(max_vel)
+    
 
-    !Estimate the global cfl limit based on max_vel
-    call max_allreduce(max_vel)    
-    dt_cfl = 1./max_vel
-    call save_dt_cfl (dt_cfl)
-
-    !Now check to see if we've violated the 
-    !cfl condition if requested
-    if(immediate_reset)then
-       call check_time_step_too_large(reset)
-
-       !If we have violated cfl then return immediately
-       if(reset)return
+    if ( abs (max_vel) > 0.d0) then 
+       dt_cfl = 1./max_vel
+    else
+       dt_cfl = 1.e8 ! as set above ?!?
     endif
 
-    !Transform NL source back to spectral space
+    call save_dt_cfl (dt_cfl)
+    
     if (accelerated) then
        call inverse2 (abracket, g1, ia)
     else
@@ -644,8 +585,7 @@ contains
     end if
     
   contains
-    !NOTE: These routines don't contain anon(ie) factor which may be desired to
-    !      allow more general cases in the future.
+
     subroutine load_kx_phi
 
       use dist_fn_arrays, only: aj0
@@ -770,92 +710,21 @@ contains
 
   end subroutine add_nl
 
-  subroutine add_nl_gryfx (g1)
-    use mp, only: max_allreduce
-    use theta_grid, only: ntgrid, kxfac
-    use gs2_layouts, only: g_lo, ik_idx, it_idx, is_idx
-    use gs2_layouts, only: accelx_lo, yxf_lo
-    use dist_fn_arrays, only: g, g_adjust, vpa, vperp2
-    use species, only: spec
-    use gs2_transforms, only: transform2, inverse2
-    use run_parameters, only: fapar, fbpar, fphi, reset, immediate_reset
-    use kt_grids, only: aky, akx
-    use gs2_time, only: save_dt_cfl, check_time_step_too_large
-    use constants, only: zi
-    use mp, only: broadcast
-    implicit none
-    complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (out) :: g1
-    integer :: i, j, k
-    real :: max_vel, zero
-    real :: dt_cfl
+  subroutine finish_nl_terms
 
-    integer :: iglo, ik, it, ig, iz, is, isgn, index_gryfx
+    if (nonlinear_mode_switch == nonlinear_mode_none) return
+!    deallocate (ba)
+!    deallocate (gb)
+!    deallocate (bracket)
+!    alloc = .true.
 
-    !real :: densfac, uparfac, tparfac, tprpfac, qparfac, qprpfac
-    densfac = 1.
-    uparfac = 1./sqrt(2.)
-    tparfac = 1.
-    tprpfac = 1.
-    qparfac = 1./sqrt(2.)
-    qprpfac = 1./sqrt(2.)
-
-
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-    ik = ik_idx(g_lo,iglo)
-    it = it_idx(g_lo,iglo)
-    is = is_idx(g_lo,iglo)
-    do isgn = 1, 2
-      do ig = -ntgrid, ntgrid
-      iz = ig + ntgrid + 1
-      !write (*,*) 'ik', ik, 'it', it, 'is', is, 'isgn', isgn, 'ig',ig
-      if(ig==ntgrid) iz = 1 ! periodic point not included in gryfx arrays
-        ! max is 1 + naky-1 + naky*(ntheta0-1) + naky*ntheta0*(ntheta-1),
-        ! * 
-        index_gryfx = 1 + (ik-1) + g_lo%naky*((it-1)) + &
-                      g_lo%naky*g_lo%ntheta0*(iz-1) + &
-                      (2*ntgrid)*g_lo%naky*g_lo%ntheta0*(is-1)
-        g1(ig,isgn,iglo) =  densfac*gryfx_zonal%NLdens_ky0(index_gryfx) + &
-                 (vpa(ig,isgn,iglo)*vpa(ig,isgn,iglo) - 0.5)* &
-                     tparfac*gryfx_zonal%NLtpar_ky0(index_gryfx) + &
-                 (vperp2(ig,iglo) - 1.0)* &
-                     tprpfac*gryfx_zonal%NLtprp_ky0(index_gryfx) + &
-                 2.*vpa(ig,isgn,iglo)* &
-                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) + &
-                 (2./3.*vpa(ig,isgn,iglo)**3. - vpa(ig,isgn,iglo))* &
-                     (qparfac*gryfx_zonal%NLqpar_ky0(index_gryfx)) + &
-                 2*vpa(ig,isgn,iglo)*(vperp2(ig,iglo) - 1.)* &
-                     (qprpfac*gryfx_zonal%NLqprp_ky0(index_gryfx)) 
-
-        ! leave vpa, vperp2 in GS2 units. use momfacs to get moments in GS2 units
-        ! this expression is consistent with moment definitions, such that
-        ! dn = < dg >, n0 du = < vpar dg >, etc.
-        ! this has been checked with a mathematica script
-!        g1(ig,isgn,iglo) =  densfac*gryfx_zonal%NLdens_ky0(index_gryfx) + &
-!                 0.5*(vpa(ig,isgn,iglo)*vpa(ig,isgn,iglo) - 1.)* &
-!                     tparfac*gryfx_zonal%NLtpar_ky0(index_gryfx) + &
-!                 0.5*(vperp2(ig,iglo) - 2.0)* &
-!                     tprpfac*gryfx_zonal%NLtprp_ky0(index_gryfx) + &
-!                 vpa(ig,isgn,iglo)* &
-!                     uparfac*gryfx_zonal%NLupar_ky0(index_gryfx) + &
-!                 0.5*(vpa(ig,isgn,iglo)**3./3. - vpa(ig,isgn,iglo))* &
-!                     qparfac*gryfx_zonal%NLqpar_ky0(index_gryfx) + &
-!                 vpa(ig,isgn,iglo)*(vperp2(ig,iglo)/2. - 1.)* &
-!                     qprpfac*gryfx_zonal%NLqprp_ky0(index_gryfx) 
-         end do
-       end do
-    end do
-    g1 = -g1 !left-handed / right-handed conversion
-
-
-    
-  end subroutine add_nl_gryfx
-
-  
+  end subroutine finish_nl_terms
 
   subroutine reset_init
     
     initialized = .false.
     initializing = .true.
+    call finish_nl_terms
 
   end subroutine reset_init
 
@@ -866,18 +735,27 @@ contains
   end subroutine finish_init
 
   subroutine finish_nonlinear_terms
-    use gs2_transforms, only: finish_transforms
 
+    use shm_mpi3, only : shm_free
     implicit none
 
     if (allocated(aba)) deallocate (aba, agb, abracket)
-    if (allocated(ba)) deallocate (ba, gb, bracket)
-
+    !if (allocated(ba)) deallocate (ba, gb, bracket)
+    if (associated(ba)) then
+       call shm_free(ba)
+    endif
+    if (associated(gb)) then
+       call shm_free(gb)
+    endif
+    if (associated(bracket)) then
+       call shm_free(bracket)
+    endif
+    
     nonlin = .false. ; alloc = .true. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
 
-    call finish_transforms
   end subroutine finish_nonlinear_terms
+
 end module nonlinear_terms
 
 

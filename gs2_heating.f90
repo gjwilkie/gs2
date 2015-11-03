@@ -70,7 +70,7 @@ contains
 
   subroutine init_htype_0 (h, nspec)
 
-    type (heating_diagnostics), intent(in out) :: h
+    type (heating_diagnostics) :: h
     integer, intent (in) :: nspec
     
     allocate (h % delfs2(nspec))      
@@ -91,7 +91,7 @@ contains
 
   subroutine init_htype_1 (h, nspec)
 
-    type (heating_diagnostics), dimension(:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:) :: h
     integer, intent (in) :: nspec
     integer :: n, nmax
 
@@ -117,7 +117,7 @@ contains
 
   subroutine init_htype_2 (h, nspec)
 
-    type (heating_diagnostics), dimension(:,:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:,:) :: h
     integer, intent (in) :: nspec
     integer :: m, n, mmax, nmax
 
@@ -146,7 +146,7 @@ contains
     
   subroutine init_htype_3 (h, nspec)
 
-    type (heating_diagnostics), dimension(:,:,:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:,:,:) :: h
     integer, intent (in) :: nspec
     integer :: l, m, n, lmax, mmax, nmax
 
@@ -178,7 +178,7 @@ contains
     
   subroutine zero_htype_0 (h)
 
-    type (heating_diagnostics), intent(in out) :: h
+    type (heating_diagnostics) :: h
     
     h % energy = 0.
     h % energy_dot = 0.
@@ -201,7 +201,7 @@ contains
 
   subroutine zero_htype_1 (h)
 
-    type (heating_diagnostics), dimension(:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:) :: h
     integer :: n, nmax
 
     nmax = size(h)
@@ -229,7 +229,7 @@ contains
 
   subroutine zero_htype_2 (h)
 
-    type (heating_diagnostics), dimension(:,:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:,:) :: h
     integer :: n, nmax, m, mmax
 
     mmax = size(h, 1)
@@ -260,7 +260,7 @@ contains
 
   subroutine zero_htype_3 (h)
 
-    type (heating_diagnostics), dimension(:,:,:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:,:,:) :: h
     integer :: n, nmax, m, mmax, l, lmax
 
     lmax = size(h, 1)
@@ -294,7 +294,7 @@ contains
 
   subroutine del_htype_0 (h)
 
-    type (heating_diagnostics), intent(in out) :: h
+    type (heating_diagnostics) :: h
     
     deallocate (h % delfs2)
     deallocate (h % hs2)
@@ -312,7 +312,7 @@ contains
 
   subroutine del_htype_1 (h)
 
-    type (heating_diagnostics), dimension(:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:) :: h
     integer :: m, mmax
     
     mmax = size (h, 1)
@@ -335,7 +335,7 @@ contains
 
   subroutine del_htype_2 (h)
 
-    type (heating_diagnostics), dimension(:,:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:,:) :: h
     integer :: m, mmax, n, nmax
     
     mmax = size (h, 1)
@@ -361,7 +361,7 @@ contains
 
   subroutine del_htype_3 (h)
 
-    type (heating_diagnostics), dimension(:,:,:), intent(in out) :: h
+    type (heating_diagnostics), dimension(:,:,:) :: h
     integer :: l, m, n, lmax, mmax, nmax
 
     lmax = size(h, 1)
@@ -392,8 +392,8 @@ contains
 
     use mp, only: proc0
     use species, only: nspec
-    type (heating_diagnostics), intent(in out) :: h
-    type (heating_diagnostics), dimension (0:), intent(in out) :: h_hist
+    type (heating_diagnostics) :: h
+    type (heating_diagnostics), dimension (0:) :: h_hist
     integer, intent (in) :: istep, navg
     integer :: is, i
 
@@ -450,8 +450,8 @@ contains
 
     use mp, only: proc0
     use species, only: nspec
-    type (heating_diagnostics), dimension(:,:), intent(in out) :: hk
-    type (heating_diagnostics), dimension (:,:,0:), intent(in out) :: hk_hist
+    type (heating_diagnostics), dimension(:,:) :: hk
+    type (heating_diagnostics), dimension (:,:,0:) :: hk_hist
     integer, intent (in) :: istep, navg
     integer :: is, i, m, n, mmax, nmax
 
@@ -618,7 +618,7 @@ contains
 !=============================================================================
     subroutine init_dvtype_0 (dv, nspec)
 
-    type (dens_vel_diagnostics), intent(in out) :: dv
+    type (dens_vel_diagnostics) :: dv
     integer, intent (in) :: nspec
 
        allocate (dv % dvpar(nspec))
@@ -630,7 +630,7 @@ contains
   end subroutine init_dvtype_0
 !=============================================================================
   subroutine init_dvtype_1 (dv, nspec)
-    type (dens_vel_diagnostics), dimension(:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:) :: dv
     integer, intent (in) :: nspec
     integer :: n, nmax
 
@@ -647,7 +647,7 @@ contains
   end subroutine init_dvtype_1
 !=============================================================================
   subroutine init_dvtype_2 (dv, nspec)
-    type (dens_vel_diagnostics), dimension(:,:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:,:) :: dv
     integer, intent (in) :: nspec
     integer :: m, n, mmax, nmax
 
@@ -667,7 +667,7 @@ contains
   end subroutine init_dvtype_2
 !=============================================================================
   subroutine init_dvtype_3 (dv, nspec)
-    type (dens_vel_diagnostics), dimension(:,:,:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:,:,:) :: dv
     integer, intent (in) :: nspec
     integer :: l, m, n, lmax, mmax, nmax
 
@@ -691,7 +691,7 @@ contains
 !=============================================================================
   subroutine zero_dvtype_0 (dv)
 
-    type (dens_vel_diagnostics), intent(in out) :: dv
+    type (dens_vel_diagnostics) :: dv
 
     dv % dvpar = 0. 
     dv % dvperp = 0.  
@@ -701,7 +701,7 @@ contains
 !=============================================================================
   subroutine zero_dvtype_1 (dv)
 
-    type (dens_vel_diagnostics), dimension(:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:) :: dv
     integer :: n, nmax
 
     nmax = size(dv)
@@ -716,7 +716,7 @@ contains
 !=============================================================================
  subroutine zero_dvtype_2 (dv)
 
-    type (dens_vel_diagnostics), dimension(:,:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:,:) :: dv
     integer :: n, nmax, m, mmax
 
     mmax = size(dv, 1)
@@ -734,7 +734,7 @@ contains
 !=============================================================================
  subroutine zero_dvtype_3 (dv)
 
-    type (dens_vel_diagnostics), dimension(:,:,:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:,:,:) :: dv
     integer :: n, nmax, m, mmax, l, lmax
 
     lmax = size(dv, 1)
@@ -754,7 +754,7 @@ contains
   end subroutine zero_dvtype_3
 !=============================================================================
   subroutine del_dvtype_0 (dv)
-    type (dens_vel_diagnostics), intent(in out) :: dv
+    type (dens_vel_diagnostics) :: dv
     
     deallocate (dv % dvpar)
     deallocate (dv % dvperp)
@@ -763,7 +763,7 @@ contains
   end subroutine del_dvtype_0
 !=============================================================================
   subroutine del_dvtype_1 (dv)
-    type (dens_vel_diagnostics), dimension(:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:) :: dv
     integer :: m, mmax
 
     mmax = size (dv, 1)
@@ -778,7 +778,7 @@ contains
 !=============================================================================
  subroutine del_dvtype_2 (dv)
 
-    type (dens_vel_diagnostics), dimension(:,:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:,:) :: dv
     integer :: m, mmax, n, nmax
     
     mmax = size (dv, 1)
@@ -796,7 +796,7 @@ contains
 !=============================================================================
  subroutine del_dvtype_3 (dv)
 
-    type (dens_vel_diagnostics), dimension(:,:,:), intent(in out) :: dv
+    type (dens_vel_diagnostics), dimension(:,:,:) :: dv
     integer :: l, lmax, m, mmax, n, nmax
     
     lmax = size (dv, 1)
@@ -817,8 +817,8 @@ contains
 !=============================================================================
   subroutine avg_dv (dv, dv_hist, istep, navg)
     use mp, only: proc0
-    type (dens_vel_diagnostics), intent(in out) :: dv
-    type (dens_vel_diagnostics), dimension (0:), intent(in out) :: dv_hist
+    type (dens_vel_diagnostics) :: dv
+    type (dens_vel_diagnostics), dimension (0:) :: dv_hist
     integer, intent (in) :: istep, navg
     integer :: i
 
@@ -845,8 +845,8 @@ contains
 !=============================================================================
   subroutine avg_dvk (dvk, dvk_hist, istep, navg)
     use mp, only: proc0
-    type (dens_vel_diagnostics), dimension(:,:), intent(in out) :: dvk
-    type (dens_vel_diagnostics), dimension (:,:,0:), intent(in out) :: dvk_hist
+    type (dens_vel_diagnostics), dimension(:,:) :: dvk
+    type (dens_vel_diagnostics), dimension (:,:,0:) :: dvk_hist
     integer, intent (in) :: istep, navg
     integer :: i, m, n, mmax, nmax
 

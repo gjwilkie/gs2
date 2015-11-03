@@ -2,13 +2,8 @@ module antenna_data
 
 ! quick fix for now; put amplitudes here and thus be 
 ! certain that there are no weird module dependencies
+
   implicit none
-
-  private
-
-  public :: init_antenna_data, finish_antenna_data
-  public :: a_ant, b_ant, nk_stir, ant_on
-
   complex, dimension(:), allocatable :: a_ant, b_ant
   ! (nk_stir)
   integer :: nk_stir
@@ -19,6 +14,7 @@ contains
   subroutine init_antenna_data (nk_stir_in)
 
     integer, intent (in) :: nk_stir_in
+!    logical :: initialized = .false.
 
 ! do not reallocate this array on this processor...
 

@@ -1,4 +1,4 @@
-#
+#################################################################### OVERVIEW
 #
 #  Makefile for Trinity (GS2) / AstroGK Gyrokinetic Turbulence code 
 #               GSP Gyrokinetic PIC code
@@ -85,7 +85,7 @@ USE_SHMEM ?=
 # which FFT library to use (fftw,fftw3,mkl_fftw,undefined) 
 USE_FFT ?= fftw3
 # uses netcdf library (bin)
-USE_NETCDF ?= on
+USE_NETCDF ?=on
 # uses parallel netcdf library
 USE_PARALLEL_NETCDF ?= 
 # uses hdf5 library (bin)
@@ -106,22 +106,31 @@ USE_NAGLIB ?=
 MAKE_LIB ?=
 # Include higher-order terms in GK equation arising from low-flow physics
 LOWFLOW ?=
-# Compile with PETSC/SLEPC support for determining eigensystem (bin).
-WITH_EIG ?= 
 
-# Compile with the new simplified diagnostics module
-USE_NEW_DIAG ?= on
+USE_NEW_DIAG?=on
 
-# Use autotools to configure the code (currently only affects the new diagnostics module)
-# Possible values... on, off
-USE_AUTOTOOLS ?= off
+ifdef NPROCS
+	NTESTPROCS=$(NPROCS)
+else
+	NTESTPROCS=2
+endif
 
-HAS_ISO_C_BINDING ?= on
+ifdef TESTNORUN
+	TESTCOMMAND=: 
+else
+	ifdef TESTEXEC
+		TESTCOMMAND=$(TESTEXEC)
+	else
+		ifdef USE_MPI
+				TESTCOMMAND=mpirun -np $(NTESTPROCS)  
+		else
+		    TESTCOMMAND=./
+		endif
 
-# If on, build with position independent code, needed if GS2 is going to be included
-# in a shared library or linked dynamically (e.g. it's needed by GRYFX).
-# This *may* have performance implications, but it hasn't been tested yet.
-USE_FPIC ?= 
+	endif
+endif
+
+export TESTCOMMAND FC LD F90FLAGS LDFLAGS CFLAGS CPPFLAGS LIBS TEST_MODS gs2_mod
 
 #
 # * Targets:
@@ -139,18 +148,18 @@ USE_FPIC ?=
 
 MAKE		= make
 CPP		= cpp
-CPPFLAGS	= -C -P -traditional
+CPPFLAGS	= -C -P -E -traditional
 FC		= f90
 MPIFC		?= mpif90
 H5FC		?= h5fc
 H5FC_par	?= h5pfc
 F90FLAGS	=
-F90OPTFLAGS	= 
+F90OPTFLAGS	=
 CC		= cc
 MPICC		?= mpicc
 H5CC		?= h5cc
 H5CC_par	?= h5pcc
-CFLAGS		= 
+CFLAGS		=
 COPTFLAGS 	=
 LD 		= $(FC)
 LDFLAGS 	= $(F90FLAGS)
@@ -164,16 +173,11 @@ PERL		= perl
 F90FLAGS_SFX0 =
 F90FLAGS_SFX1 =
 F90FLAGS_SFX2 =
-#This one is just used to ensure that the non-preprocessed
-#files line up the same as preprocessed (make output a little clearer)
-F90FLAGS_SFXJNK =
 
 MPI_INC	?=
 MPI_LIB ?=
 FFT_INC ?=
 FFT_LIB ?=
-EIG_INC ?=
-EIG_LIB ?=
 NETCDF_INC ?=
 NETCDF_LIB ?=
 HDF5_INC ?=
@@ -188,16 +192,6 @@ PGPLOT_LIB ?=
 ifdef TEST
 $(warning TEST mode is not working yet)
 	override TEST =
-endif
-
-# It makes no sense to set USE_PARALLEL_NETCDF without
-# setting USE_HDF5... so we set USE_HDF5 here. 
-# If you want to use parallel-netcdf instead of netcdf/hdf5 you can 
-# override this behaviour in the system makefile
-ifdef USE_PARALLEL_NETCDF
-ifndef USE_HDF5
-	USE_HDF5=on
-endif
 endif
 
 ######################################################### PLATFORM DEPENDENCE
@@ -226,10 +220,6 @@ sinclude Makefile.local
 
 #############################################################################
 
-#Record the top level path
-GK_HEAD_DIR:=$(PWD)
-export GK_HEAD_DIR
-
 UTILS=utils
 GEO=geo
 
@@ -248,19 +238,6 @@ endif
 #Here we define SVN_REV based on the output of svnversion
 SVN_REV='"$(shell svnversion -n .)"'
 CPPFLAGS+=-DSVN_REV=$(SVN_REV)
-
-# Define RELEASE based on the contents of the RELEASE
-# file, which is empty unless we are in a release.
-RELEASE_FILE = $(shell cat RELEASE)
-ifneq ($(RELEASE_FILE),) # If the file is not empty
-	RELEASE=$(RELEASE_FILE)
-	CPPFLAGS+=-DRELEASE=$(RELEASE_FILE)
-	DOC_FOLDER=releases/$(RELEASE_FILE)/
-endif
-
-# Define GK_SYSTEM for runtime_tests so that we can get the system name
-# at runtime
-CPPFLAGS+=-DGK_SYSTEM='"$(GK_SYSTEM)"'
 
 ifdef USE_SHMEM
 $(warning USE_SHMEM is not working yet)
@@ -284,17 +261,8 @@ ifdef USE_MPI
 	CPPFLAGS += -DMPI
 endif
 
-ifdef HAS_ISO_C_BINDING
-	CPPFLAGS += -DISO_C_BINDING
-endif
-
-ifeq ($(USE_NEW_DIAG),on)
+ifdef USE_NEW_DIAG
 	CPPFLAGS+=-DNEW_DIAG
-endif
-
-ifeq ($(USE_FPIC),on)
-	CFLAGS+=-fPIC
-	F90FLAGS += -fPIC
 endif
 
 ifdef USE_SHMEM
@@ -332,10 +300,6 @@ ifdef USE_HDF5
 	endif
 	CPPFLAGS += -DHDF
 endif
-
-
-
-
 #ifndef USE_HDF5
 #   ifdef USE_PARALLEL_NETCDF
 #      $(error 'USE_PARALLEL_NETCDF will not work unless USE_HDF5 is set to on.')
@@ -389,47 +353,23 @@ ifdef USE_LE_LAYOUT
 	CPPFLAGS += -DUSE_LE_LAYOUT
 endif
 
-#Setup the flags for using the eigensolver
-ifdef WITH_EIG
-	EIG_INC += -I$(PETSC_DIR)/include -I$(SLEPC_DIR)/include
-	ifdef PETSC_ARCH
-		EIG_LIB += -L$(PETSC_DIR)/$(PETSC_ARCH)/lib
-		EIG_INC += -I$(PETSC_DIR)/$(PETSC_ARCH)/include
-	else
-		EIG_LIB += -L$(PETSC_DIR)/lib
-	endif
-	ifdef SLEPC_ARCH
-		EIG_LIB += -L$(SLEPC_DIR)/$(SLEPC_ARCH)/lib
-		EIG_INC += -I$(SLEPC_DIR)/$(SLEPC_ARCH)/include
-	else
-		EIG_LIB += -L$(SLEPC_DIR)/lib
-	endif
-	EIG_LIB += -lslepc -lpetsc
-
-	CPPFLAGS += -DWITH_EIG $(EIG_INC)
-	CFLAGS += -DWITH_EIG 
-endif 
-
-#Make empty targets if not using the new diagnostics
-ifeq ($(USE_NEW_DIAG),on)
-#ifdef USE_NEW_DIAG
-sinclude diagnostics/Makefile.diagnostics
+ifdef USE_NEW_DIAG
+sinclude Makefile.diagnostics
 else
+
 distclean_simpledataio:
 clean_simpledataio:
 diagnostics:
 simpledataio:
 endif
 
-LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(NETCDF_LIB) $(HDF5_LIB) $(FFT_LIB) \
-		$(IPM_LIB) $(NAG_LIB) $(EIG_LIB)
+LIBS	+= $(DEFAULT_LIB) $(MPI_LIB) $(FFT_LIB) $(NETCDF_LIB) $(HDF5_LIB) \
+		$(IPM_LIB) $(NAG_LIB)
 PLIBS 	+= $(LIBS) $(PGPLOT_LIB)
 F90FLAGS+= $(F90OPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(NETCDF_INC) $(HDF5_INC)  $(FFT_INC)\
-		 $(SIMPLEDATAIO_INC) $(EIG_INC)
-CFLAGS += $(COPTFLAGS) \
-	   $(DEFAULT_INC) $(MPI_INC) $(NETCDF_INC) $(HDF5_INC) $(FFT_INC) 
-
+	   $(DEFAULT_INC) $(MPI_INC) $(FFT_INC) $(NETCDF_INC) $(HDF5_INC) \
+		 $(SIMPLEDATAIO_INC)
+CFLAGS += $(COPTFLAGS)
 
 DATE=$(shell date +%y%m%d)
 TARDIR=$(GK_PROJECT)_$(DATE)
@@ -444,7 +384,7 @@ ifneq ($(TOPDIR),$(CURDIR))
 	SUBDIR=true
 endif
 
-VPATH = $(UTILS):$(GEO):Aux:diagnostics:../$(UTILS):../$(GEO):../diagnostics$(SIMPLEDATAIO_VPATH)
+VPATH = $(UTILS):$(GEO):Aux:diagnostics:../$(UTILS):../$(GEO):../diagnostics
 # this just removes non-existing directory from VPATH
 VPATH_tmp := $(foreach tmpvp,$(subst :, ,$(VPATH)),$(shell [ -d $(tmpvp) ] && echo $(tmpvp)))
 VPATH = .:$(shell echo $(VPATH_tmp) | sed "s/ /:/g")
@@ -453,7 +393,7 @@ ifdef SUBDIR
 	VPATH +=:..
 endif
 DEPEND=Makefile.depend
-DEPEND_CMD=$(PERL) scripts/fortdep
+DEPEND_CMD=$(PERL) fortdep
 
 # most common include and library directories
 DEFAULT_INC_LIST = . $(UTILS) $(GEO) .. ../$(UTILS) ../$(GEO)
@@ -469,45 +409,24 @@ DEFAULT_LIB_LIST =
 DEFAULT_INC=$(foreach tmpinc,$(DEFAULT_INC_LIST),$(shell [ -d $(tmpinc) ] && echo -I$(tmpinc)))
 DEFAULT_LIB=$(foreach tmplib,$(DEFAULT_LIB_LIST),$(shell [ -d $(tmplib) ] && echo -L$(tmplib)))
 
-# List of fortran files generated by ruby. 
-# Note these are not deleted at the end of the compilation:
-# in fact, they are stored in the repository 
-# because some antique systems don't have ruby
-FORTFROMRUBY=$(subst generate_,,$(patsubst %.rb,%.f90,$(wildcard *.rb */*.rb)))
-FORTFROMRUBY+= gs2_init.f90 overrides.f90
-# Has to be added separately as doesn't end in f90
-#FORTFROMRUBY+=diagnostics/simpledataio/src/simpledataio_write.F90
-# ... but we treat simpledataio as a separate library so don't include for now
-
 # list of intermediate f90 files generated by preprocessor
 F90FROMFPP = $(patsubst %.fpp,%.f90,$(notdir $(wildcard *.fpp */*.fpp)))
-F90FROMFPP += tests/unit_tests/nonlinear_terms/test_nonlinear_terms.f90
-F90FROMFPP += tests/unit_tests/gs2_diagnostics_new/test_gs2_diagnostics_new.f90
-ifdef USE_NEW_DIAG
-F90FROMFPP += simpledataiof.f90 simpledataio_write.f90
-endif
+F90FROMFPP += unit_tests/nonlinear_terms/test_nonlinear_terms.f90
+F90FROMFPP += unit_tests/gs2_diagnostics_new/test_gs2_diagnostics_new.f90
 ifdef SCAL
    FC:= scalasca -instrument $(FC)
 endif
 ####################################################################### RULES
 
 .SUFFIXES:
-.SUFFIXES: .fpp .f90 .c .o .F90 .rb
+.SUFFIXES: .fpp .f90 .c .o
 
-.rb.f90:
-	$(call RUBY_GENERATE,$@,$<)
 .f90.o: 
-	$(FC) $(F90FLAGS) $(F90FLAGS_SFXJUNK) -c $<
+	$(FC) $(F90FLAGS) -c $<
 .fpp.f90:
 	$(CPP) $(CPPFLAGS) $< $@
-.F90.f90:
-	$(CPP) $(CPPFLAGS) $< $@
 .c.o:
-	$(CC) $(CFLAGS) $(subst -traditional,,$(subst -C,,$(subst -P,,$(CPPFLAGS)))) -c $<
-
-# This prevents error messages like m2c: Command not found
-%.o : %.mod
-
+	$(CC) $(CFLAGS) -c $<
 
 ##################################################################### TARGETS
 
@@ -521,23 +440,11 @@ ifeq ($(notdir $(CURDIR)),geo)
 	.DEFAULT_GOAL := geo_all
 endif
 
-.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests nonlinear_tests benchmarks clean_tests
+.PHONY: all $(GK_PROJECT)_all unit_tests linear_tests benchmarks clean_tests
 
 all: $(.DEFAULT_GOAL)
 
 include $(DEPEND)
-
-
-#If we're using fft(w) then we want to link the fft_save_wisdom object file
-#this currently has to be handled specially as it comes from a c source file
-#rather than fortran (so isn't picked up by fortdep).
-ifdef USE_FFT
-    utils_mod += fft_save_wisdom.o
-    gs2_mod += fft_save_wisdom.o
-    ingen_mod += fft_save_wisdom.o
-    generate_fftw_wisdom_mod += fft_save_wisdom.o
-endif
-
 #include Makefile.doc_depend
 
 ifdef USE_C_INDEX
@@ -552,7 +459,7 @@ sinclude Makefile.target_$(GK_PROJECT)
 # comment this out to keep intermediate .f90 files
 #.PRECIOUS: $(F90FROMFPP)
 
-.INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
+#.INTERMEDIATE: $(GK_PROJECT)_transforms.f90 $(GK_PROJECT)_io.f90 $(GK_PROJECT)_save.f90 \
 		mp.f90 fft_work.f90
 
 # These are special rules for the suffix problem of absoft
@@ -577,21 +484,16 @@ help: helplocal
 
 .PHONY: depend clean distclean tar test_make diagnostics simpledataio
 
-depend: $(FORTFROMRUBY) $(F90FROMFPP)
+depend:
 	@$(DEPEND_CMD) -m "$(MAKE)" -1 -o -v=1 $(VPATH)
 
-# Make sure template dependencies are specified
-gs2_init.f90: templates/gs2_init_template.f90
 
-doc: $(F90FROMFPP) $(FORTFROMRUBY)
-	doxygen doxygen_config 
+doc: $(F90FROMFPP)
+	doxygen ../doxygen/gs2 
 	rm -f $(F90FROMFPP)
 
 sync_doc: 
-	rsync -av --delete --exclude=releases doc/html/	${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/$(DOC_FOLDER)
-	mkdir -p doc/html/releases
-	echo "Options +Indexes" > doc/html/releases/.htaccess
-	rsync -av doc/html/releases/ ${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/releases/
+	rsync -av --delete ../doxygen/doc/html/	${USER},gyrokinetics@web.sourceforge.net:htdocs/gs2_documentation/
 
 sync_input_doc:
 	coderunner cc synchronise_variables . -C gs2
@@ -603,7 +505,7 @@ clean: clean_simpledataio
 	-rm -f *.o *.mod *.g90 *.h core */core
 
 CLEANCOMMAND=echo $$$$PWD
-CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch *.timing.* *.moments *.cdf *.jext *.parity *.heat *.heat2 *.vres2 *.amoments *.eigenfunc *.nc* *.mom2 *.epar .*.in results_of_test.txt *.stop *.fftw_wisdom *.phase *.kpar *.interp *.dist 
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch
 
 ifdef CLEAN_TEXTFILES
 	CLEANCOMMAND+= *~ *.orig
@@ -611,16 +513,17 @@ endif
 
 export CLEANCOMMAND
 
+clean_tests:
+	$(MAKE) clean -C linear_tests 
+	$(MAKE) clean -C unit_tests 
+
+clean_benchmarks:
+	$(MAKE) clean -C benchmarks 
+
 cleanlib:
 	-rm -f *.a
 
-cleanconfig:
-	rm -f system_config .tmp_output
-
-cleandoc:
-	rm -rf doc/
-
-distclean: unlink clean cleanlib clean_tests clean_benchmarks distclean_simpledataio cleanconfig cleandoc
+distclean: unlink clean cleanlib clean_tests clean_benchmarks distclean_simpledataio
 
 tar:
 	@[ ! -d $(TARDIR) ] || echo "ERROR: directory $(TARDIR) exists. Stop."
@@ -629,7 +532,7 @@ tar:
 ### setting tar_exec local $(TARLIST*) variables
 # expand wildcards listed $(TARLIST_wild) in ( $(TARLIST_dir) + . )
 # directories and add them into TARLIST
-tar_exec: TARLIST = makehead.awk scripts/fortdep AstroGK.in
+tar_exec: TARLIST = makehead.awk fortdep AstroGK.in
 tar_exec: TARLIST_dir = Makefiles utils geo Aux
 tar_exec: TARLIST_wild = *.f90 *.fpp *.inc *.c Makefile Makefile.* README README.*
 tar_exec: TARLIST += $(foreach dir,. $(TARLIST_dir),$(wildcard $(addprefix $(dir)/,$(TARLIST_wild))))
@@ -660,7 +563,6 @@ test_make:
 	@echo SVN_REV is $(SVN_REV)
 	@echo
 	@echo Compile mode:
-	@echo  COMPILER is $(COMPILER)
 	@echo  DEBUG is $(DEBUG)
 	@echo  SCAL is $(SCAL)
 	@echo  TEST is $(TEST)
@@ -696,19 +598,6 @@ test_make:
 	@echo CPPFLAGS is $(CPPFLAGS)
 	@echo LIBS is $(LIBS)
 	@echo PLIBS is $(PLIBS)
-	@echo WITH_EIG is $(WITH_EIG)
-
-ifdef STANDARD_SYSTEM_CONFIGURATION
-system_config: Makefiles/Makefile.$(GK_SYSTEM) Makefile
-	@echo "#!/bin/bash " > system_config
-	@echo "$(STANDARD_SYSTEM_CONFIGURATION)" >> system_config
-	@sed -i 's/^ //' system_config
-
-else
-.PHONY: system_config
-system_config:
-	$(error "STANDARD_SYSTEM_CONFIGURATION is not defined for this system")
-endif
 
 unlink:
 	-rm -f $(F90FROMFPP) layouts_type.h
@@ -717,20 +606,50 @@ revision:
 	@LANG=C svn info | awk '{if($$1=="Revision:") printf("%20d",$$2) }' > Revision
 
 
-geometry_c_interface.o: geometry_c_interface.h
-
 gryfx_libs: utils.a geo.a geo/geometry_c_interface.o
 
-#This is the location of the individual test suites
-TEST_DIR:=tests
-sinclude $(TEST_DIR)/Makefile.tests_and_benchmarks
+# To save time you can set test deps yourself on the command line:
+# otherwise it builds everything just to be sure, because recursive
+# make can't resolve dependencies
+TEST_DEPS?=$(gs2_mod) functional_tests.o
+#export
+TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS)" LIBS="$(LIBS) $(SIMPLEDATAIO_LIB_ABS)" CPPFLAGS="$(CPPFLAGS)"
+MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
+#MAKETESTS = $(MAKE)
+
+#export TEST_DEPS
+export TESTCOMMAND
+export gs2_mod
+#export TESTNORUN
+#export TESTFC=$(FC)
+#export TESTF90FLAGS=$(F90FLAGS)
+#export TESTCPP=$(CPP)
+#export TESTLD=$(LD)
+#export TESTLDFLAGS=$(LDFLAGS)
+#export TESTLIBS=$(LIBS)
+#export
+
+unit_tests: unit_tests.o $(TEST_DEPS)
+	cd unit_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
+
+linear_tests: functional_tests.o unit_tests.o $(TEST_DEPS)
+	cd linear_tests && time ${MAKETESTS} && echo && echo "Tests Successful!"
+
+tests: unit_tests linear_tests
+
+test_script: unit_tests linear_tests
+	echo "" > test_script.sh
+	find $(PWD)/unit_tests -executable | grep -v svn | grep 'unit_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 $(BLUEGENEARGS) \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	find $(PWD)/linear_tests -executable | grep -v svn | grep 'linear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
+	echo "echo \"Tests Successful\"" >> test_script.sh
+	#find linear_tests -executable | grep -v svn | grep '/.*/' | sed -e 's/^/$(MPIEXEC) /' >> test_script.sh
+
+benchmarks: functional_tests.o unit_tests.o $(TEST_DEPS)
+	cd benchmarks && time ${MAKE} && echo && echo "Completed Benchmarks"
 
 TAGS:	*.f90 *.fpp */*.f90 */*.fpp
 	etags $^
 
 help:
 		# make SCAL=on : makes with SCALASCA instrumentation
-
-
-
 

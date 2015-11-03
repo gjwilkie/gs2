@@ -1,11 +1,5 @@
 # include "define.inc"
 
-!> The old module for writing to netcdf. THIS MODULE IS NOW DEPRECATED.
-!! It is scheduled to be disabled by default on 1st Jan 2015 and removed
-!! from the repository on 1st March 2015. Do not edit or extend this module
-!! in any way apart from vital fixes. Any changes you make may not be 
-!! transferred to the new diagnostics module... please use the new diagnostics 
-!! module contained in the diagnostics folder instead.
 module gs2_io
 
 # ifdef NETCDF
@@ -20,20 +14,24 @@ module gs2_io
   public :: init_gs2_io, nc_eigenfunc, nc_final_fields, nc_final_epar
   public :: nc_final_moments, nc_final_an, nc_finish
   public :: nc_qflux, nc_vflux, nc_pflux, nc_pflux_tormom, nc_loop, nc_loop_moments
-!  public :: nc_loop_vres
-  public :: nc_loop_movie, nc_write_moments, nc_exchange
-!<DD>  public :: nc_write_fields
+  public :: nc_loop_vres, nc_exchange
+  public :: nc_loop_movie, nc_write_fields, nc_write_moments
+
   public :: nc_loop_fullmom, nc_loop_sym, nc_loop_corr, nc_loop_corr_extend
-  public :: nc_loop_partsym_tormom, nc_sync
+  public :: nc_loop_partsym_tormom 
 
   logical, parameter :: serial_io = .true.
 # ifdef NETCDF
+!  integer :: ncid
   logical :: proc_write
   integer (kind_nf) :: ncid
+
+!  integer :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim, ncoord_dim, ncoordt_dim
+!  integer :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim
   integer (kind_nf) :: naky_dim, nakx_dim, nttot_dim, negrid_dim, nlambda_dim, nspec_dim, ncoord_dim, ncoordt_dim
   integer (kind_nf) :: nsign_dim, time_dim, char10_dim, char200_dim, ri_dim, nlines_dim, nheat_dim, vpa_dim
+!  integer (kind_nf) :: nttotext_dim, nakxext_dim, time_big_dim
   integer (kind_nf) :: nttotext_dim, time_big_dim
-  integer (kind_nf) :: aref_id, zref_id, nref_id, tref_id, lref_id, vref_id, bref_id, rhoref_id
 
   integer, dimension (6) :: lp_dim, mom_t_dim
   integer, dimension (5) :: field_dim, final_mom_dim, heatk_dim, err_dim
@@ -58,7 +56,7 @@ module gs2_io
   integer :: time_id, phi2_id, apar2_id, bpar2_id, theta0_id, nproc_id, nmesh_id
   integer :: current_scan_parameter_value_id
   integer :: phi2_by_mode_id, apar2_by_mode_id, bpar2_by_mode_id, errest_by_mode_id, lpcoef_by_mode_id
-  integer :: phtot_id
+  integer :: phtot_id, dmix_id, kperpnorm_id
   integer :: phi2_by_kx_id, apar2_by_kx_id, bpar2_by_kx_id
   integer :: phi2_by_ky_id, apar2_by_ky_id, bpar2_by_ky_id
   integer :: phi0_id, apar0_id, bpar0_id
@@ -80,10 +78,7 @@ module gs2_io
   integer :: apar_heat_by_x_id
   integer :: bpar_heat_by_k_id, bpar_mom_by_k_id, bpar_part_by_k_id
   integer :: phi_t_id, apar_t_id, bpar_t_id
-  integer :: ntot_t_id, density_t_id, upar_t_id, tpar_t_id, tperp_t_id
-  integer :: qparflux_t_id, pperpj1_t_id, qpperpj1_t_id
-  integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
-  integer :: qparflux0_id, pperpj10_id, qpperpj10_id
+  integer :: ntot_t_id
   integer :: phi_norm_id, apar_norm_id, bpar_norm_id
   integer :: phi_id, apar_id, bpar_id, epar_id
   integer :: antot_id, antota_id, antotp_id
@@ -113,6 +108,7 @@ module gs2_io
   integer :: hk_hypervisc_id, hk_hyperres_id, hk_collisions_id
   integer :: hk_gradients_id, hk_hypercoll_id, hk_heating_id, hk_imp_colls_id
   integer, dimension (5) :: mom_dim
+  integer :: ntot0_id, density0_id, upar0_id, tpar0_id, tperp0_id
   logical :: write_apar_t, write_phi_t, write_bpar_t ! Should the fields be written out every nwrite?
 
 # endif
@@ -124,31 +120,32 @@ contains
 
   subroutine init_gs2_io (write_nl_flux, write_omega, &
       write_hrate, write_final_antot, write_eigenfunc, &
-      make_movie, nmovie_tot, write_verr, &
+      make_movie, nmovie_tot, write_verr, write_fields, &
       write_moments,&
       write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, nwrite_big_tot, &
       write_correlation_extend, & 
-      write_phi_over_time, write_apar_over_time, write_bpar_over_time, &
-      write_avg_moments, write_final_moments, write_final_epar, &
-      ob_midplane) 
+      write_phi_over_time, write_apar_over_time, write_bpar_over_time) 
+
     !write_fields_over_time added by EGH 08/2009
 !David has made some changes to this subroutine (may 2005) now should 
 !be able to do movies for linear box runs as well as nonlinear box runs.
-    use mp, only: proc0
-# ifdef NETCDF
-    use mp, only: barrier
+
+    use mp, only: proc0, barrier
     use file_utils, only: run_name
     use gs2_transforms, only: init_transforms
     use kt_grids, only: naky, ntheta0,nx,ny
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
+!    use netcdf_mod
+# ifdef NETCDF
     use netcdf, only: NF90_CLOBBER, nf90_create
     use netcdf_utils, only: get_netcdf_code_precision, netcdf_real
 # endif
-    implicit none
+!    logical :: write_nl_flux, write_omega, write_hrate, make_movie
+!    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega
-    logical, intent(in) :: write_hrate, make_movie, write_moments
+    logical, intent(in) :: write_hrate, make_movie, write_fields, write_moments
     logical, intent(in) :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
     logical, intent(in) :: write_pflux_sym, write_pflux_tormom 
@@ -156,35 +153,27 @@ contains
     integer, intent (in) :: nmovie_tot, nwrite_big_tot
     logical, intent(in) :: write_phi_over_time
     logical, intent(in) :: write_apar_over_time,  write_bpar_over_time
-    logical, intent(in) :: write_avg_moments, write_final_moments, write_final_epar
-    logical, intent(in), optional :: ob_midplane
 # ifdef NETCDF
     logical :: accelerated
     character (300) :: filename, filename_movie
+!    integer :: ierr         ! 0 if initialization is successful
     integer :: status
-
-    !################
-    !# Update internal flags
 
     !EGH
     write_phi_t = write_phi_over_time
     write_apar_t = write_apar_over_time
     write_bpar_t = write_bpar_over_time
+!CMR, for now just write ntot if write phi!
 
-    ! added by EAB 03/2004 for making movie netcdf files
-    my_make_movie = make_movie
-    io_write_corr_extend = write_correlation_extend
-
-    !----------------
 
     zero = epsilon(0.0)
+!    ierr = 0
 
     call netcdf_init (serial_io)
     if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
 
     status = NF90_NOERR
 
-    !Create file
     filename = trim(trim(run_name)//'.out.nc')
     if (serial_io) then
        ! only proc0 opens the file:
@@ -197,14 +186,23 @@ contains
        call barrier
        ! TT: do we want NF90_SHARE?
        status = nf90_create (trim(filename), NF90_CLOBBER, ncid) ! overwrites old
-       if (proc0 .and. status /= NF90_NOERR) call netcdf_error (status, file=filename)
+       if (proc0 .and. status /= NF90_NOERR) &
+            call netcdf_error (status, file=filename)
        call barrier
     endif
 
-    !Create the movie file
+!    if(status /= nf_noerr) then
+!       write(*,*) 'Unable to create netcdf file ', filename
+!       write(*,*) nf_strerror(status)
+!       ierr = 1
+!    endif
+
+    ! added by EAB 03/2004 for making movie netcdf files
+    my_make_movie = make_movie
+    io_write_corr_extend = write_correlation_extend
     if (my_make_movie) then
-       !perhaps put a call to init_y_transform
-       !    call init_y_transform_layouts  
+    !perhaps put a call to init_y_transform
+!    call init_y_transform_layouts  
        call init_transforms(ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
        filename_movie = trim(trim(run_name)//'.movie.nc')
        if (serial_io) then
@@ -222,47 +220,42 @@ contains
                call netcdf_error (status, file=filename_movie)
           call barrier
        endif
+       
+!       if(status /= nf_noerr) then
+!          write(*,*) 'Unable to create netcdf file for movies', filename_movie
+!          write(*,*) nf_strerror(status)
+!          ierr = 1
+!       endif
     endif
-
 # endif
-
     if (proc0) then
-       !Setup main file
-       call define_dims (nwrite_big_tot)
+       call define_dims (nmovie_tot, nwrite_big_tot)
        call define_vars (write_nl_flux, write_omega, &
             write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-            write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
-            write_correlation_extend, write_avg_moments, write_final_moments, write_final_epar, &
-            ob_midplane=ob_midplane)
-
-       !Write constant data
+            write_fields, write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
+            write_correlation_extend)
        call nc_grids
-       call nc_norms
        call nc_species
        call nc_geo
-
-       !Setup movie file
-       call define_dims_mymovie (nmovie_tot)
-       call define_vars_mymovie
-
-       !Write constant movie data
-       call nc_grids_mymovie
     end if
 
   end subroutine init_gs2_io
 
-  subroutine define_dims (nwrite_big_tot)
-# ifdef NETCDF
+  subroutine define_dims (nmovie_tot, nwrite_big_tot)
+
     use file_utils, only: num_input_lines
-    use kt_grids, only: naky, ntheta0, jtwist_out
+    use kt_grids, only: naky, ntheta0,nx,ny, jtwist_out
+    use gs2_layouts, only: yxf_lo    
     use theta_grid, only: ntgrid
     use le_grids, only: nlambda, negrid
     use species, only: nspec
+ !   use netcdf_mod
+# ifdef NETCDF
     use netcdf, only: NF90_UNLIMITED
     use netcdf, only: nf90_def_dim
 # endif
-    implicit none
-    integer, intent (in) :: nwrite_big_tot
+
+    integer, intent (in) :: nmovie_tot, nwrite_big_tot
 # ifdef NETCDF
     integer :: status
 
@@ -301,26 +294,6 @@ contains
        status = nf90_def_dim (ncid, 'tb', nwrite_big_tot, time_big_dim)
        if (status /= NF90_NOERR) call netcdf_error (status, dim='tb')
     end if
-# endif
-  end subroutine define_dims
-
-  !Define the dimensions used in the movie file. Some duplication with
-  !main file -- may want to merge movie data into main file
-  !Main reason for using a new file is we can only have one unlimited dimension
-  !per file (with new versions of NETCDF this is no longer true) and we 
-  !probably don't want to write movie data as often as other data.
-  !However, at the moment we precalculate the number of outputs, so it
-  !isn't actually unlimited
-  subroutine define_dims_mymovie(nmovie_tot)
-# ifdef NETCDF
-    use gs2_layouts, only: yxf_lo
-    use theta_grid, only: ntgrid
-    use netcdf, only: nf90_def_dim
-# endif
-    implicit none
-    integer, intent(in) :: nmovie_tot
-# ifdef NETCDF
-    integer :: nx, ny, status
 
     ! added by EAB 03/05/04 for GS2 movies
     ! <doc> If make_movie = .true., define some extra dimensions for movie output; x with dimension yxf_lo%nx; y with dimension yxf_lo%ny, and tm, (i.e. time) with dimension nmovie_tot = nstep/nmovie </doc>
@@ -333,25 +306,38 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, dim='y')
        status = nf90_def_dim (ncid_movie, 'theta', 2*ntgrid+1, nth_dim)
        if (status /= NF90_NOERR) call netcdf_error (status, dim='theta')
+!
+! can only have one NF_UNLIMITED, so:
+!
+!       status = nf90_def_dim(ncid_movie, 't', NF90_UNLIMITED, time_movie_dim)
        status = nf90_def_dim (ncid_movie, 'tm', nmovie_tot, time_movie_dim)
        if (status /= NF90_NOERR) call netcdf_error (status, dim='tm')
     endif
+    ! define time_movie_dim for use in other diagnostics that shouldn't be written
+    ! out often
+!    status = nf90_def_dim (ncid_movie, 'tm', nmovie_tot, time_movie_dim)
+!    if (status /= NF90_NOERR) call netcdf_error (status, dim='tm')
 # endif
-  end subroutine define_dims_mymovie
+  end subroutine define_dims
 
   subroutine nc_grids
-# ifdef NETCDF
+
     use theta_grid, only: ntgrid, theta
-    use kt_grids, only: naky, ntheta0, theta0, nx, ny, akx, aky
+    use kt_grids, only: naky, ntheta0, theta0, akx, aky, nx, ny
+    use gs2_layouts, only: yxf_lo
     use species, only: nspec
     use le_grids, only: negrid, nlambda, energy, al
     use nonlinear_terms, only: nonlin
-    use netcdf, only: nf90_put_var
-# endif    
-    implicit none
 # ifdef NETCDF
+!    use netcdf_mod
+    use netcdf, only: nf90_put_var
+    use constants, only: pi
+    
     integer :: status
     real :: nmesh
+
+    real, dimension(:), allocatable :: x, y
+    integer :: ik, it
 
     !<doc> Store the size of the grid dimensions (as defined in def_dims), in the NetCDF file </doc>
     status = nf90_put_var (ncid, nttot_id, 2*ntgrid+1)
@@ -388,57 +374,12 @@ contains
 
     status = nf90_put_var (ncid, nmesh_id, nmesh)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nmesh_id)
-# endif
-  end subroutine nc_grids
 
-  subroutine nc_norms
-# ifdef NETCDF
-    use netcdf, only: nf90_put_var
-    use normalisations, only: norms
-# endif    
-    implicit none
-# ifdef NETCDF
-    integer :: status
-
-    !>Store the normalisations
-    status = nf90_put_var (ncid, aref_id, norms%get_value("aref"))
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, aref_id)
-    status = nf90_put_var (ncid, zref_id, norms%get_value("zref"))
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, zref_id)
-    status = nf90_put_var (ncid, nref_id, norms%get_value("nref"))
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, nref_id)
-    status = nf90_put_var (ncid, tref_id, norms%get_value("tref"))
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, tref_id)
-    status = nf90_put_var (ncid, lref_id, norms%get_value("lref"))
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, lref_id)
-    status = nf90_put_var (ncid, vref_id, norms%get_value("vref"))
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, vref_id)
-    status = nf90_put_var (ncid, bref_id, norms%get_value("bref"))
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, bref_id)
-    status = nf90_put_var (ncid, rhoref_id, norms%get_value("rhoref"))
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, rhoref_id)
-
-# endif
-  end subroutine nc_norms
-
-  !Put the grid data into the movie file
-  subroutine nc_grids_mymovie
-#ifdef NETCDF
-    use constants, only: pi
-    use kt_grids, only: akx, aky
-    use gs2_layouts, only: yxf_lo
-    use theta_grid, only: ntgrid, theta
-    use netcdf, only: nf90_put_var
-#endif
-    implicit none
-# ifdef NETCDF
-    real, dimension(:), allocatable :: x,y
-    integer :: it, ik, status
     ! added by EAB 03/05/04 for GS2 movies
     if(my_make_movie) then
 
-       allocate(x(yxf_lo%nx),y(yxf_lo%ny))
-
+       allocate(x(yxf_lo%nx))
+       allocate(y(yxf_lo%ny))
        do it = 1, yxf_lo%nx 
           x(it) = 2.0*pi/akx(2)*(-0.5+ real(it-1)/real(yxf_lo%nx))
        end do
@@ -447,28 +388,33 @@ contains
        end do
        
        status = nf90_put_var (ncid_movie, nx_id, yxf_lo%nx)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, nx_id)
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid_movie, nx_id)
        status = nf90_put_var (ncid_movie, ny_id, yxf_lo%ny)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, ny_id)
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid_movie, ny_id)
        status = nf90_put_var (ncid_movie, nth_id, 2*ntgrid+1)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, nth_id)
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid_movie, nth_id)
        status = nf90_put_var (ncid_movie, x_id, x)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, x_id)
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid_movie, x_id)
        status = nf90_put_var (ncid_movie, y_id, y)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, y_id)
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid_movie, y_id)
        status = nf90_put_var (ncid_movie, th_id, theta)
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, th_id)
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid_movie, th_id)
+       deallocate(x)
 
-       deallocate(x,y)
+
+       deallocate(y)
     endif
 # endif
-  end subroutine nc_grids_mymovie
+  end subroutine nc_grids
 
   subroutine netcdf_init (serial_io2)
-# ifdef NETCDF
     use mp, only: proc0
-# endif
-    implicit none
     logical, intent(in) :: serial_io2
 # ifdef NETCDF
     proc_write = proc0 .or. (.not.serial_io2)
@@ -476,11 +422,11 @@ contains
   end subroutine netcdf_init
 
   subroutine nc_finish
-# ifdef NETCDF
     use mp, only: proc0
+# ifdef NETCDF
     use netcdf, only: nf90_close
     use netcdf_utils, only: netcdf_error
-    implicit none
+
     integer :: status
 
     if (proc0) then
@@ -499,10 +445,12 @@ contains
     !<doc> Save the input file in the NetCDF file </doc>
 # ifdef NETCDF    
     use file_utils, only: num_input_lines, get_input_unit
+!    use netcdf_mod
     use netcdf, only: nf90_put_var
-    implicit none
+
     character(200) line
     integer, dimension (2) :: nin_start, nin_count
+
     integer :: status, n, unit
 
     nin_start(1) = 1
@@ -515,6 +463,7 @@ contains
     do n = 1, num_input_lines
        read (unit=unit, fmt="(a)") line
        nin_count(1) = len(trim(line))
+!       status = nf_put_vara_text (ncid, input_id, nin_start, nin_count, line)
        status = nf90_put_var (ncid, input_id, line, start=nin_start, count=nin_count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, input_id)
        nin_start(2) = nin_start(2) + 1
@@ -524,42 +473,37 @@ contains
 
   subroutine define_vars (write_nl_flux, write_omega, &
        write_hrate, write_final_antot, write_eigenfunc, write_verr, &
-       write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
-       write_correlation_extend, write_avg_moments, write_final_moments, write_final_epar, &
-       ob_midplane)
-# ifdef NETCDF 
+       write_fields, write_moments, write_full_moments_notgc, write_sym, write_pflux_sym, write_pflux_tormom, write_correlation, &
+       write_correlation_extend)
+ 
     use file_utils, only: error_unit
     use mp, only: nproc
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
     use parameter_scan_arrays, only: write_scan_parameter
+# ifdef NETCDF
     use netcdf, only: NF90_CHAR, NF90_INT, NF90_GLOBAL
     use netcdf, only: nf90_def_var, nf90_put_att, nf90_enddef, nf90_put_var
     use netcdf, only: nf90_inq_libvers, nf90_inquire_dimension
     use netcdf_utils, only: netcdf_real
 # endif
-    implicit none
+!    use netcdf_mod
+!    logical :: write_nl_flux, write_omega, write_hrate
+!    logical :: write_final_antot, write_eigenfunc, write_verr
     logical, intent(in) :: write_nl_flux, write_omega
     logical, intent(in) :: write_hrate, write_final_antot
-    logical, intent(in) :: write_eigenfunc, write_verr, write_moments
+    logical, intent(in) :: write_eigenfunc, write_verr, write_fields, write_moments
     logical, intent(in) :: write_full_moments_notgc, write_sym, write_correlation
-    logical, intent(in) :: write_pflux_sym, write_pflux_tormom
+    logical, intent(in) :: write_pflux_sym, write_pflux_tormom 
     logical, intent(inout) :: write_correlation_extend
-    logical, intent(in) :: write_avg_moments, write_final_moments, write_final_epar
-    logical, optional, intent(in) :: ob_midplane
 # ifdef NETCDF
     character (5) :: ci
     character (20) :: datestamp, timestamp, timezone, tmpc
+    !logical :: d_fields_per = .false. - unnecessary - now set in input file
+    
     integer :: status, ierr, dimsize(5)
     real    :: total
-    logical :: obmid=.false.
 
-    !Handle optional input
-    if (present(ob_midplane)) then
-       obmid=ob_midplane
-    endif
-
-    !Define dimensions/shapes for different data types
     fmode_dim(1) = nakx_dim
     fmode_dim(2) = naky_dim
 
@@ -672,21 +616,18 @@ contains
     ! The netcdf limit is 2^31-4 bytes, however this limit still causes a problem so 178180992 is used
     ! This limit was found by running the code with different sizes, it is not exact but this is a hack
     ! and is not worth pursuing at the moment
-    !<DD>Added protective if statement as nttotext_dim is only defined if io_write_corr_extend
-    if(io_write_corr_extend)then
-       status = nf90_inquire_dimension(ncid, ri_dim, tmpc, dimsize(1))
-       status = nf90_inquire_dimension(ncid, nttotext_dim, tmpc, dimsize(2))
-       status = nf90_inquire_dimension(ncid, nakx_dim, tmpc, dimsize(3))
-       status = nf90_inquire_dimension(ncid, naky_dim, tmpc, dimsize(4))
-       status = nf90_inquire_dimension(ncid, time_big_dim, tmpc, dimsize(5))
-       ierr = error_unit()
-       total = product(real(dimsize(1:5)))
-       if(total .gt. 178180992) then ! number of reals allowed in netcdf
-          write(ierr, *) 'WARNING: phi_corr is larger than maximum netcdf size, removing.'
-          write(ierr, *) 'Try increasing nwrite_mult to avoid this.'
-          io_write_corr_extend = .false.
-          write_correlation_extend = .false.
-       endif
+    status = nf90_inquire_dimension(ncid, ri_dim, tmpc, dimsize(1))
+    status = nf90_inquire_dimension(ncid, nttotext_dim, tmpc, dimsize(2))
+    status = nf90_inquire_dimension(ncid, nakx_dim, tmpc, dimsize(3))
+    status = nf90_inquire_dimension(ncid, naky_dim, tmpc, dimsize(4))
+    status = nf90_inquire_dimension(ncid, time_big_dim, tmpc, dimsize(5))
+    ierr = error_unit()
+    total = product(real(dimsize(1:5)))
+    if(total .gt. 178180992) then ! number of reals allowed in netcdf
+       write(ierr, *) 'WARNING: phi_corr is larger than maximum netcdf size, removing.'
+       write(ierr, *) 'Try increasing nwrite_mult to avoid this.'
+       io_write_corr_extend = .false.
+       write_correlation_extend = .false.
     endif
     ! HJL End of hack
     if (io_write_corr_extend) then
@@ -712,7 +653,7 @@ contains
     status = nf90_put_att (ncid, NF90_GLOBAL, 'title', 'GS2 Simulation Data')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, NF90_GLOBAL, att='title')
     status = nf90_put_att (ncid, NF90_GLOBAL, 'Conventions', &
-         'https://sourceforge.net/projects/gyrokinetics/')
+         'http://gs2.sourceforge.net')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, NF90_GLOBAL, att='Conventions')
 
     datestamp(:) = ' '
@@ -720,9 +661,7 @@ contains
     timezone(:) = ' '
     call date_and_time (datestamp, timestamp, timezone)
 
-    !################################################
-    !# START WITH BASIC ATTRIBUTES
-
+    
     status = nf90_def_var (ncid, 'code_info', NF90_CHAR, char10_dim, code_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='code_info')
     status = nf90_put_att (ncid, code_id, 'long_name', 'GS2')
@@ -782,16 +721,6 @@ contains
          'should be clear from the context in which they appear below.')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, code_id, att=ci)
 
-    !This stores a copy of the (sanitised?) input file
-    status = nf90_def_var (ncid, 'input_file', NF90_CHAR, nin_dim, input_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='input_file')
-    status = nf90_put_att (ncid, input_id, 'long_name', 'Input file')
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, input_id, att='long_name')
-
-    !------------------------------------------------
-
-    !################################################
-    !# NOW HANDLE DATA ABOUT GRID SIZES
     !<doc> Write lots of input variables (e.g. nproc, nkx, nky)
     ! into the NetCDF file </doc>
     status = nf90_def_var (ncid, 'nproc', NF90_INT, nproc_id)
@@ -817,28 +746,13 @@ contains
     status = nf90_def_var (ncid, 'nlambda', NF90_INT, nlambda_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='nlambda')
 
-    !################################################
-    !# NOW DO NORMALISATIONS
-    !>Could use norms%check_if_set to decide what we want to write here
-    status = nf90_def_var (ncid, 'aref', netcdf_real, aref_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='aref')
-    status = nf90_def_var (ncid, 'zref', netcdf_real, zref_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='zref')
-    status = nf90_def_var (ncid, 'nref', netcdf_real, nref_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='nref')
-    status = nf90_def_var (ncid, 'tref', netcdf_real, tref_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='tref')
-    status = nf90_def_var (ncid, 'lref', netcdf_real, lref_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='lref')
-    status = nf90_def_var (ncid, 'vref', netcdf_real, vref_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='vref')
-    status = nf90_def_var (ncid, 'bref', netcdf_real, bref_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='bref')
-    status = nf90_def_var (ncid, 'rhoref', netcdf_real, rhoref_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='rhoref')
+    status = nf90_def_var (ncid, 't', netcdf_real, time_dim, time_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='t')
+    status = nf90_put_att (ncid, time_id, 'long_name', 'Time')
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, time_id, att='long_name')
+    status = nf90_put_att (ncid, time_id, 'units', 'L/vt')
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, time_id, att='units')
 
-    !################################################
-    !# NOW DO SPECIES DATA
     status = nf90_def_var (ncid, 'charge', NF90_INT, nspec_dim, charge_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='charge')
     status = nf90_put_att (ncid, charge_id, 'long_name', 'Charge')
@@ -894,16 +808,6 @@ contains
     
     status = nf90_def_var (ncid, 'type_of_species', NF90_INT, nspec_dim, spec_type_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='type_of_species')
-    !------------------------------------------------
-
-    !################################################
-    !# NOW DO GRIDS
-    status = nf90_def_var (ncid, 't', netcdf_real, time_dim, time_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='t')
-    status = nf90_put_att (ncid, time_id, 'long_name', 'Time')
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, time_id, att='long_name')
-    status = nf90_put_att (ncid, time_id, 'units', 'L/vt')
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, time_id, att='units')
 
     status = nf90_def_var (ncid, 'theta0', netcdf_real, fmode_dim, theta0_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='theta0')
@@ -928,8 +832,6 @@ contains
     status = nf90_def_var (ncid, 'theta', netcdf_real, nttot_dim, theta_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='theta')
 
-    !################################################
-    !# NOW DO GEOMETRICAL/EQUILIBRIUM DATA
     status = nf90_def_var (ncid, 'bmag', netcdf_real, nttot_dim, bmag_id)
     if (status /= NF90_NOERR) call netcdf_error (status, var='bmag')
     status = nf90_put_att (ncid, bmag_id, 'long_name', '|B|(theta)')
@@ -984,53 +886,61 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, var='drhodpsi')
     status = nf90_put_att (ncid, drhodpsi_id, 'long_name', 'drho/dPsi')
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, drhodpsi_id, att='long_name')
-    !------------------------------------------------
 
-    !################################################
-    !# NOW WE HANDLE THE DIFFERENT OPTIONAL OUTPUT
+    if (write_verr) then
+!       status = nf90_def_var (ncid, 'errest_by_mode', netcdf_real, err_dim, errest_by_mode_id)
+!       if (status /= NF90_NOERR) call netcdf_error (status, var='errest_by_mode')
+!       status = nf90_def_var (ncid, 'lpcoef_by_mode', netcdf_real, lp_dim, lpcoef_by_mode_id)
+!       if (status /= NF90_NOERR) call netcdf_error (status, var='lpcoef_by_mode')
+    end if
 
-    !Phi dependent data
+    if (write_scan_parameter) then
+     status = nf90_def_var (ncid, &
+                            'scan_parameter_value', &
+                            netcdf_real, &
+                            time_dim, &
+                            current_scan_parameter_value_id)
+     if (status /= NF90_NOERR) call netcdf_error (status, &
+                            var='scan_parameter_value')
+     status = nf90_put_att (ncid, &
+                      current_scan_parameter_value_id, &
+                      'long_name', &
+                      'The current value of the scan parameter')
+     if (status /= NF90_NOERR) &
+          call netcdf_error (status, &
+              ncid, current_scan_parameter_value_id, att='long_name')
+    end if
+
     if (fphi > zero) then
-
-       !Field at end of run
-       status = nf90_def_var (ncid, 'phi', netcdf_real, final_field_dim, phi_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='phi')
-       status = nf90_put_att(ncid, phi_id, 'long_name', 'Electrostatic Potential')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id, att='long_name')
-       status = nf90_put_att (ncid, phi_id, 'idl_name', '!7U!6')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id, att='idl_name')
-       status = nf90_put_att (ncid, phi_id, 'units', 'T/q rho/L')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id, att='units')
-
-       !Volume averaged amplitude data
        status = nf90_def_var (ncid, 'phi2', netcdf_real, time_dim, phi2_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='phi2')
        status = nf90_put_att (ncid, phi2_id, 'long_name', '|Potential**2|')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi2_id, att='long_name')
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid, phi2_id, att='long_name')
        status = nf90_put_att (ncid, phi2_id, 'units', '(T/q rho/L)**2')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi2_id, att='units')
-       
-       !Amplitude data per Fourier mode
-       status = nf90_def_var(ncid, 'phi2_by_mode', netcdf_real, mode_dim, phi2_by_mode_id)
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid, phi2_id, att='units')
+
+       status = nf90_def_var &
+            (ncid, 'phi2_by_mode', netcdf_real, mode_dim, phi2_by_mode_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='phi2_by_mode')
-       
-       !Amplitude data summed over ky
        if (ntheta0 > 1) then
-          status = nf90_def_var(ncid, 'phi2_by_kx', netcdf_real, kx_dim, phi2_by_kx_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='phi2_by_kx')
+          status = nf90_def_var &
+               (ncid, 'phi2_by_kx', netcdf_real, kx_dim, phi2_by_kx_id)
+          if (status /= NF90_NOERR) &
+               call netcdf_error (status, var='phi2_by_kx')
        end if
-       
-       !Amplitude data summed over theta0
+
        if (naky > 1) then
-          status = nf90_def_var(ncid, 'phi2_by_ky', netcdf_real, ky_dim, phi2_by_ky_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='phi2_by_ky')
+          status = nf90_def_var &
+               (ncid, 'phi2_by_ky', netcdf_real, ky_dim, phi2_by_ky_id)
+          if (status /= NF90_NOERR) &
+               call netcdf_error (status, var='phi2_by_ky')
        end if
-       
-       !Field at theta=igomega
+
        status = nf90_def_var (ncid, 'phi0', netcdf_real, omega_dim, phi0_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='phi0')
 
-       !Electrostatic fluxes
        if (write_nl_flux) then
           status = nf90_def_var (ncid, 'es_heat_par',  netcdf_real, flux_dim, es_heat_par_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_heat_par')
@@ -1061,18 +971,14 @@ contains
           status = nf90_def_var (ncid, 'es_mom1_by_k', netcdf_real, fluxk_dim, es_mom1_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom1_by_k')
        end if
-
-       !????
        if (write_sym) then
           status = nf90_def_var (ncid, 'es_mom_sym',  netcdf_real, sym_dim, es_mom_sym_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_mom_sym')
        end if
-       !????
        if (write_pflux_sym) then !JPL
           status = nf90_def_var (ncid, 'es_part_tormom_sym',  netcdf_real, sym_dim, es_part_sym_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_sym')
        end if
-       !????
        if (write_pflux_tormom) then !JPL
           status = nf90_def_var (ncid, 'es_part_tormom_flux', netcdf_real, flux_dim, es_part_tormom_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_flux')
@@ -1080,77 +986,80 @@ contains
           if (status /= NF90_NOERR) call netcdf_error (status, var='es_part_tormom_by_k')  
        end if
 
-       !Correlation over 2pi range
        if (write_correlation) then
           status = nf90_def_var (ncid, 'phi_corr_2pi',  netcdf_real, phi_corr_2pi_dim, phi_corr_2pi_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr_2pi')
        end if
-
-       !Normalised phi at end of run
+       if (write_fields) then
+          status = nf90_def_var (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)  !MR
+          if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')
+       endif
        if (write_eigenfunc) then
           status = nf90_def_var (ncid, 'phi_norm',  netcdf_real, final_field_dim, phi_norm_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_norm')
        endif
-
-       !Velocity moment of g used in calculating phi
+       status = nf90_def_var (ncid, 'phi', netcdf_real, final_field_dim, phi_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='phi')
+       status = nf90_put_att &
+            (ncid, phi_id, 'long_name', 'Electrostatic Potential')
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid, phi_id, att='long_name')
+       status = nf90_put_att (ncid, phi_id, 'idl_name', '!7U!6')
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, ncid, phi_id, att='idl_name')
+       status = nf90_put_att (ncid, phi_id, 'units', 'T/q rho/L')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id, att='units')
        if (write_final_antot) then
           status = nf90_def_var (ncid, 'antot', netcdf_real, final_field_dim, antot_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antot')
        endif
-
-       !Field as a function of time
        if (write_phi_t) then
-          status = nf90_def_var(ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)
+          status = nf90_def_var &
+               (ncid, 'phi_t', netcdf_real, field_dim, phi_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_t')
           status = nf90_put_att (ncid, phi_t_id, 'long_name', 'Electrostatic Potential over time')
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_t_id, att='long_name')
        end if
+!CMR
+       if (write_moments) then
+          status = nf90_def_var &
+               (ncid, 'ntot_t', netcdf_real, mom_t_dim, ntot_t_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, var='ntot_t')
+          status = nf90_put_att (ncid, ntot_t_id, 'long_name', 'Total perturbed density over time')
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot_t_id, att='long_name')
+       end if
+!CMRend
     end if
 
-    !Apar dependent output
     if (fapar > zero) then
-
-       !Field at end of run
-       status = nf90_def_var (ncid, 'apar', netcdf_real, final_field_dim, apar_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='apar')
-       status = nf90_put_att (ncid, apar_id, 'long_name', 'Parallel Magnetic Potential')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id, att='long_name')
-       status = nf90_put_att (ncid, apar_id, 'idl_name', '!6A!9!D#!N!6')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id, att='idl_name')
-
-       !Volume averaged amplitude data
        status = nf90_def_var (ncid, 'apar2', netcdf_real, time_dim, apar2_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='apar2')
-       status = nf90_put_att (ncid, apar2_id, 'long_name', 'Total A_par squared')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar2_id, att='long_name')
-
-       !K-resolved amplitude data
-       status = nf90_def_var(ncid, 'apar2_by_mode', netcdf_real, mode_dim, apar2_by_mode_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='apar2_by_mode')
-       status = nf90_put_att (ncid, apar2_by_mode_id, 'long_name', 'Apar squared')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar2_by_mode_id, att='long_name')
-
-       !Amplitude data summed over ky
+       status = nf90_def_var &
+            (ncid, 'apar2_by_mode', netcdf_real, mode_dim, apar2_by_mode_id)
+       if (status /= NF90_NOERR) &
+            call netcdf_error (status, var='apar2_by_mode')
        if (ntheta0 > 1) then
-          status = nf90_def_var(ncid, 'apar2_by_kx', netcdf_real, kx_dim, apar2_by_kx_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='apar2_by_kx')
+          status = nf90_def_var &
+               (ncid, 'apar2_by_kx', netcdf_real, kx_dim, apar2_by_kx_id)
+          if (status /= NF90_NOERR) &
+               call netcdf_error (status, var='apar2_by_kx')
        end if
-
-       !Amplitude data summed over theta0
        if (naky > 1) then
-          status = nf90_def_var(ncid, 'apar2_by_ky', netcdf_real, ky_dim, apar2_by_ky_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='apar2_by_ky')
+          status = nf90_def_var &
+               (ncid, 'apar2_by_ky', netcdf_real, ky_dim, apar2_by_ky_id)
+          if (status /= NF90_NOERR) &
+               call netcdf_error (status, var='apar2_by_ky')
        end if
 
-       !Field at theta=igomega
        status = nf90_def_var (ncid, 'apar0', netcdf_real, omega_dim, apar0_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='apar0')
-
-       !Apar related fluxes
        if (write_nl_flux) then
-          status = nf90_def_var(ncid,'apar_heat_flux',netcdf_real, flux_dim, apar_heat_flux_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='apar_heat_flux')
-          status = nf90_def_var(ncid, 'apar_heat_par', netcdf_real, flux_dim, apar_heat_par_id)
+          status = nf90_def_var &
+               (ncid,'apar_heat_flux',netcdf_real, flux_dim, apar_heat_flux_id)
+          if (status /= NF90_NOERR) &
+               call netcdf_error (status, var='apar_heat_flux')
+          status = nf90_def_var &
+               (ncid, 'apar_heat_par', netcdf_real, flux_dim, apar_heat_par_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_heat_par')
           status = nf90_def_var (ncid, 'apar_heat_perp', netcdf_real, flux_dim, apar_heat_perp_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_heat_perp')
@@ -1167,68 +1076,47 @@ contains
           status = nf90_def_var (ncid, 'apar_part_by_k', netcdf_real, fluxk_dim, apar_part_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_part_by_k')
        end if
-
-       !Normalised eigenfunction
        if (write_eigenfunc) then
           status = nf90_def_var (ncid, 'apar_norm', netcdf_real, final_field_dim, apar_norm_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_norm')
        endif
-
-       !Velocity space moment of g used in calculating apar
+       status = nf90_def_var (ncid, 'apar', netcdf_real, final_field_dim, apar_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='apar')
        if (write_final_antot) then
           status = nf90_def_var (ncid, 'antota', netcdf_real, final_field_dim, antota_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antota')
        endif
-
-       !Field as a function of time
        if (write_apar_t) then
           status = nf90_def_var (ncid, 'apar_t', netcdf_real, field_dim, apar_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='apar_t')
           status = nf90_put_att (ncid, apar_t_id, 'long_name', 'Parallel Magnetic Potential over Time')
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_t_id, att='long_name')
        end if
+       status = nf90_put_att (ncid, apar2_by_mode_id, 'long_name', 'Apar squared')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar2_by_mode_id, att='long_name')
+       status = nf90_put_att (ncid, apar_id, 'long_name', 'Parallel Magnetic Potential')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id, att='long_name')
+       status = nf90_put_att (ncid, apar_id, 'idl_name', '!6A!9!D#!N!6')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id, att='idl_name')
+       status = nf90_put_att (ncid, apar2_id, 'long_name', 'Total A_par squared')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar2_id, att='long_name')
     end if
 
-    !Bpar related data
     if (fbpar > zero) then
-
-       !Field at end of run
-       status = nf90_def_var (ncid, 'bpar', netcdf_real, final_field_dim, bpar_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='bpar')
-       status = nf90_put_att (ncid, bpar_id, 'long_name', 'delta B Parallel')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id, att='long_name')
-       status = nf90_put_att (ncid, bpar_id, 'idl_name', '!6B!9!D#!N!6')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id, att='idl_name')
-
-       !Volume averaged amplitude data
        status = nf90_def_var (ncid, 'bpar2', netcdf_real, time_dim, bpar2_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='bpar2')
-       status = nf90_put_att (ncid, bpar2_id, 'long_name', 'Total A_perp squared')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar2_id, att='long_name')
-
-       !K-resolved amplitude data
        status = nf90_def_var (ncid, 'bpar2_by_mode', netcdf_real, mode_dim, bpar2_by_mode_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='bpar2_by_mode')
-       status = nf90_put_att (ncid, bpar2_by_mode_id, 'long_name', 'A_perp squared')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar2_by_mode_id, att='long_name')
-
-       !Amplitude data summed over ky
        if (ntheta0 > 1) then
           status = nf90_def_var (ncid, 'bpar2_by_kx', netcdf_real, kx_dim, bpar2_by_kx_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar2_by_kx')
        end if
-
-       !Amplitude data summed over theta0
        if (naky > 1) then
           status = nf90_def_var (ncid, 'bpar2_by_ky', netcdf_real, ky_dim, bpar2_by_ky_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar2_by_ky')
        end if
-
-       !Field at theta=igomega
        status = nf90_def_var (ncid, 'bpar0', netcdf_real, omega_dim, bpar0_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='bpar0')
-
-       !Bpar related fluxes
        if (write_nl_flux) then
           status = nf90_def_var (ncid, 'bpar_heat_flux', netcdf_real, flux_dim, bpar_heat_flux_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_heat_flux')
@@ -1247,162 +1135,45 @@ contains
           status = nf90_def_var (ncid, 'bpar_part_by_k', netcdf_real, fluxk_dim, bpar_part_by_k_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_part_by_k')
        end if
-
-       !Normalised eigenfunction
        if (write_eigenfunc) then
           status = nf90_def_var (ncid, 'bpar_norm', netcdf_real, final_field_dim, bpar_norm_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_norm')
        endif
-
-       !Velocity space moment of g used in calculating bpar
+       status = nf90_def_var (ncid, 'bpar', netcdf_real, final_field_dim, bpar_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='bpar')
        if (write_final_antot) then
           status = nf90_def_var (ncid, 'antotp', netcdf_real, final_field_dim, antotp_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='antotp')
        endif
-
-       !Field as a function of time
        if (write_bpar_t) then
           status = nf90_def_var (ncid, 'bpar_t', netcdf_real, field_dim, bpar_t_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_t')
           status = nf90_put_att (ncid, bpar_t_id, 'long_name', 'delta B Parallel over time')
           if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_t_id, att='long_name')
        end if
+
+       status = nf90_put_att (ncid, bpar2_by_mode_id, 'long_name', 'A_perp squared')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar2_by_mode_id, att='long_name')
+       status = nf90_put_att (ncid, bpar_id, 'long_name', 'delta B Parallel')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id, att='long_name')
+       status = nf90_put_att (ncid, bpar_id, 'idl_name', '!6B!9!D#!N!6')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id, att='idl_name')
+       status = nf90_put_att (ncid, bpar2_id, 'long_name', 'Total A_perp squared')
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar2_id, att='long_name')
     end if
 
-!CMR
-    if (write_moments) then
-       !Only at outboard midplane
-       !<DD>Should these really have _t at the end to identify them as being a function of time?
-       if (obmid) then
-          status = nf90_def_var &
-               (ncid, 'ntot0', netcdf_real, mom_dim, ntot0_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='ntot0')
-          status = nf90_put_att (ncid, ntot0_id, 'long_name', 'Total perturbed density (theta=0) over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot0_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'density0', netcdf_real, mom_dim, density0_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='density0')
-          status = nf90_put_att (ncid, density0_id, 'long_name', 'Nonadiabatic piece of perturbed density (theta=0) over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, density0_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'upar0', netcdf_real, mom_dim, upar0_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='upar')
-          status = nf90_put_att (ncid, upar0_id, 'long_name', 'Upar (theta=0) over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, upar0_id, att='long_name')
-   
-          status = nf90_def_var &
-               (ncid, 'tpar0', netcdf_real, mom_dim, tpar0_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='tpar')
-          status = nf90_put_att (ncid, tpar0_id, 'long_name', 'Tpar (theta=0) over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, tpar0_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'tperp0', netcdf_real, mom_dim, tperp0_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='tperp')
-          status = nf90_put_att (ncid, tperp0_id, 'long_name', 'Tperp (theta=0) over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp0_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'qparflux0', netcdf_real, mom_dim, qparflux0_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='qparflux')
-          status = nf90_put_att (ncid, qparflux0_id, 'long_name', 'Qparflux (theta=0) over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, qparflux0_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'pperpj10', netcdf_real, mom_dim, pperpj10_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='pperpj1')
-          status = nf90_put_att (ncid, pperpj10_id, 'long_name', 'Pperpj1 (theta=0) over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, pperpj10_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'qpperpj10', netcdf_real, mom_dim, qpperpj10_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='qpperpj1')
-          status = nf90_put_att (ncid, qpperpj1_id, 'long_name', 'Qpperpj1 (theta=0) over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, qpperpj1_id, att='long_name')
-       !Along flux_surface
-       else
-          status = nf90_def_var &
-               (ncid, 'ntot_t', netcdf_real, mom_t_dim, ntot_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='ntot_t')
-          status = nf90_put_att (ncid, ntot_t_id, 'long_name', 'Total perturbed density over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot_t_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'density_t', netcdf_real, mom_t_dim, density_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='density_t')
-          status = nf90_put_att (ncid, density_t_id, 'long_name', 'Nonadiabatic piece of perturbed density over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, density_t_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'upar_t', netcdf_real, mom_t_dim, upar_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='upar_t')
-          status = nf90_put_att (ncid, upar_t_id, 'long_name', 'Upar over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, upar_t_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'tpar_t', netcdf_real, mom_t_dim, tpar_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='tpar_t')
-          status = nf90_put_att (ncid, tpar_t_id, 'long_name', 'Tpar over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, tpar_t_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'tperp_t', netcdf_real, mom_t_dim, tperp_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='tperp_t')
-          status = nf90_put_att (ncid, tperp_t_id, 'long_name', 'Tperp over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp_t_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'qparflux_t', netcdf_real, mom_t_dim, qparflux_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='qparflux_t')
-          status = nf90_put_att (ncid, qparflux_t_id, 'long_name', 'Qparflux over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, qparflux_t_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'pperpj1_t', netcdf_real, mom_t_dim, pperpj1_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='pperpj1_t')
-          status = nf90_put_att (ncid, pperpj1_t_id, 'long_name', 'Pperpj1 over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, pperpj1_t_id, att='long_name')
-          
-          status = nf90_def_var &
-               (ncid, 'qpperpj1_t', netcdf_real, mom_t_dim, qpperpj1_t_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='qpperpj1_t')
-          status = nf90_put_att (ncid, qpperpj1_t_id, 'long_name', 'Qpperpj1 over time')
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, qpperpj1_t_id, att='long_name')
-       end if
-    end if
-!CMRend
+    status = nf90_def_var (ncid, 'phase', netcdf_real, phase_dim, phase_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='phase')
+    status = nf90_put_att (ncid, phase_id, 'long_name', 'Normalizing phase')
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, phase_id, att='long_name')
 
-    if (write_verr) then
-!       status = nf90_def_var (ncid, 'errest_by_mode', netcdf_real, err_dim, errest_by_mode_id)
-!       if (status /= NF90_NOERR) call netcdf_error (status, var='errest_by_mode')
-!       status = nf90_def_var (ncid, 'lpcoef_by_mode', netcdf_real, lp_dim, lpcoef_by_mode_id)
-!       if (status /= NF90_NOERR) call netcdf_error (status, var='lpcoef_by_mode')
-    end if
+!    status = nf90_def_var (ncid, 'phtot', netcdf_real, mode_dim, phtot_id)
+!    if (status /= NF90_NOERR) call netcdf_error (status, var='phtot')
+!    status = nf90_def_var (ncid, 'dmix', netcdf_real, mode_dim, dmix_id)
+!    if (status /= NF90_NOERR) call netcdf_error (status, var='dmix')
+!    status = nf90_def_var (ncid, 'kperpnorm', netcdf_real, mode_dim, kperpnorm_id)
+!    if (status /= NF90_NOERR) call netcdf_error (status, var='kperpnorm')
 
-    !The current value of the scanned parameter
-    if (write_scan_parameter) then
-       status = nf90_def_var(ncid,'scan_parameter_value',netcdf_real,time_dim,current_scan_parameter_value_id)
-       if (status /= NF90_NOERR) call netcdf_error (status,var='scan_parameter_value')
-       status = nf90_put_att (ncid,current_scan_parameter_value_id,'long_name','The current value of the scan parameter')
-       if (status /= NF90_NOERR) call netcdf_error (status,ncid, current_scan_parameter_value_id, att='long_name')
-    end if
-
-    !Phase used to normalise eigenfunction/field
-    if(write_eigenfunc)then
-       status = nf90_def_var (ncid, 'phase', netcdf_real, phase_dim, phase_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='phase')
-       status = nf90_put_att (ncid, phase_id, 'long_name', 'Normalizing phase')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phase_id, att='long_name')
-    endif
-
-    !Roughly the field line averaged summed field amplitudes
-    status = nf90_def_var (ncid, 'phtot', netcdf_real, mode_dim, phtot_id)
-    if (status /= NF90_NOERR) call netcdf_error (status, var='phtot')
-    status = nf90_put_att (ncid, phtot_id, 'long_name', 'Field amplitude')
-
-    !Frequency and growth rate estimates
     if (write_omega) then
        status = nf90_def_var (ncid, 'omega', netcdf_real, omega_dim, omega_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='omega')
@@ -1410,7 +1181,6 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, var='omegaavg')
     end if
 
-    !Summed fluxes
     if (write_nl_flux) then
        status = nf90_def_var (ncid, 'hflux_tot', netcdf_real, time_dim, hflux_tot_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='hflux_tot')
@@ -1420,73 +1190,57 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, var='zflux_tot')
     end if
 
-    !Parallel electric field -- only good for linear runs
-    if(write_final_epar) then
-       status = nf90_def_var (ncid, 'epar', netcdf_real, final_field_dim, epar_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='epar')
-    endif
+    status = nf90_def_var (ncid, 'epar', netcdf_real, final_field_dim, epar_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='epar')
 
-    !Here we setup the volume/fieldline averaged moment data, currently this triggers
-    !both volume averaged, field line averaged and evaulated at theta=0 versions
-    if(write_avg_moments) then
-       !Volume averaged function of theta
-       !<DD>Should we only do this if .not.obmid?
-       status = nf90_def_var (ncid, 'ntot2', netcdf_real, flux_dim,  ntot2_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='ntot2')
-       status = nf90_def_var (ncid, 'ntot2_by_mode', netcdf_real, fluxk_dim, ntot2_by_mode_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='ntot2_by_mode')
-       status = nf90_def_var (ncid, 'tpar2_by_mode', netcdf_real, fluxk_dim, tpar2_by_mode_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='tpar2_by_mode')
-       status = nf90_def_var (ncid, 'tperp2_by_mode', netcdf_real, fluxk_dim, tperp2_by_mode_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='tperp2_by_mode')
+!    <phi>
 
-       !"Volume averaged" data from outboard midplane (really just evaluated at theta=0
-       !and then weighted with Fourier coeff factor (typically 0.5).
-       !<DD>Should we only do this if obmid?
-       status = nf90_def_var (ncid, 'ntot20', netcdf_real, flux_dim,  ntot20_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='ntot20')
-       status = nf90_put_att (ncid, ntot20_id, 'long_name', 'Density**2 at theta=0')
-       if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot20_id, att='long_name')
-       status = nf90_def_var (ncid, 'ntot20_by_mode', netcdf_real, fluxk_dim, ntot20_by_mode_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='ntot20_by_mode')
+    status = nf90_def_var (ncid, 'ntot2', netcdf_real, flux_dim,  ntot2_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='ntot2')
+    status = nf90_def_var (ncid, 'ntot2_by_mode', netcdf_real, fluxk_dim, ntot2_by_mode_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='ntot2_by_mode')
+    status = nf90_def_var (ncid, 'tpar2_by_mode', netcdf_real, fluxk_dim, tpar2_by_mode_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tpar2_by_mode')
+    status = nf90_def_var (ncid, 'tperp2_by_mode', netcdf_real, fluxk_dim, tperp2_by_mode_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tperp2_by_mode')
 
+    status = nf90_def_var (ncid, 'ntot20', netcdf_real, flux_dim,  ntot20_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='ntot20')
+    status = nf90_put_att (ncid, ntot20_id, 'long_name', 'Density**2 at theta=0')
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot20_id, att='long_name')
+    status = nf90_def_var (ncid, 'ntot20_by_mode', netcdf_real, fluxk_dim, ntot20_by_mode_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='ntot20_by_mode')
 
-       !Fieldline averaged data, note this includes phi which is not a moment
-       status = nf90_def_var (ncid, 'phi00', netcdf_real, loop_phi_dim, phi00_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='phi00')
-       status = nf90_def_var (ncid, 'ntot00', netcdf_real, loop_mom_dim, ntot00_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='ntot00')
-       status = nf90_def_var (ncid, 'density00', netcdf_real, loop_mom_dim, density00_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='density00')
-       status = nf90_def_var (ncid, 'upar00', netcdf_real, loop_mom_dim, upar00_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='upar00')
-       status = nf90_def_var (ncid, 'tpar00', netcdf_real, loop_mom_dim, tpar00_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='tpar00')
-       status = nf90_def_var (ncid, 'tperp00', netcdf_real, loop_mom_dim, tperp00_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='tperp00')
-    endif
+    status = nf90_def_var (ncid, 'ntot', netcdf_real, final_mom_dim, ntot_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='ntot')
+    status = nf90_def_var (ncid, 'density', netcdf_real, final_mom_dim, density_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='density')
+    status = nf90_def_var (ncid, 'upar', netcdf_real, final_mom_dim, upar_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='upar')
+    status = nf90_def_var (ncid, 'tpar', netcdf_real, final_mom_dim, tpar_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tpar')
+    status = nf90_def_var (ncid, 'tperp', netcdf_real, final_mom_dim, tperp_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tperp')
+    status = nf90_def_var (ncid, 'qparflux', netcdf_real, final_mom_dim, qparflux_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='qparflux')
+    status = nf90_def_var (ncid, 'pperpj1', netcdf_real, final_mom_dim, pperpj1_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='pperpj1')
+    status = nf90_def_var (ncid, 'qpperpj1', netcdf_real, final_mom_dim, qpperpj1_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='qpperpj1')
 
-    !Setup full moment data for end of simulation
-    if(write_final_moments)then
-       status = nf90_def_var (ncid, 'ntot', netcdf_real, final_mom_dim, ntot_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='ntot')
-       status = nf90_def_var (ncid, 'density', netcdf_real, final_mom_dim, density_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='density')
-       status = nf90_def_var (ncid, 'upar', netcdf_real, final_mom_dim, upar_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='upar')
-       status = nf90_def_var (ncid, 'tpar', netcdf_real, final_mom_dim, tpar_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='tpar')
-       status = nf90_def_var (ncid, 'tperp', netcdf_real, final_mom_dim, tperp_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='tperp')
-       status = nf90_def_var (ncid, 'qparflux', netcdf_real, final_mom_dim, qparflux_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='qparflux')
-       status = nf90_def_var (ncid, 'pperpj1', netcdf_real, final_mom_dim, pperpj1_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='pperpj1')
-       status = nf90_def_var (ncid, 'qpperpj1', netcdf_real, final_mom_dim, qpperpj1_id)
-       if (status /= NF90_NOERR) call netcdf_error (status, var='qpperpj1')
-    endif
-
-    !Heating rate diagnostics
+    status = nf90_def_var (ncid, 'phi00', netcdf_real, loop_phi_dim, phi00_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='phi00')
+    status = nf90_def_var (ncid, 'ntot00', netcdf_real, loop_mom_dim, ntot00_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='ntot00')
+    status = nf90_def_var (ncid, 'density00', netcdf_real, loop_mom_dim, density00_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='density00')
+    status = nf90_def_var (ncid, 'upar00', netcdf_real, loop_mom_dim, upar00_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='upar00')
+    status = nf90_def_var (ncid, 'tpar00', netcdf_real, loop_mom_dim, tpar00_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tpar00')
+    status = nf90_def_var (ncid, 'tperp00', netcdf_real, loop_mom_dim, tperp00_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='tperp00')
+    
     if (write_hrate) then
        status = nf90_def_var (ncid, 'h_energy', netcdf_real, time_dim, h_energy_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='h_energy')
@@ -1557,8 +1311,8 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, hk_heating_id, att='long_name')
     end if
 
-    ! RN> not guiding center moments (every nwrite steps)
-    if (write_full_moments_notgc .and. .not. (write_moments .and. obmid)) then
+    ! RN> not guiding center moments
+    if (write_full_moments_notgc) then
        status = nf90_def_var (ncid, 'ntot0', netcdf_real, mom_dim, ntot0_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='ntot0')
        status = nf90_def_var (ncid, 'density0', netcdf_real, mom_dim, density0_id)
@@ -1572,66 +1326,59 @@ contains
     endif
     ! <RN
 
-    !Correlation function (phi only so should probably include if fphi>0)
+!    status = nf90_put_att (ncid, phtot_id, 'long_name', 'Field amplitude')
+
+    status = nf90_def_var (ncid, 'input_file', NF90_CHAR, nin_dim, input_id)
+    if (status /= NF90_NOERR) call netcdf_error (status, var='input_file')
+    status = nf90_put_att (ncid, input_id, 'long_name', 'Input file')
+    if (status /= NF90_NOERR) call netcdf_error (status, ncid, input_id, att='long_name')
+
     if (io_write_corr_extend) then
        status = nf90_def_var (ncid, 'phi2_extend',  netcdf_real, phi2_extend_dim, phi2_extend_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='phi2_extend')
        status = nf90_def_var (ncid, 'phi_corr',  netcdf_real, phi_corr_dim, phi_corr_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='phi_corr')
     end if
-    !------------------------------------------------
 
-    !################################################
-    !# NOW EXIT DEFINITION MODE
     status = nf90_enddef (ncid)  ! out of definition mode
     if (status /= NF90_NOERR) call netcdf_error (status)
 
-    !Fill the value of nproc -- helps make sure we can write vars to file
     status = nf90_put_var (ncid, nproc_id, nproc)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, nproc_id)
 
-# endif
-  end subroutine define_vars
-
-  !Define the vars in the movie file. A fair bit of duplication wrt main
-  !file -- may want to think about merging movie data into main file.
-  !Main reason for using a new file is we can only have one unlimited dimension
-  !per file (with new versions of NETCDF this is no longer true) and we 
-  !probably don't want to write movie data as often as other data.
-  !However, at the moment we precalculate the number of outputs, so it
-  !isn't actually unlimited
-  subroutine define_vars_mymovie
-# ifdef NETCDF
-    use run_parameters, only: fphi, fapar, fbpar
-    use netcdf, only: NF90_INT, NF90_GLOBAL
-    use netcdf, only: nf90_def_var, nf90_put_att, nf90_enddef
-    use netcdf_utils, only: netcdf_real
-    implicit none
-    integer :: status
-
-    ! added by EAB 03/05/04 for GS2 movies
+        ! added by EAB 03/05/04 for GS2 movies
     if(my_make_movie) then
-       !Setup field shape
        xmode_dim (1) = nx_dim
        xmode_dim (2) = ny_dim
        xmode_dim (3) = nth_dim
        xmode_dim (4) = time_movie_dim
-
-       !Basic information
        status = nf90_put_att (ncid_movie, NF90_GLOBAL, 'title', 'GS2 Simulation x,y,theta Data for Movies')
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, NF90_GLOBAL, att='title')
-       status = nf90_put_att (ncid_movie, NF90_GLOBAL, 'Conventions','https://sourceforge.net/projects/gyrokinetics/')
+       status = nf90_put_att (ncid_movie, NF90_GLOBAL, 'Conventions', &
+            'http://gs2.sourceforge.net')
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, NF90_GLOBAL, att='Conventions')
+       !    status = nf90_def_var (ncid_movie, 'code_info_movie', NF90_CHAR, char10_dim, code_id_movie)
+       !    if (status /= NF90_NOERR) call netcdf_error (status, var='code_info')
+       !    status = nf90_put_att (ncid_movie, code_id_movie, 'long_name', 'GS2')
+       !    if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, code_id_movie, att='long_name')
+       !    ci = 'c1'
+       !    status = nf90_put_att (ncid_movie, code_id_movie, trim(ci), 'Date: '//trim(datestamp))
+       !    if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, code_id_movie, att=ci)
+       !    ci = 'c2'
+       !    status = nf90_put_att (ncid_movie, code_id_movie, trim(ci), &
+       !         'Time: '//trim(timestamp)//' '//trim(timezone))
+       !    if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, code_id_movie, att=ci)
+       !    ci = 'c3'
+       !    status = nf90_put_att (ncid_movie, code_id_movie, trim(ci), &
+       !         'netCDF version '//trim(nf90_inq_libvers()))
+       !    if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, code_id_movie, att=ci)
        
-       !Grid sizes
        status = nf90_def_var (ncid_movie, 'nx', NF90_INT, nx_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='nx')
        status = nf90_def_var (ncid_movie, 'ny', NF90_INT, ny_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='ny')
        status = nf90_def_var (ncid_movie, 'ntheta', NF90_INT, nth_id)    
        if (status /= NF90_NOERR) call netcdf_error (status, var='ntheta')
-
-       !Grids
        status = nf90_def_var (ncid_movie, 'tm', netcdf_real, time_movie_dim, time_movie_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='tm')
        status = nf90_put_att (ncid_movie, time_movie_id, 'long_name', 'Time')
@@ -1648,43 +1395,40 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, y_id, att='long_name')
        status = nf90_def_var (ncid_movie, 'theta', netcdf_real, nth_dim, th_id)
        if (status /= NF90_NOERR) call netcdf_error (status, var='theta')
-
-       !Field data for movie
        if(fphi > zero) then
           status = nf90_def_var (ncid_movie, 'phi_by_xmode', netcdf_real, xmode_dim, phi_by_xmode_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='phi_by_xmode')
        end if
-       ! TEMPORARY BD | Disable DD to match gs2_diagnostics
-       !status = nf90_def_var (ncid_movie, 'density_by_xmode', netcdf_real, xmode_dim, apar_by_xmode_id)
-       !if (status /= NF90_NOERR) call netcdf_error (status, var='density_by_xmode')
-
-       if(fapar > zero) then
-          status = nf90_def_var (ncid_movie, 'apar_by_xmode', netcdf_real, xmode_dim, apar_by_xmode_id)
-          if (status /= NF90_NOERR) call netcdf_error (status, var='apar_by_xmode')
-       end if
-
+! TEMPORARY BD
+       status = nf90_def_var (ncid_movie, 'density_by_xmode', netcdf_real, xmode_dim, apar_by_xmode_id)
+       if (status /= NF90_NOERR) call netcdf_error (status, var='density_by_xmode')
+!       if(fapar > zero) then
+!          status = nf90_def_var (ncid_movie, 'apar_by_xmode', netcdf_real, xmode_dim, apar_by_xmode_id)
+!          if (status /= NF90_NOERR) call netcdf_error (status, var='apar_by_xmode')
+!       end if
        if(fbpar > zero) then
           status = nf90_def_var (ncid_movie, 'bpar_by_xmode', netcdf_real, xmode_dim, bpar_by_xmode_id)
           if (status /= NF90_NOERR) call netcdf_error (status, var='bpar_by_xmode')
        end if
-       
-       !Finish defining
+
        status = nf90_enddef (ncid_movie)  ! out of definition mode
        if (status /= NF90_NOERR) call netcdf_error (status)
     endif
-#endif
-  end subroutine define_vars_mymovie
+
+# endif
+  end subroutine define_vars
 
   subroutine nc_eigenfunc (phase)
-# ifdef NETCDF
+
+!    use nf90_mod, only: nf90_put_var
     use convert, only: c2r
     use run_parameters, only: fphi, fapar, fbpar
     use fields_arrays, only: phi, apar, bpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     complex, dimension(:,:), intent (in) :: phase
 # ifdef NETCDF
     complex, dimension(-ntgrid:ntgrid, ntheta0, naky) :: tmp
@@ -1725,130 +1469,70 @@ contains
 # endif
   end subroutine nc_eigenfunc
 
-!<DD> Commenting out the following routine as should use
-!     write_phi_over_time, write_apar_over_time etc. to
-!     indicate that we want to write various fields vs time.
-! !MR begin
-!   subroutine nc_write_fields (nout, phinew, aparnew, bparnew)
-!     use convert, only: c2r
-!     use run_parameters, only: fphi, fapar, fbpar
-!     use theta_grid, only: ntgrid
-!     use kt_grids, only: naky, ntheta0
-! # ifdef NETCDF
-!     use netcdf, only: nf90_put_var
-! # endif
-!     complex, dimension (:,:,:), intent (in) :: phinew, aparnew, bparnew
-!     integer, intent (in) :: nout
-! !    real, dimension (2, 2*ntgrid+1, ntheta0, naky, 1) :: ri4
-!     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
-!     integer, dimension (5) :: start5, count5
-!     integer :: status
-! # ifdef NETCDF
-!     start5(1) = 1
-!     start5(2) = 1
-!     start5(3) = 1
-!     start5(4) = 1
-!     start5(5) = nout
-    
-!     count5(1) = 2
-!     count5(2) = 2*ntgrid+1
-!     count5(3) = ntheta0
-!     count5(4) = naky
-!     count5(5) = 1
-
-!     if (fphi > zero) then
-!        call c2r (phinew, ri3)
-!        status = nf90_put_var(ncid, phi_t_id, ri3, start=start5, count=count5)
-!        if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_t_id)
-!     end if
-
-!     if (fapar > zero) then
-!        call c2r (aparnew, ri3)
-!        status = nf90_put_var(ncid, apar_t_id, ri3, start=start5, count=count5)
-!        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_t_id)
-!     end if
-
-!     if (fbpar > zero) then
-!        call c2r (bparnew, ri3)
-!        status = nf90_put_var(ncid, bpar_t_id, ri3, start=start5, count=count5)
-!        if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_t_id)
-!     end if
-! # endif
-!   end subroutine nc_write_fields
-! !MR end
-
-!CMR begin
-  subroutine nc_write_moments (nout, ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1, ob_midplane) 
-    use theta_grid, only: ntgrid
-# ifdef NETCDF
+!MR begin
+  subroutine nc_write_fields (nout, phinew, aparnew, bparnew)
     use convert, only: c2r
+    use run_parameters, only: fphi, fapar, fbpar
+    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
-    use species, only: nspec
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
-    complex, dimension (-ntgrid:,:,:,:), intent (in) :: ntot, density, upar, tpar, tperp
-    complex, dimension (-ntgrid:,:,:,:), intent (in) :: qparflux, pperpj1, qpperpj1
+    complex, dimension (:,:,:), intent (in) :: phinew, aparnew, bparnew
     integer, intent (in) :: nout
-    logical, optional, intent(in) :: ob_midplane
-# ifdef NETCDF
-    real, dimension (2, 2*ntgrid+1, ntheta0, naky, nspec) :: ri4
-    real, dimension (2, ntheta0, naky, nspec) :: ri3
-    integer, dimension (6) :: start6, count6
+!    real, dimension (2, 2*ntgrid+1, ntheta0, naky, 1) :: ri4
+    real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
     integer, dimension (5) :: start5, count5
     integer :: status
-
-    if (present(ob_midplane)) then
-       if (ob_midplane ) then
-          start5(1) = 1
-          start5(2) = 1
-          start5(3) = 1
-          start5(4) = 1
-          start5(5) = nout
+# ifdef NETCDF
+    start5(1) = 1
+    start5(2) = 1
+    start5(3) = 1
+    start5(4) = 1
+    start5(5) = nout
     
-          count5(1) = 2
-          count5(2) = ntheta0
-          count5(3) = naky
-          count5(4) = nspec
-          count5(5) = 1
+    count5(1) = 2
+    count5(2) = 2*ntgrid+1
+    count5(3) = ntheta0
+    count5(4) = naky
+    count5(5) = 1
 
-          call c2r (reshape(ntot(0,:,:,:),(/ntheta0,naky,nspec/)), ri3)
-          status = nf90_put_var(ncid, ntot0_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot0_id)
-   
-          call c2r (reshape(density(0,:,:,:),(/ntheta0,naky,nspec/)), ri3)
-          status = nf90_put_var(ncid, density0_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, density0_id)
+    if (fphi > zero) then
+       call c2r (phinew, ri3)
+       status = nf90_put_var(ncid, phi_t_id, ri3, start=start5, count=count5)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_t_id)
+    end if
 
-          call c2r (reshape(upar(0,:,:,:),(/ntheta0,naky,nspec/)), ri3)
-          status = nf90_put_var(ncid, upar0_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, upar0_id)
-      
-          call c2r (reshape(tpar(0,:,:,:),(/ntheta0,naky,nspec/)), ri3)
-          status = nf90_put_var(ncid, tpar0_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, tpar0_id)
-      
-          call c2r (reshape(tperp(0,:,:,:),(/ntheta0,naky,nspec/)), ri3)
-          status = nf90_put_var(ncid, tperp0_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp0_id)
-      
-          call c2r (reshape(qparflux(0,:,:,:),(/ntheta0,naky,nspec/)), ri3)
-          status = nf90_put_var(ncid, qparflux0_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, qparflux0_id)
-      
-          call c2r (reshape(pperpj1(0,:,:,:),(/ntheta0,naky,nspec/)), ri3)
-          status = nf90_put_var(ncid, pperpj10_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, pperpj10_id)
-      
-          call c2r (reshape(qpperpj1(0,:,:,:),(/ntheta0,naky,nspec/)), ri3)
-          status = nf90_put_var(ncid, qpperpj10_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, qpperpj10_id)
-   
-          return
+    if (fapar > zero) then
+       call c2r (aparnew, ri3)
+       status = nf90_put_var(ncid, apar_t_id, ri3, start=start5, count=count5)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_t_id)
+    end if
 
-       endif
-    endif
+    if (fbpar > zero) then
+       call c2r (bparnew, ri3)
+       status = nf90_put_var(ncid, bpar_t_id, ri3, start=start5, count=count5)
+       if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_t_id)
+    end if
+# endif
+  end subroutine nc_write_fields
+!MR end
 
+!CMR begin
+  subroutine nc_write_moments (nout, ntot)
+    use convert, only: c2r
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use species, only: nspec
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var
+# endif
+    complex, dimension (:,:,:,:), intent (in) :: ntot
+    integer, intent (in) :: nout
+    real, dimension (2, 2*ntgrid+1, ntheta0, naky, nspec) :: ri4
+    integer, dimension (6) :: start6, count6
+    integer :: status
+# ifdef NETCDF
     start6(1) = 1
     start6(2) = 1
     start6(3) = 1
@@ -1867,48 +1551,22 @@ contains
     status = nf90_put_var(ncid, ntot_t_id, ri4, start=start6, count=count6)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, ntot_t_id)
 
-    call c2r (density, ri4)
-    status = nf90_put_var(ncid, density_t_id, ri4, start=start6, count=count6)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, density_t_id)
-
-    call c2r (upar, ri4)
-    status = nf90_put_var(ncid, upar_t_id, ri4, start=start6, count=count6)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, upar_t_id)
-   
-    call c2r (tpar, ri4)
-    status = nf90_put_var(ncid, tpar_t_id, ri4, start=start6, count=count6)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, tpar_t_id)
-   
-    call c2r (tperp, ri4)
-    status = nf90_put_var(ncid, tperp_t_id, ri4, start=start6, count=count6)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp_t_id)
-   
-    call c2r (qparflux, ri4)
-    status = nf90_put_var(ncid, qparflux_t_id, ri4, start=start6, count=count6)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, qparflux_t_id)
-   
-    call c2r (pperpj1, ri4)
-    status = nf90_put_var(ncid, pperpj1_t_id, ri4, start=start6, count=count6)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, pperpj1_t_id)
-   
-    call c2r (qpperpj1, ri4)
-    status = nf90_put_var(ncid, qpperpj1_t_id, ri4, start=start6, count=count6)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, qpperpj1_t_id)
-
 # endif
   end subroutine nc_write_moments
 !CMR end
 
   subroutine nc_final_fields
-# ifdef NETCDF
+
+!    use nf90_mod, only: nf90_put_var
     use convert, only: c2r
     !use fields_arrays, only: phi, apar, bpar ! EGH changed Jan 14
     use fields_arrays, only: phinew, aparnew, bparnew
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
+# ifdef NETCDF
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf, only: nf90_put_var
-    implicit none
+
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
     integer :: status
 
@@ -1933,13 +1591,13 @@ contains
   end subroutine nc_final_fields
 
   subroutine nc_final_epar (epar)
+
 # ifdef NETCDF
     use convert, only: c2r
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     complex, dimension (:,:,:), intent (in) :: epar
 # ifdef NETCDF
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
@@ -1952,14 +1610,15 @@ contains
   end subroutine nc_final_epar
 
   subroutine nc_final_moments (ntot, density, upar, tpar, tperp, qparflux, pperpj1, qpperpj1)
-# ifdef NETCDF
+
+!    use nf90_mod, only: nf90_put_var
     use convert, only: c2r
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     complex, dimension (:,:,:,:), intent (in) :: ntot, density, upar, tpar, tperp
     complex, dimension (:,:,:,:), intent (in) :: qparflux, pperpj1, qpperpj1
 # ifdef NETCDF
@@ -2001,64 +1660,64 @@ contains
 # endif
   end subroutine nc_final_moments
 
-!   subroutine nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
+  subroutine nc_loop_vres (nout, errest_by_mode, lpcoef_by_mode)
 
-! !    use nf90_mod, only: nf90_put_vara
-!     use theta_grid, only: ntgrid
-!     use kt_grids, only: naky, ntheta0
-!     use species, only: nspec
+!    use nf90_mod, only: nf90_put_vara
+    use theta_grid, only: ntgrid
+    use kt_grids, only: naky, ntheta0
+    use species, only: nspec
 
-!     integer, intent (in) :: nout
-!     real, dimension(:,:,:,:), intent (in) :: errest_by_mode
-!     real, dimension(:,:,:,:,:), intent (in) :: lpcoef_by_mode
-! # ifdef NETCDF
-!     integer, dimension (6) :: start2, count2
-!     integer, dimension (5) :: start1, count1
-! !    integer :: status
+    integer, intent (in) :: nout
+    real, dimension(:,:,:,:), intent (in) :: errest_by_mode
+    real, dimension(:,:,:,:,:), intent (in) :: lpcoef_by_mode
+# ifdef NETCDF
+    integer, dimension (6) :: start2, count2
+    integer, dimension (5) :: start1, count1
+!    integer :: status
 
-!     start1(1) = 1
-!     start1(2) = 1
-!     start1(3) = 1
-!     start1(4) = 1
-!     start1(5) = nout
+    start1(1) = 1
+    start1(2) = 1
+    start1(3) = 1
+    start1(4) = 1
+    start1(5) = nout
 
-!     start2(1) = 1
-!     start2(2) = 1
-!     start2(3) = 1
-!     start2(4) = 1
-!     start2(5) = 1
-!     start2(6) = nout
+    start2(1) = 1
+    start2(2) = 1
+    start2(3) = 1
+    start2(4) = 1
+    start2(5) = 1
+    start2(6) = nout
   
-!     count1(1) = 2*ntgrid+1
-!     count1(2) = ntheta0
-!     count1(3) = naky
-!     count1(4) = 4
-!     count1(5) = 1
+    count1(1) = 2*ntgrid+1
+    count1(2) = ntheta0
+    count1(3) = naky
+    count1(4) = 4
+    count1(5) = 1
 
-!     count2(1) = 2*ntgrid+1
-!     count2(2) = ntheta0
-!     count2(3) = naky
-!     count2(4) = nspec
-!     count2(5) = 2
-!     count2(6) = 1
+    count2(1) = 2*ntgrid+1
+    count2(2) = ntheta0
+    count2(3) = naky
+    count2(4) = nspec
+    count2(5) = 2
+    count2(6) = 1
 
-! !    status = nf90_put_var (ncid, errest_by_mode_id, start=start1, count=count1, errest_by_mode)
-! !    if (status /= NF90_NOERR) call netcdf_error (status, ncid, errest_by_mode_id)
-! !    status = nf90_put_var (ncid, lpcoef_by_mode_id, start=start2, count=count2, lpcoef_by_mode)
-! !    if (status /= NF90_NOERR) call netcdf_error (status, ncid, lpcoef_by_mode_id)
-! # endif
-!   end subroutine nc_loop_vres
+!    status = nf90_put_var (ncid, errest_by_mode_id, start=start1, count=count1, errest_by_mode)
+!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, errest_by_mode_id)
+!    status = nf90_put_var (ncid, lpcoef_by_mode_id, start=start2, count=count2, lpcoef_by_mode)
+!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, lpcoef_by_mode_id)
+# endif
+  end subroutine nc_loop_vres
 
-!Note these are averaged (volume/field line) moments.
   subroutine nc_loop_moments (nout, ntot2, ntot2_by_mode, ntot20, ntot20_by_mode, &
        phi00, ntot00, density00, upar00, tpar00, tperp00, tpar2_by_mode, tperp2_by_mode)
-# ifdef NETCDF
+
+!    use nf90_mod, only: nf90_put_vara
     use convert, only: c2r
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     integer, intent (in) :: nout
     real, dimension (:), intent (in) :: ntot2, ntot20
     real, dimension (:,:,:), intent (in) :: ntot2_by_mode, ntot20_by_mode
@@ -2148,15 +1807,16 @@ contains
   end subroutine nc_loop_moments
 
   subroutine nc_final_an (antot, antota, antotp)
-# ifdef NETCDF
+
+!    use nf90_mod, only: nf90_put_var
     use convert, only: c2r
     use run_parameters, only: fphi, fapar, fbpar
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
-    complex, dimension (:,:,:), intent(in) :: antot, antota, antotp
+    complex, dimension (:,:,:) :: antot, antota, antotp ! intent?
 # ifdef NETCDF
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
     integer :: status
@@ -2182,13 +1842,16 @@ contains
   end subroutine nc_final_an
 
   subroutine nc_exchange (nout, exchange, exchange_avg)
-# ifdef NETCDF
+
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
+
     implicit none
+
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: exchange
     real, dimension (:), intent (in) :: exchange_avg
@@ -2220,19 +1883,20 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, es_exchange_by_k_id)
     end if
 # endif
+
   end subroutine nc_exchange
 
   subroutine nc_qflux (nout, qheat, qmheat, qbheat, &
        heat_par,  mheat_par,  bheat_par, &
        heat_perp, mheat_perp, bheat_perp, &
        heat_fluxes, mheat_fluxes, bheat_fluxes, x_qmflux, hflux_tot)
-# ifdef NETCDF
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
+!    use nf90_mod, only: nf90_put_vara, nf90_put_var1
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: qheat, qmheat, qbheat
     real, dimension (:), intent (in) :: heat_par, mheat_par, bheat_par
@@ -2290,7 +1954,7 @@ contains
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_heat_perp_id)
        status = nf90_put_var (ncid, apar_heat_by_k_id, qmheat, start=start4, count=count4)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_heat_by_k_id)
-       status = nf90_put_var (ncid, apar_heat_by_x_id, x_qmflux, start=start3, count=count3)
+       status = nf90_put_var (ncid, apar_heat_by_x_id, qmheat, start=start3, count=count3)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_heat_by_x_id)
     end if
 
@@ -2312,13 +1976,14 @@ contains
 
   subroutine nc_pflux (nout, pflux, pmflux, pbflux, &
        part_fluxes, mpart_fluxes, bpart_fluxes, zflux_tot)
-# ifdef NETCDF
+
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
     use run_parameters, only: fphi, fapar, fbpar
+!    use nf90_mod, only: nf90_put_vara, nf90_put_var1
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: pflux, pmflux, pbflux
     real, dimension(:), intent (in) :: part_fluxes, mpart_fluxes, bpart_fluxes
@@ -2371,13 +2036,14 @@ contains
   end subroutine nc_pflux
 
  subroutine nc_pflux_tormom (nout, pflux_tormom, part_tormom_fluxes)
-# ifdef NETCDF
+
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
+!    use nf90_mod, only: nf90_put_vara, nf90_put_var1
+# ifdef NETCDF
     use run_parameters, only: fphi
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: pflux_tormom
     real, dimension(:), intent (in) :: part_tormom_fluxes
@@ -2412,16 +2078,18 @@ contains
 # endif
   end subroutine nc_pflux_tormom
 
+
   subroutine nc_vflux (nout, vflux, vmflux, vbflux, &
        mom_fluxes, mmom_fluxes, bmom_fluxes, vflux_tot, &
        vflux_par, vflux_perp, vflux0, vflux1)
-# ifdef NETCDF
+
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
+!    use nf90_mod, only: nf90_put_vara, nf90_put_var1
+# ifdef NETCDF
     use run_parameters, only: fphi, fapar, fbpar
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     integer, intent (in) :: nout
     real, dimension (:,:,:), intent (in) :: vflux, vmflux, vbflux
     real, dimension (:,:,:), intent (in) :: vflux_par, vflux_perp
@@ -2484,13 +2152,13 @@ contains
   end subroutine nc_vflux
 
   subroutine nc_loop_sym (nout, vflx_sym)
-    use theta_grid, only: ntgrid
-# ifdef NETCDF
+
     use species, only: nspec
     use run_parameters, only: fphi
     use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
-    implicit none
 # endif
     integer, intent (in) :: nout
     real, dimension (-ntgrid:,:,:), intent (in) :: vflx_sym
@@ -2517,14 +2185,14 @@ contains
   end subroutine nc_loop_sym
   
   subroutine nc_loop_partsym_tormom (nout, partflx_sym) 
-    use theta_grid, only: ntgrid
-# ifdef NETCDF
+
     use species, only: nspec
     use run_parameters, only: fphi
     use le_grids, only: negrid, nlambda
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     integer, intent (in) :: nout
     real, dimension (-ntgrid:,:,:), intent (in) :: partflx_sym
 # ifdef NETCDF
@@ -2550,14 +2218,14 @@ contains
   end subroutine nc_loop_partsym_tormom
 
   subroutine nc_loop_corr (nout,phi_2pi_corr)
-    use theta_grid, only: ntgrid
-# ifdef NETCDF
+
     use convert, only: c2r
     use run_parameters, only: fphi
     use kt_grids, only: naky
+    use theta_grid, only: ntgrid
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     integer, intent (in) :: nout
     complex, dimension (-ntgrid:,:), intent (in) :: phi_2pi_corr
 # ifdef NETCDF
@@ -2586,15 +2254,15 @@ contains
   end subroutine nc_loop_corr
 
   subroutine nc_loop_corr_extend (nout_big,phi_corr,phi2_extend)
-# ifdef NETCDF
+
     use file_utils, only: error_unit
     use convert, only: c2r
     use run_parameters, only: fphi
     use kt_grids, only: ntheta0, naky, jtwist_out
     use theta_grid, only: ntgrid
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
 # endif
-    implicit none
     integer, intent (in) :: nout_big
     real, dimension (:,:,:), intent (in) :: phi2_extend
     complex, dimension (:,:,:), intent (in) :: phi_corr
@@ -2602,6 +2270,7 @@ contains
     integer, dimension (4) :: start4, count4
     integer, dimension (5) :: start5, count5
     integer :: status, ierr
+
     real, dimension (2, size(phi_corr,1), size(phi_corr,2), size(phi_corr,3)) :: ri3
 
     ierr = error_unit()
@@ -2644,19 +2313,23 @@ contains
        apar0,  apar2,  apar2_by_mode, &
        bpar0, bpar2, bpar2_by_mode, &
        h, hk, omega, omegaavg, woutunits, phitot, write_omega, write_hrate)
-    use gs2_heating, only: heating_diagnostics
-# ifdef NETCDF
-    use gs2_heating, only: hk_repack
+
+    use gs2_heating, only: heating_diagnostics, hk_repack
     use run_parameters, only: fphi, fapar, fbpar
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use species, only: nspec
     use convert, only: c2r
+    !use fields_arrays, only: phi, apar, bpar
     use fields_arrays, only: phinew, aparnew, bparnew
-    use parameter_scan_arrays, only: write_scan_parameter,current_scan_parameter_value
-    use netcdf, only: nf90_put_var
+    use parameter_scan_arrays, only: write_scan_parameter,&
+                                     current_scan_parameter_value
+
+!    use nf90_mod, only: nf90_put_var1, nf90_put_vara
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var, nf90_sync
 # endif
-    implicit none
+
     integer, intent (in) :: nout
     real, intent (in) :: time, phi2, apar2, bpar2
     real, dimension (:), intent (in) :: fluxfac, woutunits
@@ -2664,7 +2337,7 @@ contains
     real, dimension(:,:), intent (in) :: phi2_by_mode, apar2_by_mode, bpar2_by_mode, phitot
     type(heating_diagnostics), intent (in) :: h
     type(heating_diagnostics), dimension(:,:), intent (in) :: hk
-    logical, intent(in) :: write_omega, write_hrate
+    logical :: write_omega, write_hrate
 # ifdef NETCDF
     real, dimension (ntheta0) :: field2_by_kx
     real, dimension (naky) :: field2_by_ky
@@ -2675,6 +2348,8 @@ contains
     integer, dimension (3) :: start, count, starth, counth
     integer, dimension (2) :: startx, countx, starty, county, starts, counts
     integer :: status, it, ik
+
+
     !Added by EGH ; for writing phi_t, the whole potential vs time
     real, dimension (2, 2*ntgrid+1, ntheta0, naky) :: ri3
     integer, dimension (5) :: start5, count5
@@ -2692,6 +2367,8 @@ contains
     count5(5) = 1
   
     !End EGH
+
+
 
     status = nf90_put_var (ncid, time_id, time, start=(/ nout /))
 
@@ -2757,7 +2434,7 @@ contains
           call c2r (phinew, ri3)
           !ri_phi_t(:,:,:,:,1) = ri3(:,:,:,:)
           status = nf90_put_var (ncid, phi_t_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_t_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, phi_id)
        end if
 
        if (ntheta0 > 1) then
@@ -2791,7 +2468,7 @@ contains
           call c2r (aparnew, ri3)
           !ri_apar_t(:,:,:,:,1) = ri3(:,:,:,:)
           status = nf90_put_var (ncid, apar_t_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_t_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, apar_id)
        end if
 
        if (ntheta0 > 1) then
@@ -2825,7 +2502,7 @@ contains
           call c2r (bparnew, ri3)
           !ri_bpar_t(:,:,:,:,1) = ri3(:,:,:,:)
           status = nf90_put_var (ncid, bpar_t_id, ri3, start=start5, count=count5)
-          if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_t_id)
+          if (status /= NF90_NOERR) call netcdf_error (status, ncid, bpar_id)
        end if
 
        if (ntheta0 > 1) then
@@ -2965,24 +2642,32 @@ contains
        call netcdf_error (status, ncid, current_scan_parameter_value_id)
      end if
 
-    status = nf90_put_var (ncid, phtot_id, phitot, start=start, count=count)
-    if (status /= NF90_NOERR) call netcdf_error (status, ncid, phtot_id)
+!    status = nf90_put_var (ncid, phtot_id, phitot, start=start, count=count)
+!    if (status /= NF90_NOERR) call netcdf_error (status, ncid, phtot_id)
+    
+    if (mod(nout, 10) == 0) then
+       status = nf90_sync (ncid)
+       if (status /= NF90_NOERR) call netcdf_error (status)
+    end if
 # endif
   end subroutine nc_loop
 
   ! RN> output full not guiding center moments 
   subroutine nc_loop_fullmom (nout, time, &
        & ntot0, density0, upar0, tpar0, tperp0)
-# ifdef NETCDF
     use kt_grids, only: naky, nakx => ntheta0
     use species, only: nspec
     use convert, only: c2r
-    use netcdf, only: nf90_put_var
+# ifdef NETCDF
+    use netcdf, only: nf90_put_var, nf90_sync
+    use netcdf_utils, only: netcdf_error
 # endif
     implicit none
+
     integer, intent (in) :: nout
     real, intent (in) :: time
-    complex, dimension(:,:,:), intent(in) :: ntot0, density0, upar0, tpar0, tperp0
+    complex, intent(in) :: ntot0(:,:,:), density0(:,:,:), upar0(:,:,:)
+    complex, intent(in) :: tpar0(:,:,:), tperp0(:,:,:)
 # ifdef NETCDF
     real, dimension (2, nakx, naky, nspec) :: ri3
     integer, dimension (5) :: startmom, countmom
@@ -3012,19 +2697,24 @@ contains
     call c2r (tperp0, ri3)
     status = nf90_put_var (ncid, tperp0_id, ri3, start=startmom, count=countmom)
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, tperp0_id)
+
+    if (mod(nout, 10) == 0) then
+       status = nf90_sync (ncid)
+       if (status /= NF90_NOERR) call netcdf_error (status)
+    end if
 # endif
   end subroutine nc_loop_fullmom
   ! <RN
 
   ! added by EAB on 03/05/04
   subroutine nc_loop_movie (nout_movie, time, yxphi, yxapar, yxbpar)
-# ifdef NETCDF
     use gs2_layouts, only: yxf_lo
     use theta_grid, only: ntgrid
-    use run_parameters, only: fphi, fapar, fbpar
-    use netcdf, only: nf90_put_var
+!    use nf90_mod, only: nf90_put_var1, nf90_put_vara
+# ifdef NETCDF
+    use run_parameters, only: fphi, fbpar
+    use netcdf, only: nf90_put_var, nf90_sync
 # endif
-    implicit none
     integer, intent (in) :: nout_movie
     real, intent (in) :: time
     real, dimension (:,:,:), intent (in):: yxphi, yxapar, yxbpar 
@@ -3043,55 +2733,35 @@ contains
     count(3) = 2*ntgrid+1
     count(4) = 1
 
+
     if ( fphi > zero) then
        status = nf90_put_var (ncid_movie, phi_by_xmode_id, yxphi, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, phi_by_xmode_id)
     end if
-
-    if ( fapar > zero) then
+!    if ( fapar > zero) then !<DD> Why is this commented out?
        status = nf90_put_var (ncid_movie, apar_by_xmode_id, yxapar, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, apar_by_xmode_id)
-    end if
+!    end if
 
     if ( fbpar > zero) then
        status = nf90_put_var (ncid_movie, bpar_by_xmode_id, yxbpar, start=start, count=count)
        if (status /= NF90_NOERR) call netcdf_error (status, ncid_movie, bpar_by_xmode_id)
     end if
+
+    if (mod(nout_movie, 10) == 0) then
+       status = nf90_sync (ncid_movie)
+       if (status /= NF90_NOERR) call netcdf_error (status)
+    end if
 # endif
   end subroutine nc_loop_movie
 
-  !> Sync the files every nsync writes
-  subroutine nc_sync(nout, nout_movie)
-# ifdef NETCDF
-    use netcdf, only: nf90_sync
-# endif
-    implicit none
-    integer, intent(in) :: nout, nout_movie
-# ifdef NETCDF
-    integer, parameter :: nsync=10
-    integer :: status
-
-    !Main file
-    if(mod(nout,nsync) == 0) then
-       status = nf90_sync (ncid)
-       if (status /= NF90_NOERR) call netcdf_error (status)
-    endif
-
-    !Movie file
-    if(my_make_movie) then
-       if(mod(nout_movie,nsync) == 0) then
-          status = nf90_sync (ncid_movie)       
-          if (status /= NF90_NOERR) call netcdf_error (status)
-       endif
-    endif
-# endif
-  end subroutine nc_sync
-
   subroutine nc_species
-# ifdef NETCDF
+
     use species, only: spec
+!    use nf90_mod, only: nf90_put_var
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
-    implicit none
+
 !    real :: betatot
     integer :: status
 
@@ -3123,14 +2793,16 @@ contains
   end subroutine nc_species
 
   subroutine nc_geo
-# ifdef NETCDF
+
     use theta_grid, only: bmag, gradpar, gbdrift, gbdrift0, &
          cvdrift, cvdrift0, gds2, gds21, gds22, grho, jacob, &
          shat, drhodpsi, eps, cdrift, cdrift0, qval !, surfarea
 !CMR add qval and beta here too, as they are both useful
     use run_parameters, only: beta
+!    use nf90_mod, only: nf90_put_var
+# ifdef NETCDF
     use netcdf, only: nf90_put_var
-    implicit none
+
     integer :: status
 
     status = nf90_put_var (ncid, bmag_id, bmag)
@@ -3174,4 +2846,5 @@ contains
     if (status /= NF90_NOERR) call netcdf_error (status, ncid, drhodpsi_id)
 # endif
   end subroutine nc_geo
+
 end module gs2_io

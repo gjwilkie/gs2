@@ -4,16 +4,15 @@ contains
 
   subroutine gridgen4read (filename,ntheta,nperiod,ntgrid,nlambda,theta,alambda, &
        gbdrift,gradpar,cvdrift,gds2,bmag,gds21,gds22,cvdrift0,gbdrift0)
-    use mp, only: mp_abort
     implicit none
     character(*), intent (in) :: filename
     integer, intent (in out) :: ntheta, nperiod, ntgrid, nlambda
-    real, dimension (-ntgrid:ntgrid), intent(out) :: theta
-    real, dimension (nlambda), intent(out) :: alambda
-    real, dimension (-ntgrid:ntgrid), intent(out) :: gbdrift, gradpar
-    real, dimension (-ntgrid:ntgrid), intent(out) :: cvdrift, gds2, bmag
-    real, dimension (-ntgrid:ntgrid), intent(out) :: gds21, gds22
-    real, dimension (-ntgrid:ntgrid), intent(out) :: cvdrift0, gbdrift0
+    real, dimension (-ntgrid:ntgrid) :: theta
+    real, dimension (nlambda) :: alambda
+    real, dimension (-ntgrid:ntgrid) :: gbdrift, gradpar
+    real, dimension (-ntgrid:ntgrid) :: cvdrift, gds2, bmag
+    real, dimension (-ntgrid:ntgrid) :: gds21, gds22
+    real, dimension (-ntgrid:ntgrid) :: cvdrift0, gbdrift0
 
     integer :: nthetain, nperiodin, ntgridin, nlambdain
     integer :: i
@@ -36,7 +35,8 @@ contains
        end if
     end do
     if (unit .eq. 0) then
-       call mp_abort("gridgen4read:  no free LUN between 10,100 => force quit",.true.)
+       write(6,*) "gridgen4read:  no free LUN between 10,100 => force quit"
+       stop
     endif
 
     open (unit=unit, file=filename, status="old")
@@ -45,7 +45,7 @@ contains
     read (unit=unit, fmt=*) nlambdain
     if (nlambdain > nlambda) then
        print *, "grid.out:nlambda > nlambda: ", nlambdain, nlambda
-       call mp_abort("grid.out:nlambda > nlambda: ")
+       stop
     end if
     nlambda = nlambdain
     read (unit=unit, fmt="(a)") line
@@ -57,7 +57,7 @@ contains
     read (unit=unit, fmt=*) ntgridin, nperiodin, nthetain
     if (ntgridin > ntgrid) then
        print *, "grid.out:ntgrid > ntgrid: ", ntgridin, ntgrid
-       call mp_abort("grid.out:ntgrid > ntgrid: ")
+       stop
     end if
     ntgrid = ntgridin
     nperiod = nperiodin
@@ -127,7 +127,6 @@ contains
   subroutine gridgen4_2 (n,nbmag,thetain,bmagin, npadd, &
        alknob,epsknob,bpknob,extrknob,thetamax,deltaw,widthw,tension, &
        ntheta,nbset,thetagrid,bmaggrid,bset)
-    use constants, only: pi, twopi
     implicit none
     integer, intent (in) :: n
     integer, intent (in) :: nbmag
@@ -138,6 +137,8 @@ contains
     integer, intent (in out) :: ntheta, nbset
     real, dimension (ntheta+1), intent (out) :: thetagrid, bmaggrid
     real, dimension (nbset), intent (out) :: bset
+
+    real, parameter :: pi = 3.1415926535897931, twopi = 6.2831853071795862
     real :: npi
     integer, parameter :: maxiter = 100
     logical, parameter :: debug_output = .true.
@@ -215,7 +216,6 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
   
     subroutine gg4init
       use splines, only: fitp_curvp1
-      use mp, only: mp_abort
       implicit none
       logical :: od
       real, dimension (2*nbmag) :: tmp
@@ -235,7 +235,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
             print *, "X values are not strictly increasing"
          end select
          write(6,*) 'gg4init: stopping with ierr=',ierr
-         call mp_abort('gg4init: stopping with ierr/=0')
+         stop
       end if
 
       nstart = 0
@@ -258,7 +258,8 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
             end if
          end do
          if (debug_unit .eq. 0) then
-            call mp_abort("gg4init:  no free LUN between 10,100 => force quit",.true.)
+            write(6,*) "gg4init:  no free LUN between 10,100 => force quit"
+            stop
          endif
          open (unit=debug_unit, file="gridgen.200", status="unknown")
          write (unit=debug_unit, fmt=*) "nbmag=", nbmag
@@ -279,7 +280,6 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     end subroutine gg4init
 
     subroutine gg4finish
-!      use mp, only: mp_abort
       implicit none
       
       if (debug_output) then
@@ -303,8 +303,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
       if (mod(nthetaout,2) /= 1) then
          print *, "gridgen4_1:gg4results:nthetaout=",nthetaout
          print *, "nthetaout is not odd, so there is a problem with gridgen"
-         print *, "This can sometimes happen if this file is not compiled with promotion to double precision."
-         !call mp_abort('MESSAGE')
+!       stop
       end if
     end subroutine gg4finish
 
@@ -537,7 +536,6 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     end subroutine add_start
 
     subroutine gg4collect
-      use mp, only: mp_abort
       implicit none
       integer :: i, iset, j
       integer :: nsetsetmax
@@ -668,7 +666,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
                   print *, "thetain(i):", thetain(i)
                   print *, "thetain(i+1):", thetain(i+1)
                   print *, "thetai:", thetai
-                  call mp_abort("gridgen4.f90:gg4collect:3.1.3.3.2: missing extremum")
+                  stop
                end if
 ! 3.1.3.3.2.1 If the minimum is greater than the target bmag, skip to
 !             the next interval.
@@ -736,7 +734,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
                   print *, "thetain(i):", thetain(i)
                   print *, "thetain(i+1):", thetain(i+1)
                   print *, "thetai:", thetai
-                  call mp_abort("gridgen4.f90:gg4collect:3.2.3.3.2: missing extremum")
+                  stop
                end if
 ! 3.2.3.3.2.1 If the maximum is less than the target bmag, skip to
 !             the next interval.
@@ -778,7 +776,6 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     end subroutine gg4collect
 
     subroutine old_gg4collect
-      use mp, only: mp_abort
       implicit none
       integer :: iset, i, ii, imatch
       real :: thetai, bmagi
@@ -891,7 +888,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
                         print *, "thetain(i):", thetain(i)
                         print *, "thetain(i+1):", thetain(i+1)
                         print *, "thetai:", thetai
-                        call mp_abort("gridgen4.f90:gg4collect:3.1.3.3.2: multiple extrema in interval")
+                        stop
                      end if
                      imatch = ii
                   end if
@@ -905,7 +902,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
                   print *, "thetain(i):", thetain(i)
                   print *, "thetain(i+1):", thetain(i+1)
                   print *, "thetai:", thetai
-                  call mp_abort("gridgen4.f90:gg4collect:3.1.3.3.2: missing extremum")
+                  stop
                end if
 ! 3.1.3.3.2.1 If the minimum is greater than the target bmag, skip to
 !             the next interval.
@@ -988,7 +985,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
                         print *, "thetain(i):", thetain(i)
                         print *, "thetain(i+1):", thetain(i+1)
                         print *, "thetai:", thetai
-                        call mp_abort("gridgen4.f90:gg4collect:3.2.3.3.2: multiple extrema in interval")
+                        stop
                      end if
                      imatch = ii
                   end if
@@ -1002,7 +999,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
                   print *, "thetain(i):", thetain(i)
                   print *, "thetain(i+1):", thetain(i+1)
                   print *, "thetai:", thetai
-                  call mp_abort("gridgen4.f90:gg4collect:3.2.3.3.2: missing extremum")
+                  stop
                end if
 ! 3.2.3.3.2.1 If the maximum is less than the target bmag, skip to
 !             the next interval.
@@ -1311,7 +1308,6 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
     end subroutine get_lambdares
 
     subroutine gg4remove
-      use mp, only: mp_abort
       implicit none
       integer :: idel, i
       integer :: ntheta_left, nlambda_left
@@ -1333,7 +1329,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
 ! 2 Delete the set just found.
          if (idel == 0) then
             print *, "gridgen4.f:gg4remove:2: This cannot happen."
-            call mp_abort("gridgen4.f:gg4remove:2: This cannot happen.")
+            stop
          end if
          call delete_set (idel, work, ntheta_left)
          nlambda_left = nlambda_left - 1
@@ -1508,7 +1504,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
   subroutine dsmooth (n, xin, yin, yout)
     implicit none
 
-    integer, intent(in) :: n
+    integer n
     real, dimension (:), intent (in) ::  xin, yin
     real, dimension (:), intent (out) :: yout
 
@@ -1553,7 +1549,7 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
   subroutine d2smooth (n, xin, yin, yout)
     implicit none
 
-    integer, intent(in) :: n
+    integer n
     real, dimension (:), intent (in) ::  xin, yin
     real, dimension (:), intent (out) :: yout
 
@@ -1601,11 +1597,13 @@ if (debug) write(6,*) "gridgen4_2: call gg4finish"
   subroutine smooth (n, xin, yin, var, yout, ifail)
     implicit none
 
-    integer, intent(in) :: n
+    integer n
     real, dimension (:), intent (in) :: xin, yin
     real, dimension (:), intent (out) :: yout
-    real, intent(in out) :: var
-    integer, intent(out) :: ifail
+    real :: var
+
+    integer ifail
+
 
 ! these next arrays should be double precision, which we usually get with 
 ! compiler options

@@ -10,25 +10,20 @@
 
 module parameter_scan
 
-  !These should really be moved to specific routines where required
-  use parameter_scan_arrays, only: current_scan_parameter_value, write_scan_parameter, run_scan
-  use parameter_scan_arrays, only: scan_parameter_switch, scan_parameter_tprim, scan_parameter_g_exb
-  use parameter_scan_arrays, only: scan_spec, hflux_tot, momflux_tot, phi2_tot, nout
-
-  implicit none
-
-  private
+  use parameter_scan_arrays
 
   public :: init_parameter_scan
   public :: finish_parameter_scan
   public :: update_scan_parameter_value
   public :: allocate_target_arrays
-  public :: deallocate_target_arrays
   public :: target_parameter_switch, scan_type_switch, scan_type_none
   public :: target_parameter_hflux_tot, target_parameter_momflux_tot, target_parameter_phi2_tot
-  public :: scan_restarted
 
   logical :: scan_restarted
+  public :: scan_restarted
+
+
+  private
 
   integer :: target_parameter_switch, &
              scan_type_switch, &
@@ -54,13 +49,14 @@ module parameter_scan
   real :: target_val
   integer :: scan_output_file
   real :: current_target_value = 0.0
-    logical :: initialized = .false.
+
 
 contains
   subroutine init_parameter_scan
     use gs2_save, only: restore_current_scan_parameter_value 
     use init_g, only: init_init_g
     use file_utils, only: open_output_file
+    logical, save :: initialized = .false.
     !write (*,*) "initializing parameter_scan"
 
     if (initialized) return
@@ -135,18 +131,13 @@ contains
      !write (*,*) "allocating target arrays ", nwrite, ",", nstep 
   end subroutine allocate_target_arrays
 
-  subroutine deallocate_target_arrays
-    if (allocated(hflux_tot)) deallocate(hflux_tot)
-    if (allocated(momflux_tot)) deallocate(momflux_tot)
-    if (allocated(phi2_tot)) deallocate(phi2_tot)
-  end subroutine deallocate_target_arrays
-
 
   subroutine finish_parameter_scan
     use file_utils, only: close_output_file
-    call deallocate_target_arrays
+    if (allocated(hflux_tot)) deallocate(hflux_tot)
+    if (allocated(momflux_tot)) deallocate(momflux_tot)
+    if (allocated(phi2_tot)) deallocate(phi2_tot)
     call close_output_file(scan_output_file)
-    initialized = .false.
   end subroutine finish_parameter_scan
   
   subroutine update_scan_parameter_value(istep, reset, exit)
@@ -165,7 +156,7 @@ contains
     case (scan_type_none)
       return
     case (scan_type_range)
-      write (scan_output_file, fmt="('time=  ',e11.4,'  parameter=  ',e11.4)") &
+      write (scan_output_file, fmt="('time=  ',e10.4,'  parameter=  ',e10.4)") &
           user_time, current_scan_parameter_value
       call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       if (.not. increment_condition_satisfied) return
@@ -181,7 +172,7 @@ contains
        end if
      case (scan_type_target)
       write (scan_output_file, &
-        fmt="('time=  ',e11.4,'  parameter=  ',e11.4,'  target=  ',e11.4)") &
+        fmt="('time=  ',e10.4,'  parameter=  ',e10.4,'  target=  ',e10.4)") &
           user_time, current_scan_parameter_value, current_target_value 
       call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       if (.not. increment_condition_satisfied) return
@@ -195,7 +186,7 @@ contains
     case (scan_type_root_finding)
       call mp_abort("scan_type_root_finding not implemented yet!")
       !write (scan_output_file, &
-        !fmt="(time=  e11.4  parameter=  e11.4  target=  e11.4)") &
+        !fmt="(time=  e10.4  parameter=  e10.4  target=  e10.4)") &
           !user_time, current_scan_parameter_value, current_target_value 
       !call check_increment_condition_satisfied(istep, increment_condition_satisfied)
       !if (.not. increment_condition_satisfied) return
@@ -243,37 +234,13 @@ contains
   end subroutine check_target_reached
 
   subroutine increment_scan_parameter(increment, reset)
+    use fields_implicit, only: set_scan_parameter
     real, intent (in) :: increment
     logical, intent (inout) :: reset
     current_scan_parameter_value = current_scan_parameter_value + increment
     call set_scan_parameter(reset)
   end subroutine increment_scan_parameter
      
-  subroutine set_scan_parameter(reset)
-    !use parameter_scan_arrays, only: current_scan_parameter_value
-    !use parameter_scan_arrays, only: scan_parameter_switch
-    !use parameter_scan_arrays, only: scan_parameter_tprim
-    !use parameter_scan_arrays, only: scan_parameter_g_exb
-    !use parameter_scan_arrays
-    use species, only: spec 
-    use dist_fn, only: g_exb
-    use mp, only: proc0
-    logical, intent (inout) :: reset
-     
-    select case (scan_parameter_switch)
-    case (scan_parameter_tprim)
-       spec(scan_spec)%tprim = current_scan_parameter_value
-       if (proc0) write (*,*) &
-         "Set scan parameter tprim_1 to ", spec(scan_spec)%tprim
-       reset = .true.
-    case (scan_parameter_g_exb)
-       g_exb = current_scan_parameter_value
-       if (proc0) write (*,*) &
-         "Set scan parameter g_exb to ", g_exb
-       reset = .false.
-    end select
-  end subroutine set_scan_parameter
-
   subroutine check_increment_condition_satisfied(istep, increment_condition_satisfied)
     use gs2_time, only: user_time
     use mp, only : mp_abort, proc0
@@ -322,6 +289,11 @@ contains
       !if (increment_condition_satisfied) last_timestep = istep
     end select 
   end subroutine check_increment_condition_satisfied
+
+
+
+
+
 
   subroutine read_parameters
     use file_utils, only: input_unit, error_unit, input_unit_exist
@@ -389,17 +361,17 @@ contains
        ierr = error_unit()
        call get_option_value &
             (scan_par, scan_parameter_opts, scan_parameter_switch, &
-            ierr, "scan_par in parameter_scan_knobs",.true.)
+            ierr, "scan_par in parameter_scan_knobs")
        call get_option_value &
             (scan_type, scan_type_opts, scan_type_switch, &
-            ierr, "scan_type in parameter_scan_knobs",.true.)
+            ierr, "scan_type in parameter_scan_knobs")
        call get_option_value &
             (target_par, target_parameter_opts, target_parameter_switch, &
-            ierr, "target_par in parameter_scan_knobs",.true.)
+            ierr, "target_par in parameter_scan_knobs")
        call get_option_value &
             (inc_con, increment_condition_opts, &
             increment_condition_switch, &
-            ierr, "inc_con in parameter_scan_knobs",.true.)
+            ierr, "inc_con in parameter_scan_knobs")
 
     end if
 

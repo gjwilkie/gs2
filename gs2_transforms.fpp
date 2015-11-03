@@ -35,23 +35,26 @@ module gs2_transforms
 
   implicit none
 
-  private
-
   public :: init_transforms, finish_transforms
   public :: init_x_transform, init_zf, kz_spectrum
   public :: transform_x, transform_y, transform2
   public :: inverse_x, inverse_y, inverse2
 
-  logical :: initialized=.false., initialized_x=.false., initialized_y_fft=.false.
-  logical :: initialized_x_redist=.false., initialized_y_redist=.false., initialized_3d=.false.
-  logical :: initialized_zf = .false.
+  private
+
+  logical :: initialized, initialized_x, initialized_y_fft
+  logical :: initialized_x_redist, initialized_y_redist, initialized_3d
 
   interface transform_x
      module procedure transform_x5d
+!     module procedure transform_x3d
+!     module procedure transform_x1d
   end interface
 
   interface transform_y
      module procedure transform_y5d
+!     module procedure transform_y3d
+!     module procedure transform_y1d
   end interface
 
   interface transform2
@@ -64,10 +67,14 @@ module gs2_transforms
 
   interface inverse_x
      module procedure inverse_x5d
+!     module procedure inverse_x3d
+!     module procedure inverse_x1d
   end interface
 
   interface inverse_y
      module procedure inverse_y5d
+!     module procedure inverse_y3d
+!     module procedure inverse_y1d
   end interface
 
   interface inverse2
@@ -83,8 +90,8 @@ module gs2_transforms
 
   ! fft
 
-  type (fft_type), save :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
-  type (fft_type), save :: xf3d_cr, xf3d_rc
+  type (fft_type) :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
+  type (fft_type) :: xf3d_cr, xf3d_rc
 
   logical :: xfft_initted = .false.
 
@@ -94,27 +101,24 @@ module gs2_transforms
 ! terms
   logical :: accel = .false.
 
-  logical, dimension (:), allocatable :: aidx  ! aidx == aliased index
-  integer, dimension (:), allocatable :: ia, iak
-  complex, dimension (:, :), allocatable :: fft, xxf
-  complex, dimension (:, :, :), allocatable :: ag
+  logical, save, dimension (:), allocatable :: aidx  ! aidx == aliased index
+  integer, save, dimension (:), allocatable :: ia, iak
+  complex, save, dimension (:, :), pointer :: fft=>null(), xxf=>null()
+  complex, save, dimension (:, :, :), allocatable :: ag
 
 contains
 
   subroutine init_transforms &
        (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny, accelerated)
-    use mp, only: nproc, proc0
+    use mp, only: nproc
     use gs2_layouts, only: init_gs2_layouts, opt_redist_init
     use gs2_layouts, only: pe_layout, init_accel_transform_layouts
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: init_x_transform_layouts
-    use gs2_layouts, only: fft_wisdom_file, fft_use_wisdom, fft_measure_plan
-    use fft_work, only: load_wisdom, save_wisdom, measure_plan
     implicit none
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
     logical, intent (out) :: accelerated
-    logical, parameter :: debug = .false.
 
     character (1) :: char
 ! CMR, 12/2/2010:  return correct status of "accelerated" even if already initialised
@@ -124,22 +128,19 @@ contains
     if (initialized) return
     initialized = .true.
 
-    measure_plan = fft_measure_plan
-    if (fft_use_wisdom) call load_wisdom(trim(fft_wisdom_file))
-    
-    if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
     call init_gs2_layouts
 
     call pe_layout (char)
 
     if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then  
        accel = .true.
-       if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
        call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     else
        !Recommended for p+log(p)>log(N) where p is number of processors and N is total number of mesh points
        !Could automate selection, though above condition is only fairly rough
-       if (debug) write (*,*) 'init_transforms: init_y_redist'
+
+       write(0,*) "gs2_transforms_MOD_init_transforms: opt_redist_init", opt_redist_init
+       
        if (opt_redist_init) then
           call init_y_redist_local (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
        else
@@ -148,18 +149,12 @@ contains
     end if
 
 ! need these for movies
-     if (debug) write (*,*) 'init_transforms: init_y_transform_layouts'
     call init_y_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
-     if (debug) write (*,*) 'init_transforms: init_x_transform_layouts'
     call init_x_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
 
-    if (debug) write (*,*) 'init_transforms: init_y_fft'
     call init_y_fft (ntgrid)
 
-    if (debug) write (*,*) 'init_transforms: done'
     accelerated = accel
-    
-    if (proc0.and.fft_use_wisdom) call save_wisdom(trim(fft_wisdom_file))
 
   end subroutine init_transforms
 
@@ -171,6 +166,7 @@ contains
   !JH present later in this file.
 
     use mp, only: nproc
+    use shm_mpi3, only : shm_alloc
     use fft_work, only: init_ccfftw
     use gs2_layouts, only: xxf_lo, pe_layout
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
@@ -198,8 +194,10 @@ contains
 
 # elif FFT == _FFTW3_
 
-       if (.not.allocated(xxf)) then
-          allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       if (.not. associated(xxf)) then
+          !allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+          call shm_alloc(xxf, (/1, xxf_lo%nx, &
+               xxf_lo%llim_proc,xxf_lo%ulim_alloc /))
        endif
 
        ! number of ffts to be calculated
@@ -220,6 +218,7 @@ contains
 
   subroutine init_y_fft (ntgrid)
 
+    use shm_mpi3, only : shm_alloc
     use gs2_layouts, only: xxf_lo, yxf_lo, accel_lo, accelx_lo, dealiasing
     use fft_work, only: init_crfftw, init_rcfftw, init_ccfftw
     implicit none
@@ -271,9 +270,11 @@ contains
     
     else
        ! non-accelerated
-       allocate (fft(yxf_lo%ny/2+1, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
-       if (.not.allocated(xxf))then
-          allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+       !allocate (fft(yxf_lo%ny/2+1, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+       call shm_alloc(fft, (/1, yxf_lo%ny/2+1, yxf_lo%llim_proc, yxf_lo%ulim_alloc/))
+       if (.not.associated(xxf))then
+          !allocate (xxf(xxf_lo%nx,xxf_lo%llim_proc:xxf_lo%ulim_alloc))
+          call shm_alloc(xxf, (/1, xxf_lo%nx, xxf_lo%llim_proc, xxf_lo%ulim_alloc /))
        endif
 
        if (.not. xfft_initted) then
@@ -330,18 +331,20 @@ contains
     use gs2_layouts, only: opt_local_copy, layout
     
     use mp, only: nproc
+    use shm_mpi3, only : shm_info, shm_onnode, shm_node_id
     use redistribute, only: index_list_type, init_redist, delete_list
     use redistribute, only: set_redist_character_type, set_xxf_optimised_variables
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
-    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, &
+         node_list(0:shm_info%size-1)
+    integer, dimension(0:nproc-1) :: nn_to, nn_from, nn_node(0:shm_info%size-1)
     integer, dimension (3) :: from_low, from_high
     integer, dimension (2) :: to_high
-    integer :: to_low
+    integer, dimension (2) :: to_low
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
 
     integer :: iglo, isign, ig, it, ixxf
-    integer :: n, ip
+    integer :: n, ip, ipn
 
     if (initialized_x_redist) return
     initialized_x_redist = .true.
@@ -358,14 +361,24 @@ contains
     ! count number of elements to be redistributed to/from each processor
     nn_to = 0
     nn_from = 0
+    nn_node = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
              call gidx2xxfidx (ig, isign, iglo, g_lo, xxf_lo, it, ixxf)
+! one should not count the destination on node. 
+! however the gather scatter subrouitne check if the destination is on onde
+! needs revision
              if (idx_local(g_lo,iglo)) &
                   nn_from(proc_id(xxf_lo,ixxf)) = nn_from(proc_id(xxf_lo,ixxf)) + 1
-             if (idx_local(xxf_lo,ixxf)) &
-                nn_to(proc_id(g_lo,iglo)) = nn_to(proc_id(g_lo,iglo)) + 1
+             if (idx_local(xxf_lo,ixxf)) then
+                ip = proc_id(g_lo,iglo); 
+                nn_to(ip) = nn_to(ip) + 1
+                if (shm_onnode(ip)) then 
+                   ipn = shm_node_id(ip) 
+                   nn_node(ipn) = nn_node(ipn) + 1
+                endif
+             endif
           end do
        end do
     end do
@@ -381,11 +394,21 @@ contains
           allocate (to_list(ip)%second(nn_to(ip)))
        end if
     end do
+   
+    do ipn = 0, shm_info%size-1 
+       n =  nn_node(ipn)
+       if (n > 0) then 
+          allocate(node_list(ipn)%first(n), &
+               node_list(ipn)%second(n), &
+               node_list(ipn)%third(n))
+       endif
+    enddo
 
 
     ! get local indices of elements distributed to/from other processors
     nn_to = 0
     nn_from = 0
+    nn_node = 0
     do iglo = g_lo%llim_world, g_lo%ulim_world
        do isign = 1, 2
           do ig = -ntgrid, ntgrid
@@ -404,6 +427,14 @@ contains
                 nn_to(ip) = n
                 to_list(ip)%first(n) = it
                 to_list(ip)%second(n) = ixxf
+                if (shm_onnode(ip)) then
+                   ipn = shm_node_id(ip)
+                   n = nn_node(ipn) + 1	
+                   nn_node(ipn) = n
+                   node_list(ipn)%first(n) = ig
+                   node_list(ipn)%second(n) = isign
+                   node_list(ipn)%third(n) = iglo
+                endif
              end if
           end do
        end do
@@ -413,8 +444,10 @@ contains
     from_low (2) = 1
     from_low (3) = g_lo%llim_proc
 
-    to_low = xxf_lo%llim_proc
-    
+    to_low(1) = xxf_lo%llim_proc
+! <LA made up value, to_low needs to be an array in init_redist 
+    to_low(2) = xxf_lo%llim_proc
+! LA>    
     to_high(1) = xxf_lo%nx
     to_high(2) = xxf_lo%ulim_alloc
 
@@ -426,11 +459,12 @@ contains
     call set_xxf_optimised_variables(opt_local_copy, naky, ntgrid, ntheta0, &
        nlambda, negrid, nx, xxf_lo%ulim_proc, g_lo%blocksize, layout)
     call init_redist (g2x, 'c', to_low, to_high, to_list, &
-         from_low, from_high, from_list)
+         from_low, from_high, from_list, node_list)
 
     call delete_list (to_list)
     call delete_list (from_list)
-
+    call delete_list (node_list)
+    
   end subroutine init_x_redist
 
   !<DD>
@@ -655,18 +689,20 @@ contains
     use gs2_layouts, only: init_y_transform_layouts
     use gs2_layouts, only: xxf_lo, yxf_lo, xxfidx2yxfidx, proc_id, idx_local
     use mp, only: nproc
+    use shm_mpi3, only : shm_info, shm_onnode, shm_node_id
     use redistribute, only: index_list_type, init_redist, delete_list
     use redistribute, only: set_yxf_optimised_variables, set_redist_character_type
     implicit none
-    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list
-    integer, dimension(0:nproc-1) :: nn_to, nn_from
+    type (index_list_type), dimension(0:nproc-1) :: to_list, from_list, &
+         node_list(0:shm_info%size-1)
+    integer, dimension(0:nproc-1) :: nn_to, nn_from, nn_node(0:shm_info%size-1)
     integer, dimension (2) :: from_low, from_high, to_high
-    integer :: to_low
+    integer :: to_low(1)
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec
     integer, intent (in) :: nx, ny
 
     integer :: it, ixxf, ik, iyxf
-    integer :: n, ip
+    integer :: n, ip, ipn
 !<DD>This routine can probably be optimised somewhat.
 !in particular the large number of calls to the index lookup routines
 !and idx_local can be reduced significantly by exploiting knowledge of
@@ -683,13 +719,20 @@ contains
     ! count number of elements to be redistributed to/from each processor
     nn_to = 0
     nn_from = 0
+    nn_node = 0
     do ixxf = xxf_lo%llim_world, xxf_lo%ulim_world
        do it = 1, yxf_lo%nx
           call xxfidx2yxfidx (it, ixxf, xxf_lo, yxf_lo, ik, iyxf)
           if (idx_local(xxf_lo,ixxf)) &
              nn_from(proc_id(yxf_lo,iyxf)) = nn_from(proc_id(yxf_lo,iyxf)) + 1
-          if (idx_local(yxf_lo,iyxf)) &
-             nn_to(proc_id(xxf_lo,ixxf)) = nn_to(proc_id(xxf_lo,ixxf)) + 1
+          if (idx_local(yxf_lo,iyxf)) then
+             ip = proc_id(xxf_lo,ixxf)
+             nn_to(ip) = nn_to(ip) + 1
+             if (shm_onnode(ip)) then 
+                ipn = shm_node_id(ip) 
+                nn_node(ipn) = nn_node(ipn) + 1
+             endif
+          endif
        end do
     end do
 
@@ -704,9 +747,18 @@ contains
        end if
     end do
 
+    do ipn = 0, shm_info%size-1 
+       n =  nn_node(ipn)
+       if (n > 0) then 
+          allocate(node_list(ipn)%first(n), &
+               node_list(ipn)%second(n))
+       endif
+    enddo
+
     ! get local indices of elements distributed to/from other processors
     nn_to = 0
     nn_from = 0
+    nn_node = 0
 !
 !CMR: loop over all xxf indices, find corresponding yxf indices
 !
@@ -736,6 +788,13 @@ contains
              nn_to(ip) = n
              to_list(ip)%first(n) = ik
              to_list(ip)%second(n) = iyxf
+             if (shm_onnode(ip)) then
+                ipn = shm_node_id(ip)
+                n = nn_node(ipn) + 1	
+                nn_node(ipn) = n
+                node_list(ipn)%first(n) = it
+                node_list(ipn)%second(n) = ixxf
+             endif
           end if
        end do
     end do
@@ -743,7 +802,10 @@ contains
     from_low(1) = 1
     from_low(2) = xxf_lo%llim_proc
 
-    to_low = yxf_lo%llim_proc
+    to_low(1) = yxf_lo%llim_proc
+! <LA made up value, to_low needs to be an array in init_redist 
+!    to_low(2) = xxf_lo%llim_proc
+! LA>
 
     to_high(1) = yxf_lo%ny/2+1
     to_high(2) = yxf_lo%ulim_alloc
@@ -755,7 +817,7 @@ contains
     call set_yxf_optimised_variables(yxf_lo%ulim_proc)
 
     call init_redist (x2y, 'c', to_low, to_high, to_list, &
-         from_low, from_high, from_list)
+         from_low, from_high, from_list, node_list)
     call delete_list (to_list)
     call delete_list (from_list)
     
@@ -1044,18 +1106,14 @@ contains
     complex, dimension (:,xxf_lo%llim_proc:), intent (in) :: xxf
 # ifdef FFT
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
-# if FFT == _FFTW_
     integer :: i
-# endif
 # else
-    real, dimension (:,yxf_lo%llim_proc:), intent(in out) :: yxf
+    real, dimension (:,yxf_lo%llim_proc:) :: yxf
 # endif
 
 
     call prof_entering ("transform_y5d", "gs2_transforms")
 
-!Note here we're doing the communication even if we're not using
-!an FFT routine.
     fft = 0.
     call gather (x2y, xxf, fft)
 
@@ -1113,13 +1171,10 @@ contains
 
   subroutine transform2_5d (g, yxf)
     use gs2_layouts, only: g_lo, yxf_lo, ik_idx
-    use unit_tests,only: debug_message
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
     real, dimension (:,yxf_lo%llim_proc:), intent (out) :: yxf
     integer :: iglo
-
-    call debug_message(4, 'gs2_transforms::transform2_5d starting')
 
 !CMR+GC: 2/9/2013
 !  gs2's Fourier coefficients,  F_k^gs2, not standard form: i.e. f(x) = f_k e^(i k.x)
@@ -1173,20 +1228,23 @@ contains
 
   subroutine transform2_5d_accel (g, axf, i)
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
-    use unit_tests, only: debug_message
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
+
 # ifdef FFT
+
     real, dimension (:,:,accelx_lo%llim_proc:), intent (out) :: axf
+
 # else
+
     real, dimension (:,:,accelx_lo%llim_proc:) :: axf
+
 # endif
-    integer, intent(out) :: i
-    integer :: iglo, k, idx
+
+
+    integer :: iglo, k, i, idx
     integer :: itgrid, iduo
     integer :: ntgrid
-
-    call debug_message(4, 'gs2_transforms::transform2_5d_accel starting')
 
     ntgrid = accel_lo%ntgrid
 !
@@ -1262,8 +1320,7 @@ contains
     implicit none
     real, dimension (:,:,accelx_lo%llim_proc:), intent (in out) :: axf
     complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: g
-    integer, intent(out) :: i
-    integer :: iglo, idx, k
+    integer :: iglo, i, idx, k
     integer :: itgrid, iduo
     integer :: ntgrid
 
@@ -1324,9 +1381,9 @@ contains
   end subroutine inverse2_5d_accel
 
   subroutine init_3d (nny_in, nnx_in, how_many_in)
+
     use fft_work, only: init_crfftw, init_rcfftw, delete_fft
-    implicit none
-    integer, intent(in) :: nny_in, nnx_in, how_many_in
+    integer :: nny_in, nnx_in, how_many_in
     integer, save :: nnx, nny, how_many
 
     if (initialized_3d) then
@@ -1365,7 +1422,7 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     implicit none
-    integer, intent(in) :: nnx, nny
+    integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi
     real, dimension (:,:,-ntgrid:), intent (out) :: phixf  
     real, dimension (:,:,:), allocatable :: phix
@@ -1423,9 +1480,9 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     implicit none
-    real, dimension (:,:,-ntgrid:), intent(in) :: phixf
-    complex, dimension (-ntgrid:,:,:), intent(out) :: phi
-    integer, intent(in) :: nnx, nny
+    real, dimension (:,:,-ntgrid:):: phixf
+    complex, dimension (-ntgrid:,:,:) :: phi
+    integer :: nnx, nny
     complex, dimension (:,:,:), allocatable :: aphi
     real, dimension (:,:,:), allocatable :: phix
     real :: fac
@@ -1482,7 +1539,7 @@ contains
     use fft_work, only: FFTW_BACKWARD, delete_fft, init_crfftw
     use kt_grids, only: naky, nakx => ntheta0, nx, aky
     implicit none
-    integer, intent(in) :: nnx, nny
+    integer :: nnx, nny
     complex, intent (in) :: phi(:,:)
     real, intent (out) :: phixf  (:,:)
     real, allocatable :: phix(:,:)
@@ -1491,9 +1548,6 @@ contains
     integer :: ik, it
     type (fft_type) :: xf2d
 
-    !May be inefficient to create and destroy this fft plan
-    !on every call to the routine. We may want to move this
-    !variable to module level and check its created flag.
 #if FFT == _FFTW_
 
     call init_crfftw (xf2d, FFTW_BACKWARD, nny, nnx)
@@ -1531,9 +1585,7 @@ contains
 
     deallocate (aphi, phix)
 !RN> this statement causes error for lahey with DEBUG. I don't know why
-!<DD>Reinstating after discussion with RN, if this causes anyone an issue
-!    then we can guard this line with some directives.   
-    call delete_fft(xf2d)
+!    call delete_fft(xf2d)
   end subroutine transform2_2d
 
 
@@ -1543,16 +1595,13 @@ contains
     implicit none
     real, intent(in) :: phixf(:,:)
     complex, intent(out) :: phi(:,:)
-    integer, intent(in) :: nnx, nny
+    integer :: nnx, nny
     complex, allocatable :: aphi(:,:)
     real, allocatable :: phix(:,:)
     real :: fac
     integer :: ik, it
     type (fft_type) :: xf2d
 
-    !May be inefficient to create and destroy this fft plan
-    !on every call to the routine. We may want to move this
-    !variable to module level and check its created flag.
 #if FFT == _FFTW_
 
     call init_rcfftw (xf2d, FFTW_FORWARD, nny, nnx)
@@ -1587,9 +1636,7 @@ contains
 
     deallocate (aphi, phix)
 !RN> this statement causes error for lahey with DEBUG. I don't know why
-!<DD>Reinstating after discussion with RN, if this causes anyone an issue
-!    then we can guard this line with some directives.   
-    call delete_fft(xf2d)
+!    call delete_fft(xf2d)
   end subroutine inverse2_2d
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1601,7 +1648,7 @@ contains
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0, aky
     implicit none
-    integer, intent(in) :: nnx, nny
+    integer :: nnx, nny
     complex, dimension (-ntgrid:,:,:,:), intent (in) :: den
     real, dimension (:,:,-ntgrid:), intent (out) :: phixf  
     real, dimension (:,:,:), allocatable :: phix
@@ -1655,14 +1702,15 @@ contains
   
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine init_zf (ntgrid, howmany)
+  subroutine init_zf (ntgrid, nperiod, howmany)
 
     use fft_work, only: init_z
     implicit none
-    integer, intent (in) :: ntgrid, howmany
+    integer, intent (in) :: ntgrid, nperiod, howmany
+    logical :: done = .false.
 
-    if (initialized_zf) return
-    initialized_zf = .true.
+    if (done) return
+    done = .true.
 
     call init_z (zf_fft, 1, 2*ntgrid, howmany)
     
@@ -1670,12 +1718,11 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     
-  subroutine kz_spectrum (an, an2)
-# if FFT == _FFTW_
-    use kt_grids, only: naky, ntheta0
-# endif
+  subroutine kz_spectrum (an, an2, ntgrid, ntheta0, naky)
+
     complex, dimension (:,:,:), intent(in)  :: an
     complex, dimension (:,:,:), intent(out) :: an2
+    integer, intent (in) :: ntheta0, naky, ntgrid
 
 # if FFT == _FFTW_    
     call fftw_f77 (zf_fft%plan, ntheta0*naky, an, 1, zf_fft%n+1, an2, 1, zf_fft%n+1)
@@ -1689,10 +1736,15 @@ contains
 ! HJL <
 
   subroutine finish_transforms
+    use shm_mpi3, only : shm_free
     use redistribute, only : delete_redist
-    use fft_work, only: delete_fft, finish_fft_work
 
-    if(allocated(xxf)) deallocate(xxf)
+!    integer :: ip
+
+    !if(allocated(xxf)) deallocate(xxf)
+    if (associated(xxf)) then
+       call shm_free(xxf)
+    endif
     if(allocated(ia)) deallocate(ia)
     if(allocated(iak)) deallocate(iak)
     if(allocated(aidx)) deallocate(aidx)
@@ -1701,19 +1753,16 @@ contains
     call delete_redist(g2x)
     call delete_redist(x2y)
 
-    if(allocated(fft)) deallocate(fft) 
+    !if(allocated(fft)) deallocate(fft) 
+    if (associated(fft))then
+       call shm_free(fft)
+    endif
 
-    !Destroy fftw plans
-    !Note delete_fft is safe to call on plans that have not been created
-    call delete_fft(yf_fft)
-    call delete_fft(yb_fft)
-    call delete_fft(xf_fft)
-    call delete_fft(xb_fft)
-    call delete_fft(zf_fft)
-    call delete_fft(xf3d_cr)
-    call delete_fft(xf3d_rc)
+!    do ip = 0, nprocs-1
+!       if(nnfrom(ip)>0) then
+!          if(allocated(from_list(ip)%first)) deallocate(from_list(ip)%first)
+!       endo
 
-    !Reset init state flags
     initialized = .false.
     initialized_x = .false.
     initialized_y_fft = .false.
@@ -1721,10 +1770,12 @@ contains
     initialized_y_redist = .false.
     initialized_3d = .false.
     xfft_initted = .false.
-    initialized_zf = .false.
-    
-    !Tidy up fft internals (FFTW3 only)
-    call finish_fft_work
+
+
   end subroutine finish_transforms
+
 ! > HJL
+
+
+
 end module gs2_transforms

@@ -6,10 +6,10 @@ module egrid
 
   implicit none
 
-  private
-
   public :: setvgrid, init_egrid
   public :: zeroes, x0
+
+  private
 
   real :: x0
   real, dimension(:), allocatable, save :: zeroes
@@ -17,18 +17,22 @@ module egrid
 contains
 
   subroutine init_egrid (negrid)
-    implicit none
+    
     integer, intent (in) :: negrid
 
     if (.not. allocated(zeroes)) then
        allocate (zeroes(negrid-1)) ; zeroes = 0.
     end if
+
   end subroutine init_egrid
 
   subroutine setvgrid (vcut, negrid, epts, wgts, nesub)
+
     use constants, only: pi => dpi
     use gauss_quad, only: get_legendre_grids_from_cheb, get_laguerre_grids
+
     implicit none
+    
     integer, intent (in) :: negrid
     real, intent (in) :: vcut
     integer, intent (in) :: nesub
@@ -62,14 +66,13 @@ contains
     x0 = sqrt(epts(negrid))
 
   end subroutine setvgrid
+
 end module egrid
 
 module le_grids
   
   use redistribute, only: redist_type
   implicit none
-
-  private
 
   public :: init_le_grids, finish_le_grids
   public :: init_g2le_redistribute, init_lambda_redistribute, init_energy_redistribute
@@ -80,7 +83,6 @@ module le_grids
   public :: xloc, sgn, ixi_to_il, ixi_to_isgn, speed, xi
   public :: xx, nterp, new_trap_int, vcut
   public :: init_weights, legendre_transform, lagrange_interp, lagrange_coefs
-  public :: finish_weights
   public :: eint_error, lint_error, trap_error, wdim
   public :: integrate_kysum, integrate_volume
   public :: get_flux_vs_theta_vs_vpa
@@ -90,6 +92,8 @@ module le_grids
   !> Unit tests
   public :: le_grids_unit_test_init_le_grids
   public :: le_grids_unit_test_integrate_species
+
+  private
 
   interface integrate_moment
      module procedure integrate_moment_c34
@@ -118,14 +122,14 @@ module le_grids
   end interface
 
   real, dimension (:), allocatable :: xx ! (ng2)
-  real, dimension (:,:), allocatable :: werr, wlerr, xloc ! mbmark
-  real, dimension (:,:,:), allocatable :: wlterr
-  real, dimension (:,:,:,:), allocatable :: lgrnge
-  real, dimension (:,:,:), allocatable :: wlmod
-  real, dimension (:,:,:), allocatable :: wtmod
-  real, dimension (:,:), allocatable :: wmod
-  real, dimension (:,:), allocatable :: lpe, lpl
-  real, dimension (:,:,:,:), allocatable :: lpt
+  real, dimension (:,:), allocatable, save :: werr, wlerr, xloc ! mbmark
+  real, dimension (:,:,:), allocatable, save :: wlterr
+  real, dimension (:,:,:,:), allocatable, save :: lgrnge
+  real, dimension (:,:,:), allocatable, save :: wlmod
+  real, dimension (:,:,:), allocatable, save :: wtmod
+  real, dimension (:,:), allocatable, save :: wmod
+  real, dimension (:,:), allocatable, save :: lpe, lpl
+  real, dimension (:,:,:,:), allocatable, save :: lpt
 
   real, dimension (:), allocatable :: energy, w, anon, dele, speed ! (negrid)
   real, dimension (:), allocatable :: al, delal ! (nlambda)
@@ -163,7 +167,6 @@ module le_grids
   logical :: leinit = .false.
   logical :: lzinit = .false.
   logical :: einit = .false.
-  logical :: init_weights_init = .false.
 
   integer :: nmax = 500
   integer :: nterp = 100
@@ -178,15 +181,15 @@ contains
 
   subroutine wnml_le_grids(unit)
     implicit none
-    integer, intent(in) :: unit
+    integer :: unit
     if (.not. exist) return
-    write (unit, *)
-    write (unit, fmt="(' &',a)") "le_grids_knobs"
-    write (unit, fmt="(' nesub = ',i4)") nesub
-    write (unit, fmt="(' nesuper = ',i4)") nesuper
-    write (unit, fmt="(' ngauss = ',i4)") ngauss
-    write (unit, fmt="(' vcut = ',e17.10)") vcut
-    write (unit, fmt="(' /')")
+       write (unit, *)
+       write (unit, fmt="(' &',a)") "le_grids_knobs"
+       write (unit, fmt="(' nesub = ',i4)") nesub
+       write (unit, fmt="(' nesuper = ',i4)") nesuper
+       write (unit, fmt="(' ngauss = ',i4)") ngauss
+       write (unit, fmt="(' vcut = ',e16.10)") vcut
+       write (unit, fmt="(' /')")
   end subroutine wnml_le_grids
 
   subroutine init_le_grids (accelerated_x, accelerated_v)
@@ -197,6 +200,7 @@ contains
     use gs2_layouts, only: init_gs2_layouts
     implicit none
     logical, intent (out) :: accelerated_x, accelerated_v
+!    logical, save :: initialized = .false.
     integer :: il, ie
 
     if (initialized) return
@@ -234,7 +238,8 @@ contains
   end subroutine init_le_grids
 
   function le_grids_unit_test_init_le_grids(sizes, energy_results, err)
-    use unit_tests, only: announce_check, process_check, agrees_with
+    use unit_tests
+    use egrid
     use species, only: nspec
     use mp, only: proc0
     integer, dimension(:), intent(in) :: sizes
@@ -284,7 +289,7 @@ contains
     use egrid, only: zeroes, x0, init_egrid
     use theta_grid, only: ntgrid
     implicit none
-    integer :: tsize
+    integer :: ig, il, ipt, isgn, tsize
 
     tsize = 2*nterp-1
 
@@ -335,16 +340,25 @@ contains
     call broadcast (w)
     call broadcast (anon)
 
-    call broadcast(wl)
-    call broadcast(forbid)
+    do il = 1, nlambda
+       call broadcast (wl(:,il))
+       call broadcast (forbid(:,il))
+    end do
 
-    call broadcast(xloc)
-    call broadcast(lgrnge)
+    do ipt = 1, tsize
+       call broadcast (xloc(:,ipt))
+       do isgn=1,2
+          do il=1, nlambda
+             call broadcast (lgrnge(:,il,ipt,isgn))
+          end do
+       end do
+    end do
 
-    call broadcast(xi)
-    call broadcast(ixi_to_il)
-    call broadcast(ixi_to_isgn)
-
+    do ig = -ntgrid, ntgrid
+       call broadcast (xi(ig,:))
+       call broadcast (ixi_to_il(ig,:))
+       call broadcast (ixi_to_isgn(ig,:))
+    end do
     call broadcast (sgn)
 
   end subroutine broadcast_results
@@ -379,6 +393,7 @@ contains
   end subroutine read_parameters
 
   subroutine init_integrations
+    use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use species, only: nspec
     use gs2_layouts, only: init_dist_fn_layouts, pe_layout
@@ -386,7 +401,7 @@ contains
     implicit none
     character (1) :: char
 
-    call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
+    call init_dist_fn_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec)
 
     if (.not. intinit) then
        intinit = .true.
@@ -416,9 +431,6 @@ contains
     real, dimension (:), allocatable :: lmodzeroes, wlerrtmp ! (ng2-1)
     integer :: ipt, ndiv, divmax
     logical :: eflag = .false.
-
-    if (init_weights_init) return
-    init_weights_init = .true.
 
 
     allocate(lmodzeroes(ng2-1), wlerrtmp(ng2-1))
@@ -991,8 +1003,9 @@ contains
 
   end subroutine integrate_species_le
 
+
   function le_grids_unit_test_integrate_species(g, weights, sizes, rslt, err)
-    use unit_tests, only: announce_check, process_check, agrees_with
+    use unit_tests
     use theta_grid, only: ntgrid
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo
@@ -1001,7 +1014,7 @@ contains
     real, dimension (:), intent (in) :: weights
     integer, dimension (:), intent (in) :: sizes
     complex, dimension (:,:,:), allocatable :: total
-    complex, dimension (-ntgrid:,:,:), intent(in) :: rslt
+    complex, dimension (-ntgrid:,:,:) :: rslt
     real, intent(in) :: err
     logical :: le_grids_unit_test_integrate_species
     logical :: tr
@@ -1033,11 +1046,15 @@ contains
     deallocate(total)
 
     le_grids_unit_test_integrate_species = tr
+
+
+
   end function le_grids_unit_test_integrate_species
 
-  subroutine legendre_transform (g, tote, totl, tott)  
+  subroutine legendre_transform (g, tote, totl, istep, tott)
+    
     use egrid, only: zeroes
-    use mp, only: nproc
+    use mp, only: nproc, broadcast
     use theta_grid, only: ntgrid, bmag, bmax
     use species, only: nspec
     use kt_grids, only: naky, ntheta0
@@ -1047,6 +1064,7 @@ contains
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out) :: tote, totl
     complex, dimension (0:,-ntgrid:,:,:,:), intent (out), optional :: tott
+    integer, intent (in) :: istep
 
     complex :: totfac
     real :: ulim
@@ -1205,7 +1223,6 @@ contains
   end subroutine legendre_polynomials
 
   subroutine lagrange_interp (g, poly, istep, all)
-!<DD>WARNING: THIS ROUTINE DOESN'T USE g0 FOR ANYTHING IS THIS CORRECT?
     use theta_grid, only: ntgrid, bmag
     use kt_grids, only: naky, ntheta0
     use gs2_layouts, only: g_lo, idx, idx_local
@@ -1265,32 +1282,27 @@ contains
     use gs2_layouts, only: g_lo, is_idx, ik_idx, it_idx, ie_idx, il_idx,intmom_sub
 ! <TT
     use theta_grid, only: ntgrid
-    use mp, only: sum_reduce, sum_allreduce_sub, nproc, sum_allreduce, sum_reduce_sub
+    use mp, only: sum_reduce, sum_allreduce_sub, nproc, sum_allreduce
 
     implicit none
 
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     complex, dimension (-ntgrid:,:,:,:), intent (out) :: total
     complex, dimension(:,:,:,:),allocatable :: total_small
-    logical, optional, intent(in) :: all
+    integer, optional, intent(in) :: all
     logical, optional, intent(in) :: full_arr
-    logical :: local_full_arr, local_all
+    logical :: local_full_arr
     integer :: is, il, ie, ik, it, iglo
 
     !Do we want to know the full result?
     local_full_arr=.false.
     if(present(full_arr)) local_full_arr=full_arr
-
-    ! Do all processors need to know the result?
-    local_all = .false.
-    if(present(all)) local_all = all
-
     !NOTE: Currently we're lazy and force the full_arr approach to reduce
     !over the whole array. Really we should still use the sub-communicator
     !approach and then gather the remaining data as we do for integrate_species
 
     !Allocate array and ensure is zero
-    if(intmom_sub.and.local_all.and.(.not.local_full_arr))then !If we're using reduce then we don't want to make array smaller
+    if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then !If we're using reduce then we don't want to make array smaller
 !       total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=0.
        allocate(total_small(-ntgrid:ntgrid,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max))
     else
@@ -1314,25 +1326,12 @@ contains
     !Not sure that we really need to limit this to nproc>1 as if
     !we run with 1 proc MPI calls should still work ok
     if (nproc > 1) then     
-       if (local_all) then 
-         if (local_full_arr) then
-            call sum_allreduce (total_small)
-         else 
-           !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
-           !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
-           !all procs in this case.
-           call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
-         end if
+       if (present(all).and.(.not.local_full_arr)) then
+          !Complete integral over distributed velocity space and ensure all procs in sub communicator know the result
+          !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
+          !all procs in this case.
+          call sum_allreduce_sub (total_small,g_lo%xysblock_comm)
        else
-         !if (local_full_arr) then
-            !call sum_reduce (total_small, 0)
-         !else 
-           !Complete integral over distributed velocity space
-           !Note: fi intmom_sub=.false. then xysblock_comm==mp_comm  | This is why total_small must be the same size on 
-           !all procs in this case.
-           !call sum_reduce_sub (total_small,g_lo%xysblock_comm)
-         !end if
-
           !Complete integral over distributed velocity space but only proc0 knows the answer
           call sum_reduce (total_small, 0)
        end if
@@ -1343,7 +1342,7 @@ contains
     !this routine is more expensive than original version just using total.
     !In practice we should have two integrate_moment_c34 routines, one for sub-comms
     !and one for world-comms.
-    if(intmom_sub.and.local_all.and.(.not.local_full_arr))then
+    if(intmom_sub.and.(present(all)).and.(.not.local_full_arr))then
        total(:,g_lo%it_min:g_lo%it_max,g_lo%ik_min:g_lo%ik_max,g_lo%is_min:g_lo%is_max)=total_small
     else
        total=total_small
@@ -1399,6 +1398,7 @@ contains
 
   end subroutine integrate_moment_r33
 
+
   subroutine integrate_moment_e (lo, g, total, all)
 !Integrate over velocity space whilst in e_lo_LAYOUT. 
     use layouts_type, only: e_layout_type
@@ -1436,6 +1436,7 @@ contains
        call sum_reduce (total, 0)
     end if
   end subroutine integrate_moment_e
+
 
   subroutine integrate_moment_lz (lo, g, total, all)
 !Integrate over velocity space whilst in lz_lo_LAYOUT. 
@@ -1483,6 +1484,7 @@ contains
     end if
   end subroutine integrate_moment_lz
 
+
   subroutine integrate_moment_lec (lo, g, total)
 !Perform an integral over velocity space whilst in the LE_LAYOUT in 
 !which we have ensured that all of velocity space is local. As such
@@ -1498,13 +1500,7 @@ contains
     complex, dimension (:,:,lo%llim_proc:), intent (in) :: g
     complex, dimension (lo%llim_proc:), intent (out) :: total
     integer :: ixi, ie, il, ile, ig, it, ik
-    integer :: nxup
     total = cmplx(0.0,0.0)
-    if (nxi .gt. 2*ng2) then
-       nxup=nxi+1
-    else
-       nxup=nxi
-    endif
     do ile = lo%llim_proc, lo%ulim_proc
        it = it_idx (lo,ile)
        ik = ik_idx (lo,ile)
@@ -1518,7 +1514,7 @@ contains
 !   needed in collision operator as EQUIVALENT to g_lo(il=nlambda, isign=2).
 !   (In collisions at ig=0, both of these points are EXACTLY equivalent, xi=0.)
 !  
-          do ixi=1, nxup
+          do ixi=1, nxi+1
              il = ixi_to_il(ig,ixi)
              total(ile) = total(ile) + w(ie) * wl(ig,il) * g(ixi,ie,ile)
           end do
@@ -1572,6 +1568,7 @@ contains
     ! No need for communication since all velocity grid points are together
     ! and each prcessor does not touch the unset place
   end subroutine integrate_moment_le
+
 
   subroutine integrate_kysum (g, ig, total, all)
 ! returns results to PE 0 [or to all processors if 'all' is present in input arg list]
@@ -1839,9 +1836,13 @@ contains
   end subroutine set_grids
 
   subroutine lgridset
+
     use theta_grid, only: ntgrid, bmag, bmax, eps
     use gauss_quad, only: get_legendre_grids_from_cheb
+    use constants
     use file_utils, only: open_output_file, close_output_file
+
+
     implicit none
 
 ! note that xgauss and wgauss are transposed wrt original code
@@ -2040,9 +2041,8 @@ contains
 ! old (finite-difference) integration scheme
     else
 !CMR, 1/11/2013: 
-! Above, with no trapped particles, we set: jend(ig)=   0      
-! Here, with trapped particles, we set:     jend(ig)=  il      
-!  where il is the lambda index of the trapped particle bouncing at theta(ig)
+!  jend(ig)=  il      lambda index of the trapped particle bouncing at theta(ig)
+!             0       if no trapped particles
 !
        jend = ng2 + 1
 !       wlterr = 0.0
@@ -2084,7 +2084,9 @@ contains
   end subroutine lgridset
 
   subroutine xigridset
+
     use theta_grid, only: ntgrid, bmag
+
     implicit none
 
     integer :: ig, je, ixi
@@ -2156,7 +2158,9 @@ contains
   end subroutine xigridset
 
   subroutine lagrange_coefs (ig, nodes, lfac, xloc)
+    
     use theta_grid, only: bmag, bmax
+
     implicit none
 
     integer, intent (in) :: ig
@@ -2197,8 +2201,23 @@ contains
 
   end subroutine lagrange_coefs
 
+  subroutine stop_invalid (name, val)
+    use file_utils, only: error_unit
+    use mp, only: proc0, finish_mp
+    implicit none
+    character(*), intent (in) :: name
+    integer, intent (in) :: val
+    integer :: ierr
+
+    if (proc0) then
+       ierr = error_unit()
+       write (unit=ierr, fmt='("Invalid value for ",a,": ",i5)') name, val
+    end if
+    call finish_mp
+    stop
+  end subroutine stop_invalid
+
   subroutine stop_message (message)
-!<DD>WARNING THIS COULD CAUSE A HANG IF NOT CALLED BY ALL PROCS
 !JAB: print an error message and end program
     use file_utils, only: error_unit
     use mp, only: proc0, finish_mp
@@ -2322,13 +2341,13 @@ contains
 
   ! calculates and returns toroidal momentum flux as a function
   ! of vpar and theta
-  subroutine get_flux_vs_theta_vs_vpa (f, vflx, dealloc)
+  subroutine get_flux_vs_theta_vs_vpa (f, vflx)
 
     use theta_grid, only: ntgrid, bmag
     use species, only: nspec
 
     implicit none
-    logical, intent(in), optional :: dealloc
+
     real, dimension (-ntgrid:,:,:,:,:), intent (in) :: f
     real, dimension (-ntgrid:,:,:), intent (out) :: vflx
 
@@ -2340,14 +2359,6 @@ contains
 
     integer :: is, il, ie, ig, iv
     integer :: norder
-
-    if(present(dealloc))then
-       if(allocated(vpa1d)) deallocate(vpa1d)
-       if(allocated(hermp1d)) deallocate(hermp1d)
-       if(allocated(vpapts)) deallocate(vpapts)
-       if(allocated(hermp)) deallocate(hermp)
-       return
-    endif
 
     norder = min(negrid, nlambda)/2
 
@@ -3844,16 +3855,16 @@ contains
    end subroutine write_mpdist_le
 
   subroutine finish_le_grids
-    use redistribute, only: delete_redist
+
     use egrid, only: zeroes
 
     implicit none
-    real, dimension(1,1,1,1,1) :: tmpf
-    real, dimension(1,1,1) :: tmpvflx
 
     if (allocated(zeroes)) deallocate (zeroes)
     if (allocated(energy)) deallocate (energy, dele, al, wl, jend, forbid, xx, lgrnge, xloc, speed)
     if (allocated(integration_work)) deallocate (integration_work)
+    if (allocated(wlerr)) deallocate (wlerr)
+    if (allocated(werr)) deallocate (werr)
     if (allocated(wlterr)) deallocate (wlterr)
     if (allocated(w)) deallocate (w)
     if (allocated(anon)) deallocate (anon)
@@ -3867,14 +3878,6 @@ contains
     if (allocated(ixi_to_il)) deallocate (ixi_to_il)
     if (allocated(ixi_to_isgn)) deallocate (ixi_to_isgn)
 
-    !Deallocate redistribute maps
-    call delete_redist(lambda_map)
-    call delete_redist(energy_map)
-    call delete_redist(g2le)
-
-    !Free internal saved arrays
-    call get_flux_vs_theta_vs_vpa(tmpf,tmpvflx,.true.)
-
     accel_x = .false. ; accel_v = .false.
     test = .false. ; trapped_particles = .true.
     new_trap_int = .false. 
@@ -3887,12 +3890,6 @@ contains
     initialized = .false.
 
   end subroutine finish_le_grids
-
-  subroutine finish_weights
-    if (allocated(werr)) deallocate (werr)
-    if (allocated(wlerr)) deallocate (wlerr)
-    init_weights_init = .false.
-  end subroutine finish_weights
 
 end module le_grids
 

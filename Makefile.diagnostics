@@ -1,0 +1,75 @@
+
+ifeq ($(SIMPLEDATAIO_CONF_ARCHIVEONLY), true)
+  SIMPLEDATAIO_CONF_EARCHIVE=--enable-archiveonly
+	SIMPLEDATAIO_INC_DIR=diagnostics/simpledataio/
+	SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/
+else
+  SIMPLEDATAIO_CONF_EARCHIVE=
+	SIMPLEDATAIO_INC_DIR=diagnostics/simpledataio/include
+	SIMPLEDATAIO_LIB_DIR=diagnostics/simpledataio/.libs
+endif
+
+SIMPLEDATAIO_INC=-I$(PWD)/$(SIMPLEDATAIO_INC_DIR)
+SIMPLEDATAIO_LIB=$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
+SIMPLEDATAIO_MODULE_FILES=$(SIMPLEDATAIO_INC_DIR)/simpledataio.mod $(SIMPLEDATAIO_INC_DIR)/simpledataio_write.mod
+
+SIMPLEDATAIO_LIB_DIR_ABS=$(PWD)/$(SIMPLEDATAIO_LIB_DIR)
+SIMPLEDATAIO_LIB_ABS=$(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataiof.a $(SIMPLEDATAIO_LIB_DIR_ABS)/libsimpledataio.a
+
+ifdef USE_MPI
+	SIMPLEDATAIO_EMPI=--enable-mpi
+endif
+
+
+
+#ifeq ($(SIMPLEDATAIO_CONF_SYSTEM), none)
+#SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) 
+#else
+#ifndef SIMPLEDATAIO_CONF_SYSTEM
+#SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) FCFLAGS="$(NETCDF_INC)" LDFLAGS="$(NETCDF_LIB)"
+#SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) FCFLAGS="$(NETCDF_INC)"
+#else
+SIMPLEDATAIO_CONF=FC=$(FC) CC=$(CC) --disable-shared  $(SIMPLEDATAIO_EMPI) $(SIMPLEDATAIO_CONF_SYSTEM)
+SIMPLEDATAIO_CONF+=$(SIMPLEDATAIO_CONF_EARCHIVE)
+#endif
+#endif
+
+ifdef USE_PARALLEL_NETCDF
+SIMPLEDATAIO_CONF+=--enable-parallel
+endif
+
+diagnostics: diagnostics/diagnostics_create_and_write.f90 diagnostics/diagnostics_config.f90 $(SIMPLEDATAIO_LIB)
+
+RUBY_GENERATE=env ruby $2 $1; if test "$$?" != 0; then  echo && echo && echo  "Warning: no ruby: $1 is not updated!!!" && echo && echo; fi
+
+
+diagnostics/diagnostics_create_and_write.f90: diagnostics/generate_diagnostics_create_and_write.rb $(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES)
+	$(call RUBY_GENERATE,$@,$<)
+diagnostics/diagnostics_config.f90: diagnostics/generate_diagnostics_config.rb  $(SIMPLEDATAIO_LIB) 
+	$(call RUBY_GENERATE,$@,$<)
+
+#simpledataio: $(SIMPLEDATAIO_LIB) $(SIMPLEDATAIO_MODULE_FILES)
+
+#diagnostics/simpledataio/.libs/libsimpledataio.a: build_simpledatio 
+
+#diagnostics/simpledataio/.libs/libsimpledataiof.a: build_simpledatio
+
+$(SIMPLEDATAIO_LIB_DIR)/libsimpledataiof.a: $(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a
+	make -C diagnostics/simpledataio
+
+$(SIMPLEDATAIO_MODULE_FILES): $(SIMPLEDATAIO_LIB)
+	make -C diagnostics/simpledataio
+
+$(SIMPLEDATAIO_LIB_DIR)/libsimpledataio.a: diagnostics/simpledataio/Makefile
+	make -C diagnostics/simpledataio
+
+simpledatio: diagnostics/simpledataio/Makefile
+	make -C diagnostics/simpledataio
+
+diagnostics/simpledataio/Makefile: diagnostics/simpledataio/configure
+	cd diagnostics/simpledataio && ./configure $(SIMPLEDATAIO_CONF)
+
+clean_simpledataio:
+	make clean -C diagnostics/simpledataio || echo "already clean"
+distclean_simpledataio:
+	make distclean -C diagnostics/simpledataio || echo "already clean"

@@ -1,11 +1,8 @@
 
 !> A module containing functions for running unit tests
 module unit_tests
-  use runtime_tests, only: verbosity
-
 
   implicit none 
-
   private
 
   !> Is the relative error of the first argument with respect
@@ -33,13 +30,6 @@ module unit_tests
 
   !> Returns true when the verbosity is greater than or equal to the argument
   public :: should_print
-  
-  !> Print a debug message if verbosity is higher than given verbosity_level.
-  !! Also print list mode/trinity job id if appropriate
-  public :: debug_message
-
-  !> Set job id, for running in list mode or within trinity
-  public :: set_job_id
 
   public :: announce_module_test
   public :: close_module_test
@@ -48,32 +38,39 @@ module unit_tests
 
   public :: verbosity
 
-  !> Trinity or list mode job id
-  public :: job_id
-
 ! HJL Moved here from gs2_main
   public :: functional_test_flag
   public :: ilast_step
 
   logical :: functional_test_flag = .false.
   integer :: ilast_step
-  integer :: job_id
  
   interface agrees_with
-     module procedure agrees_with_real
-     module procedure agrees_with_real_1d_array
-     module procedure agrees_with_complex_1d_array
-     !module procedure agrees_with_real_2d_array
-     module procedure agrees_with_integer
-  end interface agrees_with
+    module procedure agrees_with_real
+    module procedure agrees_with_real_1d_array
+    module procedure agrees_with_complex_1d_array
+    !module procedure agrees_with_real_2d_array
+    module procedure agrees_with_integer
+  end interface
 
   interface should_be
-     module procedure should_be_int
-     module procedure should_be_real
-  end interface should_be
+    module procedure should_be_int
+    module procedure should_be_real
+  end interface
+
+
 
 contains
 
+  function verbosity()
+    integer :: verbosity
+    character(len=10) :: verbosity_char
+    call getenv("VERBOSITY", verbosity_char)
+    !For fortran 2003 standard should replace above with
+    !call get_environment_variable("VERBOSITY", verbosity_char)
+    read (verbosity_char,'(I1)') verbosity
+    !write (*,*) 'verbosity is ', verbosity
+  end function verbosity
 
   function proc_message()
     use mp, only: iproc
@@ -95,8 +92,8 @@ contains
     integer :: n
     n = size(val)
     agrees_with_complex_1d_array = &
-         agrees_with_real_1d_array(real(val), real(correct), err) .and.  &
-         agrees_with_real_1d_array(aimag(val), aimag(correct), err) 
+      agrees_with_real_1d_array(real(val), real(correct), err) .and.  &
+      agrees_with_real_1d_array(aimag(val), aimag(correct), err) 
 
   end function agrees_with_complex_1d_array
 
@@ -109,42 +106,36 @@ contains
     agrees_with_real_1d_array = .true.
     do i = 1,n
 
-       !call should_be(val(i), correct(i))
-       !if (correct(i) .eq. 0.0 .or. abs(correct(i)) .lt. 10.0**(-maxexponent(err)/4)) then 
-       !agrees_with_real_1d_array = agrees_with_real_1d_array .and. (abs(val(i)) .lt. err) 
-       !else
-       !agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
-       !(abs((val(i)-correct(i))/correct(i)) .lt. err)
-       !end if
-       agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
-            agrees_with_real(val(i), correct(i), err)
-       if (.not. agrees_with_real_1d_array) exit
-    end do
+      !call should_be(val(i), correct(i))
+      !if (correct(i) .eq. 0.0 .or. abs(correct(i)) .lt. 10.0**(-maxexponent(err)/4)) then 
+        !agrees_with_real_1d_array = agrees_with_real_1d_array .and. (abs(val(i)) .lt. err) 
+      !else
+        !agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
+                                        !(abs((val(i)-correct(i))/correct(i)) .lt. err)
+      !end if
+      agrees_with_real_1d_array = agrees_with_real_1d_array .and. &
+        agrees_with_real(val(i), correct(i), err)
+      if (.not. agrees_with_real_1d_array) exit
+    end do 
   end function agrees_with_real_1d_array
-
   function agrees_with_real(val, correct, err)
     real, intent(in) :: val, correct, err
     logical :: agrees_with_real
     call should_be(val, correct)
     if (correct .eq. 0.0 .or. abs(correct) .lt. 10.0**(-maxexponent(err)/4)) then 
-       !write (*,*) 'testing abs'
-       agrees_with_real = abs(val) .lt. err 
+      !write (*,*) 'testing abs'
+      agrees_with_real = abs(val) .lt. err 
     else
-       !write (*,*) 'testing rel'
-       agrees_with_real = (abs((val-correct)/correct) .lt. err)
+      !write (*,*) 'testing rel'
+      agrees_with_real = (abs((val-correct)/correct) .lt. err)
     end if
   end function agrees_with_real
 
   function should_print(verbosity_level)
     use mp, only: proc0
-    use mp, only: mp_initialized
     integer, intent(in) :: verbosity_level
     logical :: should_print
-    if (mp_initialized) then 
-      should_print = (proc0 .and. verbosity() .ge. verbosity_level) .or. verbosity() .gt. 3
-    else
-      should_print = (verbosity() .ge. verbosity_level)
-    end if
+    should_print = (proc0 .and. verbosity() .ge. verbosity_level) .or. verbosity() .gt. 3
   end function should_print
 
   subroutine should_be_int(val, rslt)
@@ -163,16 +154,11 @@ contains
   end subroutine announce_test
 
   subroutine process_test(rslt, test_name)
-    use mp, only: mp_abort, mp_initialized
     logical, intent (in) :: rslt
     character(*), intent(in) :: test_name
     if (.not. rslt) then 
       write(*,*) '--> ', test_name, ' failed', proc_message()
-      if (mp_initialized) then 
-        call mp_abort('Failed test', .true.)
-      else
-        stop 1
-      end if
+      stop 1
     end if
 
     if (should_print(1)) write (*,*) '--> ', test_name, ' passed', proc_message()
@@ -188,9 +174,9 @@ contains
     logical, intent (in) :: rslt
     character(*), intent(in) :: test_name
     if (.not. rslt) then 
-       write(*,*) '   --> ', test_name, ' failed', proc_message()
+      write(*,*) '   --> ', test_name, ' failed', proc_message()
     else
-       if (should_print(2)) write (*,*) '   --> ', test_name, ' passed', proc_message()
+      if (should_print(2)) write (*,*) '   --> ', test_name, ' passed', proc_message()
     end if
     test_result = test_result .and. rslt
   end subroutine process_check
@@ -199,13 +185,17 @@ contains
     character(*), intent(in) :: module_name
     character(8) :: message = 'Testing '
     if (should_print(1)) call print_with_stars(message, module_name)
+
+
   end subroutine announce_module_test
 
   subroutine close_module_test(module_name)
     character(*), intent(in) :: module_name
     character(17) :: message = 'Finished testing '
     if (should_print(1)) call print_with_stars(message, module_name)
-    write (*,*)
+    !write (*,*) too much wite spece in parallel runs
+
+
   end subroutine close_module_test
 
   subroutine print_with_stars(str1, str2)
@@ -213,31 +203,16 @@ contains
     character, dimension(:), allocatable :: stars
     integer :: i
 
+
     allocate(stars(len(str1) + len(str2) + len(proc_message()) ))
     do i = 1,len(str1)+len(str2)+len(proc_message())
-       stars(i) = '*'
+      stars(i) = '*'
     end do
 
     write (*,*) stars
     write (*,*) str1, str2, proc_message()
     write (*,*) stars
+    
   end subroutine print_with_stars
-
-  subroutine debug_message(verbosity_level, message)
-    use mp, only: iproc, mp_initialized
-    integer, intent(in) :: verbosity_level
-    character(*), intent(in) :: message
-    if (mp_initialized) then 
-      if (should_print(verbosity_level)) write (*,"(A,A5,I6,A7,I6)") message, " jid=", job_id, &
-        " iproc=", iproc
-    else
-      if (should_print(verbosity_level)) write (*,"(A,A5,I6,A7,I6)") message, " jid=", job_id
-    end if
-  end subroutine debug_message
-
-  subroutine set_job_id(jid)
-    integer, intent(in) :: jid
-    job_id = jid
-  end subroutine set_job_id
 
 end module unit_tests

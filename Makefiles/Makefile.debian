@@ -1,0 +1,35 @@
+# Makefile for Debian (tested on squeeze) 
+# Maintainer: edmund.highcock@physics.ox.ac.uk
+
+#Before building install these packages
+#gcc
+#gfortran
+#openmpi-bin
+#### FFTW3 (Default) #########
+#libfftw3-mpi-dev
+#### FFTW2 (Old) #########
+#fftw2
+#fftw-dev
+#libnetcdf6
+#netcdf-bin
+#libnetcdf-dev
+
+
+COMPILER=gnu-gfortran
+USE_HDF5=
+include Makefile.$(COMPILER)
+
+USE_LOCAL_SPFUNC=on
+
+ifeq ($(USE_FFT),fftw3)
+	FFT_LIB = -L/usr/lib -L/usr/lib/x86_64-linux-gnu/ -lfftw3 -lfftw3f -lfftw3_mpi -lfftw3f_mpi
+endif
+
+ifeq ($(USE_FFT),fftw)
+	FFT_LIB = -L/usr/lib64 -lrfftw -lfftw
+endif
+
+ifdef USE_NETCDF
+	NETCDF_INC = -I/usr/include
+	NETCDF_LIB = -L/usr/lib64 -lnetcdf -lnetcdff
+endif

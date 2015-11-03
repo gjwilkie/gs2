@@ -2,13 +2,14 @@ module le_derivatives
 
   implicit none
 
-  private
-
   public :: vspace_derivatives
+
+  private
 
 contains
 
-  subroutine vspace_derivatives (g, gold, g1, phi, bpar, phinew, bparnew, diagnostics, gtoc, ctog)
+  subroutine vspace_derivatives (g, gold, g1, phi, apar, bpar, phinew,aparnew, bparnew, diagnostics, gtoc, ctog)
+
     use redistribute, only: gather, scatter
     use dist_fn_arrays, only: c_rate, g_adjust
     use gs2_layouts, only: g_lo, le_lo
@@ -29,8 +30,18 @@ contains
     implicit none
     
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in out) :: g, gold, g1
-    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar, phinew, bparnew
+    complex, dimension (-ntgrid:,:,:), intent (in) :: phi, apar, bpar, phinew, aparnew, bparnew
     integer, optional, intent (in) :: diagnostics
+
+# ifdef LOWFLOW
+    integer :: ile, ig, ie, ixi, isgn, il, is
+    integer, dimension (2) :: i
+    real :: dvp, vp0
+    complex, dimension (:,:), allocatable :: gtmp
+# endif
+    complex, dimension (:,:,:), allocatable :: gle
+    complex, dimension (:,:,:), allocatable :: gc1, gc2, gc3
+    logical :: heating_flag
 
 !CMR, 12/9/2013: 
 !CMR   New logical optional input parameters gtoc, ctog used to set
@@ -43,18 +54,8 @@ contains
 !CMR   Just realised we need to be careful with g_adjust if we avoid
 !CMR   mapping g_lo <=> le_lo    Mmmm, a little more to think about here ;-(
 !CMR
-    logical, intent(in), optional :: gtoc, ctog
+    logical, optional :: gtoc, ctog
     logical :: g_to_c, c_to_g
-
-# ifdef LOWFLOW
-    integer :: ile, ig, ie, ixi, isgn, il, is
-    integer, dimension (2) :: i
-    real :: dvp, vp0
-    complex, dimension (:,:), allocatable :: gtmp
-# endif
-    complex, dimension (:,:,:), allocatable :: gle
-    complex, dimension (:,:,:), allocatable :: gc1, gc2, gc3
-    logical :: heating_flag
 
     if (present(gtoc)) then 
        g_to_c=gtoc 
@@ -105,24 +106,22 @@ contains
                 il = ixi_to_il(ig,ixi)
                 isgn = ixi_to_isgn(ig,ixi)
                 if (.not. forbid(ig,il)) &
-                   !call get_gvpa (gtmp, dvp, ig, il, ixi, ie, isgn, gle(ixi,ie,ile))
-                   ! EGH removed isgn from arguments
-                   call get_gvpa (gtmp, dvp, ig, il, ixi, ie, gle(ixi,ie,ile))
+                   call get_gvpa (gtmp, dvp, ig, il, ixi, ie, isgn, gle(ixi,ie,ile))
+                end do
              end do
           end do
-       end do
 
-       deallocate (gtmp)
-       
-       if (colls) then
+          deallocate (gtmp)
+
+          if (colls) then
 # endif
-          ! update distribution function to take into account collisions
+       ! update distribution function to take into account collisions
           call solfp1 (gle, diagnostics)
 
 # ifdef LOWFLOW
           end if
 # endif
-          ! remap from le_layout to g_layout
+         ! remap from le_layout to g_layout
           if (c_to_g) call scatter (g2le, gle, g)
           deallocate (gle)
           if (heating_flag) then
@@ -194,16 +193,17 @@ contains
   end if
 
   contains
-    
-    subroutine get_gvpa (g_in, dv, ig0, il0, ixi0, ie0, g_out)
+
+    subroutine get_gvpa (g_in, dv, ig0, il0, ixi0, ie0, isgn0, g_out)
+
       use theta_grid, only: bmag
       use le_grids, only: speed, energy, al, xi, negrid, jend
-      use mp, only: mp_abort
+
       implicit none
 
       complex, dimension (:,:), intent (in) :: g_in
       real, intent (in) :: dv
-      integer, intent (in) :: ig0, il0, ixi0, ie0
+      integer, intent (in) :: ig0, il0, ixi0, ie0, isgn0
       complex, intent (out) :: g_out
 
       integer :: ie, ie_low, ie_up, il, il_low, il_up, ix_low, ix_up, isgn
@@ -293,7 +293,8 @@ contains
             end if
             
             if (il0 == jend(ig0)) then
-               call mp_abort('Error in get_gvpa: il0=jend(ig0) should not be possible here.',.true.)
+               write (*,*) 'Error in get_gvpa: il0=jend(ig0) should not be possible here.'
+               stop
             end if
             
             ! pitch-angle goes to smaller absolute value, corresponding to larger il
@@ -308,7 +309,8 @@ contains
             end do
             
             if (.not. x_finished) then
-               call mp_abort('Error in get_gvpa: could not bracket il')
+               write (*,*) 'Error in get_gvpa: could not bracket il'
+               stop
             end if
             
          end if
@@ -324,13 +326,13 @@ contains
          end if
          
          ! bilinear interpolation using 4 grid points closest to (vp,vperp)
-         call interp_g (ig0, isgn, il_low, il_up, ix_low, ix_up, ie_low, ie_up, v, x, g_in, g_out)
+         call interp_g (ig0, isgn, il_low, il_up, ix_low, ix_up, ie_low, ie_up, v, x, lam, p, g_in, g_out)
 
       end if
 
     end subroutine get_gvpa
 
-    subroutine interp_g (ig0, isgn, il_low, il_up, ix_low, ix_up, ie_low, ie_up, v0, x0, g, gint)
+    subroutine interp_g (ig0, isgn, il_low, il_up, ix_low, ix_up, ie_low, ie_up, v0, x0, lam0, p0, g, gint)
 
       use le_grids, only: speed, xi, negrid, sgn
 !      use le_grids, only: nlambda,al
@@ -338,7 +340,7 @@ contains
       implicit none
 
       integer, intent (in) :: ig0, isgn, il_low, il_up, ix_low, ix_up, ie_low, ie_up
-      real, intent (in) :: v0, x0
+      real, intent (in) :: v0, x0, lam0, p0
       complex, dimension (:,:), intent (in) :: g
       complex, intent (out) :: gint
 
@@ -391,5 +393,7 @@ contains
       deallocate (var)
 
     end subroutine interp_g
+
   end subroutine vspace_derivatives
+
 end module le_derivatives

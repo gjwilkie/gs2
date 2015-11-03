@@ -11,9 +11,8 @@ module gs2_save
   use netcdf, only: NF90_HDF5,NF90_MPIIO
   use netcdf, only: nf90_var_par_access, NF90_COLLECTIVE
   use netcdf, only: nf90_put_att, NF90_GLOBAL, nf90_get_att
-  use netcdf, only: nf90_create_par
 # endif
-  use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR, NF90_UNLIMITED
+  use netcdf, only: NF90_NOWRITE, NF90_CLOBBER, NF90_NOERR
   use netcdf, only: nf90_create, nf90_open, nf90_sync, nf90_close
   use netcdf, only: nf90_def_dim, nf90_def_var, nf90_enddef
   use netcdf, only: nf90_put_var, nf90_get_var, nf90_strerror
@@ -28,16 +27,11 @@ module gs2_save
 
   implicit none
 
-  private
-
-  public :: gs2_restore, gs2_save_for_restart, finish_gs2_save
-
+  public :: gs2_restore, gs2_save_for_restart, finish_save
   public :: read_many, save_many, gs2_save_response, gs2_restore_response
   public :: restore_current_scan_parameter_value
-  public :: init_gs2_save, init_dt, init_tstart, init_ant_amp
-  public :: set_restart_file
-  public :: init_vnm, restart_writable, EigNetcdfID
-  public :: init_eigenfunc_file, finish_eigenfunc_file, add_eigenpair_to_file
+  public :: init_save, init_dt, init_tstart, init_ant_amp
+  public :: init_vnm, restart_writable
 !# ifdef NETCDF
 !  public :: netcdf_real, kind_nf, get_netcdf_code_precision, netcdf_error
 !# endif
@@ -46,17 +40,10 @@ module gs2_save
      module procedure gs2_restore_many!, gs2_restore_one
   end interface
 
-  !A custom type to look after the netcdf ids for the eigenvalue file
-  type EigNetcdfID
-     integer :: ncid, conv_dim_id, theta_dim_id, ri_dim_id
-     integer :: omega_var_id, theta_var_id, phi_var_id
-     integer :: apar_var_id, bpar_var_id, conv_var_id
-     integer :: nconv_count
-  end type EigNetcdfID
-
   logical :: read_many, save_many ! Read and write single or multiple restart files
   
-  character (300) :: restart_file
+  private
+  character (300), save :: restart_file
 
 # ifdef NETCDF
   real, allocatable, dimension(:,:,:) :: tmpr, tmpi, ftmpr, ftmpi
@@ -120,7 +107,6 @@ contains
     use dist_fn_arrays, only: vpa, vperp2
     !</DD> Added for saving distribution function
     use parameter_scan_arrays, only: current_scan_parameter_value
-    use unit_tests, only: debug_message
     implicit none
     complex, dimension (-ntgrid:,:,g_lo%llim_proc:), intent (in) :: g
     real, intent (in) :: t0, delt0
@@ -141,15 +127,11 @@ contains
 # endif
     logical :: exit
     logical :: local_init !<DD> Added for saving distribution function
-    integer, parameter :: verb = 3
 
 
 !*********-----------------------_**********************
 
     istatus = 0
-    !ncid = -1 
-    !call broadcast(ncid)
-    !call broadcast(file_proc)
     
     if (present(exit_in)) then
        exit = exit_in
@@ -167,8 +149,6 @@ contains
     total_elements = g_lo%ulim_world+1
 
     if (n_elements <= 0) return
-    
-    call debug_message(verb, 'gs2_save::gs2_save_for_restart checking init')
 
     !<DD> Added for saving distribution function
     IF (PRESENT(distfn)) THEN
@@ -225,21 +205,13 @@ contains
 
        file_proc = trim(trim(file_proc)//adjustl(suffix))          
 
-       call debug_message(verb, 'gs2_save::gs2_save_for_restart opening file')
-       call debug_message(verb, 'file proc is')
-       call debug_message(verb, file_proc)
-
 # ifdef NETCDF_PARALLEL       
        if(save_many) then
 # endif
           istatus = nf90_create (file_proc, NF90_CLOBBER, ncid)
 # ifdef NETCDF_PARALLEL
        else
-          call debug_message(verb, &
-            'gs2_save::gs2_save_for_restart calling barrier before delete file')
           call barrier
-          call debug_message(verb, &
-            'gs2_save::gs2_save_for_restart called barrier before delete file')
           
           if(iproc .eq. 0) then
              open(unit=tmpunit, file=file_proc)
@@ -247,10 +219,8 @@ contains
           end if
 
           call barrier
-          call debug_message(verb, &
-            'gs2_save::gs2_save_for_restart called barrier before opening')
 ! If using netcdf version 4.1.2 or older replace NF90_MPIIO with NF90_CLOBBER
-          istatus = nf90_create_par (file_proc, IOR(NF90_HDF5,NF90_MPIIO), ncid=ncid, comm=mp_comm, info=mp_info)
+          istatus = nf90_create (file_proc, IOR(NF90_HDF5,NF90_MPIIO), ncid, comm=mp_comm, info=mp_info)
        end if
 # endif
 
@@ -270,7 +240,6 @@ contains
           end if
        endif
 # endif
-       call debug_message(verb, 'gs2_save::gs2_save_for_restart defining dimensions')
        
        if (n_elements > 0) then
           istatus = nf90_def_dim (ncid, "theta", 2*ntgrid+1, thetaid)
@@ -358,8 +327,6 @@ contains
        !</DD> Added for saving distribution function
        
        if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
-
-       call debug_message(verb, 'gs2_save::gs2_save_for_restart defining variables')
 
        istatus = nf90_def_var (ncid, "t0", netcdf_real, t0id)
        if (istatus /= NF90_NOERR) then
@@ -603,7 +570,6 @@ contains
        end if
     end if
 
-    call debug_message(verb, 'gs2_save::gs2_save_for_restart writing scalars')
 # ifdef NETCDF_PARALLEL                    
     if(save_many .or. iproc == 0) then
 # endif
@@ -705,7 +671,6 @@ contains
             allocate (tmpr(2*ntgrid+1,2,g_lo%llim_proc:g_lo%ulim_alloc))
 
        tmpr = real(g)
-      call debug_message(verb, 'gs2_save::gs2_save_for_restart writing dist fn')
 
 # ifdef NETCDF_PARALLEL
        if(save_many) then
@@ -825,14 +790,7 @@ contains
     end if
 # endif
        
-    ! EGH Why don't we just close the file every time? As things stand
-    ! if you reinitalise the timestep in a nonlinear run, but don't have
-    ! save_for_restart true in gs2_diagnostics, then the last call to
-    ! this function will leave the file open. This is highly non-intuitive
-    ! behaviour and causes nasty error messages when you run with parallel 
-    ! netcdf.
-    !if (exit) then
-    if (.true.) then
+    if (exit) then
        i = nf90_close (ncid)
        if (i /= NF90_NOERR) &
             call netcdf_error (istatus, message='nf90_close error')
@@ -852,7 +810,7 @@ contains
 
   end subroutine gs2_save_for_restart
 
-  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar, fileopt)
+  subroutine gs2_restore_many (g, scale, istatus, fphi, fapar, fbpar)
 !MR, 2007: restore kx_shift array if already allocated
 # ifdef NETCDF
     use mp, only: iproc
@@ -869,7 +827,6 @@ contains
     real, intent (in) :: scale
     integer, intent (out) :: istatus
     real, intent (in) :: fphi, fapar, fbpar
-    character (20), INTENT (in), optional :: fileopt
 # ifdef NETCDF
 # ifdef NETCDF_PARALLEL
     integer, dimension(3) :: counts, start_pos
@@ -885,10 +842,6 @@ contains
     if (.not.initialized) then
        initialized = .true.
        file_proc = trim(restart_file)
-
-       IF (PRESENT(fileopt)) THEN
-          file_proc=trim(file_proc)//trim(fileopt)
-       END IF
 
 # ifdef NETCDF_PARALLEL
        if(read_many) then
@@ -1239,153 +1192,6 @@ contains
 #endif
   end subroutine gs2_restore_response
 
-  !>Initialises a file for saving output of eigensolver to netcdf
-  subroutine init_eigenfunc_file(fname,fphi,fapar,fbpar,IDs)
-    use file_utils, only: error_unit
-    use theta_grid, only: ntgrid, theta
-    implicit none
-    character(len=*), intent(in) :: fname
-    type(EigNetcdfID), intent(inout) :: IDs
-    real, intent(in) :: fphi, fapar, fbpar
-#ifdef NETCDF
-    integer :: ierr
-#endif
-
-    !Set nconv counter to 0
-    IDs%nconv_count=0
-
-#ifdef NETCDF
-    !Get precision
-    if (netcdf_real == 0) netcdf_real = get_netcdf_code_precision()
-    
-    !/Make file
-    ierr=nf90_create(fname,NF90_CLOBBER,IDs%ncid)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
-
-    !/Define dimensions
-    ierr=nf90_def_dim(IDs%ncid,"ri",2,IDs%ri_dim_id)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="ri")
-    ierr=nf90_def_dim(IDs%ncid,"theta",2*ntgrid+1,IDs%theta_dim_id)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="theta")
-    ierr=nf90_def_dim(IDs%ncid,"nconv",NF90_UNLIMITED,IDs%conv_dim_id)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,dim="nconv")
-
-    !/Define variables
-    !Dimensions
-    ierr=nf90_def_var(IDs%ncid,"theta",netcdf_real,IDs%theta_dim_id,IDs%theta_var_id)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="theta")
-    ierr=nf90_def_var(IDs%ncid,"conv",netcdf_real,IDs%conv_dim_id,IDs%conv_var_id)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="conv_id")
-    !Fields
-    if(fphi.gt.epsilon(0.0))then
-       ierr=nf90_def_var(IDs%ncid,"phi",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
-            & IDs%conv_dim_id/),IDs%phi_var_id)
-       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="phi")
-    endif
-    if(fapar.gt.epsilon(0.0))then
-       ierr=nf90_def_var(IDs%ncid,"apar",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
-            & IDs%conv_dim_id/),IDs%apar_var_id)
-       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="apar")
-    endif
-    if(fbpar.gt.epsilon(0.0))then
-       ierr=nf90_def_var(IDs%ncid,"bpar",netcdf_real,(/IDs%ri_dim_id,IDs%theta_dim_id,&
-            & IDs%conv_dim_id/),IDs%bpar_var_id)
-       if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="bpar")
-    endif
-    !Omega
-    ierr=nf90_def_var(IDs%ncid,"omega",netcdf_real,(/IDs%ri_dim_id,IDs%conv_dim_id/),IDs%omega_var_id)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="omega")
-    
-    !End definitions
-    ierr=nf90_enddef(IDs%ncid)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,file=fname)
-
-    !Now we can place some data in the file
-    ierr=nf90_put_var(IDs%ncid,IDs%theta_var_id,theta)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr,var="theta")
-
-#endif
-  end subroutine init_eigenfunc_file
-
-  !>Add an eigenpairs data to file
-  subroutine add_eigenpair_to_file(eval,fphi,fapar,fbpar,IDs,my_conv)
-    use fields_arrays, only: phinew, aparnew, bparnew
-    use convert, only: c2r
-    use theta_grid, only: ntgrid
-    complex, intent(in) :: eval !Note just use fields to get eigenvectors
-    real, intent(in), optional :: my_conv
-    type(EigNetcdfID), intent(inout) :: IDs
-    real, intent(in) :: fphi, fapar, fbpar
-#ifdef NETCDF
-    real, dimension(2) :: ri_omega
-    real, dimension(:,:), allocatable :: ri_field
-    integer, dimension(3) :: start_field, count_field
-    integer, dimension(2) :: start_omega
-    integer :: ierr
-    real :: local_conv
-#endif
-
-    !First increment counter
-    IDs%nconv_count=IDs%nconv_count+1
-
-#ifdef NETCDF
-    !Now we make start values
-    start_field(1)=1 ; start_field(2)=1 ; start_field(3)=IDs%nconv_count
-    count_field(1)=2 ; count_field(2)=2*ntgrid+1 ; count_field(3)=1
-    start_omega(1)=1 ; start_omega(2)=IDs%nconv_count
-
-    !Set the conv value
-    if(present(my_conv))then
-       local_conv=my_conv
-    else
-       local_conv=IDs%nconv_count*1.0
-    endif
-
-    !Now we can write data
-    !/Conv
-    ierr=nf90_put_var(IDs%ncid,IDs%conv_var_id,local_conv, start=(/IDs%nconv_count/))!,count=(/1/))
-    if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%conv_var_id)
-
-    !/Omega
-    ri_omega(1)=real(eval)
-    ri_omega(2)=aimag(eval)
-    ierr=nf90_put_var(IDs%ncid,IDs%omega_var_id,ri_omega, start=start_omega,count=(/2,1/))
-    if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%omega_var_id)
-
-    !/Fields
-    allocate(ri_field(2,2*ntgrid+1))
-    if(fphi.gt.epsilon(0.0))then
-       call c2r(phinew(:,1,1),ri_field)
-       ierr=nf90_put_var(IDs%ncid,IDs%phi_var_id,ri_field, start=start_field,count=count_field)
-       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%phi_var_id)
-    endif
-    if(fapar.gt.epsilon(0.0))then
-       call c2r(aparnew(:,1,1),ri_field)
-       ierr=nf90_put_var(IDs%ncid,IDs%apar_var_id,ri_field, start=start_field,count=count_field)
-       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%apar_var_id)
-    endif
-    if(fbpar.gt.epsilon(0.0))then
-       call c2r(bparnew(:,1,1),ri_field)
-       ierr=nf90_put_var(IDs%ncid,IDs%bpar_var_id,ri_field, start=start_field,count=count_field)
-       if(ierr/=NF90_NOERR) call netcdf_error (ierr, IDs%ncid, IDs%bpar_var_id)
-    endif
-    deallocate(ri_field)       
-#endif
-  end subroutine add_eigenpair_to_file
-
-  !>Close the eigenfunction file
-  subroutine finish_eigenfunc_file(IDs)
-    implicit none
-    type(EigNetcdfID), intent(inout) :: IDs
-#ifdef NETCDF
-    integer :: ierr
-
-    !/Now close the file
-    ierr=nf90_close(IDs%ncid)
-    if(ierr/=NF90_NOERR) call netcdf_error(ierr)
-#endif
-  end subroutine finish_eigenfunc_file
-
   !>This function checks to see if we can create a file with name
   !<restart_file>//<SomeSuffix> if not then our restarts are not
   !going to be possible and we return false. Can also be used to check
@@ -1449,17 +1255,14 @@ contains
     restart_writable=writable
   end function restart_writable
 
-  subroutine init_gs2_save
-  end subroutine init_gs2_save
-
-  subroutine set_restart_file (file)
+  subroutine init_save (file)
     character(300), intent (in) :: file
     
     restart_file = file
 
-  end subroutine set_restart_file
+  end subroutine init_save
 
-  subroutine finish_gs2_save
+  subroutine finish_save
 #ifdef NETCDF    
     if (allocated(tmpr)) deallocate(tmpr)
     if (allocated(tmpi)) deallocate(tmpi)
@@ -1471,7 +1274,7 @@ contains
     initialized = .false.
     initialized_dfn = .false.
 #endif
-  end subroutine finish_gs2_save
+  end subroutine finish_save
 
   subroutine restore_current_scan_parameter_value(current_scan_parameter_value)
 # ifdef NETCDF
