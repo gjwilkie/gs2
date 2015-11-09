@@ -41,6 +41,7 @@ module read_chease
   private
 
   public :: read_infile
+  public :: finish
 
   public :: npsi_chease, nchi_chease 
   public :: psi_chease, chi_chease
