@@ -297,7 +297,7 @@ void sdatio_set_dimension_start(struct sdatio_file * sfile, char * dimension_nam
       /*}   */
       found = 1;
       sdim->start = start;
-      printf("Start for dimension %s is %d\n", sdim->name, sdim->start);
+      if (sdatio_debug) printf("Start for dimension %s is %d\n", sdim->name, sdim->start);
     }
   }
   if (!found) {
@@ -491,6 +491,19 @@ void sdatio_append_variable(struct sdatio_file * sfile, struct sdatio_variable *
 
   DEBUG_MESS("Deallocated old vars\n");
   
+}
+
+void sdatio_dimension_size(struct sdatio_file * sfile, char * dimension_name, int * n){
+  struct sdatio_dimension * sdim = sdatio_find_dimension(sfile, dimension_name);
+  size_t lengthp;
+  int retval;
+  char * name_tmp = (char*)malloc(sizeof(char*)*(NC_MAX_NAME+1));
+  if (sdim->size == SDATIO_UNLIMITED){
+    if ((retval = nc_inq_dim(sfile->nc_file_id, sdim->nc_id, name_tmp, &lengthp))) ERR(retval);
+    *n = lengthp;
+  }
+  else *n =  sdim->size;
+  free(name_tmp);
 }
 
 int sdatio_number_of_dimensions(struct sdatio_file * sfile, char * variable_name){

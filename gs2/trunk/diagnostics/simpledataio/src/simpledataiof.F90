@@ -501,6 +501,25 @@ contains
 #endif
   end subroutine number_of_unlimited_dimensions
 
+  subroutine dimension_size(sfile, dimension_name, n)
+    type(sdatio_file), intent(in) :: sfile
+    character(*), intent(in) :: dimension_name
+    integer, intent(out) :: n
+#ifdef ISO_C_BINDING
+    interface
+       subroutine sdatio_dimension_size(sfile, dimension_name, n) &
+            bind(c, name='sdatio_dimension_size')
+         use iso_c_binding
+         import sdatio_file
+         type(sdatio_file) :: sfile
+         integer(c_int) :: n
+         character(c_char) :: dimension_name(*)
+       end subroutine sdatio_dimension_size
+    end interface
+    call sdatio_dimension_size(sfile, dimension_name//c_null_char, n)
+#endif
+  end subroutine dimension_size
+
   subroutine netcdf_inputs(sfile, variable_name, fileid, varid, starts, counts, &
        offsets)
     type(sdatio_file), intent(in) :: sfile
