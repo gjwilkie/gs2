@@ -656,6 +656,12 @@ contains
     if (debug) write(6,*) "init_dist_fn: dist_fn_layouts"
     call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
 
+    ! TODO: I don't think we need to call init_nonlinear_terms
+    ! before calling allocate_arrays here because allocate_arrays
+    ! does not require any of the transform layouts. I think 
+    ! we can take this line out and remove the dependency 
+    ! dist_fn_arrays<=nonlinear_terms in gs2_init.rb. Anyone 
+    ! see any problems with this?  EGH
     if (debug) write(6,*) "init_dist_fn: nonlinear_terms"
     call init_nonlinear_terms 
 
