@@ -5,22 +5,16 @@ else
 endif
 
 ifdef TESTNORUN
-	TESTCOMMAND=: 
-else
-	ifdef TESTEXEC
-		TESTCOMMAND=$(TESTEXEC) ./
-	else
-		ifdef USE_MPI
-				TESTCOMMAND=mpirun -np $(NTESTPROCS) ./
-		else
-		    TESTCOMMAND=./
-		endif
-
-	endif
+	#TESTCOMMAND=: 
+override TESTEXEC=:
+#else
 endif
 
-export TESTCOMMAND
 export NTESTPROCS
+export TESTEXEC
+export USE_MPI
+
+#export TESTCOMMAND
 
 #Set the level of testing, currently loosely defined as
 # 0 : Only most basic tests included
@@ -48,7 +42,8 @@ TEST_DEPS?=libgs2.a functional_tests.o benchmarks.o gs2
 TESTS_ENVIRONMENT=FC="$(FC)" F90FLAGS="${F90FLAGS}" CPP="$(CPP)"  LD="$(LD)" LDFLAGS="$(LDFLAGS) -L$(PWD) $(SDATIO_LINK)" LIBS=" -lgs2 $(SDATIO_LIB) $(LIBS)" CPPFLAGS="$(CPPFLAGS)"
 MAKETESTS = $(MAKE) $(TESTS_ENVIRONMENT)
 
-export TESTCOMMAND
+#export TESTCOMMAND
+export TESTEXEC
 
 ifndef NO_TEST_COLOURS
 COLOUR_COMMAND=| sed -e 's/passed/\x1b[32mpassed\x1b[39m/' \
@@ -116,8 +111,11 @@ test_script: unit_tests_no_message linear_tests_no_message
 	find $(PWD)/$(TEST_DIR)/nonlinear_tests -executable | grep -v svn | grep '$(TEST_DIR)/nonlinear_tests/.*/' | sed -e 's/^\(.\+\)$$/\1 \1.in \&\&/' | sed -e 's/^/$(TESTEXEC) /'  >> test_script.sh
 	echo "echo \"Tests Successful\"" >> test_script.sh
 
-benchmarks: unit_tests.o $(TEST_DEPS)
-	cd $(TEST_DIR)/benchmarks && time ${MAKETESTS} && echo && echo "Completed Benchmarks"
+benchmarks_no_message: unit_tests.o $(TEST_DEPS)
+	$(call RUN_TESTS,benchmarks)
+
+benchmarks: benchmarks_no_message
+	$(call TEST_PRINTOUT,$(call TEST_RESULTS,$@))
 
 upload_benchmarks: 
 	cd $(TEST_DIR)/benchmarks && time ${MAKETESTS} upload && echo && echo "Completed Benchmarks"

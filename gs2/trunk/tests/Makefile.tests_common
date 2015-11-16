@@ -27,10 +27,34 @@ upload:
 	$(UPLOADCOMMAND)
 
 
+ifdef TESTEXEC
+# TESTEXEC is typically defined in a system makefile
+# For example, in Makefile.debian (note the double $$):
+# TESTEXEC=mpirun -np $$(1)
+#
+# Before r3768, TESTEXEC did not allow you to override
+# the number of processes, for example, in Makefile.archer
+# TESTEXEC=aprun -N 24 -n 24;
+#
+# This will still work (so any system Makefiles that haven't
+# been updated will still work), but the correct form is now
+# TESTEXEC=aprun -N $$(1) -n $$(1)';
+#$(info TESTEXEC is $(TESTEXEC))
+TESTCOMMAND=$(call TESTEXEC,$(NTESTPROCS)) ./
+else
+ifndef USE_MPI
+		TESTCOMMAND=mpirun -np $(NTESTPROCS) ./
+else
+		TESTCOMMAND=./
+endif
+endif
+
 RUNCOMMAND= @$(TESTCOMMAND)$(1) $(BLUEGENEARGS) $(2) $(3); if test "$$?" != 0; then  echo "FAILED: `basename $$PWD` ($(TESTCOMMAND)$(1) $(2) $(3))" >> results_of_test.txt; else echo "passed: `basename $$PWD` ($(TESTCOMMAND)$(1) $(2) $(3))" >> results_of_test.txt;  fi
 
 SKIPCOMMAND= @echo "skipped: `basename $$PWD` ($(1))" >> results_of_test.txt
 
-BENCHMARKCOMMAND= $(call TESTEXEC,$(1))$(2) $(BLUEGENEARGS) $(3)
+BENCHMARKEXEC=$(call TESTEXEC,$(1)) ./$(2) $(BLUEGENEARGS)  $(3)
+
+BENCHMARKCOMMAND= $(call BENCHMARKEXEC,$(1),$(2),$(3)); if test "$$?" != 0; then  echo "FAILED: `basename $$PWD` ($(call BENCHMARKEXEC,$(1),$(2),$(3)))" >> results_of_test.txt; else echo "passed: `basename $$PWD` ($(call BENCHMARKEXEC,$(1),$(2),$(3)))" >> results_of_test.txt;  fi
 
 UPLOAD_BENCHMARKS= ls $(1) | xargs -n 1 -I {} scp {} $(USER),gyrokinetics@web.sourceforge.net:htdocs/wikifiles/benchmark_data/.
