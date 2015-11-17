@@ -185,11 +185,24 @@ contains
     use species, only: init_species, nspec, spec
     use theta_grid, only: init_theta_grid
     use kt_grids, only: init_kt_grids, naky, ntheta0
-    use le_grids, only: init_le_grids, nlambda, negrid
+    use le_grids, only: init_le_grids, nlambda, negrid , init_map
     use run_parameters, only: init_run_parameters
     use gs2_layouts, only: init_dist_fn_layouts, init_gs2_layouts
 
     implicit none
+
+    logical :: use_lz_layout = .false.
+    logical :: use_e_layout = .false.
+! lowflow terms include higher-order corrections to GK equation
+! such as parallel nonlinearity that require derivatives in v-space.
+! most efficient way to take these derivatives is to go from g_lo to le_lo,
+! i.e., bring all energies and lambdas onto each processor
+!<DD>Note the user can still disable use_le_layout in the input file
+!    this just changes the default.
+# ifdef LOWFLOW
+    use_le_layout = .true.
+# endif
+
 
     if (initialized) return
     initialized = .true.
@@ -205,7 +218,18 @@ contains
     call init_run_parameters
     call init_dist_fn_layouts (naky, ntheta0, nlambda, negrid, nspec)
     call read_parameters
-
+    if( .not. use_le_layout ) then
+       select case (collision_model_switch)
+       case (collision_model_full)
+          use_lz_layout = .true.
+          use_e_layout = .true.
+       case (collision_model_lorentz,collision_model_lorentz_test)
+          use_lz_layout = .true.
+       case (collision_model_ediffuse)
+          use_e_layout = .true.
+       end select
+    end if
+    call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
     call init_arrays
 
   end subroutine init_collisions
@@ -317,7 +341,7 @@ contains
 
   subroutine init_arrays
     use species, only: nspec
-    use le_grids, only: negrid, init_map
+    use le_grids, only: negrid
     use kt_grids, only: naky, ntheta0
     use theta_grid, only: ntgrid
     use dist_fn_arrays, only: c_rate
@@ -325,17 +349,6 @@ contains
     implicit none
 
     real, dimension (negrid) :: hee
-    logical :: use_lz_layout = .false.
-    logical :: use_e_layout = .false.
-! lowflow terms include higher-order corrections to GK equation
-! such as parallel nonlinearity that require derivatives in v-space.
-! most efficient way to take these derivatives is to go from g_lo to le_lo,
-! i.e., bring all energies and lambdas onto each processor
-!<DD>Note the user can still disable use_le_layout in the input file
-!    this just changes the default.
-# ifdef LOWFLOW
-    use_le_layout = .true.
-# endif
 
     !<DD>This (potentially large) array should only be needed if 
     !write_hrate (gs2_diagnostics) is true.
@@ -349,20 +362,6 @@ contains
        colls = .false.
        return
     end if
-
-    if( .not. use_le_layout ) then
-       select case (collision_model_switch)
-       case (collision_model_full)
-          use_lz_layout = .true.
-          use_e_layout = .true.
-       case (collision_model_lorentz,collision_model_lorentz_test)
-          use_lz_layout = .true.
-       case (collision_model_ediffuse)
-          use_e_layout = .true.
-       end select
-    end if
-
-    call init_map (use_lz_layout, use_e_layout, use_le_layout, test)
 
     call init_vnew (hee)
     if (all(abs(vnew(:,1,:)) <= 2.0*epsilon(0.0))) then
@@ -798,21 +797,22 @@ contains
        !use complex arrays to allow reuse of existing integrate routines etc.) 
        if (.not. allocated(s0)) then
           allocate (s0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          s0=real(s0tmp)
-          deallocate(s0tmp)
        endif
+       s0=real(s0tmp)
+       deallocate(s0tmp)
 
        if (.not. allocated(w0)) then
           allocate (w0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          w0=real(w0tmp)
-          deallocate(w0tmp)
        endif
+       w0=real(w0tmp)
+       deallocate(w0tmp)
 
        if (.not. allocated(z0)) then
           allocate (z0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          z0=real(z0tmp)
-          deallocate(z0tmp)
        endif
+       z0=real(z0tmp)
+       deallocate(z0tmp)
+
     end if
     
   end subroutine init_lorentz_conserve
@@ -1201,21 +1201,21 @@ contains
        !use complex arrays to allow reuse of existing integrate routines etc.)
        if (.not. allocated(bs0)) then
           allocate (bs0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          bs0=real(bs0tmp)
-          deallocate(bs0tmp)
        endif
+       bs0=real(bs0tmp)
+       deallocate(bs0tmp)
 
        if (.not. allocated(bw0)) then
           allocate (bw0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          bw0=real(bw0tmp)
-          deallocate(bw0tmp)
        endif
-
+       bw0=real(bw0tmp)
+       deallocate(bw0tmp)
+       
        if (.not. allocated(bz0)) then
           allocate (bz0(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
-          bz0=real(bz0tmp)
-          deallocate(bz0tmp)
        endif
+       bz0=real(bz0tmp)
+       deallocate(bz0tmp)
     end if
  end subroutine init_diffuse_conserve
 
