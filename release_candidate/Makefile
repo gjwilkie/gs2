@@ -586,7 +586,7 @@ clean: clean_simpledataio
 	-rm -f *.o *.mod *.g90 *.h core */core
 
 CLEANCOMMAND=echo $$$$PWD
-CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc gridgen.200 *.lpc *.vres *.fields *.g fort.?? *.mod .*.scratch *.timing.* *.moments *.cdf *.jext *.parity *.heat *.heat2 *.vres2 *.amoments *.eigenfunc *.nc* *.mom2 *.epar .*.in results_of_test.txt *.stop *.fftw_wisdom *.phase *.kpar *.interp *.dist 
+CLEANCOMMAND=rm -f *.o *.error *.out *.out.nc *.gridgen.200 *.lpc *.vres *.fields *.g *.fort.?? *.mod .*.scratch *.timing.* *.moments *.cdf *.jext *.parity *.heat *.heat2 *.vres2 *.amoments *.eigenfunc *.nc* *.mom2 *.epar .*.in results_of_test.txt *.stop *.fftw_wisdom *.phase *.kpar *.interp *.dist 
 
 ifdef CLEAN_TEXTFILES
 	CLEANCOMMAND+= *~ *.orig

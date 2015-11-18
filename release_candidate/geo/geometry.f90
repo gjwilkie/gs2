@@ -73,6 +73,8 @@ module geometry
   integer :: verb = 2 ! Verbosity of print statements | Should we use runtime_tests:verbosity?
   logical :: debug = .true.
 
+  integer :: fort11_unit !For outputting geom values
+
   character(len=800) :: eqfile
 
   type advanced_parameters_type  
@@ -269,6 +271,7 @@ contains
     use ideq, only: idfitin, ideq_init => dfit_init
     use  leq, only: leqin, dpdrhofun
     use constants, only: pi
+    use file_utils, only: open_output_file, close_output_file, get_unused_unit
     implicit none
     integer, optional, intent (out) :: ntheta_returned
 
@@ -299,9 +302,16 @@ contains
 
     character(1) :: char
     integer :: i, j, k, itot, nthg, n
+    integer :: fort25_unit !For outputting geom values
+    integer :: fort78_unit !For outputting geom values
+    integer :: fort99_unit !For outputting geom values
 
     ! Set output verbosity levels
     eeq_verbosity = verb
+
+    !Create module level output file and get unit
+    call get_unused_unit(fort11_unit)
+    call open_output_file(fort11_unit,".fort.11")
 
 !     compute the initial constants
     
@@ -425,14 +435,14 @@ if (debug) write(6,*) 'eikcoefs: alloc_local_arrays'
 if (debug) writelots=.true.
 if (debug) write(6,*) "eikcoefs: if (writelots)"
     if(writelots) then
-       write(11,*) 'All lengths normalized to the avg midplane minor radius'
+       write(fort11_unit,*) 'All lengths normalized to the avg midplane minor radius'
        if(irho /= 2) then
-          write(11,*) 'except rho, which always goes from 0 to 1.'
-          write(11,*) 'The rho normalization is determined by irho.'
+          write(fort11_unit,*) 'except rho, which always goes from 0 to 1.'
+          write(fort11_unit,*) 'The rho normalization is determined by irho.'
        endif
-       write(11,*) 'avgrmid = ',avgrmid,' meters'
-       if(iflux == 1) write(11,*) 'R_mag = ',rmaj
-       if(iflux == 1) write(11,*) 'B_T0 = ',B_T0
+       write(fort11_unit,*) 'avgrmid = ',avgrmid,' meters'
+       if(iflux == 1) write(fort11_unit,*) 'R_mag = ',rmaj
+       if(iflux == 1) write(fort11_unit,*) 'B_T0 = ',B_T0
     endif
 
     rho=rhoc
@@ -467,9 +477,9 @@ if (debug) write(6,*) "eikcoefs: find rgrid"
     endif
 
     if(writelots) then
-       write(11,*) 'rp of rho = ',rp
-       write(11,*) 'Rcenter(rho) = ',rcenter(rp)
-       write(11,*) 'R_geo = ',R_geo,' !or ',btori(rgrid(0), 0.)
+       write(fort11_unit,*) 'rp of rho = ',rp
+       write(fort11_unit,*) 'Rcenter(rho) = ',rcenter(rp)
+       write(fort11_unit,*) 'R_geo = ',R_geo,' !or ',btori(rgrid(0), 0.)
     endif
 
     if(R_geo > Rmaj + 1.e-5) then
@@ -480,12 +490,20 @@ if (debug) write(6,*) "eikcoefs: find rgrid"
     endif
 
     if(writelots) then
+       call get_unused_unit(fort78_unit)
+       call open_output_file(fort78_unit,".fort.78")
+       call get_unused_unit(fort99_unit)
+       call open_output_file(fort99_unit,".fort.99")
+    
        rbar = 0.
-       write(78,*) '# theta_pol,  R,   Z'
+       write(fort78_unit,*) '# theta_pol,  R,   Z'
        do i= -nth,nth         
-          write(99,*) 'i=',i,' thet= ',theta(i),' rgrid= ',rgrid(i)
-          write(78,*) theta(i),Rpos(rgrid(i),theta(i)),Zpos(rgrid(i),theta(i))
+          write(fort99_unit,*) 'i=',i,' thet= ',theta(i),' rgrid= ',rgrid(i)
+          write(fort78_unit,*) theta(i),Rpos(rgrid(i),theta(i)),Zpos(rgrid(i),theta(i))
        enddo
+
+       call close_output_file(fort78_unit)
+       call close_output_file(fort99_unit)
 
        do i=-nth,nth-1
           rbar = rbar + rgrid(i) * (theta(i+1)-theta(i))
@@ -500,10 +518,10 @@ if (debug) write(6,*) "eikcoefs: find rgrid"
     if(nperiod > 1) call periodic_copy(theta, 2.*pi)
 
     if(writelots) then
-       write(11,*) 'drhodrp=',drhodrp
+       write(fort11_unit,*) 'drhodrp=',drhodrp
        if (irho == 1) then
           call drho_drhod(rp, drhodrp, drhodrhod)
-          write(11,*) 'drho_drhod=',drhodrhod
+          write(fort11_unit,*) 'drho_drhod=',drhodrhod
        end if
     end if
 
@@ -511,7 +529,7 @@ if (debug) write(6,*) "eikcoefs: find rgrid"
 ! should test whether this is a new equilibrium
 !
 
- if (debug) write(11,*) 'eikcoefs: various logs', gen_eq, ppl_eq, chs_eq, efit_eq, dfit_eq, idfit_eq
+ if (debug) write(fort11_unit,*) 'eikcoefs: various logs', gen_eq, ppl_eq, chs_eq, efit_eq, dfit_eq, idfit_eq
 
     if(gen_eq)    call geq_init
     if(ppl_eq)    call peq_init
@@ -581,7 +599,7 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
     if (debug) write(6,*) "eikcoefs: call eikonal"
     call eikonal(rgrid, rpgrad, thgrad, qval, seik, dsdthet, dpsidrp)
     if (debug) write(6,*) "eikcoefs: done eikonal"
-    if(writelots) write(11,*) 'q= ',qval
+    if(writelots) write(fort11_unit,*) 'q= ',qval
 
     if(iflux == 0 .or. iflux == 2) then
        bi = btori(rgrid(0), theta(0))
@@ -597,6 +615,8 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
        endif
     endif
 
+!<DD> If anyone uncomments the below loop please use get_unused_unit and open_output_file
+!     to open the output file (and close_output_file to close it) rather than using unit=43 directly.
 !    do i=-nth,nth
 !       write(43,*) theta(i), Bpolmag(i), rpos(rgrid(i), theta(i)), zpos(rgrid(i), theta(i)), seik(i)
 !    enddo
@@ -620,7 +640,7 @@ if (debug) write(6,*) "eikcoefs: call rmajortgrid"
 !      enddo
 ! ******************
 
-    if(writelots) write(11,*) 'dpsidrp= ',dpsidrp
+    if(writelots) write(fort11_unit,*) 'dpsidrp= ',dpsidrp
 !     
 !     compute derivatives of eikonal
 
@@ -701,33 +721,33 @@ if (debug) write(6,*) "eikcoefs: end gradients"
 
        pressure = pfun(rgrid(0),theta(0))
 
-       write(11,*) 
-       write(11,*) 'Quantity, equilibrium value, value used'
+       write(fort11_unit,*) 
+       write(fort11_unit,*) 'Quantity, equilibrium value, value used'
 
        select case (bishop)
        case (2)
           s_hat_new = s_hat_input
           dp_new = p_prime_input
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
-          write(11,*) 'p_prime = ',dp,', ',dp_new
+          write(fort11_unit,*) 'p_prime = ',dp,', ',dp_new
           if(writelots) write(*,*) 'p_prime = ',dp,', ',dp_new
        case (3)
           s_hat_new = s_hat_input
           dp_new = -invLp_input*pressure*drhodpsi
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
-          write(11,*) '1/L_p = ',-dp/drhodpsi/pressure,', ',-dp_new/drhodpsi/pressure
+          write(fort11_unit,*) '1/L_p = ',-dp/drhodpsi/pressure,', ',-dp_new/drhodpsi/pressure
           if(writelots) write(*,*) '1/L_p = ',-dp/drhodpsi/pressure,', ',-dp_new/drhodpsi/pressure
        case (4)
           s_hat_new = s_hat_input
           dp_new = 0.5*beta_prime_input*drhodpsi
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
-          write(11,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
+          write(fort11_unit,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
        case (5) 
           s_hat_new = s_hat_input
           dp_new = -alpha_input/qval**2/rmaj*drhodpsi
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
-          write(11,*) 'alpha = ', -qval**2*rmaj*dp/drhodpsi,', ', &
+          write(fort11_unit,*) 'alpha = ', -qval**2*rmaj*dp/drhodpsi,', ', &
                -qval**2*rmaj*dp_new/drhodpsi
           if(writelots) write(*,*) 'alpha = ', -qval**2*rmaj*dp/drhodpsi,', ', &
                -qval**2*rmaj*dp_new/drhodpsi
@@ -735,26 +755,26 @@ if (debug) write(6,*) "eikcoefs: end gradients"
           s_hat_new = s_hat
           dp_new = 0.5*beta_prime_input*drhodpsi
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
-          write(11,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
+          write(fort11_unit,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
        case (7)
           s_hat_new = s_hat
           dp_new = dp * dp_mult
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
           beta_prime_new=2.*dp_new/drhodpsi
-          write(11,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
+          write(fort11_unit,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
        case (8)
           s_hat_new = s_hat_input
           dp_new = 0.5*beta_prime_input*drhodpsi * dp_mult
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
-          write(11,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
+          write(fort11_unit,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
        case (9)
           s_hat_new = s_hat_input
           dp_new = 0.5*beta_prime_input*drhodpsi
           di_new = (s_hat_new/tmp -2*c_b -dp_new*b_b) / a_b
-          write(11,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
+          write(fort11_unit,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
        case default
           if(iflux /= 1) then
@@ -766,13 +786,13 @@ if (debug) write(6,*) "eikcoefs: end gradients"
              dp_new = dp
              di_new = di
           endif
-          write(11,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
+          write(fort11_unit,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
           if(writelots) write(*,*) 'd beta/d rho = ',2.*dp/drhodpsi,', ',2.*dp_new/drhodpsi
       end select
 
-       write(11,*) 's_hat ',s_hat,', ',s_hat_new
+       write(fort11_unit,*) 's_hat ',s_hat,', ',s_hat_new
        if(writelots) write(*,*) 's_hat ',s_hat,', ',s_hat_new
-       write(11,*) 
+       write(fort11_unit,*) 
 
        shat = s_hat_new
        dqdrp = s_hat_new*qval/rho*drhodrp
@@ -824,11 +844,11 @@ if (debug) write(6,*) "eikcoefs: end gradients"
        endif
     
        if(writelots) then
-          write(11,*) 'dqdrho=',dqdrho,' qval1,2= ',qval1,qval2
-          write(11,*) 's_hat= ',shat
-          write (11,*) 'i,rgrid,rgrid1,rgrid2:'
+          write(fort11_unit,*) 'dqdrho=',dqdrho,' qval1,2= ',qval1,qval2
+          write(fort11_unit,*) 's_hat= ',shat
+          write (fort11_unit,*) 'i,rgrid,rgrid1,rgrid2:'
           do i=-nth,nth
-             write (11,*) i,rgrid(i),rgrid1(i),rgrid2(i)
+             write (fort11_unit,*) i,rgrid(i),rgrid1(i),rgrid2(i)
           enddo
        endif
  
@@ -868,9 +888,9 @@ if (debug) write(6,*) "eikcoefs: end gradients"
     endif
 
     if(writelots) then
-       write(11,*) 'i,theta,grads1,2=  '
+       write(fort11_unit,*) 'i,theta,grads1,2=  '
        do i=-ntgrid,ntgrid
-          write(11,*) i,theta(i),grads(i,1),grads(i,2)
+          write(fort11_unit,*) i,theta(i),grads(i,1),grads(i,2)
        enddo
     endif
 !     compute total grad S including toroidal part
@@ -986,7 +1006,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
     call integrate(ds, theta, ans, nth)
     surfarea=2.*pi*(ans(nth)-ans(-nth))
 !    write(*,*) 'surface area= ',surfarea,' avgrmid**2'
-    if (writelots) write (11,*) 'surfarea=', surfarea
+    if (writelots) write (fort11_unit,*) 'surfarea=', surfarea
     
 
 !     compute dV/drhon = 2 pi Int(J dtheta)
@@ -1018,7 +1038,11 @@ if (debug) write(6,*) "eikcoefs: end gradients"
 !       call sym(gds24, 1, ntgrid)
     endif
 
-    write(25,*) rhoc, f_trap(bmag(-nth:nth))
+    
+    call get_unused_unit(fort25_unit)
+    call open_output_file(fort25_unit,".fort.25")
+    write(fort25_unit,*) rhoc, f_trap(bmag(-nth:nth))
+    call close_output_file(fort25_unit)
 
     kxfac = abs(qval/rhoc/drhodpsin)
     qsf = qval
@@ -1034,6 +1058,8 @@ if (debug) write(6,*) "eikcoefs: end gradients"
 
     call dealloc_local_arrays
 
+    !Close output files
+    call close_output_file(fort11_unit)
 ! Generate metric tensor elements to compare with Xanthopoulos and Jenko    
 ! Need to change normalization to match XJ
 
@@ -1686,7 +1712,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
     end if
     !EGH>
     rpofrho=soln
-    if(ier > 0) write(11,*) 'error in rpofrho,rho=',rho
+    if(ier > 0) write(fort11_unit,*) 'error in rpofrho,rho=',rho
   end function rpofrho
   
   subroutine tripprod2dtgrid(x, y, rgrid, val)
@@ -2079,9 +2105,9 @@ if (debug) write(6,*) "eikcoefs: end gradients"
     f2=f(b1)-fval
     if(xerrbi < 0.) goto 1000
     if(f1*f2 > 0.) then
-       write(11,*) 'f1 and f2 have same sign in bisection routine'
-       write(11,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
-       write(11,*) 'fval=',fval
+       write(fort11_unit,*) 'f1 and f2 have same sign in bisection routine'
+       write(fort11_unit,*) 'a1,f1,b1,f2=',a1,f1,b1,f2
+       write(fort11_unit,*) 'fval=',fval
        ier=1
        goto 1000
     endif
@@ -2096,7 +2122,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
           b1=trial
           f2=f3
        endif
-!      write(11,*) 'i,a1,f1,b1,f2 ',i,a1,f1,b1,f2
+!      write(fort11_unit,*) 'i,a1,f1,b1,f2 ',i,a1,f1,b1,f2
     enddo
  1000 continue
     if( abs(f1) > abs(f2) ) then
@@ -2108,7 +2134,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
        b1=aold
     endif
 !     start secant method
-!     write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
+!     write(fort11_unit,*) 'a1,f1,b1,f2',a1,f1,b1,f2
     isolv=0
     do i=1,10
        aold=a1
@@ -2117,7 +2143,7 @@ if (debug) write(6,*) "eikcoefs: end gradients"
        a1=a1-f1*(b1-a1)/f3
        f2=f1
        b1=aold
-!       write(11,*) 'a1,f1,b1,f2',a1,f1,b1,f2
+!       write(fort11_unit,*) 'a1,f1,b1,f2',a1,f1,b1,f2
        if(abs(a1-b1) < xerrsec) isolv=isolv+1
        if (isolv >= nsolv) goto 9000
        f1=f(a1)-fval
