@@ -28,6 +28,22 @@ dump_grids: $(dump_grids_mod)
 ideal_ball: $(ideal_ball_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
 
+#Heating rate
+hrate: $(hrate_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+
+#
+kpar: $(kp_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+
+#
+om: $(om_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+
+#
+ediff: $(ediff_mod)
+	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS) 
+
 #Driver program for gridgen?
 rungridgen: $(rungridgen_mod)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LIBS)

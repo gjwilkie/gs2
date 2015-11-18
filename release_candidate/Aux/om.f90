@@ -5,12 +5,13 @@ program om
   real, dimension(:), allocatable :: w, A
   character (500) :: runname, c
   integer, dimension (1) :: max_loc, jlo, jhi
-  integer :: i, imax, ierr
+  integer :: i, imax, ierr, len
   complex :: omega
   real :: wr, wi
 
   if (cl_iargc() /= 0) then
-     call cl_getarg (1, runname, 500, ierr)
+     len = 500
+     call cl_getarg (1, runname, len, ierr)
   else
      write (*,*) 'runname = ?'
      read (*,*) runname
