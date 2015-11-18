@@ -6,10 +6,11 @@ program hrate
   real, dimension(:,:), allocatable :: h_rate, hrateavg
   character (500) :: runname, c
   integer, dimension (1) :: max_loc, jlo, jhi
-  integer :: i, imax, ierr
+  integer :: i, imax, ierr, len
 
   if (cl_iargc() /= 0) then
-     call cl_getarg (1, runname, 500, ierr)
+     len = 500
+     call cl_getarg (1, runname, len, ierr)
   else
      write (*,*) 'runname = ?'
      read (*,*) runname

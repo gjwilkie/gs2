@@ -9,10 +9,11 @@ program kp
   integer :: i, imax, ierr
   complex :: omega
   real :: wr, wi
-  integer :: ntheta0, naky, nkpar
+  integer :: ntheta0, naky, nkpar, len
 
   if (cl_iargc() /= 0) then
-     call cl_getarg (1, runname, 500, ierr)
+     len = 500
+     call cl_getarg (1, runname, len, ierr)
   else
      write (*,*) 'runname = ?'
      read (*,*) runname
