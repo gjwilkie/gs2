@@ -2784,7 +2784,7 @@ contains
     use theta_grid, only: dbdthetc, ntgrid, ntheta
     use vpamu_grids, only: nvgrid
     use kt_grids, only: ntheta0
-
+    
     implicit none
 
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in out) :: gfnc, gfncold
@@ -2805,6 +2805,7 @@ contains
     
 !    call get_source (gfncold, phi, phinew, apar, aparnew, istep)
     call get_linear_source (gfncold, phi, phinew, apar, aparnew, istep)
+
     if (equation==1) then
        call add_gprim_source
     else
@@ -3138,8 +3139,8 @@ contains
     use vpamu_grids, only: vpa, vpac
     use vpamu_grids, only: use_gaussian_quadrature
     use gs2_layouts, only: g_lo, ik_idx, imu_idx, is_idx
-    use kt_grids, only: ntheta0
     use nonlinear_terms, only: nonlin
+    use kt_grids, only: ntheta0
     
     implicit none
 
@@ -3213,7 +3214,7 @@ contains
              
           end if
 
-          call get_gold_source_contribution (it, iglo, gfnc, source)
+          call get_gold_source_contribution (it, iglo, gfnc, source(:,:,it,iglo))
 
           ! iv_idx needed to distinguish between +/- vpar for upwinding
           iv_idx(-nvgrid:-1) = 1
@@ -3313,15 +3314,16 @@ contains
     ! ig=-ntgrid is first cell value, ig=ntgrid-1 is last cell value
     ! iv=-nvgrid is first cell value, iv=nvgrid-1 is last cell value
 
-    do iglo = g_lo%llim_proc, g_lo%ulim_proc
-
-       ik = ik_idx(g_lo,iglo)
-       imu = imu_idx(g_lo,iglo)
-       is = is_idx(g_lo,iglo)
-
-       do it = 1, ntheta0
+    if (nonlin) then
+    
+       do iglo = g_lo%llim_proc, g_lo%ulim_proc
           
-          if (nonlin) then
+          ik = ik_idx(g_lo,iglo)
+          imu = imu_idx(g_lo,iglo)
+          is = is_idx(g_lo,iglo)
+          
+          do it = 1, ntheta0
+             
              select case (istep)
              case (0)
                 ! do nothing
@@ -3342,19 +3344,17 @@ contains
                         + (5./12.)*gexp_3(ig,:,it,iglo))
                 end do
              end select
-          end if
 
 !          if (is==1.and.imu==2.and.ik==2.and.it==2) write (*,*) 'ig=1,iv=1,it=2,ik=2,imu=2,is=1 source', source(1,1,it,iglo)
           
-          if (periodic(ik)) then
-             source(-ntgrid,-1,it,iglo) = globalfac1*source(-ntgrid,-1,it,iglo) &
-                  + globalfac2*source(ntgrid-1,0,it,iglo)
-          end if
+             if (periodic(ik)) then
+                source(-ntgrid,-1,it,iglo) = globalfac1*source(-ntgrid,-1,it,iglo) &
+                     + globalfac2*source(ntgrid-1,0,it,iglo)
+             end if
 
-          ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
-          if (imu==1 .and. .not.use_gaussian_quadrature) then
+             ! treat mu=0,vpa=0 points specially, as they are decoupled from other points
+             if (imu==1 .and. .not.use_gaussian_quadrature) then
              
-             if (nonlin) then
                 select case (istep)
                 case (0)
                    ! do nothing
@@ -3371,15 +3371,12 @@ contains
                 end select
              end if
                 
-          end if
+             if (it > neigen(ik)) cycle
 
-          if (it > neigen(ik)) cycle
-
-          do iseg = 1, nsegments(it,ik)
-             ! this is the source at the (theta=0,vpa=0) grid point (not a cell value)
-             ! it is needed because that point does not take info from other grid points
-             ! except indirectly through the fields
-             if (nonlin) then
+             do iseg = 1, nsegments(it,ik)
+                ! this is the source at the (theta=0,vpa=0) grid point (not a cell value)
+                ! it is needed because that point does not take info from other grid points
+                ! except indirectly through the fields
                 select case (istep)
                 case (0)
                    ! do nothing
@@ -3394,12 +3391,12 @@ contains
                         - (4./3.)*gexp_2(ig_mid(iseg),0,itmod(iseg,it,ik),iglo) &
                         + (5./12.)*gexp_3(ig_mid(iseg),0,itmod(iseg,it,ik),iglo))
                 end select
-             end if
-          end do
+             end do
           
+          end do
        end do
-    end do
-    
+    end if
+       
   end subroutine get_nonlinear_source
   
   subroutine get_gold_source_contribution (it, iglo, g_old, source_out)
@@ -3412,9 +3409,9 @@ contains
     
     integer, intent (in) :: it, iglo
     complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (in) :: g_old
-    complex, dimension (-ntgrid:,-nvgrid:,:,g_lo%llim_proc:), intent (out) :: source_out
+    complex, dimension (-ntgrid:,-nvgrid:), intent (out) :: source_out
     
-    source_out(:ntgrid-1,:nvgrid-1,it,iglo) &
+    source_out(:ntgrid-1,:nvgrid-1) &
          = -(g_old(-ntgrid+1:,-nvgrid+1:,it,iglo)*mppfac(:ntgrid-1,:nvgrid-1,it,iglo) &
          + g_old(-ntgrid+1:,:nvgrid-1,it,iglo)*mpmfac(:ntgrid-1,:nvgrid-1,it,iglo) &
          + g_old(:ntgrid-1,-nvgrid+1:,it,iglo)*mmpfac(:ntgrid-1,:nvgrid-1,it,iglo) &
