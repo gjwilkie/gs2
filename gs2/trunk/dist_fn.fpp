@@ -999,11 +999,13 @@ contains
 
 
        ierr = error_unit()
+
+       if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
+
        call get_option_value &
             (boundary_option, boundaryopts, boundary_option_switch, &
             ierr, "boundary_option in dist_fn_knobs",.true.)
 
-       if(abs(shat) <=  1.e-5) boundary_option = 'periodic'
 
        call get_option_value &
             (source_option, sourceopts, source_option_switch, &
