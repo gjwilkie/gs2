@@ -37,11 +37,21 @@ module nonlinear_terms
   integer, parameter :: nonlinear_mode_none = 1, nonlinear_mode_on = 2
   integer, parameter :: flow_mode_off = 1, flow_mode_on = 2
 
+#ifndef SHMEM
   real, dimension (:,:), allocatable :: ba, gb, bracket
   ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
 
   real, dimension (:,:,:), allocatable :: aba, agb, abracket
   ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
+
+#else
+  real, save, dimension (:,:), pointer :: ba => null(), gb => null(), bracket => null()
+  ! yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc
+
+  real, save, dimension (:,:,:), pointer, contiguous :: aba => null(), &
+       agb => null(), abracket => null()
+  ! 2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc
+#endif
 
 ! CFL coefficients
   real :: cfl, cflx, cfly
@@ -145,6 +155,10 @@ contains
     use gs2_layouts, only: init_dist_fn_layouts, yxf_lo, accelx_lo
     use gs2_layouts, only: init_gs2_layouts
     use gs2_transforms, only: init_transforms
+#ifdef SHMEM
+    use mp, only : iproc
+    use shm_mpi3, only : shm_alloc
+#endif
     implicit none
     logical :: dum1, dum2
     logical, parameter :: debug=.false.
@@ -174,14 +188,26 @@ contains
        if (debug) write(6,*) "init_nonlinear_terms: allocations"
        if (alloc) then
           if (accelerated) then
+#ifndef SHMEM
              allocate (     aba(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              allocate (     agb(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
              allocate (abracket(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))
+#else
+             call shm_alloc(aba, (/ 1, 2*ntgrid+1, 1, 2, accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
+             call shm_alloc(agb, (/ 1, 2*ntgrid+1, 1, 2, accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
+             call shm_alloc(abracket, (/ 1, 2*ntgrid+1, 1, 2, accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
+#endif
              aba = 0. ; agb = 0. ; abracket = 0.
           else
+#ifndef SHMEM
              allocate (     ba(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
              allocate (     gb(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
              allocate (bracket(yxf_lo%ny,yxf_lo%llim_proc:yxf_lo%ulim_alloc))
+#else
+             call shm_alloc(ba, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
+             call shm_alloc(gb, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
+             call shm_alloc(bracket, (/ 1,yxf_lo%ny,yxf_lo%llim_proc,yxf_lo%ulim_alloc /))
+#endif
              ba = 0. ; gb = 0. ; bracket = 0.
           end if
           alloc = .false.
@@ -867,16 +893,34 @@ contains
 
   subroutine finish_nonlinear_terms
     use gs2_transforms, only: finish_transforms
-
+#ifdef SHMEM
+    use shm_mpi3, only : shm_free
+#endif
     implicit none
 
+#ifndef SHMEM
     if (allocated(aba)) deallocate (aba, agb, abracket)
     if (allocated(ba)) deallocate (ba, gb, bracket)
-
+#else
+    if (associated(aba)) call shm_free(aba)
+    if (associated(agb)) call shm_free(agb)
+    if (associated(abracket)) call shm_free(abracket)
+    if (associated(ba)) then
+       call shm_free(ba)
+    endif
+    if (associated(gb)) then
+       call shm_free(gb)
+    endif
+    if (associated(bracket)) then
+       call shm_free(bracket)
+    endif
+#endif
     nonlin = .false. ; alloc = .true. ; zip = .false. ; accelerated = .false.
     initialized = .false. ; initializing = .true.
 
+#ifndef SHMEM
     call finish_transforms
+#endif
   end subroutine finish_nonlinear_terms
 end module nonlinear_terms
 

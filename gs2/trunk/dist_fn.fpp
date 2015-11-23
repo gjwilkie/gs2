@@ -173,14 +173,23 @@ module dist_fn
   real, dimension (:,:,:), allocatable :: gridfac1
   ! (-ntgrid:ntgrid,ntheta0,naky)
 
+#ifndef SHMEM
   complex, dimension (:,:,:), allocatable :: g0, g_h
+#else
+  complex, dimension (:,:,:), allocatable, target :: g0, g_h
+#endif
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   complex, dimension (:,:,:), allocatable :: g_adj
   ! (N(links), 2, -g-layout-)
 
 !  complex, dimension (:,:,:), allocatable, save :: gnl_1, gnl_2, gnl_3
+#ifndef SHMEM
   complex, dimension (:,:,:), allocatable :: gexp_1, gexp_2, gexp_3
+#else
+  complex, dimension (:,:,:), pointer, save, contiguous :: gexp_1 => null()
+  complex, dimension (:,:,:), allocatable :: gexp_2, gexp_3
+#endif
   ! (-ntgrid:ntgrid,2, -g-layout-)
 
   ! momentum conservation
@@ -768,6 +777,9 @@ contains
 
   subroutine finish_dist_fn_arrays
     use dist_fn_arrays, only: g, gnew, kx_shift, theta0_shift, vperp2
+#ifdef SHMEM
+    use shm_mpi3, only : shm_free
+#endif
 
     if (.not. initialized_dist_fn_arrays) return
     initialized_dist_fn_arrays = .false.
@@ -775,7 +787,12 @@ contains
     call finish_dist_fn_level_1
     if (allocated(g)) deallocate (g, gnew, g0)
     if (allocated(source_coeffs)) deallocate(source_coeffs)
+#ifndef SHMEM
     if (allocated(gexp_1)) deallocate (gexp_1, gexp_2, gexp_3)
+#else
+    if (allocated(gexp_2)) deallocate (gexp_2, gexp_3)
+    if (associated(gexp_1)) call shm_free(gexp_1)
+#endif
     if (allocated(g_h)) deallocate (g_h, save_h)
     if (allocated(kx_shift)) deallocate (kx_shift)
     if (allocated(theta0_shift)) deallocate (theta0_shift)
@@ -3650,6 +3667,9 @@ endif
     use gs2_layouts, only: g_lo
     use nonlinear_terms, only: nonlin
     use run_parameters, only: fapar
+#ifdef SHMEM
+    use shm_mpi3, only : shm_alloc
+#endif
     implicit none
 !    logical :: alloc = .true.
 
@@ -3666,13 +3686,23 @@ endif
           endif
        endif
 #ifdef LOWFLOW
-       allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+#ifndef SHMEM
+          allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+#else
+          call shm_alloc(gexp_1, (/ -ntgrid, ntgrid, 1, 2, &
+               g_lo%llim_proc, g_lo%ulim_alloc/))
+#endif
        allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        allocate (gexp_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
        gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
 #else
        if (nonlin) then
+#ifndef SHMEM
           allocate (gexp_1(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
+#else
+          call shm_alloc(gexp_1, (/ -ntgrid, ntgrid, 1, 2, &
+               g_lo%llim_proc, g_lo%ulim_alloc/))
+#endif
           allocate (gexp_2(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           allocate (gexp_3(-ntgrid:ntgrid,2,g_lo%llim_proc:g_lo%ulim_alloc))
           gexp_1 = 0. ; gexp_2 = 0. ; gexp_3 = 0.
@@ -8856,12 +8886,20 @@ endif
     use nonlinear_terms, only: accelerated
     use gs2_transforms, only: transform2, init_transforms
     use run_parameters, only: fphi, fbpar
+#ifdef SHMEM
+    use shm_mpi3, only: shm_alloc, shm_free
+#endif
 
     complex, dimension (-ntgrid:,:,:), intent (in) :: phi, bpar
     logical, intent (in) :: last
 
     real, dimension (:,:), allocatable :: grs, gzf
+#ifndef SHMEM
     real, dimension (:,:,:), allocatable :: agrs, agzf
+#else
+    real, dimension (:,:,:), pointer, contiguous :: agrs => null(), agzf => null()
+    complex, dimension(:,:,:), pointer, contiguous :: g0_ptr => null()
+#endif
     real, dimension (:), allocatable :: agp0, agp0zf
     real :: gp0, gp0zf
     integer :: ig, it, ik, il, ie, is, iyxlo, isign, ia, iaclo, iglo, acc
@@ -8869,11 +8907,23 @@ endif
 !    logical :: first = .true.
 
     if (accelerated) then
+#ifndef SHMEM
        allocate (agrs(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))          
        allocate (agzf(2*ntgrid+1, 2, accelx_lo%llim_proc:accelx_lo%ulim_alloc))          
+#else
+       call shm_alloc(agrs, (/ 1, 2*ntgrid+1, 1, 2, &
+            accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
+       call shm_alloc(agzf, (/ 1, 2*ntgrid+1, 1, 2, &
+            accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
+        call shm_alloc(g0_ptr, (/ 1, 2*ntgrid+1, 1, 2, &
+            accelx_lo%llim_proc, accelx_lo%ulim_alloc /))
+#endif
        allocate (agp0(2), agp0zf(2))
        agrs = 0.0; agzf = 0.0; agp0 = 0.0; agp0zf = 0.0
     else
+#ifdef SHMEM
+       g0_ptr => g0
+#endif
        allocate (grs(yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
        allocate (gzf(yxf_lo%ny, yxf_lo%llim_proc:yxf_lo%ulim_alloc))
        grs = 0.0; gzf = 0.0; gp0 = 0.0; gp0zf = 0.0
@@ -8894,8 +8944,13 @@ endif
 
     call g_adjust (gnew, phi, bpar, fphi, fbpar)
 
+#ifndef SHMEM
     g0 = gnew
+#else
+    g0_ptr = gnew
+#endif
 
+#ifndef SHMEM
     if (accelerated) then
        call transform2 (g0, agrs, ia)
     else
@@ -8915,6 +8970,30 @@ endif
     else
        call transform2 (g0, gzf)
     end if
+
+#else
+
+    if (accelerated) then
+       call transform2 (g0_ptr, agrs, ia)
+    else
+       call transform2 (g0_ptr, grs)
+    end if
+
+    g0_ptr = 0.0
+    do iglo=g_lo%llim_proc, g_lo%ulim_proc
+       ik = ik_idx(g_lo,iglo)
+       if (ik == 1) g0_ptr(:,:,iglo) = gnew(:,:,iglo)
+    end do
+
+    call g_adjust (gnew, phi, bpar, -fphi, -fbpar)
+
+    if (accelerated) then
+       call transform2 (g0_ptr, agzf, ia)
+    else
+       call transform2 (g0_ptr, gzf)
+    end if
+
+#endif
 
     if (accelerated) then
        do iaclo=accelx_lo%llim_world, accelx_lo%ulim_world
@@ -8948,7 +9027,14 @@ endif
           end if
           call barrier
        end do
-       deallocate(agrs, agzf, agp0, agp0zf)
+       deallocate(agp0, agp0zf)
+#ifndef SHMEM
+       deallocate(agrs, agzf)
+#else
+       call shm_free(agrs)
+       call shm_free(agzf)
+       call shm_free(g0_ptr)
+#endif
     else
        do iyxlo=yxf_lo%llim_world, yxf_lo%ulim_world
           

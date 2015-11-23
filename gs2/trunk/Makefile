@@ -262,11 +262,6 @@ endif
 # at runtime
 CPPFLAGS+=-DGK_SYSTEM='"$(GK_SYSTEM)"'
 
-ifdef USE_SHMEM
-$(warning USE_SHMEM is not working yet)
-	override USE_SHMEM =	
-endif
-
 ifdef USE_HDF5
 	ifndef USE_MPI
 $(error Currently, USE_HDF5 works with USE_MPI)
