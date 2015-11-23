@@ -85,6 +85,12 @@ module gs2_transforms
 
   type (fft_type), save :: xf_fft, xb_fft, yf_fft, yb_fft, zf_fft
   type (fft_type), save :: xf3d_cr, xf3d_rc
+#ifdef SHMEM
+  type (fft_type) :: faccel_shmx, faccel_shmy, baccel_shmx, baccel_shmy
+
+  integer, save :: gidx_s ! starting point for dealising loop
+  integer planf_accel_x, planf_accel_y, planb_accel_y, plan
+#endif
 
   logical :: xfft_initted = .false.
 
@@ -97,7 +103,11 @@ module gs2_transforms
   logical, dimension (:), allocatable :: aidx  ! aidx == aliased index
   integer, dimension (:), allocatable :: ia, iak
   complex, dimension (:, :), allocatable :: fft, xxf
+#ifndef SHMEM
   complex, dimension (:, :, :), allocatable :: ag
+#else
+  complex, save, dimension (:, :, :), pointer, contiguous :: ag => null()
+#endif
 
 contains
 
@@ -132,9 +142,13 @@ contains
 
     call pe_layout (char)
 
+#ifndef SHMEM
     if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then  
+#else
+    if (char == 'v') then
+#endif
        accel = .true.
-       if (debug) write (*,*) 'init_transforms: init_gs2_layouts'
+       if (debug) write (*,*) 'init_transforms: init_gs2_layouts (accel)'
        call init_accel_transform_layouts (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx, ny)
     else
        !Recommended for p+log(p)>log(N) where p is number of processors and N is total number of mesh points
@@ -173,6 +187,9 @@ contains
     use mp, only: nproc
     use fft_work, only: init_ccfftw
     use gs2_layouts, only: xxf_lo, pe_layout
+#ifdef SHMEM
+    use shm_mpi3, only : shm_alloc
+#endif
     integer, intent (in) :: ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx
 
     character (1) :: char
@@ -186,7 +203,11 @@ contains
 
     call pe_layout (char)
 
+#ifndef SHMEM
     if (char == 'v' .and. mod (negrid*nlambda*nspec, nproc) == 0) then
+#else
+    if (char == 'v') then
+#endif
        accel = .true.
     else
        call init_x_redist (ntgrid, naky, ntheta0, nlambda, negrid, nspec, nx)
@@ -222,13 +243,19 @@ contains
 
     use gs2_layouts, only: xxf_lo, yxf_lo, accel_lo, accelx_lo, dealiasing
     use fft_work, only: init_crfftw, init_rcfftw, init_ccfftw
+#ifdef SHMEM
+    use shm_mpi3, only : shm_alloc
+#endif
     implicit none
     integer, intent (in) :: ntgrid
 
-    integer :: idx, i
+    integer :: idx, i, ig
 
 # if FFT == _FFTW3_
     integer :: nb_ffts
+#ifdef SHMEM
+    complex, allocatable :: dummy(:,:)
+# endif
 # endif
 
     if (initialized_y_fft) return
@@ -240,18 +267,34 @@ contains
        allocate (ia (accel_lo%nia))
        allocate (iak(accel_lo%nia))
        allocate (              aidx (accel_lo%llim_proc:accel_lo%ulim_alloc))
+#ifndef SHMEM
        allocate (ag(-ntgrid:ntgrid,2,accel_lo%llim_proc:accel_lo%ulim_alloc))
+#else
+       call shm_alloc(ag, (/ -ntgrid, ntgrid, 1, 2, accel_lo%llim_proc, accel_lo%ulim_alloc /))
+#endif
        aidx = .true.
 
+    ! ig is address used in compute_gidx_s below (SHMEM only)
+       ig=0
        do i = accel_lo%llim_proc, accel_lo%ulim_proc
           if (dealiasing(accel_lo, i)) cycle
           aidx(i) = .false.
+          ig = ig + 1
        end do
 
+#ifndef SHMEM
        do idx = 1, accel_lo%nia
           ia (idx) = accelx_lo%llim_proc + (idx-1)*accelx_lo%nxny
           iak(idx) = accel_lo%llim_proc  + (idx-1)*accel_lo%nxnky
        end do
+#else
+       call compute_gidx_s
+
+       do idx = 1, accel_lo%nia
+          ia (idx) = accelx_lo%llim_node + (idx-1)*accelx_lo%nxny
+          iak(idx) = accel_lo%llim_node  + (idx-1)*accel_lo%nxnky
+       end do
+#endif
 
        !JH FFTW plan creation for the accelerated 2d transforms
 #if FFT == _FFTW_ 
@@ -265,6 +308,16 @@ contains
             (2*accel_lo%ntgrid+1) * 2)
        call init_rcfftw (yb_fft, -1, accel_lo%ny, accel_lo%nx, &
             (2*accel_lo%ntgrid+1) * 2)
+#ifdef SHMEM
+       call init_crfftw(faccel_shmx, 1, accel_lo%ny, 2*(2*ntgrid+1), "t")
+       allocate(dummy( 2*(2*ntgrid+1), accel_lo%ndky * accel_lo%nx))
+       call init_ccfftw(faccel_shmy, 1, accel_lo%nx, 2*(2*ntgrid+1), dummy, "t", accel_lo%ndky)
+       deallocate(dummy)
+       call init_rcfftw(baccel_shmx, -1, accelx_lo%ny, 2*(2*ntgrid+1), "t")
+       allocate(dummy( 2*(2*ntgrid+1), accelx_lo%ny * accelx_lo%nx))
+       call init_ccfftw(baccel_shmy, -1, accel_lo%nx, 2*(2*ntgrid+1), dummy, "t",accel_lo%ndky)
+       deallocate(dummy)
+#endif
 
 #endif
 
@@ -321,6 +374,31 @@ contains
 #endif
 
     end if
+
+#ifdef SHMEM
+#if FFT == _FFTW3_
+
+  contains 
+
+    subroutine compute_gidx_s
+      ! need the starting point for g_lo in _accel transforms
+      use shm_mpi3, only : shm_info
+      use gs2_layouts, only: g_lo
+      use mpi
+      implicit none
+      
+      integer aux(0:shm_info%size-1), i, ierr
+
+      call mpi_allgather(ig, 1, MPI_INTEGER, aux, 1, MPI_INTEGER, shm_info%comm, ierr)
+      
+      gidx_s = g_lo%llim_node
+      do i=1, shm_info%id
+         gidx_s = gidx_s + aux(i-1)
+      enddo
+    end subroutine compute_gidx_s
+
+#endif
+#endif
 
   end subroutine init_y_fft
 
@@ -1174,6 +1252,9 @@ contains
   subroutine transform2_5d_accel (g, axf, i)
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
     use unit_tests, only: debug_message
+#ifdef SHMEM
+    use shm_mpi3, only : shm_info, shm_get_node_pointer, shm_node_barrier
+#endif
     implicit none
     complex, dimension (:,:,g_lo%llim_proc:), intent (in out) :: g
 # ifdef FFT
@@ -1183,12 +1264,20 @@ contains
 # endif
     integer, intent(out) :: i
     integer :: iglo, k, idx
+#ifdef SHMEM
+    complex, pointer, contiguous ::ag_ptr(:,:,:) => null(), g_ptr(:,:,:) => null()
+    real, pointer, contiguous :: axf_ptr(:,:,:) => null() 
+#endif 
+
     integer :: itgrid, iduo
     integer :: ntgrid
 
     call debug_message(4, 'gs2_transforms::transform2_5d_accel starting')
 
     ntgrid = accel_lo%ntgrid
+#ifdef SHMEM
+    g_ptr (1:,1:,g_lo%llim_node:) => shm_get_node_pointer(g, -1)
+#endif
 !
 !CMR+GC, 2/9/2013:
 !  Scaling g would not be necessary if gs2 used standard Fourier coefficients.
@@ -1196,6 +1285,7 @@ contains
     ! scale the g and copy into the anti-aliased array ag
     ! zero out empty ag
     ! touch each g and ag only once
+#ifndef SHMEM
     idx = g_lo%llim_proc
     do k = accel_lo%llim_proc, accel_lo%ulim_proc
 ! CMR: aidx is true for modes killed by the dealiasing mask
@@ -1225,22 +1315,67 @@ contains
           idx = idx + 1
        endif
     enddo
+#else
+    idx = gidx_s !g_lo%llim_proc
+    do k = accel_lo%llim_proc, accel_lo%ulim_proc
+! CMR: aidx is true for modes killed by the dealiasing mask
+! so following line removes ks in dealiasing region
+       if (aidx(k)) then
+          ag(:,:,k) = 0.0
+       else
+          ! scaling only for k_y not the zero mode
+          if (ik_idx(g_lo, idx) .ne. 1) then
+             do iduo = 1, 2
+                do itgrid = 1, 2*ntgrid +1
+                   g_ptr(itgrid, iduo, idx) &
+                        = 0.5 * g_ptr(itgrid, iduo, idx)
+                   ag(itgrid - (ntgrid+1), iduo, k) &
+                        = g_ptr(itgrid, iduo, idx)
+                enddo
+             enddo
+             ! in case of k_y being zero: just copy
+          else
+             do iduo = 1, 2
+                do itgrid = 1, 2*ntgrid+1
+                   ag(itgrid-(ntgrid+1), iduo, k) &
+                        = g_ptr(itgrid, iduo, idx)
+                enddo
+             enddo
+          endif
+          idx = idx + 1
+       endif
+    enddo
+#endif
 
 !CMR+GC: 2/9/2013
 ! Following large loop can be eliminated if gs2 used standard Fourier coefficients.
 ! (See above comment in transform2_5d.)
 
+#ifndef SHMEM
     ! we might not have scaled all g
     Do iglo = idx, g_lo%ulim_proc
        if (ik_idx(g_lo, iglo) .ne. 1) then
           g(:,:, iglo) = 0.5 * g(:,:,iglo)
        endif
     enddo
+#else
+    ! we might not have scaled all g
+    Do iglo = idx, g_lo%ulim_proc
+       if (ik_idx(g_lo, iglo) .ne. 1) then
+          g_ptr(:,:, iglo) = 0.5 * g_ptr(:,:,iglo)
+       endif
+    enddo
+       
+       ag_ptr (-ntgrid:,1:,accel_lo%llim_node:) => shm_get_node_pointer(ag, -1)
+       axf_ptr(-ntgrid:,1:,accelx_lo%llim_node:) => & 
+            shm_get_node_pointer(axf, -1)
+#endif
        
        
     ! transform
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
+#ifndef SHMEM
     do k = accel_lo%llim_proc, accel_lo%ulim_proc, accel_lo%nxnky
 # if FFT == _FFTW_
        call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k:), i, 1, &
@@ -1253,12 +1388,85 @@ contains
        idx = idx + 1
     end do
 
+#else
+    call shm_node_barrier
+    do k = accel_lo%llim_node, accel_lo%ulim_node, accel_lo%nxnky
+# if FFT == _FFTW_
+       call rfftwnd_f77_complex_to_real (yf_fft%plan, i, ag(:,:,k:), i, 1, &
+            axf(:,:,ia(idx):), i, 1)
+# elif FFT == _FFTW3_
+       call fft_shm(k,ia(idx))
+       ! remember FFTW3 for c2r destroys the contents of ag
+       !call fft_shm(ag_ptr(:,:,k:),2*(2*ntgrid+1),  accel_lo%ndky,  accel_lo%nx, &
+       !     axf_ptr(:,:,ia(idx):), 2*(2*ntgrid+1),accelx_lo%ny, accelx_lo%nx)
+!!$       if (shm_info%id == -10) then 
+!!$          call FFTW_PREFIX(_execute_dft_c2r) (yf_fft%plan, ag(t1, t2, k), &
+!!$               axf(t1, t2, ia(idx)))
+!!$       else
+!!$          call FFTW_PREFIX(_execute_dft_c2r) (yf_fft%plan, ag_ptr(t1, t2, k), &
+!!$               axf_ptr(t1, t2, ia(idx)))
+!!$       endif
+# endif
+       idx = idx + 1
+    end do
+    call shm_node_barrier
+
+    
+  contains
+
+# if FFT == _FFTW3_
+    subroutine fft_shm(k1,k2)
+      use shm_mpi3, only : shm_info, shm_fence
+      implicit none
+      integer, intent(in) :: k1, k2
+      
+       integer i, j, is, ie, js, je, idw, nwk
+       integer n1,n2,n3,p1,p2,p3
+       
+       n1 = 2*(2*ntgrid+1)
+       n2 = accel_lo%ndky
+       n3 = accel_lo%nx
+       p1 = 2*(2*ntgrid+1)
+       p2 = accelx_lo%ny
+       p3 =  accelx_lo%nx
+
+       if ( p3 /= n3 ) then 
+          write(0,*) "fft_shm: WARNING third dimesions not equal"
+       endif
+
+       nwk = g_lo%ppn
+       idw = shm_info%id
+       is = idw*(n2/nwk) + min(idw,mod(n2, nwk))
+       ie = is + (n2/nwk) -1 
+       if ( idw < mod(n2, nwk)) ie = ie +1
+       js = idw*(p3/nwk) + min(idw,mod(p3, nwk))
+       je = js + (p3/nwk) -1 
+       if ( idw < mod(p3, nwk)) je = je +1
+       
+       do i = is, ie 
+          call FFTW_PREFIX(_execute_dft)(faccel_shmy%plan, ag_ptr(-ntgrid,1,k1+i),ag_ptr(-ntgrid,1,k1+i))
+       enddo
+
+       call shm_node_barrier
+       call shm_fence(ag_ptr(-ntgrid,1,accel_lo%llim_node))
+
+       do j = js, je
+          call FFTW_PREFIX(_execute_dft_c2r)(faccel_shmx%plan, ag_ptr(-ntgrid,1,k1+j*n2), axf_ptr(-ntgrid,1,k2+j*p2))
+       enddo
+      
+    end subroutine fft_shm
+# endif
+# endif
+
   end subroutine transform2_5d_accel
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine inverse2_5d_accel (axf, g, i)
     use gs2_layouts, only: g_lo, accel_lo, accelx_lo, ik_idx
+#ifdef SHMEM
+    use shm_mpi3, only : shm_info, shm_get_node_pointer, shm_node_barrier
+#endif
     implicit none
     real, dimension (:,:,accelx_lo%llim_proc:), intent (in out) :: axf
     complex, dimension (:,:,g_lo%llim_proc:), intent (out) :: g
@@ -1266,9 +1474,14 @@ contains
     integer :: iglo, idx, k
     integer :: itgrid, iduo
     integer :: ntgrid
+#ifdef SHMEM
+    complex, pointer, contiguous ::ag_ptr(:,:,:) => null(), g_ptr(:,:,:) => null()
+    real, pointer, contiguous :: axf_ptr(:,:,:) => null() 
+#endif
 
     ntgrid = accel_lo%ntgrid
 
+#ifndef SHMEM
 ! transform
     i = (2*accel_lo%ntgrid+1)*2
     idx = 1
@@ -1321,6 +1534,118 @@ contains
        endif
     enddo
 
+#else
+
+    if ( shm_info%id > -1) then 
+       ag_ptr (-ntgrid:,1:,accel_lo%llim_node:) => shm_get_node_pointer(ag, -1)
+       axf_ptr(1:,1:,accelx_lo%llim_node:) => shm_get_node_pointer(axf, -1)
+    endif
+
+    call shm_node_barrier
+! transform
+    i = (2*accel_lo%ntgrid+1)*2
+    idx = 1
+    do k = accelx_lo%llim_node, accelx_lo%ulim_node, accelx_lo%nxny
+# if FFT == _FFTW_
+       call rfftwnd_f77_real_to_complex (yb_fft%plan, i, axf(:,:,k:), i, 1, &
+            ag(:,:,iak(idx):), i, 1)
+# elif FFT == _FFTW3_
+!!$       if ( shm_info%id == -100 ) then 
+!!$          call FFTW_PREFIX(_execute_dft_r2c)(yb_fft%plan, axf(t1+ntgrid+1, t2, k), &
+!!$               ag(t1, t2, iak(idx)))
+!!$       else
+!!$          call FFTW_PREFIX(_execute_dft_r2c)(yb_fft%plan, axf_ptr(t1+ntgrid+1, t2, k), &
+!!$               ag_ptr(t1, t2, iak(idx)))
+!!$       endif
+       !call fft_shm_inv(axf_ptr(:, :, k:), 2*(2*ntgrid+1), accelx_lo%ny, accelx_lo%nx, &
+       !     ag_ptr(:, :, iak(idx):), 2*(2*ntgrid+1),  accel_lo%ndky,  accel_lo%nx)
+       call fft_shm_inv(k, iak(idx))
+# endif
+       idx = idx + 1
+    end do
+
+    call shm_node_barrier
+
+    g_ptr (1:,1:,g_lo%llim_node:) => shm_get_node_pointer(g, -1)
+    idx = gidx_s !g_lo%llim_proc
+    do k = accel_lo%llim_proc, accel_lo%ulim_proc
+       ! ignore the large k (anti-alias)
+       if ( .not.aidx(k)) then
+!
+!CMR+GC, 2/9/2013:
+!  Scaling g here would be unnecessary if gs2 used standard Fourier coefficients.
+          ! different scale factors depending on ky == 0
+          if (ik_idx(g_lo, idx) .ne. 1) then
+             do iduo = 1, 2 
+                do itgrid = 1, 2*ntgrid+1
+                   g_ptr(itgrid, iduo, idx) &
+                        = 2.0 * yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
+                enddo
+             enddo
+          else
+             do iduo = 1, 2 
+                do itgrid = 1, 2*ntgrid+1
+                   g_ptr(itgrid, iduo, idx) &
+                        = yb_fft%scale * ag(itgrid-(ntgrid+1), iduo, k)
+                enddo
+             enddo
+          endif
+          idx = idx + 1
+       endif
+    enddo
+    
+!CMR+GC: 2/9/2013
+! Following large loop can be eliminated if gs2 used standard Fourier coefficients.
+! (See above comment in transform2_5d.)
+
+    ! we might not have scaled all g
+    Do iglo = idx, g_lo%ulim_proc
+       if (ik_idx(g_lo, iglo) .ne. 1) then
+          g_ptr(:,:, iglo) = 2.0 * g_ptr(:,:,iglo)
+       endif
+    enddo
+
+  contains
+
+# if FFT == _FFTW3_
+    subroutine fft_shm_inv(k1,k2)
+      use shm_mpi3, only : shm_info, shm_fence
+      implicit none
+      integer, intent(in) :: k1, k2
+      
+       integer i, j, is, ie, js, je, idw, nwk
+       integer nx, ny, px, py
+
+       ! test ny == py !!!
+       nx = accelx_lo%ny
+       ny = accelx_lo%nx
+       px = accel_lo%ndky 
+       py = accel_lo%nx
+
+       nwk = g_lo%ppn
+       idw = shm_info%id
+       is = idw*(px/nwk) + min(idw,mod(px, nwk))
+       ie = is + (px/nwk) -1 
+       if ( idw < mod(px, nwk)) ie = ie +1
+       js = idw*(ny/nwk) + min(idw,mod(ny, nwk))
+       je = js + (ny/nwk) -1 
+       if ( idw < mod(ny, nwk)) je = je +1
+       
+       do j = js, je
+          call FFTW_PREFIX(_execute_dft_r2c)(baccel_shmx%plan, axf_ptr(1,1,k1+j*nx), ag_ptr(-ntgrid,1,k2+j*px))
+       enddo
+
+       call shm_node_barrier
+       call shm_fence(ag_ptr(-ntgrid,1,accel_lo%llim_node))
+
+       do i = is, ie 
+          call FFTW_PREFIX(_execute_dft)(baccel_shmy%plan, ag_ptr(-ntgrid,1,k2+i), ag_ptr(-ntgrid,1,k2+i))
+       enddo
+
+     end subroutine fft_shm_inv
+# endif
+
+# endif
   end subroutine inverse2_5d_accel
 
   subroutine init_3d (nny_in, nnx_in, how_many_in)
@@ -1691,12 +2016,19 @@ contains
   subroutine finish_transforms
     use redistribute, only : delete_redist
     use fft_work, only: delete_fft, finish_fft_work
+#ifdef SHMEM
+    use shm_mpi3, only : shm_free
+#endif
 
     if(allocated(xxf)) deallocate(xxf)
     if(allocated(ia)) deallocate(ia)
     if(allocated(iak)) deallocate(iak)
     if(allocated(aidx)) deallocate(aidx)
+#ifndef SHMEM
     if(allocated(ag)) deallocate(ag)
+#else
+    if (associated(ag)) call shm_free(ag)
+#endif
 
     call delete_redist(g2x)
     call delete_redist(x2y)
